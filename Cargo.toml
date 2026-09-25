@@ -35,8 +35,10 @@ aes-gcm = "0.11.0-rc.5"
 chacha20poly1305 = "0.11.0-rc.5"
 ml-kem = { version = "0.3", features = ["getrandom", "zeroize"] }
 x25519-dalek = { version = "3", features = ["getrandom", "static_secrets", "zeroize"] }
+ed25519-dalek = { version = "3", features = ["rand_core", "zeroize"] }
 rand_core = { version = "0.9", features = ["os_rng"] }
 
+getrandom = "0.3"
 hex = "0.4"
 base64 = "0.22"
 
