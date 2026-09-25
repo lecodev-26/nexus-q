@@ -1,0 +1,17 @@
+[package]
+name = "nexusq-cli"
+description = "Command-line interface for AXIOM NEXUS-Q"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "nexusq"
+path = "src/main.rs"
+
+[dependencies]
+nexusq-core = { workspace = true }
+thiserror = { workspace = true }

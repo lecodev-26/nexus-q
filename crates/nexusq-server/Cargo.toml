@@ -1,0 +1,17 @@
+[package]
+name = "nexusq-server"
+description = "Network server for AXIOM NEXUS-Q"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "nexusq-server"
+path = "src/main.rs"
+
+[dependencies]
+nexusq-core = { workspace = true }
+thiserror = { workspace = true }

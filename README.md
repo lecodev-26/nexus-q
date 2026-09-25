@@ -68,13 +68,13 @@ SDK / API / CLI
 
 ## Estado del proyecto
 
-Fase actual: **Fase 0 — Fundaciones**
+Fase actual: **Fase 1 — Project restructuring**
 
 - [x] Estructura inicial del repositorio
-- [ ] Documentación de arquitectura
-- [ ] Threat model
-- [ ] Reglas criptográficas
-- [ ] Definición de alcance de v1.0
+- [x] Documentación de arquitectura
+- [x] Threat model
+- [x] Reglas criptográficas
+- [x] Definición de alcance de v1.0
 
 Ver [`docs/ROADMAP.md`](docs/ROADMAP.md) para el plan completo.
 
@@ -95,10 +95,10 @@ Ver [`docs/ROADMAP.md`](docs/ROADMAP.md) para el plan completo.
 
 ## Compilación
 
-> Aún no hay código funcional. Esta sección se completará en la Fase 1.
+> El workspace y los tres crates están definidos. La implementación
+> real llega en fases posteriores.
 
 ```bash
-# (pendiente)
 cargo build
 cargo test
 ```

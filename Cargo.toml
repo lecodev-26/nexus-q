@@ -1,0 +1,53 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/nexusq-core",
+    "crates/nexusq-cli",
+    "crates/nexusq-server",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+authors = ["lecodev-26 <325287752+lecodev-26@users.noreply.github.com>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/lecodev-26/axiom-nexus-q"
+
+[workspace.dependencies]
+nexusq-core = { path = "crates/nexusq-core", version = "0.1.0" }
+
+thiserror = "2"
+
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+serde = { version = "1", features = ["derive"] }
+serde_bytes = "0.11"
+
+zeroize = { version = "1", features = ["derive"] }
+subtle = "2"
+rand_core = { version = "0.9", features = ["os_rng"] }
+
+hex = "0.4"
+base64 = "0.22"
+
+proptest = "1"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+debug = false
+
+[profile.dev]
+opt-level = 0
+debug = 2
+overflow-checks = true
+
+[profile.test]
+opt-level = 1
+debug = 2
+overflow-checks = true
