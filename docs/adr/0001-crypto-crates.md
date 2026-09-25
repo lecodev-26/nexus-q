@@ -80,3 +80,41 @@ proves stable, we add it as a follow-up.
 - `docs/ROADMAP.md` §5 — Fase 2 deliverables
 - NIST FIPS 203 (ML-KEM), 204 (ML-DSA), 205 (SLH-DSA)
 - crates.io: RustCrypto project, dalek-cryptography project
+
+---
+
+## Update — 2026-09-25
+
+Revisited the `ml-dsa` decision after implementing the rest of Fase 2.
+
+Findings:
+
+- FIPS 204 was finalized on 2024-08-13; the algorithm itself is
+  standardized and believed secure against quantum adversaries.
+- The RustCrypto implementation (`ml-dsa`) is at **0.1.1**, released
+  2026-06-05. Eighteen releases in eight months.
+- The crate is **not independently audited**. Its own README states so.
+- Three security advisories in 2026 alone:
+  - **CVE-2026-24850** — accepted signatures with duplicate hint
+    indices (malleability regression).
+  - **CVE-2025-0144** — timing side channel in `Decompose`.
+  - Off-by-two in `UseHint` when `r0 == 0`.
+  All three are fixed, but they illustrate that the implementation is
+  still settling.
+- Downstream projects that depend on `ml-dsa` pin exact versions
+  (`=0.1.1`) because the API is documented as "still evolving".
+
+**Decision stands: keep ML-DSA deferred.**
+
+Revisit conditions:
+
+- `ml-dsa` reaches 0.2.x or higher with a stable API.
+- A public audit of the RustCrypto PQC crates is published.
+- Fase 15 (Security Engineering) starts, whichever comes first.
+
+When added, ML-DSA will coexist with Ed25519, not replace it. Hybrid
+signatures (Ed25519 || ML-DSA) are the intended end state.
+
+Note: `pqcrypto-mldsa` (bindings to PQClean) is being archived upstream
+and produces SIGILL on ARM64 Android (as observed with `pqcrypto-mlkem`).
+It is not a viable alternative for NEXUS-Q.
