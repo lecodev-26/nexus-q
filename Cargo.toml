@@ -27,12 +27,14 @@ serde_bytes = "0.11"
 
 zeroize = { version = "1", features = ["derive"] }
 subtle = "2"
-sha2 = "0.10"
-sha3 = "0.10"
-argon2 = "0.5"
-hkdf = "0.12"
-aes-gcm = "0.10"
-chacha20poly1305 = "0.10"
+sha2 = "0.11.0-rc.5"
+sha3 = "0.11.0-rc.5"
+argon2 = "0.6.0-rc.1"
+hkdf = "0.13.0-rc.5"
+aes-gcm = "0.11.0-rc.5"
+chacha20poly1305 = "0.11.0-rc.5"
+ml-kem = { version = "0.3", features = ["getrandom", "zeroize"] }
+x25519-dalek = { version = "3", features = ["getrandom", "static_secrets", "zeroize"] }
 rand_core = { version = "0.9", features = ["os_rng"] }
 
 hex = "0.4"

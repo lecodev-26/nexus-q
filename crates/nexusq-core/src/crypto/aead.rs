@@ -107,14 +107,14 @@ pub fn encrypt(
     match algorithm {
         Algorithm::Aes256Gcm => {
             let cipher = Aes256Gcm::new_from_slice(key).map_err(|_| AeadError::InvalidKey)?;
-            let n = AesNonce::from_slice(nonce);
-            cipher.encrypt(n, payload).map_err(|_| AeadError::Encrypt)
+            let n = AesNonce::try_from(nonce).map_err(|_| AeadError::InvalidNonce)?;
+            cipher.encrypt(&n, payload).map_err(|_| AeadError::Encrypt)
         }
         Algorithm::ChaCha20Poly1305 => {
             let cipher =
                 ChaCha20Poly1305::new_from_slice(key).map_err(|_| AeadError::InvalidKey)?;
-            let n = ChaChaNonce::from_slice(nonce);
-            cipher.encrypt(n, payload).map_err(|_| AeadError::Encrypt)
+            let n = ChaChaNonce::try_from(nonce).map_err(|_| AeadError::InvalidNonce)?;
+            cipher.encrypt(&n, payload).map_err(|_| AeadError::Encrypt)
         }
     }
 }
@@ -149,14 +149,14 @@ pub fn decrypt(
     match algorithm {
         Algorithm::Aes256Gcm => {
             let cipher = Aes256Gcm::new_from_slice(key).map_err(|_| AeadError::InvalidKey)?;
-            let n = AesNonce::from_slice(nonce);
-            cipher.decrypt(n, payload).map_err(|_| AeadError::Decrypt)
+            let n = AesNonce::try_from(nonce).map_err(|_| AeadError::InvalidNonce)?;
+            cipher.decrypt(&n, payload).map_err(|_| AeadError::Decrypt)
         }
         Algorithm::ChaCha20Poly1305 => {
             let cipher =
                 ChaCha20Poly1305::new_from_slice(key).map_err(|_| AeadError::InvalidKey)?;
-            let n = ChaChaNonce::from_slice(nonce);
-            cipher.decrypt(n, payload).map_err(|_| AeadError::Decrypt)
+            let n = ChaChaNonce::try_from(nonce).map_err(|_| AeadError::InvalidNonce)?;
+            cipher.decrypt(&n, payload).map_err(|_| AeadError::Decrypt)
         }
     }
 }
