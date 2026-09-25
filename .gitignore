@@ -1,0 +1,66 @@
+# ==============================
+# Rust
+# ==============================
+/target/
+**/*.rs.bk
+*.pdb
+
+# ==============================
+# Cargo (solo en libs; en binarios se versiona)
+# Descomenta la siguiente línea SOLO si decidimos no versionar Cargo.lock
+# ==============================
+# Cargo.lock
+
+# ==============================
+# NEXUS-Q — NUNCA versionar secretos
+# ==============================
+*.key
+*.pem
+*.p12
+*.pfx
+*.nqx
+*.nqv
+*.vault
+*.keystore
+*.secret
+secrets/
+private/
+keys/
+vaults/
+
+# ==============================
+# Entorno / configuración local
+# ==============================
+.env
+.env.*
+!.env.example
+*.local
+config.local.*
+*.log
+
+# ==============================
+# Backups y dumps
+# ==============================
+*.bak
+*.backup
+*.dump
+*.old
+*.tmp
+*.swp
+*~
+
+# ==============================
+# IDEs / editores
+# ==============================
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# ==============================
+# Testing / coverage
+# ==============================
+/coverage/
+*.profraw
+*.profdata
