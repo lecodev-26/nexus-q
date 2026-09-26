@@ -17,10 +17,17 @@ use crate::crypto::aead::{self, AeadError, Algorithm as AeadAlgorithm};
 use crate::crypto::kdf::{self, KdfError};
 use crate::crypto::random::{OsRandomSource, RandomError, RandomSource};
 
+use super::algorithm::Algorithm;
 use super::body::{CURRENT_SCHEMA_VERSION, VaultBody, VaultMetadata};
 use super::header::{HeaderError, KdfParams, MAGIC, SALT_LEN, VaultHeader};
+use super::key_id::{KeyId, KeyIdError};
+use super::metadata::{KeyMetadata, Origin};
+use super::purpose::Purpose;
+use super::record::{KeyRecord, RecordValidationError, WrappedKeyMaterial};
 use super::serde_helpers::{self, CborError};
+use super::status::KeyStatus;
 use super::timestamp::Timestamp;
+use super::wrapping::{WrappingError, wrap};
 
 /// Number of bytes of the length prefix before the CBOR header.
 const HEADER_LEN_PREFIX: usize = 4;
@@ -77,6 +84,31 @@ pub enum VaultError {
     /// The vault uses a version this build does not understand.
     #[error("unsupported vault version: {0}")]
     UnsupportedVersion(u8),
+
+    /// A key with this id already exists in the vault.
+    #[error("key id already exists: {0}")]
+    DuplicateKeyId(KeyId),
+
+    /// The purpose is not allowed for the chosen algorithm.
+    #[error("purpose {purpose} is not allowed for algorithm {algorithm}")]
+    PurposeNotAllowed {
+        /// The algorithm requested.
+        algorithm: Algorithm,
+        /// The purpose requested.
+        purpose: Purpose,
+    },
+
+    /// Wrapping or unwrapping key material failed.
+    #[error("wrapping error: {0}")]
+    Wrapping(#[from] WrappingError),
+
+    /// A key record failed its internal consistency check.
+    #[error("record validation failed: {0}")]
+    RecordValidation(#[from] RecordValidationError),
+
+    /// Key id generation or parsing failed.
+    #[error("key id error: {0}")]
+    KeyId(#[from] KeyIdError),
 }
 
 /// A vault file on disk.
@@ -294,6 +326,98 @@ impl Session {
         &mut self.body
     }
 
+    /// Generates a new key of the given algorithm and purpose.
+    ///
+    /// The material is generated (as a placeholder for now: 32 random
+    /// bytes regardless of algorithm), wrapped under the vault's KEK,
+    /// and stored in the body. The key starts in the `Generated`
+    /// state; activation is a separate step performed by the caller.
+    ///
+    /// See `docs/KEY_MANAGEMENT.md` §6.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VaultError::PurposeNotAllowed`] if the purpose is not
+    /// compatible with the algorithm, [`VaultError::DuplicateKeyId`]
+    /// if the freshly generated id collides (astronomically unlikely),
+    /// or another error if generation or wrapping fails.
+    pub fn generate_key(
+        &mut self,
+        algorithm: Algorithm,
+        purpose: Purpose,
+    ) -> Result<KeyId, VaultError> {
+        if !purpose.is_allowed_for(algorithm) {
+            return Err(VaultError::PurposeNotAllowed { algorithm, purpose });
+        }
+
+        // Generate the key id and the material.
+        let mut rng = OsRandomSource::new();
+        let key_id = KeyId::generate(&mut rng, algorithm.as_str())?;
+        if self.body.find_key(&key_id).is_some() {
+            return Err(VaultError::DuplicateKeyId(key_id));
+        }
+
+        let material = generate_material(algorithm, &mut rng)?;
+
+        // Wrap the material under the KEK, bound to the key id.
+        let wrapped = wrap(&material, self.kek.as_ref(), &key_id)?;
+
+        // Pick the WrappedKeyMaterial variant based on the algorithm's
+        // category. Symmetric algorithms use Symmetric; the rest use
+        // Asymmetric. Hardware-backed keys are not produced here.
+        let wrapped_variant = match algorithm.category() {
+            super::algorithm::Category::Aead => WrappedKeyMaterial::Symmetric(wrapped),
+            _ => WrappedKeyMaterial::Asymmetric(wrapped),
+        };
+
+        // Build the metadata record.
+        let now = Timestamp::now().unwrap_or(Timestamp::from_secs(0));
+        let metadata = KeyMetadata {
+            key_id: key_id.clone(),
+            algorithm,
+            purpose,
+            created_at: now,
+            created_by: "session".to_string(),
+            created_from: Origin::Generated,
+            status: KeyStatus::Generated,
+            version: 1,
+            owner: None,
+            rotation_due: None,
+            expires_at: None,
+            parent_key_id: None,
+            hardware_backed: false,
+            attestation: None,
+        };
+
+        let record = KeyRecord::new(metadata, wrapped_variant);
+        record.validate()?;
+
+        self.body.keys.push(record);
+        Ok(key_id)
+    }
+
+    /// Returns an iterator over all key records in the vault.
+    pub fn list_keys(&self) -> impl Iterator<Item = &KeyRecord> {
+        self.body.keys.iter()
+    }
+
+    /// Returns the key record for `key_id`, if present.
+    #[must_use]
+    pub fn find_key(&self, key_id: &KeyId) -> Option<&KeyRecord> {
+        self.body.find_key(key_id)
+    }
+
+    /// Returns a mutable reference to the key record for `key_id`.
+    pub fn find_key_mut(&mut self, key_id: &KeyId) -> Option<&mut KeyRecord> {
+        self.body.find_key_mut(key_id)
+    }
+
+    /// Returns the number of keys in the vault.
+    #[must_use]
+    pub fn key_count(&self) -> usize {
+        self.body.key_count()
+    }
+
     /// Locks the session: persists the current body and returns the
     /// [`Vault`].
     ///
@@ -391,6 +515,28 @@ fn generate_vault_id<S: RandomSource>(source: &mut S) -> Result<String, VaultErr
         out.push(HEX[(b & 0x0f) as usize] as char);
     }
     Ok(out)
+}
+
+// =============================================================================
+// Key material generation
+// =============================================================================
+//
+// For Phase 4 the vault is a container: it does not yet need to know
+// how to produce algorithm-specific key material. That arrives with
+// envelope encryption (Phase 5) and identity (Phase 6). For now we
+// generate 32 random bytes regardless of algorithm, which is enough to
+// exercise the wrapping and storage paths.
+//
+// When real material is introduced, this function will dispatch per
+// algorithm and return the serialized private key bytes.
+
+fn generate_material<S: RandomSource>(
+    _algorithm: Algorithm,
+    source: &mut S,
+) -> Result<Vec<u8>, VaultError> {
+    let mut material = vec![0u8; 32];
+    source.fill_bytes(&mut material)?;
+    Ok(material)
 }
 
 #[cfg(test)]
@@ -524,5 +670,102 @@ mod tests {
         let session = vault.unlock(b"pw").unwrap();
         assert!(session.body().metadata.vault_id.starts_with("nqv_"));
         assert_eq!(session.body().metadata.vault_id.len(), 4 + 32);
+    }
+
+    #[test]
+    fn generate_key_stores_a_wrapped_record() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = session
+            .generate_key(Algorithm::Ed25519, Purpose::Sign)
+            .unwrap();
+        assert_eq!(session.key_count(), 1);
+
+        let record = session.find_key(&id).unwrap();
+        assert_eq!(record.algorithm(), Algorithm::Ed25519);
+        assert_eq!(record.purpose(), Purpose::Sign);
+        assert_eq!(record.status(), KeyStatus::Generated);
+        // Wrapped material is longer than the 32-byte plaintext because
+        // it carries a nonce (12) and a tag (16).
+        assert_eq!(record.material.len(), 12 + 32 + 16);
+    }
+
+    #[test]
+    fn generate_key_rejects_incompatible_purpose() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        // Ed25519 cannot be used for encryption.
+        let err = session
+            .generate_key(Algorithm::Ed25519, Purpose::Encrypt)
+            .unwrap_err();
+        assert!(matches!(err, VaultError::PurposeNotAllowed { .. }));
+        assert_eq!(session.key_count(), 0);
+    }
+
+    #[test]
+    fn generated_keys_persist_across_lock_and_unlock() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+
+        let id = {
+            let vault = Vault::open(&path).unwrap();
+            let mut session = vault.unlock(b"pw").unwrap();
+            let id = session
+                .generate_key(Algorithm::Aes256Gcm, Purpose::Wrap)
+                .unwrap();
+            session.lock().unwrap();
+            id
+        };
+
+        let vault = Vault::open(&path).unwrap();
+        let session = vault.unlock(b"pw").unwrap();
+        assert_eq!(session.key_count(), 1);
+        assert!(session.find_key(&id).is_some());
+    }
+
+    #[test]
+    fn generated_keys_have_distinct_ids() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let a = session
+            .generate_key(Algorithm::Ed25519, Purpose::Sign)
+            .unwrap();
+        let b = session
+            .generate_key(Algorithm::Ed25519, Purpose::Sign)
+            .unwrap();
+        assert_ne!(a, b);
+        assert_eq!(session.key_count(), 2);
+    }
+
+    #[test]
+    fn list_keys_iterates_every_record() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        session
+            .generate_key(Algorithm::Ed25519, Purpose::Sign)
+            .unwrap();
+        session
+            .generate_key(Algorithm::MlKem768, Purpose::KeyAgreement)
+            .unwrap();
+
+        let ids: Vec<_> = session.list_keys().map(|r| r.key_id().clone()).collect();
+        assert_eq!(ids.len(), 2);
     }
 }
