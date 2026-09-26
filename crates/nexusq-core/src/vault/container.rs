@@ -25,6 +25,7 @@ use super::metadata::{KeyMetadata, Origin};
 use super::purpose::Purpose;
 use super::record::{KeyRecord, RecordValidationError, WrappedKeyMaterial};
 use super::serde_helpers::{self, CborError};
+use super::state::{StateTransitionError, VaultState};
 use super::status::KeyStatus;
 use super::timestamp::Timestamp;
 use super::wrapping::{WrappingError, wrap};
@@ -109,6 +110,17 @@ pub enum VaultError {
     /// Key id generation or parsing failed.
     #[error("key id error: {0}")]
     KeyId(#[from] KeyIdError),
+
+    /// The session's state does not allow the requested operation.
+    #[error("operation not allowed in vault state {state}")]
+    StateDenied {
+        /// The state that refused the operation.
+        state: VaultState,
+    },
+
+    /// A vault state transition was not allowed.
+    #[error("invalid vault state transition: {0}")]
+    StateTransition(#[from] StateTransitionError),
 }
 
 /// A vault file on disk.
@@ -131,6 +143,7 @@ pub struct Session {
     vault: Vault,
     kek: Zeroizing<[u8; kdf::DERIVED_KEY_LEN]>,
     body: VaultBody,
+    state: VaultState,
 }
 
 impl Vault {
@@ -224,6 +237,7 @@ impl Vault {
             vault: self.clone(),
             kek,
             body,
+            state: VaultState::Unlocked,
         })
     }
 
@@ -346,6 +360,8 @@ impl Session {
         algorithm: Algorithm,
         purpose: Purpose,
     ) -> Result<KeyId, VaultError> {
+        self.require_writes_allowed()?;
+
         if !purpose.is_allowed_for(algorithm) {
             return Err(VaultError::PurposeNotAllowed { algorithm, purpose });
         }
@@ -408,14 +424,70 @@ impl Session {
     }
 
     /// Returns a mutable reference to the key record for `key_id`.
-    pub fn find_key_mut(&mut self, key_id: &KeyId) -> Option<&mut KeyRecord> {
-        self.body.find_key_mut(key_id)
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VaultError::StateDenied`] if the session is sealed or
+    /// compromised. Read the immutable [`Session::find_key`] for
+    /// read-only access.
+    pub fn find_key_mut(&mut self, key_id: &KeyId) -> Result<Option<&mut KeyRecord>, VaultError> {
+        self.require_writes_allowed()?;
+        Ok(self.body.find_key_mut(key_id))
     }
 
     /// Returns the number of keys in the vault.
     #[must_use]
     pub fn key_count(&self) -> usize {
         self.body.key_count()
+    }
+
+    /// Returns the current state of the session.
+    #[must_use]
+    pub const fn state(&self) -> VaultState {
+        self.state
+    }
+
+    /// Seals the session: reads remain allowed, writes are refused.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VaultError::StateTransition`] if the transition is not
+    /// allowed (for example, from a compromised session).
+    pub fn seal(&mut self) -> Result<(), VaultError> {
+        self.state = self.state.transition_to(VaultState::Sealed)?;
+        Ok(())
+    }
+
+    /// Unseals the session, returning it to the unlocked state.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VaultError::StateTransition`] if the transition is not
+    /// allowed (for example, from a compromised session).
+    pub fn unseal(&mut self) -> Result<(), VaultError> {
+        self.state = self.state.transition_to(VaultState::Unlocked)?;
+        Ok(())
+    }
+
+    /// Marks the session as compromised. All further operations are
+    /// refused; the caller must drop the session.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VaultError::StateTransition`] if the session is already
+    /// locked or compromised.
+    pub fn mark_compromised(&mut self) -> Result<(), VaultError> {
+        self.state = self.state.transition_to(VaultState::Compromised)?;
+        Ok(())
+    }
+
+    /// Internal helper: rejects operations when writes are not allowed.
+    fn require_writes_allowed(&self) -> Result<(), VaultError> {
+        if self.state.allows_writes() {
+            Ok(())
+        } else {
+            Err(VaultError::StateDenied { state: self.state })
+        }
     }
 
     /// Locks the session: persists the current body and returns the
@@ -767,5 +839,106 @@ mod tests {
 
         let ids: Vec<_> = session.list_keys().map(|r| r.key_id().clone()).collect();
         assert_eq!(ids.len(), 2);
+    }
+
+    #[test]
+    fn session_starts_unlocked() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let session = vault.unlock(b"pw").unwrap();
+        assert_eq!(session.state(), VaultState::Unlocked);
+    }
+
+    #[test]
+    fn sealed_session_refuses_writes_but_allows_reads() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        session.seal().unwrap();
+        assert_eq!(session.state(), VaultState::Sealed);
+
+        // Reads still work.
+        assert_eq!(session.key_count(), 0);
+
+        // Writes are refused.
+        let err = session
+            .generate_key(Algorithm::Ed25519, Purpose::Sign)
+            .unwrap_err();
+        assert!(matches!(err, VaultError::StateDenied { .. }));
+    }
+
+    #[test]
+    fn unseal_restores_write_access() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        session.seal().unwrap();
+        session.unseal().unwrap();
+        assert_eq!(session.state(), VaultState::Unlocked);
+
+        session
+            .generate_key(Algorithm::Ed25519, Purpose::Sign)
+            .unwrap();
+        assert_eq!(session.key_count(), 1);
+    }
+
+    #[test]
+    fn compromised_session_refuses_everything() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        session.mark_compromised().unwrap();
+        assert_eq!(session.state(), VaultState::Compromised);
+
+        // Writes refused.
+        assert!(matches!(
+            session.generate_key(Algorithm::Ed25519, Purpose::Sign),
+            Err(VaultError::StateDenied { .. })
+        ));
+
+        // Sealing refused (state transition invalid).
+        assert!(matches!(
+            session.seal(),
+            Err(VaultError::StateTransition(_))
+        ));
+
+        // Unsealing refused.
+        assert!(matches!(
+            session.unseal(),
+            Err(VaultError::StateTransition(_))
+        ));
+    }
+
+    #[test]
+    fn find_key_mut_requires_write_access() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = session
+            .generate_key(Algorithm::Ed25519, Purpose::Sign)
+            .unwrap();
+
+        session.seal().unwrap();
+        let err = session.find_key_mut(&id).unwrap_err();
+        assert!(matches!(err, VaultError::StateDenied { .. }));
+
+        session.unseal().unwrap();
+        let record = session.find_key_mut(&id).unwrap().unwrap();
+        record.metadata.status = KeyStatus::Active;
+        assert_eq!(session.find_key(&id).unwrap().status(), KeyStatus::Active);
     }
 }
