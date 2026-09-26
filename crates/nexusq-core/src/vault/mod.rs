@@ -5,6 +5,7 @@ pub mod body;
 pub mod container;
 pub mod header;
 pub mod key_id;
+pub mod lifecycle;
 pub mod metadata;
 pub mod purpose;
 pub mod record;
@@ -21,6 +22,7 @@ pub use header::{
     FORMAT_VERSION, HeaderError, KdfAlgorithm, KdfParams, MAGIC, SALT_LEN, VaultHeader,
 };
 pub use key_id::{KeyId, KeyIdError};
+pub use lifecycle::{DestructionConfirmation, LifecycleError, RevokeReason};
 pub use metadata::{KeyMetadata, Origin};
 pub use purpose::{Purpose, PurposeError};
 pub use record::{KeyRecord, RecordValidationError, WrappedKeyMaterial};

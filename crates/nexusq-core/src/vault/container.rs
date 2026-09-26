@@ -22,6 +22,7 @@ use super::algorithm::Algorithm;
 use super::body::{CURRENT_SCHEMA_VERSION, VaultBody, VaultMetadata};
 use super::header::{HeaderError, KdfParams, MAGIC, SALT_LEN, VaultHeader};
 use super::key_id::{KeyId, KeyIdError};
+use super::lifecycle::{DestructionConfirmation, LifecycleError, RevokeReason};
 use super::metadata::{KeyMetadata, Origin};
 use super::purpose::Purpose;
 use super::record::{KeyRecord, RecordValidationError, WrappedKeyMaterial};
@@ -122,6 +123,10 @@ pub enum VaultError {
     /// A vault state transition was not allowed.
     #[error("invalid vault state transition: {0}")]
     StateTransition(#[from] StateTransitionError),
+
+    /// A key lifecycle operation failed.
+    #[error("lifecycle error: {0}")]
+    Lifecycle(#[from] LifecycleError),
 }
 
 /// A vault file on disk.
@@ -479,6 +484,199 @@ impl Session {
     /// locked or compromised.
     pub fn mark_compromised(&mut self) -> Result<(), VaultError> {
         self.state = self.state.transition_to(VaultState::Compromised)?;
+        Ok(())
+    }
+
+    // =========================================================================
+    // Key lifecycle operations
+    // =========================================================================
+
+    /// Moves a key from `Generated` to `Active`.
+    ///
+    /// The key becomes usable for new work.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VaultError::Lifecycle`] with
+    /// [`LifecycleError::KeyNotFound`] if the key does not exist, or
+    /// [`LifecycleError::WrongStatus`] if it is not in `Generated`.
+    pub fn activate_key(&mut self, key_id: &KeyId) -> Result<(), VaultError> {
+        self.require_writes_allowed()?;
+        let record = self
+            .body
+            .find_key_mut(key_id)
+            .ok_or_else(|| LifecycleError::KeyNotFound(key_id.clone()))?;
+
+        let new_status = record
+            .metadata
+            .status
+            .transition_to(KeyStatus::Active)
+            .map_err(LifecycleError::from)?;
+        record.metadata.status = new_status;
+        Ok(())
+    }
+
+    /// Rotates an `Active` key, producing a fresh key with the same
+    /// algorithm and purpose, and retires the original.
+    ///
+    /// The new key carries `parent_key_id = Some(old)` and
+    /// `version = old.version + 1`. It starts in `Generated`; the
+    /// caller typically activates it explicitly.
+    ///
+    /// The original moves to `Retired`. It can still decrypt and verify
+    /// data protected while it was active, but cannot produce new
+    /// signatures or ciphertexts.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VaultError::Lifecycle`] with
+    /// [`LifecycleError::KeyNotFound`] if the key does not exist, or
+    /// [`LifecycleError::WrongStatus`] if it is not `Active`.
+    pub fn rotate_key(&mut self, key_id: &KeyId) -> Result<KeyId, VaultError> {
+        self.require_writes_allowed()?;
+
+        // Read the pieces we need before mutating anything.
+        let (algorithm, purpose, old_version) = {
+            let record = self
+                .body
+                .find_key(key_id)
+                .ok_or_else(|| LifecycleError::KeyNotFound(key_id.clone()))?;
+            if record.status() != KeyStatus::Active {
+                return Err(LifecycleError::WrongStatus {
+                    key_id: key_id.clone(),
+                    status: record.status(),
+                    required: "Active",
+                }
+                .into());
+            }
+            (
+                record.algorithm(),
+                record.purpose(),
+                record.metadata.version,
+            )
+        };
+
+        // Generate the replacement.
+        let new_id = self.generate_key(algorithm, purpose)?;
+
+        // Fix up the new record: parent, version.
+        {
+            let new_record = self.body.find_key_mut(&new_id).expect("just inserted");
+            new_record.metadata.parent_key_id = Some(key_id.clone());
+            new_record.metadata.version = old_version + 1;
+        }
+
+        // Retire the original, going through Rotating.
+        //
+        // The state machine allows Active -> Rotating -> Retired but
+        // not Active -> Retired directly, because the intermediate
+        // state is where a grace period would live once envelopes with
+        // real deadlines exist. For now we pass through it and
+        // immediately complete the rotation.
+        {
+            let old_record = self.body.find_key_mut(key_id).expect("checked above");
+            let rotating = old_record
+                .metadata
+                .status
+                .transition_to(KeyStatus::Rotating)
+                .map_err(LifecycleError::from)?;
+            let retired = rotating
+                .transition_to(KeyStatus::Retired)
+                .map_err(LifecycleError::from)?;
+            old_record.metadata.status = retired;
+        }
+
+        Ok(new_id)
+    }
+
+    /// Revokes a key.
+    ///
+    /// The key material remains in the vault so that data protected
+    /// while it was active can still be recovered, but the key is no
+    /// longer trusted for new operations.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VaultError::Lifecycle`] with
+    /// [`LifecycleError::KeyNotFound`] if the key does not exist,
+    /// [`LifecycleError::Terminal`] if the key is already `Destroyed`,
+    /// or [`LifecycleError::Transition`] if the current status does not
+    /// permit revocation.
+    pub fn revoke_key(&mut self, key_id: &KeyId, _reason: RevokeReason) -> Result<(), VaultError> {
+        self.require_writes_allowed()?;
+        let record = self
+            .body
+            .find_key_mut(key_id)
+            .ok_or_else(|| LifecycleError::KeyNotFound(key_id.clone()))?;
+
+        if record.status() == KeyStatus::Destroyed {
+            return Err(LifecycleError::Terminal {
+                key_id: key_id.clone(),
+                status: record.status(),
+            }
+            .into());
+        }
+
+        let new_status = record
+            .metadata
+            .status
+            .transition_to(KeyStatus::Revoked)
+            .map_err(LifecycleError::from)?;
+        record.metadata.status = new_status;
+        Ok(())
+    }
+
+    /// Destroys a key.
+    ///
+    /// The key material is dropped and the record moves to `Destroyed`.
+    /// This is **irreversible**: data protected by this key becomes
+    /// permanently unreadable.
+    ///
+    /// The caller must pass [`DestructionConfirmation::Explicit`] to
+    /// acknowledge the irreversibility.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VaultError::Lifecycle`] with
+    /// [`LifecycleError::KeyNotFound`] if the key does not exist, or
+    /// [`LifecycleError::Terminal`] if it is already destroyed.
+    pub fn destroy_key(
+        &mut self,
+        key_id: &KeyId,
+        _confirmation: DestructionConfirmation,
+    ) -> Result<(), VaultError> {
+        self.require_writes_allowed()?;
+        let record = self
+            .body
+            .find_key_mut(key_id)
+            .ok_or_else(|| LifecycleError::KeyNotFound(key_id.clone()))?;
+
+        if record.status() == KeyStatus::Destroyed {
+            return Err(LifecycleError::Terminal {
+                key_id: key_id.clone(),
+                status: KeyStatus::Destroyed,
+            }
+            .into());
+        }
+
+        // Drop the wrapped material by replacing it with an empty
+        // variant of the same shape. The previous Vec is freed; if the
+        // type gains a Drop impl with zeroization later, this will wipe
+        // the bytes before release.
+        let empty = match record.material {
+            super::record::WrappedKeyMaterial::Symmetric(_) => {
+                super::record::WrappedKeyMaterial::Symmetric(Vec::new())
+            }
+            super::record::WrappedKeyMaterial::Asymmetric(_) => {
+                super::record::WrappedKeyMaterial::Asymmetric(Vec::new())
+            }
+            super::record::WrappedKeyMaterial::HardwareHandle(_) => {
+                super::record::WrappedKeyMaterial::HardwareHandle(Vec::new())
+            }
+        };
+        record.material = empty;
+
+        record.metadata.status = KeyStatus::Destroyed;
         Ok(())
     }
 
@@ -1039,6 +1237,249 @@ mod tests {
         let tmp = unique_temp_path(&path).unwrap();
         let name = tmp.file_name().unwrap().to_string_lossy();
         assert!(name.starts_with("vault.nqv.tmp."));
+    }
+
+    // =========================================================================
+    // Lifecycle tests
+    // =========================================================================
+
+    fn make_active(session: &mut Session) -> KeyId {
+        let id = session
+            .generate_key(Algorithm::Ed25519, Purpose::Sign)
+            .unwrap();
+        session.activate_key(&id).unwrap();
+        id
+    }
+
+    #[test]
+    fn activate_key_moves_generated_to_active() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = session
+            .generate_key(Algorithm::Ed25519, Purpose::Sign)
+            .unwrap();
+        assert_eq!(
+            session.find_key(&id).unwrap().status(),
+            KeyStatus::Generated
+        );
+
+        session.activate_key(&id).unwrap();
+        assert_eq!(session.find_key(&id).unwrap().status(), KeyStatus::Active);
+    }
+
+    #[test]
+    fn activate_key_rejects_unknown_id() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let mut rng = OsRandomSource::new();
+        let bogus = KeyId::generate(&mut rng, "ed25519").unwrap();
+        let err = session.activate_key(&bogus).unwrap_err();
+        assert!(matches!(err, VaultError::Lifecycle(_)));
+    }
+
+    #[test]
+    fn activate_key_rejects_already_active() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = make_active(&mut session);
+        let err = session.activate_key(&id).unwrap_err();
+        assert!(matches!(err, VaultError::Lifecycle(_)));
+    }
+
+    #[test]
+    fn rotate_key_creates_replacement_and_retires_original() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let old = make_active(&mut session);
+        let old_version = session.find_key(&old).unwrap().metadata.version;
+
+        let new = session.rotate_key(&old).unwrap();
+        assert_ne!(old, new);
+        assert_eq!(session.key_count(), 2);
+
+        // Original retired.
+        let old_rec = session.find_key(&old).unwrap();
+        assert_eq!(old_rec.status(), KeyStatus::Retired);
+
+        // Replacement carries parent and bumped version.
+        let new_rec = session.find_key(&new).unwrap();
+        assert_eq!(new_rec.metadata.parent_key_id.as_ref(), Some(&old));
+        assert_eq!(new_rec.metadata.version, old_version + 1);
+        assert_eq!(new_rec.algorithm(), Algorithm::Ed25519);
+        assert_eq!(new_rec.purpose(), Purpose::Sign);
+    }
+
+    #[test]
+    fn rotate_key_rejects_non_active() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = session
+            .generate_key(Algorithm::Ed25519, Purpose::Sign)
+            .unwrap();
+        // Still in Generated, not Active.
+        let err = session.rotate_key(&id).unwrap_err();
+        assert!(matches!(err, VaultError::Lifecycle(_)));
+    }
+
+    #[test]
+    fn revoke_key_moves_active_to_revoked() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = make_active(&mut session);
+        session.revoke_key(&id, RevokeReason::Compromised).unwrap();
+        assert_eq!(session.find_key(&id).unwrap().status(), KeyStatus::Revoked);
+    }
+
+    #[test]
+    fn revoke_key_rejects_destroyed() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = make_active(&mut session);
+        session
+            .destroy_key(&id, DestructionConfirmation::Explicit)
+            .unwrap();
+        let err = session
+            .revoke_key(&id, RevokeReason::Compromised)
+            .unwrap_err();
+        assert!(matches!(err, VaultError::Lifecycle(_)));
+    }
+
+    #[test]
+    fn destroy_key_clears_material_and_marks_destroyed() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = make_active(&mut session);
+        let material_len_before = session.find_key(&id).unwrap().material.len();
+        assert!(material_len_before > 0);
+
+        session
+            .destroy_key(&id, DestructionConfirmation::Explicit)
+            .unwrap();
+
+        let record = session.find_key(&id).unwrap();
+        assert_eq!(record.status(), KeyStatus::Destroyed);
+        assert_eq!(record.material.len(), 0);
+        assert!(record.material.is_empty());
+    }
+
+    #[test]
+    fn destroy_key_is_irreversible() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = make_active(&mut session);
+        session
+            .destroy_key(&id, DestructionConfirmation::Explicit)
+            .unwrap();
+
+        // Destroying again fails.
+        let err = session
+            .destroy_key(&id, DestructionConfirmation::Explicit)
+            .unwrap_err();
+        assert!(matches!(err, VaultError::Lifecycle(_)));
+
+        // Cannot activate either.
+        let err = session.activate_key(&id).unwrap_err();
+        assert!(matches!(err, VaultError::Lifecycle(_)));
+    }
+
+    #[test]
+    fn lifecycle_operations_respect_vault_state() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = make_active(&mut session);
+        session.seal().unwrap();
+
+        // All mutations denied in sealed state.
+        assert!(matches!(
+            session.activate_key(&id),
+            Err(VaultError::StateDenied { .. })
+        ));
+        assert!(matches!(
+            session.rotate_key(&id),
+            Err(VaultError::StateDenied { .. })
+        ));
+        assert!(matches!(
+            session.revoke_key(&id, RevokeReason::Compromised),
+            Err(VaultError::StateDenied { .. })
+        ));
+        assert!(matches!(
+            session.destroy_key(&id, DestructionConfirmation::Explicit),
+            Err(VaultError::StateDenied { .. })
+        ));
+    }
+
+    #[test]
+    fn lifecycle_changes_persist_across_lock_and_unlock() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+
+        let (active_id, destroyed_id) = {
+            let vault = Vault::open(&path).unwrap();
+            let mut session = vault.unlock(b"pw").unwrap();
+
+            let a = make_active(&mut session);
+            let d = session
+                .generate_key(Algorithm::Ed25519, Purpose::Sign)
+                .unwrap();
+            session
+                .destroy_key(&d, DestructionConfirmation::Explicit)
+                .unwrap();
+
+            session.lock().unwrap();
+            (a, d)
+        };
+
+        let vault = Vault::open(&path).unwrap();
+        let session = vault.unlock(b"pw").unwrap();
+        assert_eq!(
+            session.find_key(&active_id).unwrap().status(),
+            KeyStatus::Active
+        );
+        assert_eq!(
+            session.find_key(&destroyed_id).unwrap().status(),
+            KeyStatus::Destroyed
+        );
     }
 
     #[test]
