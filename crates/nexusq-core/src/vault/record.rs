@@ -10,7 +10,46 @@
 //!
 //! See `docs/KEY_MANAGEMENT.md` §4 and `docs/STORAGE.md` §4.
 
-use super::{Algorithm, KeyId, KeyMetadata, KeyStatus, Purpose};
+use super::{Algorithm, KeyId, KeyMetadata, KeyStatus, Origin, Purpose};
+
+/// Errors returned when a [`KeyRecord`] fails validation.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum RecordValidationError {
+    /// The record's version was zero.
+    #[error("key version must be at least 1")]
+    VersionZero,
+
+    /// The purpose is not allowed for the algorithm.
+    #[error("purpose {purpose} is not allowed for algorithm {algorithm}")]
+    PurposeNotAllowed {
+        /// The algorithm on the record.
+        algorithm: Algorithm,
+        /// The purpose on the record.
+        purpose: Purpose,
+    },
+
+    /// A hardware-backed record did not carry a hardware handle, or
+    /// vice versa.
+    #[error("hardware_backed flag does not match the wrapped material variant")]
+    HardwareFlagMismatch,
+
+    /// The wrapped material was empty.
+    #[error("wrapped key material is empty")]
+    EmptyMaterial,
+
+    /// A derived key has no parent.
+    #[error("derived key has no parent_key_id")]
+    DerivedWithoutParent,
+
+    /// `expires_at` is before `created_at`.
+    #[error("expires_at is before created_at")]
+    ExpiredBeforeCreation,
+
+    /// `rotation_due` is before `created_at`.
+    #[error("rotation_due is before created_at")]
+    RotationBeforeCreation,
+}
 
 /// Key material wrapped under the vault's KEK.
 ///
@@ -119,6 +158,59 @@ impl KeyRecord {
     pub fn is_active(&self) -> bool {
         self.metadata.is_active()
     }
+
+    /// Checks the internal invariants of the record.
+    ///
+    /// This does not validate cryptographic correctness (that is the
+    /// job of the crypto module) or authorization (that is the policy
+    /// engine). It only checks that the metadata and the wrapped
+    /// material are mutually consistent.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RecordValidationError`] describing the first invariant
+    /// that was violated.
+    pub fn validate(&self) -> Result<(), RecordValidationError> {
+        let md = &self.metadata;
+
+        if md.version == 0 {
+            return Err(RecordValidationError::VersionZero);
+        }
+
+        if !md.purpose.is_allowed_for(md.algorithm) {
+            return Err(RecordValidationError::PurposeNotAllowed {
+                algorithm: md.algorithm,
+                purpose: md.purpose,
+            });
+        }
+
+        let is_hw_handle = matches!(self.material, WrappedKeyMaterial::HardwareHandle(_));
+        if md.hardware_backed != is_hw_handle {
+            return Err(RecordValidationError::HardwareFlagMismatch);
+        }
+
+        if self.material.is_empty() {
+            return Err(RecordValidationError::EmptyMaterial);
+        }
+
+        if md.created_from == Origin::Derived && md.parent_key_id.is_none() {
+            return Err(RecordValidationError::DerivedWithoutParent);
+        }
+
+        if let Some(exp) = md.expires_at {
+            if exp < md.created_at {
+                return Err(RecordValidationError::ExpiredBeforeCreation);
+            }
+        }
+
+        if let Some(rot) = md.rotation_due {
+            if rot < md.created_at {
+                return Err(RecordValidationError::RotationBeforeCreation);
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -201,5 +293,96 @@ mod tests {
         md.status = KeyStatus::Retired;
         let record = KeyRecord::new(md, WrappedKeyMaterial::Asymmetric(vec![0u8; 64]));
         assert!(!record.is_active());
+    }
+
+    #[test]
+    fn validate_accepts_a_well_formed_record() {
+        let md = sample_metadata();
+        let record = KeyRecord::new(md, WrappedKeyMaterial::Asymmetric(vec![0u8; 64]));
+        assert!(record.validate().is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_version_zero() {
+        let mut md = sample_metadata();
+        md.version = 0;
+        let record = KeyRecord::new(md, WrappedKeyMaterial::Asymmetric(vec![0u8; 64]));
+        assert!(matches!(
+            record.validate(),
+            Err(RecordValidationError::VersionZero)
+        ));
+    }
+
+    #[test]
+    fn validate_rejects_mismatched_purpose() {
+        let mut md = sample_metadata();
+        md.purpose = Purpose::Encrypt; // Ed25519 only allows Sign
+        let record = KeyRecord::new(md, WrappedKeyMaterial::Asymmetric(vec![0u8; 64]));
+        assert!(matches!(
+            record.validate(),
+            Err(RecordValidationError::PurposeNotAllowed { .. })
+        ));
+    }
+
+    #[test]
+    fn validate_rejects_hardware_flag_mismatch() {
+        // hardware_backed = false but material is a HardwareHandle.
+        let md = sample_metadata();
+        let record = KeyRecord::new(md, WrappedKeyMaterial::HardwareHandle(vec![1, 2, 3]));
+        assert!(matches!(
+            record.validate(),
+            Err(RecordValidationError::HardwareFlagMismatch)
+        ));
+    }
+
+    #[test]
+    fn validate_accepts_a_hardware_backed_record() {
+        let mut md = sample_metadata();
+        md.hardware_backed = true;
+        let record = KeyRecord::new(md, WrappedKeyMaterial::HardwareHandle(vec![1, 2, 3]));
+        assert!(record.validate().is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_empty_material() {
+        let md = sample_metadata();
+        let record = KeyRecord::new(md, WrappedKeyMaterial::Asymmetric(Vec::new()));
+        assert!(matches!(
+            record.validate(),
+            Err(RecordValidationError::EmptyMaterial)
+        ));
+    }
+
+    #[test]
+    fn validate_rejects_derived_key_without_parent() {
+        let mut md = sample_metadata();
+        md.created_from = Origin::Derived;
+        let record = KeyRecord::new(md, WrappedKeyMaterial::Asymmetric(vec![0u8; 64]));
+        assert!(matches!(
+            record.validate(),
+            Err(RecordValidationError::DerivedWithoutParent)
+        ));
+    }
+
+    #[test]
+    fn validate_rejects_expiration_before_creation() {
+        let mut md = sample_metadata();
+        md.expires_at = Some(Timestamp::from_secs(1_000));
+        let record = KeyRecord::new(md, WrappedKeyMaterial::Asymmetric(vec![0u8; 64]));
+        assert!(matches!(
+            record.validate(),
+            Err(RecordValidationError::ExpiredBeforeCreation)
+        ));
+    }
+
+    #[test]
+    fn validate_rejects_rotation_before_creation() {
+        let mut md = sample_metadata();
+        md.rotation_due = Some(Timestamp::from_secs(1_000));
+        let record = KeyRecord::new(md, WrappedKeyMaterial::Asymmetric(vec![0u8; 64]));
+        assert!(matches!(
+            record.validate(),
+            Err(RecordValidationError::RotationBeforeCreation)
+        ));
     }
 }
