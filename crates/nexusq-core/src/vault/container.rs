@@ -20,6 +20,7 @@ use crate::crypto::random::{OsRandomSource, RandomError, RandomSource};
 
 use super::algorithm::Algorithm;
 use super::body::{CURRENT_SCHEMA_VERSION, VaultBody, VaultMetadata};
+use super::envelope::{self, EnvelopeError};
 use super::header::{HeaderError, KdfParams, MAGIC, SALT_LEN, VaultHeader};
 use super::key_id::{KeyId, KeyIdError};
 use super::lifecycle::{DestructionConfirmation, LifecycleError, RevokeReason};
@@ -127,6 +128,10 @@ pub enum VaultError {
     /// A key lifecycle operation failed.
     #[error("lifecycle error: {0}")]
     Lifecycle(#[from] LifecycleError),
+
+    /// An envelope operation failed.
+    #[error("envelope error: {0}")]
+    Envelope(#[from] EnvelopeError),
 }
 
 /// A vault file on disk.
@@ -484,6 +489,103 @@ impl Session {
     /// locked or compromised.
     pub fn mark_compromised(&mut self) -> Result<(), VaultError> {
         self.state = self.state.transition_to(VaultState::Compromised)?;
+        Ok(())
+    }
+
+    // =========================================================================
+    // Envelope operations
+    // =========================================================================
+
+    /// Encrypts `plaintext` with the vault key `key_id`, producing a
+    /// CBOR-encoded envelope.
+    ///
+    /// The key must be `Active` and of an AEAD category.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VaultError::StateDenied`] if the session is sealed or
+    /// compromised, or [`VaultError::Envelope`] for envelope-level
+    /// failures (unknown key, wrong category, non-active key).
+    pub fn encrypt(
+        &self,
+        key_id: &KeyId,
+        plaintext: &[u8],
+        metadata: Vec<u8>,
+    ) -> Result<Vec<u8>, VaultError> {
+        self.require_writes_allowed()?;
+
+        let record = self
+            .body
+            .find_key(key_id)
+            .ok_or_else(|| LifecycleError::KeyNotFound(key_id.clone()))?;
+
+        let bytes = envelope::build_envelope(self.kek.as_ref(), record, plaintext, metadata)?;
+        Ok(bytes)
+    }
+
+    /// Decrypts a CBOR-encoded envelope produced by [`Session::encrypt`].
+    ///
+    /// The KeyId embedded in the envelope is resolved against the
+    /// session's vault.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VaultError::StateDenied`] if the session is sealed or
+    /// compromised, or [`VaultError::Envelope`] for envelope-level
+    /// failures (unknown key, tampered data, wrong mode).
+    pub fn decrypt(&self, envelope_bytes: &[u8]) -> Result<Zeroizing<Vec<u8>>, VaultError> {
+        self.require_writes_allowed()?;
+
+        let lookup = |id: &KeyId| self.body.find_key(id).cloned();
+        let plaintext = envelope::open_envelope(self.kek.as_ref(), envelope_bytes, lookup)?;
+        Ok(plaintext)
+    }
+
+    /// Encrypts a file under the vault key `key_id`.
+    ///
+    /// The encrypted output is written next to `input` with a `.nqx`
+    /// extension. Returns the path of the encrypted file.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VaultError::StateDenied`] if the session is sealed or
+    /// compromised, or [`VaultError::Envelope`] for envelope-level
+    /// failures.
+    pub fn encrypt_file(
+        &self,
+        input: impl AsRef<std::path::Path>,
+        key_id: &KeyId,
+        metadata: Vec<u8>,
+    ) -> Result<std::path::PathBuf, VaultError> {
+        self.require_writes_allowed()?;
+
+        let record = self
+            .body
+            .find_key(key_id)
+            .ok_or_else(|| LifecycleError::KeyNotFound(key_id.clone()))?;
+
+        let path =
+            super::file_ops::encrypt_file_with_key(input, self.kek.as_ref(), record, metadata)?;
+        Ok(path)
+    }
+
+    /// Decrypts an envelope file previously produced by
+    /// [`Session::encrypt_file`], writing the plaintext to `output`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VaultError::StateDenied`] if the session is sealed or
+    /// compromised, or [`VaultError::Envelope`] for envelope-level
+    /// failures.
+    pub fn decrypt_file(
+        &self,
+        input: impl AsRef<std::path::Path>,
+        output: impl AsRef<std::path::Path>,
+    ) -> Result<(), VaultError> {
+        self.require_writes_allowed()?;
+
+        let lookup = |id: &KeyId| self.body.find_key(id).cloned();
+        super::file_ops::decrypt_file_with_key(input, output, self.kek.as_ref(), lookup)?;
         Ok(())
     }
 
@@ -1480,6 +1582,172 @@ mod tests {
             session.find_key(&destroyed_id).unwrap().status(),
             KeyStatus::Destroyed
         );
+    }
+
+    // =========================================================================
+    // Envelope integration tests
+    // =========================================================================
+
+    fn make_active_aead_key(session: &mut Session) -> KeyId {
+        let id = session
+            .generate_key(Algorithm::Aes256Gcm, Purpose::Encrypt)
+            .unwrap();
+        session.activate_key(&id).unwrap();
+        id
+    }
+
+    #[test]
+    fn session_encrypt_decrypt_roundtrip() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = make_active_aead_key(&mut session);
+        let plaintext = b"the secret message";
+        let env_bytes = session
+            .encrypt(&id, plaintext, b"note.txt".to_vec())
+            .unwrap();
+
+        let recovered = session.decrypt(&env_bytes).unwrap();
+        assert_eq!(recovered.as_slice(), plaintext);
+    }
+
+    #[test]
+    fn session_encrypt_rejects_inactive_key() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = session
+            .generate_key(Algorithm::Aes256Gcm, Purpose::Encrypt)
+            .unwrap();
+        // Not activated.
+        let err = session.encrypt(&id, b"data", Vec::new()).unwrap_err();
+        assert!(matches!(err, VaultError::Envelope(_)));
+    }
+
+    #[test]
+    fn session_encrypt_rejects_unknown_key() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let session = vault.unlock(b"pw").unwrap();
+
+        let mut rng = OsRandomSource::new();
+        let bogus = KeyId::generate(&mut rng, "aes256gcm").unwrap();
+        let err = session.encrypt(&bogus, b"data", Vec::new()).unwrap_err();
+        assert!(matches!(err, VaultError::Lifecycle(_)));
+    }
+
+    #[test]
+    fn session_decrypt_rejects_tampered_envelope() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = make_active_aead_key(&mut session);
+        let mut env_bytes = session.encrypt(&id, b"payload", Vec::new()).unwrap();
+        let last = env_bytes.len() - 1;
+        env_bytes[last] ^= 0x01;
+
+        let err = session.decrypt(&env_bytes).unwrap_err();
+        assert!(matches!(err, VaultError::Envelope(_)));
+    }
+
+    #[test]
+    fn session_envelope_operations_denied_when_sealed() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = make_active_aead_key(&mut session);
+        let env_bytes = session.encrypt(&id, b"payload", Vec::new()).unwrap();
+
+        session.seal().unwrap();
+
+        // Encrypt and decrypt are both denied in the sealed state.
+        assert!(matches!(
+            session.encrypt(&id, b"more", Vec::new()),
+            Err(VaultError::StateDenied { .. })
+        ));
+        assert!(matches!(
+            session.decrypt(&env_bytes),
+            Err(VaultError::StateDenied { .. })
+        ));
+    }
+
+    #[test]
+    fn session_envelope_operations_denied_when_compromised() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = make_active_aead_key(&mut session);
+        session.mark_compromised().unwrap();
+
+        assert!(matches!(
+            session.encrypt(&id, b"data", Vec::new()),
+            Err(VaultError::StateDenied { .. })
+        ));
+    }
+
+    #[test]
+    fn session_file_roundtrip() {
+        use std::fs;
+
+        let dir = TempDir::new().unwrap();
+        let vault_path = temp_path(&dir, "test.nqv");
+        Vault::create(&vault_path, b"pw", None).unwrap();
+        let vault = Vault::open(&vault_path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = make_active_aead_key(&mut session);
+
+        let input = dir.path().join("letter.txt");
+        let output = dir.path().join("letter-recovered.txt");
+        fs::write(&input, b"dear friend, ...").unwrap();
+
+        let encrypted_path = session
+            .encrypt_file(&input, &id, b"letter.txt".to_vec())
+            .unwrap();
+        assert!(encrypted_path.exists());
+
+        session.decrypt_file(&encrypted_path, &output).unwrap();
+        assert_eq!(fs::read(&output).unwrap(), b"dear friend, ...");
+    }
+
+    #[test]
+    fn session_envelope_survives_lock_and_unlock() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+
+        let (id, env_bytes) = {
+            let vault = Vault::open(&path).unwrap();
+            let mut session = vault.unlock(b"pw").unwrap();
+            let id = make_active_aead_key(&mut session);
+            let bytes = session.encrypt(&id, b"persistent", Vec::new()).unwrap();
+            session.lock().unwrap();
+            (id, bytes)
+        };
+
+        // Reopen and decrypt.
+        let vault = Vault::open(&path).unwrap();
+        let session = vault.unlock(b"pw").unwrap();
+        let _ = id;
+        let recovered = session.decrypt(&env_bytes).unwrap();
+        assert_eq!(recovered.as_slice(), b"persistent");
     }
 
     #[test]
