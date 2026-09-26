@@ -10,6 +10,8 @@
 //!
 //! See `docs/KEY_MANAGEMENT.md` §4 and `docs/STORAGE.md` §4.
 
+use serde::{Deserialize, Serialize};
+
 use super::{Algorithm, KeyId, KeyMetadata, KeyStatus, Origin, Purpose};
 
 /// Errors returned when a [`KeyRecord`] fails validation.
@@ -56,7 +58,7 @@ pub enum RecordValidationError {
 /// The three variants describe *what kind* of material is stored, so
 /// that the vault can apply the right size and shape checks without
 /// having to know the algorithm in advance.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WrappedKeyMaterial {
     /// Symmetric key material (AES, ChaCha20).
     ///
@@ -112,7 +114,7 @@ impl WrappedKeyMaterial {
 }
 
 /// A key in the vault: metadata plus wrapped material.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KeyRecord {
     /// Everything the vault knows about the key, except the material.
     pub metadata: KeyMetadata,
