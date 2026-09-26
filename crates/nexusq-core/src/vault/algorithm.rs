@@ -14,6 +14,8 @@
 use std::fmt;
 use std::str::FromStr;
 
+use super::Purpose;
+
 /// Category of a cryptographic algorithm.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Category {
@@ -82,6 +84,21 @@ impl Algorithm {
             Self::MlKem768 => Some(2400),
             Self::Ed25519 => Some(32),
             Self::Aes256Gcm | Self::ChaCha20Poly1305 => Some(32),
+        }
+    }
+
+    /// Returns the set of purposes a key with this algorithm can be
+    /// created for.
+    ///
+    /// A key with an algorithm but no matching purpose is rejected at
+    /// creation time.
+    #[must_use]
+    pub const fn allowed_purposes(self) -> &'static [Purpose] {
+        match self {
+            Self::MlKem768 => &[Purpose::KeyAgreement],
+            Self::Ed25519 => &[Purpose::Sign],
+            Self::Aes256Gcm => &[Purpose::Encrypt, Purpose::Decrypt, Purpose::Wrap],
+            Self::ChaCha20Poly1305 => &[Purpose::Encrypt, Purpose::Decrypt],
         }
     }
 
@@ -184,5 +201,32 @@ mod tests {
     fn parse_rejects_case_variants() {
         assert!("MLKEM768".parse::<Algorithm>().is_err());
         assert!("Ed25519".parse::<Algorithm>().is_err());
+    }
+
+    #[test]
+    fn allowed_purposes_are_correct_per_algorithm() {
+        assert_eq!(
+            Algorithm::MlKem768.allowed_purposes(),
+            &[Purpose::KeyAgreement]
+        );
+        assert_eq!(Algorithm::Ed25519.allowed_purposes(), &[Purpose::Sign]);
+        assert_eq!(
+            Algorithm::Aes256Gcm.allowed_purposes(),
+            &[Purpose::Encrypt, Purpose::Decrypt, Purpose::Wrap]
+        );
+        assert_eq!(
+            Algorithm::ChaCha20Poly1305.allowed_purposes(),
+            &[Purpose::Encrypt, Purpose::Decrypt]
+        );
+    }
+
+    #[test]
+    fn purpose_matches_algorithm_consistently() {
+        assert!(Purpose::Sign.is_allowed_for(Algorithm::Ed25519));
+        assert!(!Purpose::Sign.is_allowed_for(Algorithm::MlKem768));
+        assert!(Purpose::KeyAgreement.is_allowed_for(Algorithm::MlKem768));
+        assert!(!Purpose::KeyAgreement.is_allowed_for(Algorithm::Ed25519));
+        assert!(Purpose::Wrap.is_allowed_for(Algorithm::Aes256Gcm));
+        assert!(!Purpose::Wrap.is_allowed_for(Algorithm::ChaCha20Poly1305));
     }
 }
