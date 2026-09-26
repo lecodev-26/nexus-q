@@ -3,6 +3,7 @@
 pub mod algorithm;
 pub mod body;
 pub mod container;
+pub mod envelope;
 pub mod header;
 pub mod key_id;
 pub mod lifecycle;
@@ -18,6 +19,10 @@ pub mod wrapping;
 pub use algorithm::{Algorithm, AlgorithmError, Category};
 pub use body::{CURRENT_SCHEMA_VERSION, VaultBody, VaultMetadata};
 pub use container::{Session, Vault, VaultError};
+pub use envelope::{
+    Envelope, EnvelopeAlgorithm, EnvelopeHeader, FORMAT_VERSION as ENVELOPE_FORMAT_VERSION,
+    MAGIC as ENVELOPE_MAGIC,
+};
 pub use header::{
     FORMAT_VERSION, HeaderError, KdfAlgorithm, KdfParams, MAGIC, SALT_LEN, VaultHeader,
 };
