@@ -2,6 +2,7 @@
 
 pub mod algorithm;
 pub mod body;
+pub mod container;
 pub mod header;
 pub mod key_id;
 pub mod metadata;
@@ -10,10 +11,11 @@ pub mod record;
 pub mod serde_helpers;
 pub mod status;
 pub mod timestamp;
-pub mod container;
+pub mod wrapping;
 
 pub use algorithm::{Algorithm, AlgorithmError, Category};
 pub use body::{CURRENT_SCHEMA_VERSION, VaultBody, VaultMetadata};
+pub use container::{Session, Vault, VaultError};
 pub use header::{
     FORMAT_VERSION, HeaderError, KdfAlgorithm, KdfParams, MAGIC, SALT_LEN, VaultHeader,
 };
@@ -24,4 +26,4 @@ pub use record::{KeyRecord, RecordValidationError, WrappedKeyMaterial};
 pub use serde_helpers::{CborError, from_slice, to_vec};
 pub use status::{KeyStatus, StatusParseError, StatusTransitionError};
 pub use timestamp::{Timestamp, TimestampError};
-pub use container::{Session, Vault, VaultError};
+pub use wrapping::{WrappingError, unwrap, wrap};
