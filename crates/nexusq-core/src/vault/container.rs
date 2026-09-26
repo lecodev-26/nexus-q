@@ -32,6 +32,7 @@ use super::state::{StateTransitionError, VaultState};
 use super::status::KeyStatus;
 use super::timestamp::Timestamp;
 use super::wrapping::{WrappingError, wrap};
+use crate::identity::{Identity, IdentityId, IdentityMetadata, IdentityStatus};
 
 /// Number of bytes of the length prefix before the CBOR header.
 const HEADER_LEN_PREFIX: usize = 4;
@@ -132,6 +133,18 @@ pub enum VaultError {
     /// An envelope operation failed.
     #[error("envelope error: {0}")]
     Envelope(#[from] EnvelopeError),
+
+    /// An identity operation failed.
+    #[error("identity error: {0}")]
+    Identity(#[from] crate::identity::IdentityValidationError),
+
+    /// No identity with this id exists in the vault.
+    #[error("identity not found: {0}")]
+    IdentityNotFound(IdentityId),
+
+    /// An identity id was generated twice (astronomically unlikely).
+    #[error("identity id already exists: {0}")]
+    DuplicateIdentityId(IdentityId),
 }
 
 /// A vault file on disk.
@@ -490,6 +503,92 @@ impl Session {
     pub fn mark_compromised(&mut self) -> Result<(), VaultError> {
         self.state = self.state.transition_to(VaultState::Compromised)?;
         Ok(())
+    }
+
+    // =========================================================================
+    // Identity operations
+    // =========================================================================
+
+    /// Creates a fresh identity with a brand new Ed25519 signing key.
+    ///
+    /// The signing key is generated inside the vault and immediately
+    /// activated. The new identity references it and starts in the
+    /// `Active` state.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VaultError::StateDenied`] if the session is sealed or
+    /// compromised, or another error if key generation or identity
+    /// registration fails.
+    pub fn create_identity(&mut self, label: Option<String>) -> Result<IdentityId, VaultError> {
+        self.require_writes_allowed()?;
+
+        // Generate the signing key inside the vault.
+        let signing_key = self.generate_key(Algorithm::Ed25519, Purpose::Sign)?;
+        self.activate_key(&signing_key)?;
+
+        // Build the identity.
+        let mut rng = OsRandomSource::new();
+        let identity_id = IdentityId::generate(&mut rng)
+            .map_err(|_| VaultError::Random(crate::crypto::random::RandomError::Unavailable))?;
+
+        if self.body.find_identity(&identity_id).is_some() {
+            return Err(VaultError::DuplicateIdentityId(identity_id));
+        }
+
+        let now = Timestamp::now().unwrap_or(Timestamp::from_secs(0));
+        let metadata = IdentityMetadata {
+            created_at: now,
+            created_by: "session".to_string(),
+            label,
+            status: IdentityStatus::Active,
+            version: 1,
+            revoked_at: None,
+            revocation_reason: None,
+        };
+
+        let identity = Identity {
+            id: identity_id.clone(),
+            signing_key,
+            encryption_key: None,
+            key_agreement_key: None,
+            metadata,
+        };
+        identity.validate()?;
+
+        self.body.identities.push(identity);
+        Ok(identity_id)
+    }
+
+    /// Returns an iterator over all identities in the vault.
+    pub fn list_identities(&self) -> impl Iterator<Item = &Identity> {
+        self.body.identities.iter()
+    }
+
+    /// Returns the identity with `id`, if present.
+    #[must_use]
+    pub fn find_identity(&self, id: &IdentityId) -> Option<&Identity> {
+        self.body.find_identity(id)
+    }
+
+    /// Returns a mutable reference to the identity with `id`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VaultError::StateDenied`] if the session is sealed or
+    /// compromised.
+    pub fn find_identity_mut(
+        &mut self,
+        id: &IdentityId,
+    ) -> Result<Option<&mut Identity>, VaultError> {
+        self.require_writes_allowed()?;
+        Ok(self.body.find_identity_mut(id))
+    }
+
+    /// Returns the number of identities in the vault.
+    #[must_use]
+    pub fn identity_count(&self) -> usize {
+        self.body.identity_count()
     }
 
     // =========================================================================
@@ -1758,6 +1857,142 @@ mod tests {
         let _ = id;
         let recovered = session.decrypt(&env_bytes).unwrap();
         assert_eq!(recovered.as_slice(), b"persistent");
+    }
+
+    // =========================================================================
+    // Identity integration tests
+    // =========================================================================
+
+    #[test]
+    fn create_identity_stores_identity_and_signing_key() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = session.create_identity(Some("alice".to_string())).unwrap();
+        assert_eq!(session.identity_count(), 1);
+        assert_eq!(session.key_count(), 1);
+
+        let identity = session.find_identity(&id).unwrap();
+        assert_eq!(identity.metadata.label.as_deref(), Some("alice"));
+        assert_eq!(identity.metadata.status, IdentityStatus::Active);
+        assert_eq!(identity.metadata.version, 1);
+
+        // The signing key exists, is Active, and is Ed25519/Sign.
+        let key = session.find_key(&identity.signing_key).unwrap();
+        assert_eq!(key.algorithm(), Algorithm::Ed25519);
+        assert_eq!(key.purpose(), Purpose::Sign);
+        assert_eq!(key.status(), KeyStatus::Active);
+    }
+
+    #[test]
+    fn create_identity_without_label() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = session.create_identity(None).unwrap();
+        let identity = session.find_identity(&id).unwrap();
+        assert!(identity.metadata.label.is_none());
+    }
+
+    #[test]
+    fn identities_have_distinct_ids() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let a = session.create_identity(None).unwrap();
+        let b = session.create_identity(None).unwrap();
+        assert_ne!(a, b);
+        assert_eq!(session.identity_count(), 2);
+        assert_eq!(session.key_count(), 2);
+    }
+
+    #[test]
+    fn list_identities_returns_all() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        session.create_identity(None).unwrap();
+        session.create_identity(None).unwrap();
+        session.create_identity(None).unwrap();
+
+        let ids: Vec<_> = session.list_identities().map(|i| i.id.clone()).collect();
+        assert_eq!(ids.len(), 3);
+    }
+
+    #[test]
+    fn create_identity_requires_write_access() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        session.seal().unwrap();
+        let err = session.create_identity(None).unwrap_err();
+        assert!(matches!(err, VaultError::StateDenied { .. }));
+    }
+
+    #[test]
+    fn identities_persist_across_lock_and_unlock() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+
+        let id = {
+            let vault = Vault::open(&path).unwrap();
+            let mut session = vault.unlock(b"pw").unwrap();
+            let id = session
+                .create_identity(Some("persistent".to_string()))
+                .unwrap();
+            session.lock().unwrap();
+            id
+        };
+
+        let vault = Vault::open(&path).unwrap();
+        let session = vault.unlock(b"pw").unwrap();
+        assert_eq!(session.identity_count(), 1);
+        let identity = session.find_identity(&id).unwrap();
+        assert_eq!(identity.metadata.label.as_deref(), Some("persistent"));
+    }
+
+    #[test]
+    fn find_identity_mut_requires_write_access() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = session.create_identity(None).unwrap();
+        session.seal().unwrap();
+
+        let err = session.find_identity_mut(&id).unwrap_err();
+        assert!(matches!(err, VaultError::StateDenied { .. }));
+
+        session.unseal().unwrap();
+        let identity = session.find_identity_mut(&id).unwrap().unwrap();
+        identity.metadata.label = Some("updated".to_string());
+        assert_eq!(
+            session
+                .find_identity(&id)
+                .unwrap()
+                .metadata
+                .label
+                .as_deref(),
+            Some("updated")
+        );
     }
 
     #[test]

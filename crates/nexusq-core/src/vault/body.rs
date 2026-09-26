@@ -19,6 +19,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::{KeyRecord, Timestamp};
+use crate::identity::Identity;
 
 /// Current body schema version.
 ///
@@ -71,6 +72,15 @@ pub struct VaultBody {
     /// [`crate::vault::KeyId`]. The vector is used for enumeration and
     /// serialization.
     pub keys: Vec<KeyRecord>,
+
+    /// All identities in the vault.
+    ///
+    /// An identity references its keys by [`crate::vault::KeyId`]; it
+    /// does not store key material itself. The field is optional on
+    /// deserialization so vaults written before identities existed
+    /// keep loading.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub identities: Vec<Identity>,
 }
 
 impl VaultBody {
@@ -80,6 +90,7 @@ impl VaultBody {
         Self {
             metadata,
             keys: Vec::new(),
+            identities: Vec::new(),
         }
     }
 
@@ -98,6 +109,23 @@ impl VaultBody {
     /// Finds a key by its id, mutably.
     pub fn find_key_mut(&mut self, key_id: &super::KeyId) -> Option<&mut KeyRecord> {
         self.keys.iter_mut().find(|r| r.key_id() == key_id)
+    }
+
+    /// Returns the number of identities in the vault.
+    #[must_use]
+    pub fn identity_count(&self) -> usize {
+        self.identities.len()
+    }
+
+    /// Finds an identity by its id.
+    #[must_use]
+    pub fn find_identity(&self, id: &crate::identity::IdentityId) -> Option<&Identity> {
+        self.identities.iter().find(|i| &i.id == id)
+    }
+
+    /// Finds an identity by its id, mutably.
+    pub fn find_identity_mut(&mut self, id: &crate::identity::IdentityId) -> Option<&mut Identity> {
+        self.identities.iter_mut().find(|i| &i.id == id)
     }
 }
 
