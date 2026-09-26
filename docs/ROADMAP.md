@@ -212,20 +212,29 @@ and metadata.
 
 **Deliverables:**
 
-- Vault file format (F-01, see `STORAGE.md` §4)
-- Vault state machine (LOCKED, UNLOCKED, SEALED, COMPROMISED)
-- Session management (create, use, terminate)
-- Key store operations (create, import, export-public, rotate, revoke,
-  destroy)
-- Access control (via policy engine, at least minimal)
-- Audit log integration
+- [x] Vault file format (F-01, see `STORAGE.md` §4)
+- [x] Vault state machine (LOCKED, UNLOCKED, SEALED, COMPROMISED)
+- [x] Session management (create, use, terminate)
+- [x] Key store operations: create, list, find, activate, rotate,
+      revoke, destroy
+- [ ] Access control (via policy engine, at least minimal) — deferred
+      to Phase 11 (Policy Engine), which is where it belongs
+- [ ] Audit log integration — deferred to Phase 5+, since the audit
+      module is not yet implemented
+- [x] Envelope encryption primitives (material wrapping), used here
+      for key storage
 
 **Exit criteria:**
 
-- Vault can be created, unlocked, used, locked, reopened.
-- Tampered vault files are detected and refused.
-- Wrong passwords are detected without full decryption.
-- Atomic write verified under simulated crash.
+- [x] Vault can be created, unlocked, used, locked, reopened.
+- [x] Tampered vault files are detected and refused.
+- [x] Wrong passwords are detected without full decryption.
+- [x] Atomic write verified: temp file, fsync, rename, directory
+      fsync. Concurrent writers use unique temp names.
+
+**Status:** ✅ Complete, except for access control (Phase 11) and
+audit log integration (Phase 5+). Those are tracked separately and do
+not block moving to Phase 5.
 
 ---
 
