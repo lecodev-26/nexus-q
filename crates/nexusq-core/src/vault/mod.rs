@@ -4,6 +4,7 @@ pub mod algorithm;
 pub mod body;
 pub mod container;
 pub mod envelope;
+pub mod file_ops;
 pub mod header;
 pub mod key_id;
 pub mod lifecycle;
@@ -22,6 +23,10 @@ pub use container::{Session, Vault, VaultError};
 pub use envelope::{
     Envelope, EnvelopeAlgorithm, EnvelopeHeader, FORMAT_VERSION as ENVELOPE_FORMAT_VERSION,
     MAGIC as ENVELOPE_MAGIC,
+};
+pub use file_ops::{
+    ENCRYPTED_EXTENSION, decrypt_file_with_kem, decrypt_file_with_key, encrypt_file_to_public_key,
+    encrypt_file_with_key, encrypted_path_for,
 };
 pub use header::{
     FORMAT_VERSION, HeaderError, KdfAlgorithm, KdfParams, MAGIC, SALT_LEN, VaultHeader,

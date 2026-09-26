@@ -155,6 +155,10 @@ pub enum EnvelopeError {
     /// The KEM encapsulated or decapsulated incorrectly.
     #[error("kem operation failed")]
     Kem,
+
+    /// An I/O error occurred while reading or writing a file.
+    #[error("i/o error: {0}")]
+    Io(#[from] std::io::Error),
 }
 
 /// How the DEK is protected inside the envelope.
