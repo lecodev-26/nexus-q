@@ -1,0 +1,188 @@
+//! Cryptographic algorithms recognized by the key manager.
+//!
+//! This enum is descriptive: it names the algorithms NEXUS-Q knows how
+//! to use, along with their canonical string identifiers and key sizes.
+//! It does not perform any cryptographic operations. The vault module
+//! maps each variant to the corresponding implementation in
+//! [`crate::crypto`].
+//!
+//! Only algorithms that are already implemented are listed here. New
+//! variants are added when a primitive lands, not in advance. See
+//! `docs/CRYPTOGRAPHY.md` §4 for the full set of algorithm families
+//! and their parameters.
+
+use std::fmt;
+use std::str::FromStr;
+
+/// Category of a cryptographic algorithm.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Category {
+    /// Key encapsulation mechanism (post-quantum).
+    Kem,
+    /// Digital signature scheme.
+    Signature,
+    /// Authenticated symmetric encryption.
+    Aead,
+}
+
+/// A cryptographic algorithm supported by NEXUS-Q.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Algorithm {
+    /// ML-KEM-768 (FIPS 203). Post-quantum key encapsulation.
+    MlKem768,
+    /// Ed25519 (RFC 8032). Digital signatures.
+    Ed25519,
+    /// AES-256-GCM (NIST SP 800-38D). Authenticated encryption.
+    Aes256Gcm,
+    /// ChaCha20-Poly1305 (RFC 8439). Authenticated encryption.
+    ChaCha20Poly1305,
+}
+
+impl Algorithm {
+    /// Returns the canonical lowercase identifier of this algorithm.
+    ///
+    /// This is the string used in [`crate::vault::KeyId`] and in any
+    /// serialized metadata. It is stable: changing it is a breaking
+    /// change.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::MlKem768 => "mlkem768",
+            Self::Ed25519 => "ed25519",
+            Self::Aes256Gcm => "aes256gcm",
+            Self::ChaCha20Poly1305 => "chacha20poly1305",
+        }
+    }
+
+    /// Returns the category this algorithm belongs to.
+    #[must_use]
+    pub const fn category(self) -> Category {
+        match self {
+            Self::MlKem768 => Category::Kem,
+            Self::Ed25519 => Category::Signature,
+            Self::Aes256Gcm | Self::ChaCha20Poly1305 => Category::Aead,
+        }
+    }
+
+    /// Returns the length in bytes of a public key for this algorithm,
+    /// or `None` if the algorithm has no public key.
+    #[must_use]
+    pub const fn public_key_len(self) -> Option<usize> {
+        match self {
+            Self::MlKem768 => Some(1184),
+            Self::Ed25519 => Some(32),
+            Self::Aes256Gcm | Self::ChaCha20Poly1305 => None,
+        }
+    }
+
+    /// Returns the length in bytes of a secret key for this algorithm.
+    #[must_use]
+    pub const fn secret_key_len(self) -> Option<usize> {
+        match self {
+            Self::MlKem768 => Some(2400),
+            Self::Ed25519 => Some(32),
+            Self::Aes256Gcm | Self::ChaCha20Poly1305 => Some(32),
+        }
+    }
+
+    /// Returns every algorithm known to the key manager.
+    #[must_use]
+    pub const fn all() -> &'static [Algorithm] {
+        &[
+            Algorithm::MlKem768,
+            Algorithm::Ed25519,
+            Algorithm::Aes256Gcm,
+            Algorithm::ChaCha20Poly1305,
+        ]
+    }
+}
+
+impl fmt::Display for Algorithm {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for Algorithm {
+    type Err = AlgorithmError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        for &alg in Algorithm::all() {
+            if alg.as_str() == s {
+                return Ok(alg);
+            }
+        }
+        Err(AlgorithmError::Unknown(s.to_string()))
+    }
+}
+
+/// Errors returned when parsing an [`Algorithm`].
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum AlgorithmError {
+    /// The input did not match any known algorithm identifier.
+    #[error("unknown algorithm: {0}")]
+    Unknown(String),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn roundtrip_display_and_parse_for_every_algorithm() {
+        for &alg in Algorithm::all() {
+            let s = alg.to_string();
+            let parsed: Algorithm = s.parse().unwrap();
+            assert_eq!(parsed, alg);
+        }
+    }
+
+    #[test]
+    fn categories_are_correct() {
+        assert_eq!(Algorithm::MlKem768.category(), Category::Kem);
+        assert_eq!(Algorithm::Ed25519.category(), Category::Signature);
+        assert_eq!(Algorithm::Aes256Gcm.category(), Category::Aead);
+        assert_eq!(Algorithm::ChaCha20Poly1305.category(), Category::Aead);
+    }
+
+    #[test]
+    fn public_key_lengths_match_specs() {
+        assert_eq!(Algorithm::MlKem768.public_key_len(), Some(1184));
+        assert_eq!(Algorithm::Ed25519.public_key_len(), Some(32));
+        assert_eq!(Algorithm::Aes256Gcm.public_key_len(), None);
+        assert_eq!(Algorithm::ChaCha20Poly1305.public_key_len(), None);
+    }
+
+    #[test]
+    fn secret_key_lengths_match_specs() {
+        assert_eq!(Algorithm::MlKem768.secret_key_len(), Some(2400));
+        assert_eq!(Algorithm::Ed25519.secret_key_len(), Some(32));
+        assert_eq!(Algorithm::Aes256Gcm.secret_key_len(), Some(32));
+        assert_eq!(Algorithm::ChaCha20Poly1305.secret_key_len(), Some(32));
+    }
+
+    #[test]
+    fn canonical_strings_are_stable() {
+        // These strings appear in KeyId and in serialized metadata.
+        // Changing any of them is a breaking change.
+        assert_eq!(Algorithm::MlKem768.as_str(), "mlkem768");
+        assert_eq!(Algorithm::Ed25519.as_str(), "ed25519");
+        assert_eq!(Algorithm::Aes256Gcm.as_str(), "aes256gcm");
+        assert_eq!(Algorithm::ChaCha20Poly1305.as_str(), "chacha20poly1305");
+    }
+
+    #[test]
+    fn parse_rejects_unknown() {
+        assert!(matches!(
+            "rsa2048".parse::<Algorithm>(),
+            Err(AlgorithmError::Unknown(_))
+        ));
+    }
+
+    #[test]
+    fn parse_rejects_case_variants() {
+        assert!("MLKEM768".parse::<Algorithm>().is_err());
+        assert!("Ed25519".parse::<Algorithm>().is_err());
+    }
+}
