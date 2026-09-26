@@ -12,6 +12,8 @@
 use std::fmt;
 use std::str::FromStr;
 
+use serde::{Deserialize, Serialize};
+
 /// Lifecycle state of a key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum KeyStatus {
@@ -132,6 +134,19 @@ impl KeyStatus {
                 to: target,
             })
         }
+    }
+}
+
+impl Serialize for KeyStatus {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for KeyStatus {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        s.parse().map_err(serde::de::Error::custom)
     }
 }
 

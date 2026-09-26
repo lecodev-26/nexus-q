@@ -9,6 +9,8 @@
 use std::fmt;
 use std::str::FromStr;
 
+use serde::{Deserialize, Serialize};
+
 use super::Algorithm;
 
 /// What a key is allowed to be used for.
@@ -66,6 +68,19 @@ impl Purpose {
             Purpose::KeyAgreement,
             Purpose::Wrap,
         ]
+    }
+}
+
+impl Serialize for Purpose {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for Purpose {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        s.parse().map_err(serde::de::Error::custom)
     }
 }
 

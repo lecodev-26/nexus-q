@@ -10,6 +10,8 @@
 //!
 //! See `docs/KEY_MANAGEMENT.md` §4.
 
+use serde::{Deserialize, Serialize};
+
 use super::{Algorithm, KeyId, KeyStatus, Purpose, Timestamp};
 
 /// How a key came to exist in the vault.
@@ -21,6 +23,24 @@ pub enum Origin {
     Imported,
     /// Derived from another key (see `parent_key_id`).
     Derived,
+}
+
+impl Serialize for Origin {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for Origin {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        match s.as_str() {
+            "generated" => Ok(Origin::Generated),
+            "imported" => Ok(Origin::Imported),
+            "derived" => Ok(Origin::Derived),
+            other => Err(serde::de::Error::custom(format!("unknown origin: {other}"))),
+        }
+    }
 }
 
 impl Origin {
@@ -39,7 +59,7 @@ impl Origin {
 ///
 /// The key material lives separately, wrapped under the vault's KEK.
 /// This struct is the "public face" of a key inside the vault.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KeyMetadata {
     /// Unique identifier. Never changes for the lifetime of the key.
     pub key_id: KeyId,
