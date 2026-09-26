@@ -245,19 +245,23 @@ protect real data.
 
 **Deliverables:**
 
-- Envelope format `NQX1` (see `STORAGE.md` §5)
-- Encrypt / decrypt file operations
-- Envelope to vault key and to public key
-- AAD binding (algorithm ID, KeyId, metadata)
-- Corruption detection (no partial plaintext)
-- CLI commands for encrypt / decrypt (early stub)
+- [x] Envelope format `NQX1` (see `STORAGE.md` §5 and ADR 0003)
+- [x] Encrypt / decrypt operations (in memory)
+- [x] Envelope to vault key (vault mode)
+- [x] Envelope to public key (public-key mode, ML-KEM-768 hybrid)
+- [x] AAD binding (whole header is AAD for the payload)
+- [x] Corruption detection (no partial plaintext)
+- [x] File operations with `.nqx` extension
+- [ ] CLI commands for encrypt / decrypt — deferred to Phase 12 (CLI)
 
 **Exit criteria:**
 
-- Round-trip encryption/decryption works for files of various sizes.
-- Tampered envelopes fail with no partial plaintext.
-- Envelopes to public keys can be decrypted by the recipient.
-- Metadata is authenticated.
+- [x] Round-trip encryption/decryption works for various payloads.
+- [x] Tampered envelopes fail with no partial plaintext.
+- [x] Envelopes to public keys can be decrypted by the recipient.
+- [x] Metadata is authenticated.
+
+**Status:** ✅ Complete, except for CLI integration (Phase 12).
 
 ---
 
