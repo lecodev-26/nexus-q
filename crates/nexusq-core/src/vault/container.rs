@@ -955,21 +955,31 @@ fn generate_vault_id<S: RandomSource>(source: &mut S) -> Result<String, VaultErr
 // Key material generation
 // =============================================================================
 //
-// For Phase 4 the vault is a container: it does not yet need to know
-// how to produce algorithm-specific key material. That arrives with
-// envelope encryption (Phase 5) and identity (Phase 6). For now we
-// generate 32 random bytes regardless of algorithm, which is enough to
-// exercise the wrapping and storage paths.
-//
-// When real material is introduced, this function will dispatch per
-// algorithm and return the serialized private key bytes.
+// Real, algorithm-specific key material. For Ed25519 we draw a signing
+// key and keep its 32-byte seed. For ML-KEM we draw a hybrid key pair
+// and keep the secret half. For the AEAD algorithms we draw 32 random
+// bytes. Everything is returned in a Zeroizing buffer so the caller
+// does not have to remember to wipe it.
 
 fn generate_material<S: RandomSource>(
-    _algorithm: Algorithm,
+    algorithm: Algorithm,
     source: &mut S,
-) -> Result<Vec<u8>, VaultError> {
-    let mut material = vec![0u8; 32];
-    source.fill_bytes(&mut material)?;
+) -> Result<Zeroizing<Vec<u8>>, VaultError> {
+    let material: Zeroizing<Vec<u8>> = match algorithm {
+        Algorithm::Ed25519 => {
+            let pair = crate::crypto::sign::generate();
+            Zeroizing::new(pair.signing.to_bytes().to_vec())
+        }
+        Algorithm::MlKem768 => {
+            let pair = crate::crypto::kem::hybrid::generate();
+            pair.secret_key_bytes()
+        }
+        Algorithm::Aes256Gcm | Algorithm::ChaCha20Poly1305 => {
+            let mut buf = Zeroizing::new(vec![0u8; 32]);
+            source.fill_bytes(buf.as_mut())?;
+            buf
+        }
+    };
     Ok(material)
 }
 
