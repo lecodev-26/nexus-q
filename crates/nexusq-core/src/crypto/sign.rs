@@ -105,6 +105,16 @@ impl SigningKey {
         VerifyingKey(self.0.verifying_key())
     }
 
+    /// Serializes the signing key to its 32-byte seed.
+    ///
+    /// The seed is what `from_bytes` accepts, and what the vault stores
+    /// wrapped under its KEK. The buffer is wrapped in [`Zeroizing`] so
+    /// it is cleared on drop.
+    #[must_use]
+    pub fn to_bytes(&self) -> Zeroizing<[u8; SIGNING_KEY_LEN]> {
+        Zeroizing::new(self.0.to_bytes())
+    }
+
     /// Signs `message`, producing a detached signature.
     #[must_use]
     pub fn sign(&self, message: &[u8]) -> Signature {
@@ -250,6 +260,16 @@ mod tests {
             Signature::from_bytes(&[0u8; 10]),
             Err(SignError::InvalidSignature)
         ));
+    }
+
+    #[test]
+    fn signing_key_serialization_is_reversible() {
+        let pair = generate();
+        let seed = pair.signing.to_bytes();
+
+        let restored = SigningKey::from_bytes(seed.as_ref()).unwrap();
+        let sig = restored.sign(b"roundtrip");
+        pair.verifying.verify(b"roundtrip", &sig).unwrap();
     }
 
     #[test]
