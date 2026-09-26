@@ -10,6 +10,7 @@ pub mod record;
 pub mod serde_helpers;
 pub mod status;
 pub mod timestamp;
+pub mod container;
 
 pub use algorithm::{Algorithm, AlgorithmError, Category};
 pub use body::{CURRENT_SCHEMA_VERSION, VaultBody, VaultMetadata};
@@ -23,3 +24,4 @@ pub use record::{KeyRecord, RecordValidationError, WrappedKeyMaterial};
 pub use serde_helpers::{CborError, from_slice, to_vec};
 pub use status::{KeyStatus, StatusParseError, StatusTransitionError};
 pub use timestamp::{Timestamp, TimestampError};
+pub use container::{Session, Vault, VaultError};

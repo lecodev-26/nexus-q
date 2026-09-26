@@ -513,6 +513,7 @@ dependencies = [
  "sha2",
  "sha3",
  "subtle",
+ "tempfile",
  "thiserror",
  "tracing",
  "x25519-dalek",
