@@ -2,6 +2,7 @@
 
 pub mod algorithm;
 pub mod body;
+pub mod header;
 pub mod key_id;
 pub mod metadata;
 pub mod purpose;
@@ -12,6 +13,9 @@ pub mod timestamp;
 
 pub use algorithm::{Algorithm, AlgorithmError, Category};
 pub use body::{CURRENT_SCHEMA_VERSION, VaultBody, VaultMetadata};
+pub use header::{
+    FORMAT_VERSION, HeaderError, KdfAlgorithm, KdfParams, MAGIC, SALT_LEN, VaultHeader,
+};
 pub use key_id::{KeyId, KeyIdError};
 pub use metadata::{KeyMetadata, Origin};
 pub use purpose::{Purpose, PurposeError};
