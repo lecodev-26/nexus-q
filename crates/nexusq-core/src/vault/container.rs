@@ -9,6 +9,7 @@
 //! See `docs/STORAGE.md` §4 and `docs/SECURITY_MODEL.md` §4.
 
 use std::fs;
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use zeroize::Zeroizing;
@@ -538,6 +539,24 @@ fn parse_file(bytes: &[u8]) -> Result<(VaultHeader, &[u8]), VaultError> {
     Ok((header, rest))
 }
 
+/// Writes the vault to disk with crash-safe and durable semantics.
+///
+/// Steps:
+///
+/// 1. Serialize the file into memory.
+/// 2. Create a uniquely named temp file in the same directory as the
+///    target. Unique naming avoids collisions between concurrent writers.
+/// 3. Write the whole payload and `fsync` the temp file, so its contents
+///    are on stable storage before we publish it.
+/// 4. `rename` the temp file onto the target. On POSIX this is atomic:
+///    readers see either the old file or the new one, never a mix.
+/// 5. `fsync` the containing directory, so the rename itself survives a
+///    crash.
+///
+/// If any step fails, the original file (if it existed) is left intact.
+/// Orphan temp files are harmless and can be removed manually; we do not
+/// delete them automatically because a concurrent process might still
+/// be writing to one.
 fn write_vault_file(
     path: &Path,
     header_bytes: &[u8],
@@ -556,12 +575,55 @@ fn write_vault_file(
     out.extend_from_slice(nonce);
     out.extend_from_slice(ciphertext);
 
-    // Atomic write: temp file in the same directory, then rename.
-    // This avoids the caller ever seeing a half-written file.
-    let tmp = path.with_extension("nqv.tmp");
-    fs::write(&tmp, &out)?;
-    fs::rename(&tmp, path)?;
+    let tmp_path = unique_temp_path(path)?;
+
+    // Write and fsync the temp file.
+    {
+        let mut f = fs::File::create(&tmp_path)?;
+        f.write_all(&out)?;
+        f.sync_all()?;
+    }
+
+    // Rename onto the target. If this fails, try to clean up the temp.
+    if let Err(e) = fs::rename(&tmp_path, path) {
+        let _ = fs::remove_file(&tmp_path);
+        return Err(VaultError::Io(e));
+    }
+
+    // fsync the directory so the rename is durable. Best-effort on
+    // platforms that do not support directory fsync.
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            if let Ok(dir) = fs::File::open(parent) {
+                if let Err(e) = dir.sync_all() {
+                    if e.kind() != std::io::ErrorKind::Unsupported {
+                        return Err(VaultError::Io(e));
+                    }
+                }
+            }
+        }
+    }
+
     Ok(())
+}
+
+/// Builds a unique temp path next to `path`.
+///
+/// Format: `<name>.tmp.<8 hex chars>`. The suffix comes from the OS
+/// CSPRNG so two writers cannot collide.
+fn unique_temp_path(path: &Path) -> Result<PathBuf, VaultError> {
+    let mut rng = OsRandomSource::new();
+    let mut suffix = [0u8; 4];
+    rng.fill_bytes(&mut suffix)?;
+
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(format!(
+        ".tmp.{:02x}{:02x}{:02x}{:02x}",
+        suffix[0], suffix[1], suffix[2], suffix[3]
+    ));
+
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    Ok(parent.join(name))
 }
 
 fn derive_kek(
@@ -940,5 +1002,66 @@ mod tests {
         let record = session.find_key_mut(&id).unwrap().unwrap();
         record.metadata.status = KeyStatus::Active;
         assert_eq!(session.find_key(&id).unwrap().status(), KeyStatus::Active);
+    }
+
+    #[test]
+    fn no_temp_files_remain_after_success() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+
+        // The directory should contain exactly the vault file.
+        let entries: Vec<_> = fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0], "test.nqv");
+    }
+
+    #[test]
+    fn temp_path_is_unique_per_call() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "x.nqv");
+        let a = unique_temp_path(&path).unwrap();
+        let b = unique_temp_path(&path).unwrap();
+        assert_ne!(a, b);
+        // Both live in the same parent.
+        assert_eq!(a.parent(), path.parent());
+        assert_eq!(b.parent(), path.parent());
+    }
+
+    #[test]
+    fn temp_path_keeps_original_extension_visible() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "vault.nqv");
+        let tmp = unique_temp_path(&path).unwrap();
+        let name = tmp.file_name().unwrap().to_string_lossy();
+        assert!(name.starts_with("vault.nqv.tmp."));
+    }
+
+    #[test]
+    fn multiple_writes_leave_only_the_vault_file() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+
+        // Modify and re-lock a few times.
+        for i in 0..3 {
+            let vault = Vault::open(&path).unwrap();
+            let mut session = vault.unlock(b"pw").unwrap();
+            session.body_mut().metadata.label = Some(format!("run-{i}"));
+            session.lock().unwrap();
+        }
+
+        // Still exactly one file.
+        let count = fs::read_dir(dir.path()).unwrap().count();
+        assert_eq!(count, 1);
+
+        // And the latest label persisted.
+        let vault = Vault::open(&path).unwrap();
+        let session = vault.unlock(b"pw").unwrap();
+        assert_eq!(session.body().metadata.label.as_deref(), Some("run-2"));
     }
 }
