@@ -91,6 +91,12 @@ impl EnvelopeAlgorithm {
     }
 }
 
+impl std::fmt::Display for EnvelopeAlgorithm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// Errors returned by envelope operations.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -136,6 +142,51 @@ pub enum EnvelopeError {
         /// Its algorithm.
         algorithm: crate::vault::Algorithm,
     },
+
+    /// The envelope's mode does not match the operation requested.
+    #[error("envelope mode is {found}, expected {expected}")]
+    WrongMode {
+        /// The mode the operation required.
+        expected: EnvelopeMode,
+        /// The mode found in the envelope.
+        found: EnvelopeMode,
+    },
+
+    /// The KEM encapsulated or decapsulated incorrectly.
+    #[error("kem operation failed")]
+    Kem,
+}
+
+/// How the DEK is protected inside the envelope.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EnvelopeMode {
+    /// Vault mode: the DEK is wrapped under a key in the local vault.
+    /// The `key_id` field identifies that key.
+    #[serde(rename = "vault")]
+    Vault,
+
+    /// Public-key mode: the DEK is a shared secret produced by a KEM
+    /// against the recipient's public key. The `wrapped_dek` field
+    /// holds the KEM ciphertext and `key_id` is `None`.
+    #[serde(rename = "public_key")]
+    PublicKey,
+}
+
+impl EnvelopeMode {
+    /// Returns the canonical lowercase identifier.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Vault => "vault",
+            Self::PublicKey => "public_key",
+        }
+    }
+}
+
+impl std::fmt::Display for EnvelopeMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
 }
 
 /// The header of an envelope.
@@ -154,11 +205,17 @@ pub struct EnvelopeHeader {
     /// Reserved flags. Must be zero in v1.
     pub flags: u16,
 
+    /// How the DEK is protected.
+    pub mode: EnvelopeMode,
+
     /// AEAD algorithm for the payload.
     pub algorithm: EnvelopeAlgorithm,
 
-    /// The vault key that protects the DEK.
-    pub key_id: KeyId,
+    /// The vault key that protects the DEK, if any.
+    ///
+    /// `Some` in vault mode, `None` in public-key mode.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub key_id: Option<KeyId>,
 
     /// Nonce for the payload AEAD.
     pub nonce: [u8; NONCE_LEN],
@@ -237,7 +294,6 @@ pub fn build_envelope(
     let mut nonce = [0u8; NONCE_LEN];
     rng.fill_bytes(&mut nonce)?;
 
-    // Envelope algorithm mirrors the key's algorithm.
     let env_alg = envelope_algorithm_from(algorithm).ok_or(EnvelopeError::WrongCategory {
         key_id: key_id.clone(),
         algorithm,
@@ -247,8 +303,9 @@ pub fn build_envelope(
         magic: MAGIC,
         version: FORMAT_VERSION,
         flags: 0,
+        mode: EnvelopeMode::Vault,
         algorithm: env_alg,
-        key_id: key_id.clone(),
+        key_id: Some(key_id.clone()),
         nonce,
         metadata,
     };
@@ -276,7 +333,7 @@ pub fn build_envelope(
     Ok(serde_helpers::to_vec(&envelope)?)
 }
 
-/// Opens an envelope, returning the plaintext.
+/// Opens a vault-mode envelope, returning the plaintext.
 ///
 /// `kek` is the vault's KEK. `key_lookup` resolves the envelope's
 /// KeyId to a [`KeyRecord`]; it is called once with the KeyId found in
@@ -284,11 +341,11 @@ pub fn build_envelope(
 ///
 /// # Errors
 ///
-/// Returns [`EnvelopeError::UnsupportedFormat`] if the magic, version
-/// or flags are not recognized, [`EnvelopeError::KeyNotFound`] if the
-/// lookup returns `None`, [`EnvelopeError::KeyNotUsable`] if the key
-/// is in a state that cannot decrypt, or another error if unwrapping
-/// or decryption fails.
+/// Returns [`EnvelopeError::UnsupportedFormat`] if the magic, version,
+/// flags or mode are not recognized, [`EnvelopeError::KeyNotFound`] if
+/// the lookup returns `None`, [`EnvelopeError::KeyNotUsable`] if the
+/// key is in a state that cannot decrypt, or another error if
+/// unwrapping or decryption fails.
 pub fn open_envelope<F>(
     kek: &[u8],
     envelope_bytes: &[u8],
@@ -302,23 +359,23 @@ where
     if !envelope.header.is_supported() {
         return Err(EnvelopeError::UnsupportedFormat);
     }
+    if envelope.header.mode != EnvelopeMode::Vault {
+        return Err(EnvelopeError::WrongMode {
+            expected: EnvelopeMode::Vault,
+            found: envelope.header.mode,
+        });
+    }
 
-    let key_id = &envelope.header.key_id;
+    let key_id = envelope
+        .header
+        .key_id
+        .as_ref()
+        .ok_or(EnvelopeError::UnsupportedFormat)?;
+
     let key_record =
         key_lookup(key_id).ok_or_else(|| EnvelopeError::KeyNotFound(key_id.clone()))?;
 
-    // Decryption is allowed from every state except Generated and
-    // Destroyed. Rotating, Retired and Revoked can still recover data
-    // that was protected while the key was active.
-    match key_record.status() {
-        KeyStatus::Active | KeyStatus::Rotating | KeyStatus::Retired | KeyStatus::Revoked => {}
-        status => {
-            return Err(EnvelopeError::KeyNotUsable {
-                key_id: key_id.clone(),
-                status,
-            });
-        }
-    }
+    check_can_decrypt(&key_record)?;
 
     // Unwrap the DEK.
     let dek = wrapping::unwrap(&envelope.wrapped_dek, kek, key_id)?;
@@ -335,6 +392,116 @@ where
     )?;
 
     Ok(Zeroizing::new(plaintext))
+}
+
+/// Builds a public-key-mode envelope: `plaintext` is protected with a
+/// DEK derived from encapsulating against `recipient_public_key`.
+///
+/// The recipient must hold the matching secret key to open the
+/// envelope. `metadata` is authenticated but not encrypted.
+///
+/// The AEAD algorithm defaults to AES-256-GCM. A future revision may
+/// allow the caller to select it via an additional parameter.
+///
+/// # Errors
+///
+/// Returns an error if the public key has the wrong length, if
+/// randomness is unavailable, or if encryption fails.
+pub fn build_envelope_to_public_key(
+    recipient_public_key: &[u8],
+    plaintext: &[u8],
+    metadata: Vec<u8>,
+) -> Result<Vec<u8>, EnvelopeError> {
+    let env_alg = EnvelopeAlgorithm::Aes256Gcm;
+
+    let mut rng = OsRandomSource::new();
+    let mut nonce = [0u8; NONCE_LEN];
+    rng.fill_bytes(&mut nonce)?;
+
+    // Encapsulate: produces (kem_ciphertext, shared_secret).
+    // The shared secret IS the DEK for the payload.
+    let (kem_ciphertext, shared_secret) =
+        crate::crypto::kem::hybrid::encapsulate(recipient_public_key)
+            .map_err(|_| EnvelopeError::Kem)?;
+
+    let header = EnvelopeHeader {
+        magic: MAGIC,
+        version: FORMAT_VERSION,
+        flags: 0,
+        mode: EnvelopeMode::PublicKey,
+        algorithm: env_alg,
+        key_id: None,
+        nonce,
+        metadata,
+    };
+
+    let header_bytes = serde_helpers::to_vec(&header)?;
+
+    let ciphertext = aead::encrypt(
+        env_alg.to_crypto(),
+        shared_secret.as_ref(),
+        &nonce,
+        &header_bytes,
+        plaintext,
+    )?;
+
+    let envelope = Envelope {
+        header,
+        wrapped_dek: ByteBuf::from(kem_ciphertext),
+        ciphertext: ByteBuf::from(ciphertext),
+    };
+
+    Ok(serde_helpers::to_vec(&envelope)?)
+}
+
+/// Opens a public-key-mode envelope with a hybrid KEM key pair.
+///
+/// # Errors
+///
+/// Returns [`EnvelopeError::UnsupportedFormat`] if the mode is not
+/// public-key, [`EnvelopeError::Kem`] if decapsulation fails, or
+/// another error if decryption fails.
+pub fn open_envelope_with_kem(
+    key_pair: &crate::crypto::kem::hybrid::KeyPair,
+    envelope_bytes: &[u8],
+) -> Result<Zeroizing<Vec<u8>>, EnvelopeError> {
+    let envelope: Envelope = serde_helpers::from_slice(envelope_bytes)?;
+
+    if !envelope.header.is_supported() {
+        return Err(EnvelopeError::UnsupportedFormat);
+    }
+    if envelope.header.mode != EnvelopeMode::PublicKey {
+        return Err(EnvelopeError::WrongMode {
+            expected: EnvelopeMode::PublicKey,
+            found: envelope.header.mode,
+        });
+    }
+
+    // The shared secret is the DEK.
+    let shared_secret = crate::crypto::kem::hybrid::decapsulate(key_pair, &envelope.wrapped_dek)
+        .map_err(|_| EnvelopeError::Kem)?;
+
+    let header_bytes = serde_helpers::to_vec(&envelope.header)?;
+
+    let plaintext = aead::decrypt(
+        envelope.header.algorithm.to_crypto(),
+        shared_secret.as_ref(),
+        &envelope.header.nonce,
+        &header_bytes,
+        &envelope.ciphertext,
+    )?;
+
+    Ok(Zeroizing::new(plaintext))
+}
+
+fn check_can_decrypt(record: &KeyRecord) -> Result<(), EnvelopeError> {
+    match record.status() {
+        KeyStatus::Active | KeyStatus::Rotating | KeyStatus::Retired | KeyStatus::Revoked => Ok(()),
+        status => Err(EnvelopeError::KeyNotUsable {
+            key_id: record.key_id().clone(),
+            status,
+        }),
+    }
 }
 
 fn envelope_algorithm_from(algorithm: crate::vault::Algorithm) -> Option<EnvelopeAlgorithm> {
@@ -384,7 +551,8 @@ mod tests {
             version: FORMAT_VERSION,
             flags: 0,
             algorithm: EnvelopeAlgorithm::Aes256Gcm,
-            key_id: sample_key_id(),
+            mode: EnvelopeMode::Vault,
+            key_id: Some(sample_key_id()),
             nonce: [0u8; NONCE_LEN],
             metadata: Vec::new(),
         };
@@ -398,7 +566,8 @@ mod tests {
             version: FORMAT_VERSION,
             flags: 0,
             algorithm: EnvelopeAlgorithm::Aes256Gcm,
-            key_id: sample_key_id(),
+            mode: EnvelopeMode::Vault,
+            key_id: Some(sample_key_id()),
             nonce: [0u8; NONCE_LEN],
             metadata: Vec::new(),
         };
@@ -413,7 +582,8 @@ mod tests {
             version: FORMAT_VERSION,
             flags: 0,
             algorithm: EnvelopeAlgorithm::Aes256Gcm,
-            key_id: sample_key_id(),
+            mode: EnvelopeMode::Vault,
+            key_id: Some(sample_key_id()),
             nonce: [0u8; NONCE_LEN],
             metadata: Vec::new(),
         };
@@ -428,7 +598,8 @@ mod tests {
             version: FORMAT_VERSION,
             flags: 0,
             algorithm: EnvelopeAlgorithm::Aes256Gcm,
-            key_id: sample_key_id(),
+            mode: EnvelopeMode::Vault,
+            key_id: Some(sample_key_id()),
             nonce: [0u8; NONCE_LEN],
             metadata: Vec::new(),
         };
@@ -443,7 +614,8 @@ mod tests {
             version: FORMAT_VERSION,
             flags: 0,
             algorithm: EnvelopeAlgorithm::Aes256Gcm,
-            key_id: sample_key_id(),
+            mode: EnvelopeMode::Vault,
+            key_id: Some(sample_key_id()),
             nonce: [0x42; NONCE_LEN],
             metadata: b"filename.txt".to_vec(),
         };
@@ -460,7 +632,8 @@ mod tests {
                 version: FORMAT_VERSION,
                 flags: 0,
                 algorithm: EnvelopeAlgorithm::Aes256Gcm,
-                key_id: sample_key_id(),
+                mode: EnvelopeMode::Vault,
+                key_id: Some(sample_key_id()),
                 nonce: [0x24; NONCE_LEN],
                 metadata: Vec::new(),
             },
@@ -654,5 +827,121 @@ mod tests {
         let other = make_active_record(Algorithm::Aes256Gcm);
         let err = open_envelope(&KEK, &env_bytes, lookup_ok(other)).unwrap_err();
         assert!(matches!(err, EnvelopeError::KeyNotFound(_)));
+    }
+
+    // =========================================================================
+    // Public-key mode
+    // =========================================================================
+
+    #[test]
+    fn public_key_envelope_roundtrip() {
+        let pair = crate::crypto::kem::hybrid::generate();
+        let recipient_pk = pair.public_key_bytes();
+
+        let plaintext = b"the quick brown fox jumps over the lazy dog";
+        let env_bytes =
+            build_envelope_to_public_key(&recipient_pk, plaintext, b"note.txt".to_vec()).unwrap();
+
+        let opened = open_envelope_with_kem(&pair, &env_bytes).unwrap();
+        assert_eq!(opened.as_slice(), plaintext);
+    }
+
+    #[test]
+    fn public_key_envelope_metadata_is_readable() {
+        let pair = crate::crypto::kem::hybrid::generate();
+        let recipient_pk = pair.public_key_bytes();
+        let meta = b"secret-recipe.pdf".to_vec();
+
+        let env_bytes = build_envelope_to_public_key(&recipient_pk, b"data", meta.clone()).unwrap();
+
+        let env: Envelope = crate::vault::serde_helpers::from_slice(&env_bytes).unwrap();
+        assert_eq!(env.header.metadata, meta);
+        assert_eq!(env.header.mode, EnvelopeMode::PublicKey);
+        assert!(env.header.key_id.is_none());
+    }
+
+    #[test]
+    fn public_key_envelope_with_wrong_secret_key_fails() {
+        let alice = crate::crypto::kem::hybrid::generate();
+        let bob = crate::crypto::kem::hybrid::generate();
+
+        let env_bytes =
+            build_envelope_to_public_key(&alice.public_key_bytes(), b"for alice only", Vec::new())
+                .unwrap();
+
+        // Bob tries to open Alice's envelope.
+        let err = open_envelope_with_kem(&bob, &env_bytes).unwrap_err();
+        assert!(matches!(err, EnvelopeError::Aead(_)));
+    }
+
+    #[test]
+    fn open_envelope_rejects_public_key_mode() {
+        let pair = crate::crypto::kem::hybrid::generate();
+        let env_bytes =
+            build_envelope_to_public_key(&pair.public_key_bytes(), b"payload", Vec::new()).unwrap();
+
+        // Vault-mode opener refuses a public-key envelope.
+        let err = open_envelope(&KEK, &env_bytes, |_| None).unwrap_err();
+        assert!(matches!(err, EnvelopeError::WrongMode { .. }));
+    }
+
+    #[test]
+    fn open_envelope_with_kem_rejects_vault_mode() {
+        let record = make_active_record(Algorithm::Aes256Gcm);
+        let env_bytes = build_envelope(&KEK, &record, b"payload", Vec::new()).unwrap();
+
+        let pair = crate::crypto::kem::hybrid::generate();
+        let err = open_envelope_with_kem(&pair, &env_bytes).unwrap_err();
+        assert!(matches!(err, EnvelopeError::WrongMode { .. }));
+    }
+
+    #[test]
+    fn public_key_envelope_rejects_short_public_key() {
+        let err = build_envelope_to_public_key(&[0u8; 100], b"data", Vec::new()).unwrap_err();
+        assert!(matches!(err, EnvelopeError::Kem));
+    }
+
+    #[test]
+    fn public_key_envelope_rejects_tampered_ciphertext() {
+        let pair = crate::crypto::kem::hybrid::generate();
+        let env_bytes =
+            build_envelope_to_public_key(&pair.public_key_bytes(), b"payload", Vec::new()).unwrap();
+
+        let mut env: Envelope = crate::vault::serde_helpers::from_slice(&env_bytes).unwrap();
+        let mut ct = env.ciphertext.into_vec();
+        ct[0] ^= 0x01;
+        env.ciphertext = ByteBuf::from(ct);
+        let tampered = crate::vault::serde_helpers::to_vec(&env).unwrap();
+
+        let err = open_envelope_with_kem(&pair, &tampered).unwrap_err();
+        assert!(matches!(err, EnvelopeError::Aead(_)));
+    }
+
+    #[test]
+    fn public_key_envelope_rejects_tampered_metadata() {
+        let pair = crate::crypto::kem::hybrid::generate();
+        let env_bytes = build_envelope_to_public_key(
+            &pair.public_key_bytes(),
+            b"payload",
+            b"metadata".to_vec(),
+        )
+        .unwrap();
+
+        let mut env: Envelope = crate::vault::serde_helpers::from_slice(&env_bytes).unwrap();
+        env.header.metadata[0] ^= 0x01;
+        let tampered = crate::vault::serde_helpers::to_vec(&env).unwrap();
+
+        let err = open_envelope_with_kem(&pair, &tampered).unwrap_err();
+        assert!(matches!(err, EnvelopeError::Aead(_)));
+    }
+
+    #[test]
+    fn public_key_envelope_empty_plaintext() {
+        let pair = crate::crypto::kem::hybrid::generate();
+        let env_bytes =
+            build_envelope_to_public_key(&pair.public_key_bytes(), b"", Vec::new()).unwrap();
+
+        let opened = open_envelope_with_kem(&pair, &env_bytes).unwrap();
+        assert!(opened.is_empty());
     }
 }
