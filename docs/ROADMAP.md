@@ -185,19 +185,23 @@ workspace.
 
 **Deliverables:**
 
-- `KeyId` generation and parsing
-- Key metadata structures (all fields)
-- Key lifecycle state machine
-- Key purpose enforcement
-- Rotation, revocation, destruction operations
-- Audit event emission for every operation
+- [x] `KeyId` generation and parsing
+- [x] Key metadata structures (all fields)
+- [x] Key lifecycle state machine
+- [x] Key purpose enforcement
+- [ ] Rotation, revocation, destruction operations (moved to Phase 4)
+- [ ] Audit event emission for every operation (moved to Phase 4)
 
 **Exit criteria:**
 
-- State machine transitions tested exhaustively.
-- Forbidden transitions rejected.
-- Rotation and revocation have end-to-end tests.
-- Audit events verified for every operation.
+- [x] State machine transitions tested exhaustively.
+- [x] Forbidden transitions rejected.
+- [ ] Rotation and revocation have end-to-end tests (Phase 4).
+- [ ] Audit events verified for every operation (Phase 4).
+
+**Status:** ✅ Structural part complete. Operational part (rotation,
+revocation, destruction as actual vault operations) is implemented in
+Phase 4 where it can be tied to persistence and audit.
 
 ---
 
