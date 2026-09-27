@@ -21,8 +21,9 @@ use std::path::{Path, PathBuf};
 use crate::crypto::sign::Signature;
 
 use super::super::{
-    AttestationProvider, AttestationReport, HardwareError, KeyAttestation, KeyHandle, KeyInfo,
-    KeyProvider, MeasuredBoot, Measurement, MixedRandomSource, RandomSource, Register, SecureBoot,
+    AttestationError, AttestationPolicy, AttestationProvider, AttestationReport,
+    AttestationVerifier, HardwareError, KeyAttestation, KeyHandle, KeyInfo, KeyProvider,
+    MeasuredBoot, Measurement, MixedRandomSource, RandomSource, Register, SecureBoot,
     SecureBootState, SecureBuffer, SecureMemory, SecureStorage, SoftwareTrng, StorageKey,
     TrngSource,
 };
@@ -259,6 +260,22 @@ impl AttestationProvider for SoftwareBackend {
 }
 
 // =============================================================================
+// AttestationVerifier
+// =============================================================================
+
+impl AttestationVerifier for SoftwareBackend {
+    fn verify(
+        &self,
+        _report: &AttestationReport,
+        _policy: &AttestationPolicy,
+    ) -> Result<(), AttestationError> {
+        // A software backend has no root of trust, so it cannot
+        // verify any signature.
+        Err(AttestationError::NotSupported)
+    }
+}
+
+// =============================================================================
 // MeasuredBoot
 // =============================================================================
 
@@ -430,6 +447,25 @@ mod tests {
         let (_dir, b) = backend();
         let spec = super::super::super::KeySpec::Ed25519Sign;
         assert!(matches!(b.generate(spec), Err(HardwareError::NotSupported)));
+    }
+
+    #[test]
+    fn attestation_verifier_is_not_supported_on_software() {
+        use super::super::super::AttestationVerifier as _;
+        let (_dir, b) = backend();
+        let report = AttestationReport {
+            measurements: vec![Measurement {
+                component: "kernel".into(),
+                digest: vec![0xAA; 32],
+            }],
+            nonce: None,
+            signature: None,
+        };
+        let policy = AttestationPolicy::new();
+        assert!(matches!(
+            b.verify(&report, &policy),
+            Err(AttestationError::NotSupported)
+        ));
     }
 
     #[test]

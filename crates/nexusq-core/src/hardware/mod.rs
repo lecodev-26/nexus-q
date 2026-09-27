@@ -38,7 +38,10 @@ pub mod trng;
 
 pub mod backends;
 
-pub use attestation::{AttestationProvider, AttestationReport, Measurement};
+pub use attestation::{
+    AttestationError, AttestationPolicy, AttestationProvider, AttestationReport,
+    AttestationVerifier, Measurement, verify_report_against_policy, verify_report_structure,
+};
 pub use backend::Backend;
 pub use backends::software::SoftwareBackend;
 pub use key_provider::{KeyAttestation, KeyInfo, KeyProvider, KeySpec};
