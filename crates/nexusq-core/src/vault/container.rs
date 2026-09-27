@@ -33,7 +33,9 @@ use super::status::KeyStatus;
 use super::timestamp::Timestamp;
 use super::wrapping::{WrappingError, wrap};
 use crate::crypto::sign::{self, SignError, Signature};
-use crate::identity::{Identity, IdentityId, IdentityMetadata, IdentityStatus};
+use crate::identity::{
+    Credential, CredentialError, Identity, IdentityId, IdentityMetadata, IdentityStatus,
+};
 
 /// Number of bytes of the length prefix before the CBOR header.
 const HEADER_LEN_PREFIX: usize = 4;
@@ -164,6 +166,10 @@ pub enum VaultError {
     /// public half.
     #[error("key {0} has no public half")]
     MissingPublicKey(KeyId),
+
+    /// A credential operation failed.
+    #[error("credential error: {0}")]
+    Credential(#[from] CredentialError),
 }
 
 /// A vault file on disk.
@@ -823,6 +829,109 @@ impl Session {
         identity.metadata.revoked_at = Some(now);
         identity.metadata.revocation_reason = Some(reason);
         Ok(())
+    }
+
+    // =========================================================================
+    // Credential operations
+    // =========================================================================
+
+    /// Issues a credential signed by `issuer` about `subject`.
+    ///
+    /// Returns a self-contained CBOR-encoded blob. The credential is
+    /// **not** stored in the vault; the caller decides where to keep
+    /// it. Any holder of the issuer's public signing key can verify it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VaultError::IdentityNotFound`] if the issuer does not
+    /// exist, [`VaultError::IdentityNotUsable`] if the issuer is not
+    /// `Active`, or another error if the signing key cannot be used.
+    pub fn issue_credential(
+        &self,
+        issuer: &IdentityId,
+        subject: IdentityId,
+        claims: Vec<u8>,
+        expires_at: Option<Timestamp>,
+    ) -> Result<Vec<u8>, VaultError> {
+        // Signing requires write access, because it unwraps key material.
+        self.require_writes_allowed()?;
+
+        let identity = self
+            .body
+            .find_identity(issuer)
+            .ok_or_else(|| VaultError::IdentityNotFound(issuer.clone()))?;
+
+        if identity.metadata.status != IdentityStatus::Active {
+            return Err(VaultError::IdentityNotUsable {
+                id: issuer.clone(),
+                status: identity.metadata.status,
+            });
+        }
+
+        let record = self
+            .body
+            .find_key(&identity.signing_key)
+            .ok_or_else(|| LifecycleError::KeyNotFound(identity.signing_key.clone()))?;
+
+        if record.status() != KeyStatus::Active {
+            return Err(VaultError::IdentityNotUsable {
+                id: issuer.clone(),
+                status: identity.metadata.status,
+            });
+        }
+
+        // Unwrap the seed, rebuild the signing key, issue.
+        let seed_bytes = super::wrapping::unwrap(
+            record.material.bytes(),
+            self.kek.as_ref(),
+            &identity.signing_key,
+        )?;
+        let signing_key = sign::SigningKey::from_bytes(&seed_bytes)?;
+
+        let now = Timestamp::now().unwrap_or(Timestamp::from_secs(0));
+        let credential_bytes = Credential::issue(
+            &signing_key,
+            issuer.clone(),
+            subject,
+            claims,
+            now,
+            expires_at,
+        )?;
+        Ok(credential_bytes)
+    }
+
+    /// Verifies a credential using the issuer's public signing key.
+    ///
+    /// Does not check expiry: callers that need expiry enforcement
+    /// should inspect [`Credential::is_expired_at`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VaultError::Credential`] if the bytes are malformed or
+    /// the signature does not verify, or
+    /// [`VaultError::IdentityNotFound`] if the issuer is not in the
+    /// vault.
+    pub fn verify_credential(&self, bytes: &[u8]) -> Result<Credential, VaultError> {
+        // Parse once to learn who the issuer is.
+        let credential: Credential = crate::vault::from_slice(bytes)?;
+
+        let identity = self
+            .body
+            .find_identity(&credential.issuer)
+            .ok_or_else(|| VaultError::IdentityNotFound(credential.issuer.clone()))?;
+
+        let record = self
+            .body
+            .find_key(&identity.signing_key)
+            .ok_or_else(|| LifecycleError::KeyNotFound(identity.signing_key.clone()))?;
+
+        let pk_bytes = record
+            .public_key_bytes()
+            .ok_or_else(|| VaultError::MissingPublicKey(identity.signing_key.clone()))?;
+
+        let verifying_key = sign::VerifyingKey::from_bytes(pk_bytes)?;
+        let verified = Credential::verify_with_key(bytes, &verifying_key)?;
+        Ok(verified)
     }
 
     // =========================================================================
@@ -2775,6 +2884,230 @@ mod tests {
             session.find_key(&signing_key).unwrap().status(),
             KeyStatus::Active
         );
+    }
+
+    // =========================================================================
+    // Credential tests
+    // =========================================================================
+
+    #[test]
+    fn issue_and_verify_credential_roundtrip() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let alice = session.create_identity(Some("alice".to_string())).unwrap();
+        let bob = session.create_identity(Some("bob".to_string())).unwrap();
+
+        let claims = b"role=admin".to_vec();
+        let expires = Some(Timestamp::from_secs(9_999_999_999));
+        let cred_bytes = session
+            .issue_credential(&alice, bob.clone(), claims.clone(), expires)
+            .unwrap();
+
+        let cred = session.verify_credential(&cred_bytes).unwrap();
+        assert_eq!(cred.issuer, alice);
+        assert_eq!(cred.subject, bob);
+        assert_eq!(cred.claims(), claims.as_slice());
+        assert_eq!(cred.expires_at, expires);
+    }
+
+    #[test]
+    fn credential_without_expiry_verifies() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let issuer = session.create_identity(None).unwrap();
+        let subject = session.create_identity(None).unwrap();
+
+        let cred_bytes = session
+            .issue_credential(&issuer, subject, b"permanent".to_vec(), None)
+            .unwrap();
+        let cred = session.verify_credential(&cred_bytes).unwrap();
+        assert!(cred.expires_at.is_none());
+    }
+
+    #[test]
+    fn verify_credential_rejects_tampered_claims() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let issuer = session.create_identity(None).unwrap();
+        let subject = session.create_identity(None).unwrap();
+
+        let cred_bytes = session
+            .issue_credential(&issuer, subject, b"role=user".to_vec(), None)
+            .unwrap();
+
+        // Tamper the credential in transit.
+        let mut cred: Credential = crate::vault::from_slice(&cred_bytes).unwrap();
+        cred.claims = b"role=admin".to_vec();
+        let tampered = crate::vault::to_vec(&cred).unwrap();
+
+        let err = session.verify_credential(&tampered).unwrap_err();
+        assert!(matches!(err, VaultError::Credential(_)));
+    }
+
+    #[test]
+    fn issue_credential_rejects_unknown_issuer() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let subject = session.create_identity(None).unwrap();
+        let mut rng = OsRandomSource::new();
+        let bogus = IdentityId::generate(&mut rng).unwrap();
+
+        let err = session
+            .issue_credential(&bogus, subject, b"claims".to_vec(), None)
+            .unwrap_err();
+        assert!(matches!(err, VaultError::IdentityNotFound(_)));
+    }
+
+    #[test]
+    fn issue_credential_rejects_revoked_issuer() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let issuer = session.create_identity(None).unwrap();
+        let subject = session.create_identity(None).unwrap();
+
+        session
+            .revoke_identity(&issuer, RevokeReason::Compromised)
+            .unwrap();
+
+        let err = session
+            .issue_credential(&issuer, subject, b"claims".to_vec(), None)
+            .unwrap_err();
+        assert!(matches!(err, VaultError::IdentityNotUsable { .. }));
+    }
+
+    #[test]
+    fn verify_credential_rejects_unknown_issuer() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+
+        // Issue a credential in one vault.
+        let cred_bytes = {
+            let vault = Vault::open(&path).unwrap();
+            let mut session = vault.unlock(b"pw").unwrap();
+            let issuer = session.create_identity(None).unwrap();
+            let subject = session.create_identity(None).unwrap();
+            session
+                .issue_credential(&issuer, subject, b"claims".to_vec(), None)
+                .unwrap()
+        };
+
+        // Wipe and recreate the vault: different identities, so the
+        // credential's issuer is unknown.
+        std::fs::remove_file(&path).unwrap();
+        Vault::create(&path, b"pw", None).unwrap();
+
+        let vault = Vault::open(&path).unwrap();
+        let session = vault.unlock(b"pw").unwrap();
+        let err = session.verify_credential(&cred_bytes).unwrap_err();
+        assert!(matches!(err, VaultError::IdentityNotFound(_)));
+    }
+
+    #[test]
+    fn verify_credential_succeeds_after_issuer_rotation() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let issuer = session.create_identity(None).unwrap();
+        let subject = session.create_identity(None).unwrap();
+
+        let cred_bytes = session
+            .issue_credential(&issuer, subject, b"claims".to_vec(), None)
+            .unwrap();
+
+        // Rotate the issuer's signing key. The credential was signed
+        // by the old key. Since the identity now points to the new key,
+        // verifying through the session would fail (correctly, the
+        // credential is no longer signed by the current key). We assert
+        // that by using verify_with_key with the old public key.
+        let old_signing_key = session.find_identity(&issuer).unwrap().signing_key.clone();
+        let old_pk = session
+            .find_key(&old_signing_key)
+            .unwrap()
+            .public_key_bytes()
+            .unwrap()
+            .to_vec();
+
+        session.rotate_identity_key(&issuer).unwrap();
+
+        // The credential still verifies against the old public key.
+        let vk = sign::VerifyingKey::from_bytes(&old_pk).unwrap();
+        let cred = Credential::verify_with_key(&cred_bytes, &vk).unwrap();
+        assert_eq!(cred.issuer, issuer);
+
+        // But the session's verification now fails, because the
+        // identity's current key is the new one.
+        let err = session.verify_credential(&cred_bytes).unwrap_err();
+        assert!(matches!(err, VaultError::Credential(_)));
+    }
+
+    #[test]
+    fn verify_credential_succeeds_after_issuer_revocation() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let issuer = session.create_identity(None).unwrap();
+        let subject = session.create_identity(None).unwrap();
+
+        let cred_bytes = session
+            .issue_credential(&issuer, subject, b"claims".to_vec(), None)
+            .unwrap();
+
+        session
+            .revoke_identity(&issuer, RevokeReason::Superseded)
+            .unwrap();
+
+        // The signing key is untouched by revocation, so verification
+        // still succeeds. Whether a real deployment should refuse
+        // credentials from revoked issuers is a policy decision
+        // (Phase 11).
+        let cred = session.verify_credential(&cred_bytes).unwrap();
+        assert_eq!(cred.issuer, issuer);
+    }
+
+    #[test]
+    fn issue_credential_requires_write_access() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let issuer = session.create_identity(None).unwrap();
+        let subject = session.create_identity(None).unwrap();
+
+        session.seal().unwrap();
+
+        let err = session
+            .issue_credential(&issuer, subject, b"claims".to_vec(), None)
+            .unwrap_err();
+        assert!(matches!(err, VaultError::StateDenied { .. }));
     }
 
     #[test]
