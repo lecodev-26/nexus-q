@@ -40,6 +40,7 @@ ed25519-dalek = { version = "3", features = ["rand_core", "zeroize"] }
 rand_core = { version = "0.9", features = ["os_rng"] }
 
 getrandom = "0.3"
+crc32c = "0.6"
 hex = "0.4"
 base64 = "0.22"
 
