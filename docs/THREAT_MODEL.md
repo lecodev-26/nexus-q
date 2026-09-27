@@ -269,8 +269,40 @@ a vulnerability.
 | T-08 | Key misuse (wrong operation for key purpose) | Policy engine enforces purpose |
 | T-09 | Audit log tampering                          | Chained MAC; verification on read |
 | T-10 | Silent downgrade of algorithm                | Version byte + strict algorithm binding |
-| T-11 | Weak or predictable randomness               | Health checks + mixed sources |
+| T-11 | Weak or predictable randomness               | TRNG + OS CSPRNG mixing, health checks, fail-closed |
 | T-12 | Cross-version format confusion               | Version byte first; reject unknown |
+
+### T-11 in detail: randomness
+
+Randomness underpins every key, nonce and salt in NEXUS-Q. If an
+attacker can predict a key's bytes, every promise the key makes is
+void. The defense has three layers:
+
+1. **Two independent sources.** When a hardware TRNG is accessible,
+   NEXUS-Q reads from it *and* from the OS CSPRNG, concatenates both
+   streams, and runs them through HKDF-SHA256. A fault in either
+   source does not weaken the output, because the other still
+   contributes entropy. Only simultaneous failure of both would
+   degrade the result.
+
+2. **Health checks on the TRNG.** Every TRNG sample is validated
+   before use: correct length, non-constant, at least 16 distinct
+   byte values, different from the previous sample. A failing sample
+   marks the TRNG unusable and subsequent draws skip it. The checks
+   are basic; they catch an obviously broken source, not a subtle
+   one. Regulatory deployments must run AIS 31 / SP 800-90B on the
+   actual hardware.
+
+3. **Fail closed.** If the OS CSPRNG fails, the operation fails.
+   NEXUS-Q never falls back to a weaker source than the one that
+   failed. Absence of a TRNG is not a failure: it degrades the source
+   to "OS only", which is already as strong as what most software
+   uses.
+
+Platforms without access to a raw TRNG (Termux without root,
+unprivileged Linux processes, most desktop environments) run with
+the OS CSPRNG alone. This is documented, not hidden: see
+`docs/CRYPTOGRAPHY.md` §4.1.
 
 ---
 

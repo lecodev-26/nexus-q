@@ -65,15 +65,58 @@ custom MACs) is forbidden.
 
 ### 4.1 Randomness
 
-**Sources:**
+**Sources, in order of preference:**
 
-- **Primary (software):** OS CSPRNG
-  - Linux/Android: `getrandom(2)` (blocking until initialized)
-  - Fallback: `/dev/urandom`
-- **Primary (hardware):** TRNG when available (Fase 8), with health checks
-- **Mixing:** when multiple sources are available, NEXUS-Q mixes them
-  (XOR of health-checked outputs) and re-conditions with a hash. We never
-  trust a single source.
+1. **Hardware TRNG**, when accessible. On Linux and Android this is
+   typically `/dev/hwrng`, but NEXUS-Q does not assume any particular
+   device path: the `TrngSource` trait is the only contract, and a
+   platform-specific backend decides how to open it.
+2. **OS CSPRNG**, always. On Linux and Android this is
+   `getrandom(2)`, which blocks until the kernel pool is initialized;
+   `/dev/urandom` is the legacy fallback. On macOS this is
+   `SecRandomCopyBytes`; on Windows, `BCryptGenRandom`.
+
+**Mixing.** When a TRNG is available, NEXUS-Q does not use it alone.
+The TRNG bytes and the OS bytes are concatenated and run through
+HKDF-SHA256 with `info = "nexusq-mixed-rng-v1"`:
+
+    output = HKDF-SHA256(ikm = trng_bytes || os_bytes,
+                         salt = none,
+                         info = "nexusq-mixed-rng-v1",
+                         L = requested_length)
+
+Mixing makes both sources single points of failure only in
+combination: a faulty TRNG does not compromise the output because the
+OS CSPRNG still contributes; a compromised OS does not compromise the
+output because the TRNG still contributes. Both must fail
+simultaneously for the output to be weak.
+
+**Health checks.** Every TRNG sample is validated before use:
+
+- Length is exactly the expected sample length.
+- Not all bytes identical.
+- At least 16 distinct byte values.
+- Not identical to the previous sample.
+
+A failing sample marks the TRNG as unusable; subsequent draws skip it
+until the failure flag is reset. These checks are **not** NIST SP
+800-90B compliant. Deployments that need regulatory-grade assurance
+must run the full AIS 31 / SP 800-90B suite against the actual
+hardware.
+
+**Fallback policy.** When the TRNG is absent, unavailable, or fails a
+health check, the mixed source silently falls back to the OS CSPRNG
+alone. The fallback is always to a source of equal or greater strength
+than the one that failed; NEXUS-Q never falls back to a weaker source.
+If the OS CSPRNG itself fails, the operation fails closed: no key is
+generated, no nonce is produced.
+
+**Platforms without TRNG access.** Termux and any unprivileged Linux
+process cannot read `/dev/hwrng` directly. On these platforms
+`SoftwareTrng::try_open()` returns `None` and the mixed source reduces
+to OS-only. This is not a degradation: the OS CSPRNG already mixes
+hardware entropy from many sources, including the TRNG, inside the
+kernel.
 
 **Requirements:**
 
@@ -81,8 +124,9 @@ custom MACs) is forbidden.
 - Nonces: 96 bits (12 bytes) for AES-GCM and ChaCha20-Poly1305.
 - Salts: 128 bits (16 bytes) minimum, 256 bits preferred.
 
-**Forbidden:** `rand::thread_rng()` without explicit CSPRNG backing, time
-as a seed, process ID as entropy, user input as entropy.
+**Forbidden:** `rand::thread_rng()` without explicit CSPRNG backing,
+time as a seed, process ID as entropy, user input as entropy, using a
+TRNG without mixing, falling back to a weaker source on failure.
 
 ### 4.2 Hashing
 
