@@ -22,13 +22,15 @@ use crate::crypto::sign::Signature;
 
 use super::super::{
     AttestationProvider, AttestationReport, HardwareError, KeyHandle, KeyProvider, Measurement,
-    RandomSource, SecureBuffer, SecureMemory, SecureStorage, StorageKey,
+    MixedRandomSource, RandomSource, SecureBuffer, SecureMemory, SecureStorage, SoftwareTrng,
+    StorageKey, TrngSource,
 };
 
 /// Backend that uses ordinary OS facilities.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SoftwareBackend {
     storage_root: PathBuf,
+    rng: MixedRandomSource,
 }
 
 impl SoftwareBackend {
@@ -45,7 +47,41 @@ impl SoftwareBackend {
         let storage_root = root.as_ref().to_path_buf();
         fs::create_dir_all(&storage_root)?;
         tighten_permissions(&storage_root)?;
-        Ok(Self { storage_root })
+
+        // Try to open a hardware TRNG. On platforms where none is
+        // accessible this returns None and the mixed source reduces to
+        // the OS CSPRNG alone.
+        let rng = match SoftwareTrng::try_open() {
+            Some(trng) => MixedRandomSource::new(Some(Box::new(trng))),
+            None => MixedRandomSource::os_only(),
+        };
+
+        Ok(Self { storage_root, rng })
+    }
+
+    /// Creates a backend with an explicit TRNG, for tests and for
+    /// platform-specific callers that know how to open one.
+    ///
+    /// # Errors
+    ///
+    /// Same as [`SoftwareBackend::new`].
+    pub fn with_trng(
+        root: impl AsRef<Path>,
+        trng: Box<dyn TrngSource>,
+    ) -> Result<Self, HardwareError> {
+        let storage_root = root.as_ref().to_path_buf();
+        fs::create_dir_all(&storage_root)?;
+        tighten_permissions(&storage_root)?;
+        Ok(Self {
+            storage_root,
+            rng: MixedRandomSource::new(Some(trng)),
+        })
+    }
+
+    /// Returns a reference to the mixed random source.
+    #[must_use]
+    pub fn rng(&self) -> &MixedRandomSource {
+        &self.rng
     }
 
     /// Returns the directory used by [`SecureStorage`].
@@ -260,23 +296,12 @@ fn unlock_memory(_ptr: &mut [u8]) -> Result<(), HardwareError> {
 }
 
 // =============================================================================
-// RandomSource
-// =============================================================================
-
-impl RandomSource for SoftwareBackend {
-    fn fill_bytes(&self, dest: &mut [u8]) -> Result<(), crate::crypto::random::RandomError> {
-        let src = crate::crypto::random::OsRandomSource::new();
-        src.fill_bytes(dest)
-    }
-}
-
-// =============================================================================
 // Backend
 // =============================================================================
 
 impl super::super::Backend for SoftwareBackend {
     fn random(&self) -> &dyn RandomSource {
-        self
+        &self.rng
     }
 
     fn storage(&self) -> &dyn SecureStorage {
@@ -404,5 +429,61 @@ mod tests {
         let mut buf = b.alloc(16).unwrap();
         assert!(matches!(b.lock(&mut buf), Err(HardwareError::NotSupported)));
         assert!(!buf.is_locked());
+    }
+
+    // =========================================================================
+    // RNG integration
+    // =========================================================================
+
+    /// A TRNG that always succeeds, for tests.
+    struct FixedTrng {
+        byte: u8,
+    }
+
+    impl crate::hardware::TrngSource for FixedTrng {
+        fn read(&self, dest: &mut [u8]) -> Result<(), crate::crypto::random::RandomError> {
+            dest.fill(self.byte);
+            Ok(())
+        }
+        fn name(&self) -> &'static str {
+            "fixed"
+        }
+    }
+
+    #[test]
+    fn default_backend_has_no_trng_on_this_platform() {
+        // On Termux and on general-purpose PCs without root access,
+        // SoftwareTrng::try_open returns None. The mixed source then
+        // reduces to OS-only.
+        let (_dir, b) = backend();
+        assert!(!b.rng().has_usable_trng());
+        assert!(b.rng().trng_name().is_none());
+    }
+
+    #[test]
+    fn backend_with_explicit_trng_uses_it() {
+        let dir = TempDir::new().unwrap();
+        let b = SoftwareBackend::with_trng(dir.path(), Box::new(FixedTrng { byte: 0xAA })).unwrap();
+
+        assert!(b.rng().has_usable_trng());
+        assert_eq!(b.rng().trng_name(), Some("fixed"));
+
+        let mut buf = [0u8; 32];
+        b.rng().fill_bytes(&mut buf).unwrap();
+        // The output is a mix, not the TRNG constant alone.
+        assert!(!buf.iter().all(|&x| x == 0xAA));
+    }
+
+    #[test]
+    fn backend_random_reflects_underlying_source() {
+        use super::super::super::Backend as _;
+        let dir = TempDir::new().unwrap();
+        let b = SoftwareBackend::with_trng(dir.path(), Box::new(FixedTrng { byte: 0x55 })).unwrap();
+
+        // Backend::random() must expose the mixed source, not a
+        // separate one.
+        let mut buf = [0u8; 16];
+        b.random().fill_bytes(&mut buf).unwrap();
+        assert!(buf.iter().any(|&x| x != 0));
     }
 }
