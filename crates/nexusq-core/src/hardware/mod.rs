@@ -29,6 +29,7 @@
 pub mod attestation;
 pub mod backend;
 pub mod key_provider;
+pub mod mixed_rng;
 pub mod secure_memory;
 pub mod secure_storage;
 pub mod trng;
@@ -39,6 +40,7 @@ pub use attestation::{AttestationProvider, AttestationReport, Measurement};
 pub use backend::Backend;
 pub use backends::software::SoftwareBackend;
 pub use key_provider::{KeyProvider, KeySpec};
+pub use mixed_rng::MixedRandomSource;
 pub use secure_memory::{SecureBuffer, SecureMemory};
 pub use secure_storage::SecureStorage;
 pub use trng::{
