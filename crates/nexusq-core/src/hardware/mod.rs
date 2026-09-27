@@ -31,6 +31,7 @@ pub mod backend;
 pub mod key_provider;
 pub mod secure_memory;
 pub mod secure_storage;
+pub mod trng;
 
 pub mod backends;
 
@@ -40,6 +41,10 @@ pub use backends::software::SoftwareBackend;
 pub use key_provider::{KeyProvider, KeySpec};
 pub use secure_memory::{SecureBuffer, SecureMemory};
 pub use secure_storage::SecureStorage;
+pub use trng::{
+    HEALTH_SAMPLE_LEN, HealthFailure, HealthStatus, MIN_DISTINCT_BYTES, SoftwareTrng, TrngSource,
+    check_sample,
+};
 
 // Randomness already lives in the crypto module. Re-export here so
 // callers can depend on one abstraction surface.
