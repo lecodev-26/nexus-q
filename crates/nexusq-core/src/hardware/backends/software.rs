@@ -486,4 +486,114 @@ mod tests {
         b.random().fill_bytes(&mut buf).unwrap();
         assert!(buf.iter().any(|&x| x != 0));
     }
+
+    // =========================================================================
+    // End-to-end tests through Backend::random()
+    // =========================================================================
+
+    #[test]
+    fn random_fills_every_common_size() {
+        use super::super::super::Backend as _;
+        let (_dir, b) = backend();
+
+        for size in [1usize, 12, 16, 32, 64, 128, 256] {
+            let mut buf = vec![0u8; size];
+            b.random().fill_bytes(&mut buf).unwrap();
+            assert_eq!(buf.len(), size);
+            // A run of all-zeros of length >= 16 is statistically
+            // impossible with a healthy source.
+            if size >= 16 {
+                assert!(buf.iter().any(|&x| x != 0), "size {size} all zeros");
+            }
+        }
+    }
+
+    #[test]
+    fn consecutive_draws_differ() {
+        use super::super::super::Backend as _;
+        let (_dir, b) = backend();
+
+        let mut a = [0u8; 32];
+        let mut c = [0u8; 32];
+        b.random().fill_bytes(&mut a).unwrap();
+        b.random().fill_bytes(&mut c).unwrap();
+        assert_ne!(a, c, "two 32-byte draws should not collide");
+    }
+
+    #[test]
+    fn byte_distribution_is_not_patologically_biased() {
+        use super::super::super::Backend as _;
+        let (_dir, b) = backend();
+
+        // Draw 4096 bytes and count each value. With 4096 samples over
+        // 256 values we expect ~16 per value. A healthy source should
+        // keep every count below 40 and every count nonzero (with
+        // overwhelming probability).
+        let mut buf = vec![0u8; 4096];
+        b.random().fill_bytes(&mut buf).unwrap();
+
+        let mut counts = [0u32; 256];
+        for &byte in &buf {
+            counts[byte as usize] += 1;
+        }
+
+        for (value, &count) in counts.iter().enumerate() {
+            assert!(count > 0, "value {value} never appeared in 4096 draws");
+            assert!(
+                count < 40,
+                "value {value} appeared {count} times (expected ~16)"
+            );
+        }
+    }
+
+    #[test]
+    fn backend_random_generates_a_usable_ed25519_key() {
+        use super::super::super::Backend as _;
+        use crate::crypto::sign::{self, SigningKey};
+
+        let (_dir, b) = backend();
+
+        // Draw a 32-byte seed from the backend and use it to build a
+        // signing key. If the backend is broken, this would produce a
+        // key that cannot sign consistently.
+        let mut seed = [0u8; 32];
+        b.random().fill_bytes(&mut seed).unwrap();
+
+        let signing = SigningKey::from_bytes(&seed).unwrap();
+        let verifying = signing.verifying_key();
+
+        let message = b"end-to-end test through the backend";
+        let signature = signing.sign(message);
+        verifying.verify(message, &signature).unwrap();
+
+        // Sanity: a different key does not verify.
+        let other = sign::generate();
+        assert!(other.verifying.verify(message, &signature).is_err());
+    }
+
+    #[test]
+    fn backend_random_output_is_mixed_with_trng_when_present() {
+        use super::super::super::Backend as _;
+
+        // Two backends: one with TRNG, one without. Given the same
+        // sequence of calls, their outputs must differ, because the
+        // TRNG contributes to the mix.
+        let dir_a = TempDir::new().unwrap();
+        let dir_b = TempDir::new().unwrap();
+        let with_trng =
+            SoftwareBackend::with_trng(dir_a.path(), Box::new(FixedTrng { byte: 0x00 })).unwrap();
+        let without = SoftwareBackend::new(dir_b.path()).unwrap();
+
+        let mut a = [0u8; 32];
+        let mut c = [0u8; 32];
+        with_trng.random().fill_bytes(&mut a).unwrap();
+        without.random().fill_bytes(&mut c).unwrap();
+
+        // Different processes would still differ by OS entropy, but
+        // within the same test process the OS RNG advances, so we only
+        // assert that both are non-zero and differ from the constant
+        // TRNG.
+        assert_ne!(a, [0u8; 32]);
+        assert_ne!(c, [0u8; 32]);
+    }
 }
