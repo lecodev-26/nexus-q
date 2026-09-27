@@ -21,9 +21,10 @@ use std::path::{Path, PathBuf};
 use crate::crypto::sign::Signature;
 
 use super::super::{
-    AttestationProvider, AttestationReport, HardwareError, KeyHandle, KeyProvider, MeasuredBoot,
-    Measurement, MixedRandomSource, RandomSource, Register, SecureBoot, SecureBootState,
-    SecureBuffer, SecureMemory, SecureStorage, SoftwareTrng, StorageKey, TrngSource,
+    AttestationProvider, AttestationReport, HardwareError, KeyAttestation, KeyHandle, KeyInfo,
+    KeyProvider, MeasuredBoot, Measurement, MixedRandomSource, RandomSource, Register, SecureBoot,
+    SecureBootState, SecureBuffer, SecureMemory, SecureStorage, SoftwareTrng, StorageKey,
+    TrngSource,
 };
 
 /// Backend that uses ordinary OS facilities.
@@ -223,6 +224,18 @@ impl KeyProvider for SoftwareBackend {
     }
 
     fn destroy(&self, _handle: &KeyHandle) -> Result<(), HardwareError> {
+        Err(HardwareError::NotSupported)
+    }
+
+    fn attest_key(
+        &self,
+        _handle: &KeyHandle,
+        _nonce: Option<&[u8]>,
+    ) -> Result<KeyAttestation, HardwareError> {
+        Err(HardwareError::NotSupported)
+    }
+
+    fn key_info(&self, _handle: &KeyHandle) -> Result<KeyInfo, HardwareError> {
         Err(HardwareError::NotSupported)
     }
 }
@@ -435,6 +448,26 @@ mod tests {
         assert!(state.is_unknown());
         assert!(!state.is_verified());
         assert!(!state.is_failed());
+    }
+
+    #[test]
+    fn key_provider_attest_key_is_not_supported() {
+        let (_dir, b) = backend();
+        let handle = KeyHandle::from_bytes(vec![1, 2, 3]);
+        assert!(matches!(
+            b.attest_key(&handle, None),
+            Err(HardwareError::NotSupported)
+        ));
+    }
+
+    #[test]
+    fn key_provider_key_info_is_not_supported() {
+        let (_dir, b) = backend();
+        let handle = KeyHandle::from_bytes(vec![1, 2, 3]);
+        assert!(matches!(
+            b.key_info(&handle),
+            Err(HardwareError::NotSupported)
+        ));
     }
 
     #[test]
