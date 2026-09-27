@@ -22,8 +22,8 @@ use crate::crypto::sign::Signature;
 
 use super::super::{
     AttestationProvider, AttestationReport, HardwareError, KeyHandle, KeyProvider, Measurement,
-    MixedRandomSource, RandomSource, SecureBuffer, SecureMemory, SecureStorage, SoftwareTrng,
-    StorageKey, TrngSource,
+    MixedRandomSource, RandomSource, SecureBoot, SecureBootState, SecureBuffer, SecureMemory,
+    SecureStorage, SoftwareTrng, StorageKey, TrngSource,
 };
 
 /// Backend that uses ordinary OS facilities.
@@ -246,6 +246,18 @@ impl AttestationProvider for SoftwareBackend {
 }
 
 // =============================================================================
+// SecureBoot
+// =============================================================================
+
+impl SecureBoot for SoftwareBackend {
+    fn state(&self) -> SecureBootState {
+        // A general-purpose OS does not expose the boot chain to user
+        // space. The honest answer is Unknown, not Verified.
+        SecureBootState::Unknown
+    }
+}
+
+// =============================================================================
 // SecureMemory (best-effort)
 // =============================================================================
 
@@ -387,6 +399,16 @@ mod tests {
         let (_dir, b) = backend();
         let spec = super::super::super::KeySpec::Ed25519Sign;
         assert!(matches!(b.generate(spec), Err(HardwareError::NotSupported)));
+    }
+
+    #[test]
+    fn secure_boot_state_is_unknown_on_software() {
+        use super::super::super::SecureBoot as _;
+        let (_dir, b) = backend();
+        let state = b.state();
+        assert!(state.is_unknown());
+        assert!(!state.is_verified());
+        assert!(!state.is_failed());
     }
 
     #[test]
