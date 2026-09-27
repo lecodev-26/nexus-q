@@ -702,6 +702,76 @@ impl Session {
         Ok(())
     }
 
+    /// Rotates the signing key of an identity.
+    ///
+    /// Generates a new Ed25519 key, activates it, retires the previous
+    /// one, and bumps the identity's version. The identity keeps its
+    /// [`IdentityId`]; only the signing key changes.
+    ///
+    /// During the rotation the identity transitions through
+    /// `Rotating` but ends in `Active` in the same call. The
+    /// intermediate state exists in the enum for future use (for
+    /// example, to schedule re-signing of long-lived artifacts), but
+    /// the current implementation does not expose it to callers.
+    ///
+    /// Returns the new signing key's [`KeyId`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VaultError::IdentityNotFound`] if the identity does
+    /// not exist, [`VaultError::IdentityNotUsable`] if it is not
+    /// `Active`, or another error if key generation or retirement
+    /// fails.
+    pub fn rotate_identity_key(&mut self, id: &IdentityId) -> Result<KeyId, VaultError> {
+        self.require_writes_allowed()?;
+
+        // Snapshot what we need before mutating.
+        let (old_signing_key, current_version) = {
+            let identity = self
+                .body
+                .find_identity(id)
+                .ok_or_else(|| VaultError::IdentityNotFound(id.clone()))?;
+
+            if identity.metadata.status != IdentityStatus::Active {
+                return Err(VaultError::IdentityNotUsable {
+                    id: id.clone(),
+                    status: identity.metadata.status,
+                });
+            }
+            (identity.signing_key.clone(), identity.metadata.version)
+        };
+
+        // Generate the replacement signing key and activate it.
+        let new_signing_key = self.generate_key(Algorithm::Ed25519, Purpose::Sign)?;
+        self.activate_key(&new_signing_key)?;
+
+        // Retire the old key: Active -> Rotating -> Retired.
+        {
+            let old_record = self
+                .body
+                .find_key_mut(&old_signing_key)
+                .ok_or_else(|| LifecycleError::KeyNotFound(old_signing_key.clone()))?;
+            let rotating = old_record
+                .metadata
+                .status
+                .transition_to(KeyStatus::Rotating)
+                .map_err(LifecycleError::from)?;
+            let retired = rotating
+                .transition_to(KeyStatus::Retired)
+                .map_err(LifecycleError::from)?;
+            old_record.metadata.status = retired;
+        }
+
+        // Update the identity: swap the signing key, bump the version.
+        {
+            let identity = self.body.find_identity_mut(id).expect("checked above");
+            identity.signing_key = new_signing_key.clone();
+            identity.metadata.version = current_version + 1;
+        }
+
+        Ok(new_signing_key)
+    }
+
     // =========================================================================
     // Envelope operations
     // =========================================================================
@@ -2294,6 +2364,181 @@ mod tests {
             .unwrap();
         let record = session.find_key(&key_id).unwrap();
         assert!(record.public_key_bytes().is_none());
+    }
+
+    // =========================================================================
+    // Identity rotation tests
+    // =========================================================================
+
+    #[test]
+    fn rotate_identity_swaps_signing_key_and_bumps_version() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = session.create_identity(None).unwrap();
+        let old_key = session.find_identity(&id).unwrap().signing_key.clone();
+        let old_version = session.find_identity(&id).unwrap().metadata.version;
+
+        let new_key = session.rotate_identity_key(&id).unwrap();
+
+        assert_ne!(old_key, new_key);
+        let identity = session.find_identity(&id).unwrap();
+        assert_eq!(identity.signing_key, new_key);
+        assert_eq!(identity.metadata.version, old_version + 1);
+        assert_eq!(identity.metadata.status, IdentityStatus::Active);
+
+        // Old key retired, new key active.
+        assert_eq!(
+            session.find_key(&old_key).unwrap().status(),
+            KeyStatus::Retired
+        );
+        assert_eq!(
+            session.find_key(&new_key).unwrap().status(),
+            KeyStatus::Active
+        );
+    }
+
+    #[test]
+    fn rotate_identity_keeps_identity_id() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = session.create_identity(None).unwrap();
+        session.rotate_identity_key(&id).unwrap();
+
+        // The identity is still discoverable under the same id.
+        assert!(session.find_identity(&id).is_some());
+        assert_eq!(session.identity_count(), 1);
+    }
+
+    #[test]
+    fn new_signing_key_signs_and_verifies_after_rotation() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = session.create_identity(None).unwrap();
+        session.rotate_identity_key(&id).unwrap();
+
+        let msg = b"signed after rotation";
+        let sig = session.identity_sign(&id, msg).unwrap();
+        session.identity_verify(&id, msg, &sig).unwrap();
+    }
+
+    #[test]
+    fn old_signatures_verify_after_rotation() {
+        // A signature made with the old key must still verify
+        // afterwards, because the public half of the retired key is
+        // still in the vault. We assert this by capturing the old
+        // public key before rotating, then checking it still verifies
+        // the old signature.
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = session.create_identity(None).unwrap();
+        let msg = b"signed before rotation";
+        let old_sig = session.identity_sign(&id, msg).unwrap();
+
+        // Capture the old key id and its public half for later.
+        let old_signing_key = session.find_identity(&id).unwrap().signing_key.clone();
+        let old_pk = session
+            .find_key(&old_signing_key)
+            .unwrap()
+            .public_key_bytes()
+            .unwrap()
+            .to_vec();
+
+        session.rotate_identity_key(&id).unwrap();
+
+        // The old key is Retired but its public half survives.
+        let record = session.find_key(&old_signing_key).unwrap();
+        assert_eq!(record.status(), KeyStatus::Retired);
+        assert_eq!(record.public_key_bytes().unwrap(), old_pk.as_slice());
+
+        // The old signature verifies against the old public key.
+        let vk = sign::VerifyingKey::from_bytes(&old_pk).unwrap();
+        vk.verify(msg, &old_sig).unwrap();
+    }
+
+    #[test]
+    fn rotate_rejects_unknown_identity() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let mut rng = OsRandomSource::new();
+        let bogus = IdentityId::generate(&mut rng).unwrap();
+        let err = session.rotate_identity_key(&bogus).unwrap_err();
+        assert!(matches!(err, VaultError::IdentityNotFound(_)));
+    }
+
+    #[test]
+    fn rotate_rejects_revoked_identity() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = session.create_identity(None).unwrap();
+        {
+            let identity = session.find_identity_mut(&id).unwrap().unwrap();
+            identity.metadata.status = IdentityStatus::Revoked;
+            identity.metadata.revoked_at = Some(Timestamp::from_secs(1_800_000_000));
+        }
+
+        let err = session.rotate_identity_key(&id).unwrap_err();
+        assert!(matches!(err, VaultError::IdentityNotUsable { .. }));
+    }
+
+    #[test]
+    fn rotate_requires_write_access() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = session.create_identity(None).unwrap();
+        session.seal().unwrap();
+
+        let err = session.rotate_identity_key(&id).unwrap_err();
+        assert!(matches!(err, VaultError::StateDenied { .. }));
+    }
+
+    #[test]
+    fn multiple_rotations_increment_version_monotonically() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = session.create_identity(None).unwrap();
+        assert_eq!(session.find_identity(&id).unwrap().metadata.version, 1);
+
+        session.rotate_identity_key(&id).unwrap();
+        assert_eq!(session.find_identity(&id).unwrap().metadata.version, 2);
+
+        session.rotate_identity_key(&id).unwrap();
+        assert_eq!(session.find_identity(&id).unwrap().metadata.version, 3);
+
+        // Every rotation adds a new key; none is deleted.
+        assert_eq!(session.key_count(), 3);
+        assert_eq!(session.identity_count(), 1);
     }
 
     #[test]
