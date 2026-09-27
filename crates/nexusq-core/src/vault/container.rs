@@ -32,6 +32,7 @@ use super::state::{StateTransitionError, VaultState};
 use super::status::KeyStatus;
 use super::timestamp::Timestamp;
 use super::wrapping::{WrappingError, wrap};
+use crate::crypto::sign::{self, SignError, Signature};
 use crate::identity::{Identity, IdentityId, IdentityMetadata, IdentityStatus};
 
 /// Number of bytes of the length prefix before the CBOR header.
@@ -145,6 +146,24 @@ pub enum VaultError {
     /// An identity id was generated twice (astronomically unlikely).
     #[error("identity id already exists: {0}")]
     DuplicateIdentityId(IdentityId),
+
+    /// A signature operation failed.
+    #[error("signature error: {0}")]
+    Signature(#[from] SignError),
+
+    /// The identity is not in a state that allows the operation.
+    #[error("identity {id} is {status}; cannot be used for this operation")]
+    IdentityNotUsable {
+        /// The identity in question.
+        id: IdentityId,
+        /// Its current status.
+        status: IdentityStatus,
+    },
+
+    /// A key needed by an identity operation is missing or has no
+    /// public half.
+    #[error("key {0} has no public half")]
+    MissingPublicKey(KeyId),
 }
 
 /// A vault file on disk.
@@ -397,7 +416,7 @@ impl Session {
             return Err(VaultError::DuplicateKeyId(key_id));
         }
 
-        let material = generate_material(algorithm, &mut rng)?;
+        let (material, public_key_bytes) = generate_material(algorithm, &mut rng)?;
 
         // Wrap the material under the KEK, bound to the key id.
         let wrapped = wrap(&material, self.kek.as_ref(), &key_id)?;
@@ -429,7 +448,10 @@ impl Session {
             attestation: None,
         };
 
-        let record = KeyRecord::new(metadata, wrapped_variant);
+        let record = match public_key_bytes {
+            Some(pk) => KeyRecord::with_public_key(metadata, wrapped_variant, pk),
+            None => KeyRecord::new(metadata, wrapped_variant),
+        };
         record.validate()?;
 
         self.body.keys.push(record);
@@ -589,6 +611,95 @@ impl Session {
     #[must_use]
     pub fn identity_count(&self) -> usize {
         self.body.identity_count()
+    }
+
+    /// Signs `message` on behalf of the identity.
+    ///
+    /// The signing key is unwrapped from the vault with the KEK,
+    /// used, and dropped (zeroized) before returning.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VaultError::IdentityNotFound`] if the identity does
+    /// not exist, [`VaultError::IdentityNotUsable`] if it is not
+    /// Active, [`VaultError::Lifecycle`] if the signing key is not
+    /// Active, or another error if unwrapping or signing fails.
+    pub fn identity_sign(&self, id: &IdentityId, message: &[u8]) -> Result<Signature, VaultError> {
+        let identity = self
+            .body
+            .find_identity(id)
+            .ok_or_else(|| VaultError::IdentityNotFound(id.clone()))?;
+
+        if identity.metadata.status != IdentityStatus::Active {
+            return Err(VaultError::IdentityNotUsable {
+                id: id.clone(),
+                status: identity.metadata.status,
+            });
+        }
+
+        let record = self
+            .body
+            .find_key(&identity.signing_key)
+            .ok_or_else(|| LifecycleError::KeyNotFound(identity.signing_key.clone()))?;
+
+        if record.algorithm() != Algorithm::Ed25519 {
+            return Err(VaultError::Envelope(EnvelopeError::WrongCategory {
+                key_id: identity.signing_key.clone(),
+                algorithm: record.algorithm(),
+            }));
+        }
+        if record.status() != KeyStatus::Active {
+            return Err(VaultError::IdentityNotUsable {
+                id: id.clone(),
+                status: identity.metadata.status,
+            });
+        }
+
+        // Unwrap the seed, reconstruct the signing key, sign.
+        let seed_bytes = super::wrapping::unwrap(
+            record.material.bytes(),
+            self.kek.as_ref(),
+            &identity.signing_key,
+        )?;
+        let signing_key = sign::SigningKey::from_bytes(&seed_bytes)?;
+        let signature = signing_key.sign(message);
+        Ok(signature)
+    }
+
+    /// Verifies a signature produced by [`Session::identity_sign`].
+    ///
+    /// Does **not** require the KEK: the identity's public key is
+    /// stored in cleartext on the key record.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VaultError::IdentityNotFound`] if the identity does
+    /// not exist, [`VaultError::MissingPublicKey`] if the signing key
+    /// record has no public half, or [`VaultError::Signature`] if the
+    /// signature does not match.
+    pub fn identity_verify(
+        &self,
+        id: &IdentityId,
+        message: &[u8],
+        signature: &Signature,
+    ) -> Result<(), VaultError> {
+        let identity = self
+            .body
+            .find_identity(id)
+            .ok_or_else(|| VaultError::IdentityNotFound(id.clone()))?;
+
+        let record = self
+            .body
+            .find_key(&identity.signing_key)
+            .ok_or_else(|| LifecycleError::KeyNotFound(identity.signing_key.clone()))?;
+
+        let pk_bytes = record
+            .public_key_bytes()
+            .ok_or_else(|| VaultError::MissingPublicKey(identity.signing_key.clone()))?;
+
+        let verifying_key = sign::VerifyingKey::from_bytes(pk_bytes)?;
+        verifying_key.verify(message, signature)?;
+        Ok(())
     }
 
     // =========================================================================
@@ -1060,26 +1171,33 @@ fn generate_vault_id<S: RandomSource>(source: &mut S) -> Result<String, VaultErr
 // bytes. Everything is returned in a Zeroizing buffer so the caller
 // does not have to remember to wipe it.
 
+/// Secret material plus, optionally, its public half.
+type GeneratedMaterial = (Zeroizing<Vec<u8>>, Option<Vec<u8>>);
+
 fn generate_material<S: RandomSource>(
     algorithm: Algorithm,
     source: &mut S,
-) -> Result<Zeroizing<Vec<u8>>, VaultError> {
-    let material: Zeroizing<Vec<u8>> = match algorithm {
+) -> Result<GeneratedMaterial, VaultError> {
+    let result = match algorithm {
         Algorithm::Ed25519 => {
             let pair = crate::crypto::sign::generate();
-            Zeroizing::new(pair.signing.to_bytes().to_vec())
+            let secret = Zeroizing::new(pair.signing.to_bytes().to_vec());
+            let public = pair.verifying.to_bytes().to_vec();
+            (secret, Some(public))
         }
         Algorithm::MlKem768 => {
             let pair = crate::crypto::kem::hybrid::generate();
-            pair.secret_key_bytes()
+            let secret = pair.secret_key_bytes();
+            let public = pair.public_key_bytes();
+            (secret, Some(public))
         }
         Algorithm::Aes256Gcm | Algorithm::ChaCha20Poly1305 => {
             let mut buf = Zeroizing::new(vec![0u8; 32]);
             source.fill_bytes(buf.as_mut())?;
-            buf
+            (buf, None)
         }
     };
-    Ok(material)
+    Ok(result)
 }
 
 #[cfg(test)]
@@ -1993,6 +2111,189 @@ mod tests {
                 .as_deref(),
             Some("updated")
         );
+    }
+
+    // =========================================================================
+    // Identity signing tests
+    // =========================================================================
+
+    #[test]
+    fn identity_sign_and_verify_roundtrip() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = session.create_identity(None).unwrap();
+        let message = b"the document to sign";
+        let sig = session.identity_sign(&id, message).unwrap();
+        session.identity_verify(&id, message, &sig).unwrap();
+    }
+
+    #[test]
+    fn identity_verify_rejects_wrong_message() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = session.create_identity(None).unwrap();
+        let sig = session.identity_sign(&id, b"original").unwrap();
+        let err = session.identity_verify(&id, b"tampered", &sig).unwrap_err();
+        assert!(matches!(err, VaultError::Signature(_)));
+    }
+
+    #[test]
+    fn identity_verify_rejects_tampered_signature() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = session.create_identity(None).unwrap();
+        let msg = b"message";
+        let sig = session.identity_sign(&id, msg).unwrap();
+        let mut sig_bytes = sig.to_bytes().to_vec();
+        sig_bytes[0] ^= 0x01;
+        let bad_sig = Signature::from_bytes(&sig_bytes).unwrap();
+
+        let err = session.identity_verify(&id, msg, &bad_sig).unwrap_err();
+        assert!(matches!(err, VaultError::Signature(_)));
+    }
+
+    #[test]
+    fn identity_verify_rejects_signature_from_other_identity() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let alice = session.create_identity(Some("alice".to_string())).unwrap();
+        let bob = session.create_identity(Some("bob".to_string())).unwrap();
+
+        let msg = b"signed by alice";
+        let sig = session.identity_sign(&alice, msg).unwrap();
+
+        // Verifying with Bob's identity should fail.
+        let err = session.identity_verify(&bob, msg, &sig).unwrap_err();
+        assert!(matches!(err, VaultError::Signature(_)));
+    }
+
+    #[test]
+    fn identity_sign_rejects_unknown_identity() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let session = vault.unlock(b"pw").unwrap();
+
+        let mut rng = OsRandomSource::new();
+        let bogus = IdentityId::generate(&mut rng).unwrap();
+        let err = session.identity_sign(&bogus, b"data").unwrap_err();
+        assert!(matches!(err, VaultError::IdentityNotFound(_)));
+    }
+
+    #[test]
+    fn identity_sign_rejects_revoked_identity() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = session.create_identity(None).unwrap();
+
+        // Manually flip to Revoked (revocation API lands in NQ-006-06).
+        {
+            let identity = session.find_identity_mut(&id).unwrap().unwrap();
+            identity.metadata.status = IdentityStatus::Revoked;
+            identity.metadata.revoked_at = Some(Timestamp::from_secs(1_800_000_000));
+        }
+
+        let err = session.identity_sign(&id, b"data").unwrap_err();
+        assert!(matches!(err, VaultError::IdentityNotUsable { .. }));
+    }
+
+    #[test]
+    fn identity_verify_works_on_revoked_identity_for_past_signatures() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = session.create_identity(None).unwrap();
+        let msg = b"signed before revocation";
+        let sig = session.identity_sign(&id, msg).unwrap();
+
+        // Revoke the identity.
+        {
+            let identity = session.find_identity_mut(&id).unwrap().unwrap();
+            identity.metadata.status = IdentityStatus::Revoked;
+            identity.metadata.revoked_at = Some(Timestamp::from_secs(1_800_000_000));
+            identity.metadata.revocation_reason =
+                Some(crate::vault::lifecycle::RevokeReason::Compromised);
+        }
+
+        // Verification still works: the public key is available.
+        session.identity_verify(&id, msg, &sig).unwrap();
+    }
+
+    #[test]
+    fn identity_signatures_survive_lock_and_unlock() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+
+        let (id, msg, sig) = {
+            let vault = Vault::open(&path).unwrap();
+            let mut session = vault.unlock(b"pw").unwrap();
+            let id = session.create_identity(None).unwrap();
+            let msg = b"persistent message".to_vec();
+            let sig = session.identity_sign(&id, &msg).unwrap();
+            session.lock().unwrap();
+            (id, msg, sig)
+        };
+
+        let vault = Vault::open(&path).unwrap();
+        let session = vault.unlock(b"pw").unwrap();
+        session.identity_verify(&id, &msg, &sig).unwrap();
+    }
+
+    #[test]
+    fn signing_key_record_has_public_half() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = session.create_identity(None).unwrap();
+        let identity = session.find_identity(&id).unwrap();
+        let record = session.find_key(&identity.signing_key).unwrap();
+        let pk = record
+            .public_key_bytes()
+            .expect("Ed25519 has a public half");
+        assert_eq!(pk.len(), 32);
+    }
+
+    #[test]
+    fn symmetric_keys_have_no_public_half() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let key_id = session
+            .generate_key(Algorithm::Aes256Gcm, Purpose::Encrypt)
+            .unwrap();
+        let record = session.find_key(&key_id).unwrap();
+        assert!(record.public_key_bytes().is_none());
     }
 
     #[test]

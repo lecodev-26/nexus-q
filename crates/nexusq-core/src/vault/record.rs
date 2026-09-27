@@ -121,13 +121,49 @@ pub struct KeyRecord {
 
     /// The key material, wrapped under the vault's KEK.
     pub material: WrappedKeyMaterial,
+
+    /// The public half of the key, if the algorithm has one.
+    ///
+    /// Stored in cleartext on purpose: it is public information, and
+    /// keeping it here means verifying a signature does not require
+    /// unwrapping anything or holding the KEK.
+    ///
+    /// `None` for symmetric algorithms, which have no public half.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub public_key_bytes: Option<Vec<u8>>,
 }
 
 impl KeyRecord {
-    /// Creates a new record from its two halves.
+    /// Creates a new record without a public key.
+    ///
+    /// Use [`KeyRecord::with_public_key`] for asymmetric algorithms.
     #[must_use]
     pub fn new(metadata: KeyMetadata, material: WrappedKeyMaterial) -> Self {
-        Self { metadata, material }
+        Self {
+            metadata,
+            material,
+            public_key_bytes: None,
+        }
+    }
+
+    /// Creates a new record with a public key attached.
+    #[must_use]
+    pub fn with_public_key(
+        metadata: KeyMetadata,
+        material: WrappedKeyMaterial,
+        public_key_bytes: Vec<u8>,
+    ) -> Self {
+        Self {
+            metadata,
+            material,
+            public_key_bytes: Some(public_key_bytes),
+        }
+    }
+
+    /// Returns the public key bytes, if present.
+    #[must_use]
+    pub fn public_key_bytes(&self) -> Option<&[u8]> {
+        self.public_key_bytes.as_deref()
     }
 
     /// Returns the key's id.
@@ -278,6 +314,25 @@ mod tests {
         let m = WrappedKeyMaterial::Asymmetric(Vec::new());
         assert!(m.is_empty());
         assert_eq!(m.len(), 0);
+    }
+
+    #[test]
+    fn new_record_has_no_public_key() {
+        let md = sample_metadata();
+        let record = KeyRecord::new(md, WrappedKeyMaterial::Asymmetric(vec![0u8; 64]));
+        assert!(record.public_key_bytes().is_none());
+    }
+
+    #[test]
+    fn with_public_key_attaches_bytes() {
+        let md = sample_metadata();
+        let pk = vec![0x42u8; 32];
+        let record = KeyRecord::with_public_key(
+            md,
+            WrappedKeyMaterial::Asymmetric(vec![0u8; 64]),
+            pk.clone(),
+        );
+        assert_eq!(record.public_key_bytes(), Some(pk.as_slice()));
     }
 
     #[test]

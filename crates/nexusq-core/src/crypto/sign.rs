@@ -55,11 +55,11 @@ pub enum SignError {
 pub struct SigningKey(DalekSigningKey);
 
 /// An Ed25519 verifying key (public).
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct VerifyingKey(DalekVerifyingKey);
 
 /// An Ed25519 detached signature.
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Signature(DalekSignature);
 
 /// A signing / verifying key pair.
