@@ -772,6 +772,59 @@ impl Session {
         Ok(new_signing_key)
     }
 
+    /// Revokes an identity.
+    ///
+    /// Revocation is terminal: the identity cannot return to `Active`.
+    /// Past signatures remain verifiable because the signing key's
+    /// public half stays in the vault; new signatures are refused.
+    ///
+    /// The signing key itself is **not** revoked here. Its status is
+    /// independent of the identity's, and the identity check already
+    /// blocks new operations. Callers who also want to revoke the key
+    /// should call [`Session::revoke_key`] explicitly.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VaultError::IdentityNotFound`] if the identity does
+    /// not exist, [`VaultError::IdentityNotUsable`] if it is already
+    /// revoked, or [`VaultError::StateDenied`] if the session is sealed
+    /// or compromised.
+    pub fn revoke_identity(
+        &mut self,
+        id: &IdentityId,
+        reason: RevokeReason,
+    ) -> Result<(), VaultError> {
+        self.require_writes_allowed()?;
+
+        let now = Timestamp::now().unwrap_or(Timestamp::from_secs(0));
+
+        let identity = self
+            .body
+            .find_identity_mut(id)
+            .ok_or_else(|| VaultError::IdentityNotFound(id.clone()))?;
+
+        if identity.metadata.status == IdentityStatus::Revoked {
+            return Err(VaultError::IdentityNotUsable {
+                id: id.clone(),
+                status: IdentityStatus::Revoked,
+            });
+        }
+
+        let new_status = identity
+            .metadata
+            .status
+            .transition_to(IdentityStatus::Revoked)
+            .map_err(|_| VaultError::IdentityNotUsable {
+                id: id.clone(),
+                status: identity.metadata.status,
+            })?;
+
+        identity.metadata.status = new_status;
+        identity.metadata.revoked_at = Some(now);
+        identity.metadata.revocation_reason = Some(reason);
+        Ok(())
+    }
+
     // =========================================================================
     // Envelope operations
     // =========================================================================
@@ -2539,6 +2592,189 @@ mod tests {
         // Every rotation adds a new key; none is deleted.
         assert_eq!(session.key_count(), 3);
         assert_eq!(session.identity_count(), 1);
+    }
+
+    // =========================================================================
+    // Identity revocation tests
+    // =========================================================================
+
+    #[test]
+    fn revoke_identity_sets_status_and_metadata() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = session.create_identity(None).unwrap();
+        session
+            .revoke_identity(&id, RevokeReason::Compromised)
+            .unwrap();
+
+        let identity = session.find_identity(&id).unwrap();
+        assert_eq!(identity.metadata.status, IdentityStatus::Revoked);
+        assert!(identity.metadata.revoked_at.is_some());
+        assert!(matches!(
+            identity.metadata.revocation_reason,
+            Some(RevokeReason::Compromised)
+        ));
+        assert!(identity.is_revoked());
+        assert!(!identity.is_active());
+    }
+
+    #[test]
+    fn revoke_identity_blocks_future_signatures() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = session.create_identity(None).unwrap();
+        session
+            .revoke_identity(&id, RevokeReason::OwnerLeft)
+            .unwrap();
+
+        let err = session.identity_sign(&id, b"data").unwrap_err();
+        assert!(matches!(err, VaultError::IdentityNotUsable { .. }));
+    }
+
+    #[test]
+    fn revoke_identity_keeps_past_signatures_verifiable() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = session.create_identity(None).unwrap();
+        let msg = b"signed before revocation";
+        let sig = session.identity_sign(&id, msg).unwrap();
+
+        session
+            .revoke_identity(&id, RevokeReason::Superseded)
+            .unwrap();
+
+        // Verification still succeeds.
+        session.identity_verify(&id, msg, &sig).unwrap();
+    }
+
+    #[test]
+    fn revoke_identity_is_idempotent_error() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = session.create_identity(None).unwrap();
+        session
+            .revoke_identity(&id, RevokeReason::Compromised)
+            .unwrap();
+
+        let err = session
+            .revoke_identity(&id, RevokeReason::Compromised)
+            .unwrap_err();
+        assert!(matches!(err, VaultError::IdentityNotUsable { .. }));
+    }
+
+    #[test]
+    fn revoke_rejects_unknown_identity() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let mut rng = OsRandomSource::new();
+        let bogus = IdentityId::generate(&mut rng).unwrap();
+        let err = session
+            .revoke_identity(&bogus, RevokeReason::Compromised)
+            .unwrap_err();
+        assert!(matches!(err, VaultError::IdentityNotFound(_)));
+    }
+
+    #[test]
+    fn revoked_identity_cannot_be_rotated() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = session.create_identity(None).unwrap();
+        session
+            .revoke_identity(&id, RevokeReason::Compromised)
+            .unwrap();
+
+        let err = session.rotate_identity_key(&id).unwrap_err();
+        assert!(matches!(err, VaultError::IdentityNotUsable { .. }));
+    }
+
+    #[test]
+    fn revoke_identity_requires_write_access() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = session.create_identity(None).unwrap();
+        session.seal().unwrap();
+
+        let err = session
+            .revoke_identity(&id, RevokeReason::Compromised)
+            .unwrap_err();
+        assert!(matches!(err, VaultError::StateDenied { .. }));
+    }
+
+    #[test]
+    fn revoke_identity_persists_across_lock_and_unlock() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+
+        let id = {
+            let vault = Vault::open(&path).unwrap();
+            let mut session = vault.unlock(b"pw").unwrap();
+            let id = session.create_identity(None).unwrap();
+            session
+                .revoke_identity(&id, RevokeReason::OwnerLeft)
+                .unwrap();
+            session.lock().unwrap();
+            id
+        };
+
+        let vault = Vault::open(&path).unwrap();
+        let session = vault.unlock(b"pw").unwrap();
+        let identity = session.find_identity(&id).unwrap();
+        assert!(identity.is_revoked());
+        assert!(matches!(
+            identity.metadata.revocation_reason,
+            Some(RevokeReason::OwnerLeft)
+        ));
+    }
+
+    #[test]
+    fn revoke_identity_does_not_touch_signing_key() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let id = session.create_identity(None).unwrap();
+        let signing_key = session.find_identity(&id).unwrap().signing_key.clone();
+
+        session
+            .revoke_identity(&id, RevokeReason::Compromised)
+            .unwrap();
+
+        // The signing key status is unchanged.
+        assert_eq!(
+            session.find_key(&signing_key).unwrap().status(),
+            KeyStatus::Active
+        );
     }
 
     #[test]
