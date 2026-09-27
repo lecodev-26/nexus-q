@@ -34,12 +34,12 @@ pub trait RandomSource: Send + Sync {
     /// must treat any error as fatal for the operation in progress: it is
     /// never acceptable to fall back to a weaker source without an
     /// explicit policy decision.
-    fn fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), RandomError>;
+    fn fill_bytes(&self, dest: &mut [u8]) -> Result<(), RandomError>;
 
     /// Returns a `Vec` of `len` random bytes.
     ///
     /// Convenience wrapper over [`fill_bytes`](Self::fill_bytes).
-    fn bytes(&mut self, len: usize) -> Result<Vec<u8>, RandomError> {
+    fn bytes(&self, len: usize) -> Result<Vec<u8>, RandomError> {
         let mut buf = vec![0u8; len];
         self.fill_bytes(&mut buf)?;
         Ok(buf)
@@ -64,7 +64,7 @@ impl OsRandomSource {
 }
 
 impl RandomSource for OsRandomSource {
-    fn fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), RandomError> {
+    fn fill_bytes(&self, dest: &mut [u8]) -> Result<(), RandomError> {
         OsRng
             .try_fill_bytes(dest)
             .map_err(|_| RandomError::OsFailure)
@@ -77,14 +77,14 @@ mod tests {
 
     #[test]
     fn fills_requested_length() {
-        let mut src = OsRandomSource::new();
+        let src = OsRandomSource::new();
         let buf = src.bytes(64).expect("os rng available");
         assert_eq!(buf.len(), 64);
     }
 
     #[test]
     fn produces_different_output_on_successive_calls() {
-        let mut src = OsRandomSource::new();
+        let src = OsRandomSource::new();
         let a = src.bytes(32).expect("os rng available");
         let b = src.bytes(32).expect("os rng available");
         assert_ne!(a, b, "two 32-byte draws should not collide");
@@ -92,7 +92,7 @@ mod tests {
 
     #[test]
     fn zero_length_is_allowed() {
-        let mut src = OsRandomSource::new();
+        let src = OsRandomSource::new();
         let buf = src.bytes(0).expect("os rng available");
         assert!(buf.is_empty());
     }

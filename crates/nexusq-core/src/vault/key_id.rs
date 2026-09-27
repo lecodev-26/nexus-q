@@ -74,7 +74,7 @@ impl KeyId {
     ///
     /// Returns [`KeyIdError::RandomFailure`] if the underlying random
     /// source fails.
-    pub fn generate<S: RandomSource>(source: &mut S, algorithm: &str) -> Result<Self, KeyIdError> {
+    pub fn generate<S: RandomSource>(source: &S, algorithm: &str) -> Result<Self, KeyIdError> {
         validate_algorithm_segment(algorithm)?;
 
         let mut buf = [0u8; RANDOM_BYTES];
@@ -205,8 +205,8 @@ mod tests {
 
     #[test]
     fn generate_produces_expected_shape() {
-        let mut src = OsRandomSource::new();
-        let id = KeyId::generate(&mut src, "mlkem768").unwrap();
+        let src = OsRandomSource::new();
+        let id = KeyId::generate(&src, "mlkem768").unwrap();
         assert!(id.as_str().starts_with("nqk_mlkem768_"));
         assert_eq!(id.algorithm(), "mlkem768");
         assert_eq!(id.random_part().len(), RANDOM_HEX_LEN);
@@ -214,9 +214,9 @@ mod tests {
 
     #[test]
     fn generate_produces_different_ids() {
-        let mut src = OsRandomSource::new();
-        let a = KeyId::generate(&mut src, "mlkem768").unwrap();
-        let b = KeyId::generate(&mut src, "mlkem768").unwrap();
+        let src = OsRandomSource::new();
+        let a = KeyId::generate(&src, "mlkem768").unwrap();
+        let b = KeyId::generate(&src, "mlkem768").unwrap();
         assert_ne!(a, b);
     }
 
@@ -288,8 +288,8 @@ mod tests {
 
     #[test]
     fn display_and_parse_are_roundtrip() {
-        let mut src = OsRandomSource::new();
-        let id = KeyId::generate(&mut src, "ed25519").unwrap();
+        let src = OsRandomSource::new();
+        let id = KeyId::generate(&src, "ed25519").unwrap();
         let s = id.to_string();
         let parsed: KeyId = s.parse().unwrap();
         assert_eq!(id, parsed);

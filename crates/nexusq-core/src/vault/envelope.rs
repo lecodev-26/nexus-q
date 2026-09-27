@@ -289,7 +289,7 @@ pub fn build_envelope(
         });
     }
 
-    let mut rng = OsRandomSource::new();
+    let rng = OsRandomSource::new();
 
     // Fresh DEK and payload nonce.
     let mut dek = Zeroizing::new([0u8; DEK_LEN]);
@@ -418,7 +418,7 @@ pub fn build_envelope_to_public_key(
 ) -> Result<Vec<u8>, EnvelopeError> {
     let env_alg = EnvelopeAlgorithm::Aes256Gcm;
 
-    let mut rng = OsRandomSource::new();
+    let rng = OsRandomSource::new();
     let mut nonce = [0u8; NONCE_LEN];
     rng.fill_bytes(&mut nonce)?;
 
@@ -523,8 +523,8 @@ mod tests {
     use crate::crypto::random::OsRandomSource;
 
     fn sample_key_id() -> KeyId {
-        let mut rng = OsRandomSource::new();
-        KeyId::generate(&mut rng, "aes256gcm").unwrap()
+        let rng = OsRandomSource::new();
+        KeyId::generate(&rng, "aes256gcm").unwrap()
     }
 
     #[test]
@@ -661,8 +661,8 @@ mod tests {
     const KEK: [u8; 32] = [0x42u8; 32];
 
     fn make_active_record(algorithm: Algorithm) -> KeyRecord {
-        let mut rng = OsRandomSource::new();
-        let key_id = KeyId::generate(&mut rng, algorithm.as_str()).unwrap();
+        let rng = OsRandomSource::new();
+        let key_id = KeyId::generate(&rng, algorithm.as_str()).unwrap();
         KeyRecord::new(
             KeyMetadata {
                 key_id,

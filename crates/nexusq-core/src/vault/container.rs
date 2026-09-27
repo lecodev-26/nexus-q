@@ -219,13 +219,13 @@ impl Vault {
             )));
         }
 
-        let mut rng = OsRandomSource::new();
+        let rng = OsRandomSource::new();
 
         // Generate a fresh salt and vault id.
         let mut salt = [0u8; SALT_LEN];
         rng.fill_bytes(&mut salt)?;
 
-        let vault_id = generate_vault_id(&mut rng)?;
+        let vault_id = generate_vault_id(&rng)?;
 
         // Derive the KEK and build the header.
         let params = KdfParams::v1_default();
@@ -348,7 +348,7 @@ impl Vault {
         body: &VaultBody,
         kek: &[u8; kdf::DERIVED_KEY_LEN],
     ) -> Result<(), VaultError> {
-        let mut rng = OsRandomSource::new();
+        let rng = OsRandomSource::new();
         let mut nonce = [0u8; BODY_NONCE_LEN];
         rng.fill_bytes(&mut nonce)?;
 
@@ -416,13 +416,13 @@ impl Session {
         }
 
         // Generate the key id and the material.
-        let mut rng = OsRandomSource::new();
-        let key_id = KeyId::generate(&mut rng, algorithm.as_str())?;
+        let rng = OsRandomSource::new();
+        let key_id = KeyId::generate(&rng, algorithm.as_str())?;
         if self.body.find_key(&key_id).is_some() {
             return Err(VaultError::DuplicateKeyId(key_id));
         }
 
-        let (material, public_key_bytes) = generate_material(algorithm, &mut rng)?;
+        let (material, public_key_bytes) = generate_material(algorithm, &rng)?;
 
         // Wrap the material under the KEK, bound to the key id.
         let wrapped = wrap(&material, self.kek.as_ref(), &key_id)?;
@@ -556,8 +556,8 @@ impl Session {
         self.activate_key(&signing_key)?;
 
         // Build the identity.
-        let mut rng = OsRandomSource::new();
-        let identity_id = IdentityId::generate(&mut rng)
+        let rng = OsRandomSource::new();
+        let identity_id = IdentityId::generate(&rng)
             .map_err(|_| VaultError::Random(crate::crypto::random::RandomError::Unavailable))?;
 
         if self.body.find_identity(&identity_id).is_some() {
@@ -1354,7 +1354,7 @@ fn write_vault_file(
 /// Format: `<name>.tmp.<8 hex chars>`. The suffix comes from the OS
 /// CSPRNG so two writers cannot collide.
 fn unique_temp_path(path: &Path) -> Result<PathBuf, VaultError> {
-    let mut rng = OsRandomSource::new();
+    let rng = OsRandomSource::new();
     let mut suffix = [0u8; 4];
     rng.fill_bytes(&mut suffix)?;
 
@@ -1380,7 +1380,7 @@ fn derive_kek(
     Ok(Zeroizing::new(kek))
 }
 
-fn generate_vault_id<S: RandomSource>(source: &mut S) -> Result<String, VaultError> {
+fn generate_vault_id<S: RandomSource>(source: &S) -> Result<String, VaultError> {
     let mut buf = [0u8; 16];
     source.fill_bytes(&mut buf)?;
     let mut out = String::with_capacity(4 + 32);
@@ -1408,7 +1408,7 @@ type GeneratedMaterial = (Zeroizing<Vec<u8>>, Option<Vec<u8>>);
 
 fn generate_material<S: RandomSource>(
     algorithm: Algorithm,
-    source: &mut S,
+    source: &S,
 ) -> Result<GeneratedMaterial, VaultError> {
     let result = match algorithm {
         Algorithm::Ed25519 => {
@@ -1840,8 +1840,8 @@ mod tests {
         let vault = Vault::open(&path).unwrap();
         let mut session = vault.unlock(b"pw").unwrap();
 
-        let mut rng = OsRandomSource::new();
-        let bogus = KeyId::generate(&mut rng, "ed25519").unwrap();
+        let rng = OsRandomSource::new();
+        let bogus = KeyId::generate(&rng, "ed25519").unwrap();
         let err = session.activate_key(&bogus).unwrap_err();
         assert!(matches!(err, VaultError::Lifecycle(_)));
     }
@@ -2097,8 +2097,8 @@ mod tests {
         let vault = Vault::open(&path).unwrap();
         let session = vault.unlock(b"pw").unwrap();
 
-        let mut rng = OsRandomSource::new();
-        let bogus = KeyId::generate(&mut rng, "aes256gcm").unwrap();
+        let rng = OsRandomSource::new();
+        let bogus = KeyId::generate(&rng, "aes256gcm").unwrap();
         let err = session.encrypt(&bogus, b"data", Vec::new()).unwrap_err();
         assert!(matches!(err, VaultError::Lifecycle(_)));
     }
@@ -2423,8 +2423,8 @@ mod tests {
         let vault = Vault::open(&path).unwrap();
         let session = vault.unlock(b"pw").unwrap();
 
-        let mut rng = OsRandomSource::new();
-        let bogus = IdentityId::generate(&mut rng).unwrap();
+        let rng = OsRandomSource::new();
+        let bogus = IdentityId::generate(&rng).unwrap();
         let err = session.identity_sign(&bogus, b"data").unwrap_err();
         assert!(matches!(err, VaultError::IdentityNotFound(_)));
     }
@@ -2641,8 +2641,8 @@ mod tests {
         let vault = Vault::open(&path).unwrap();
         let mut session = vault.unlock(b"pw").unwrap();
 
-        let mut rng = OsRandomSource::new();
-        let bogus = IdentityId::generate(&mut rng).unwrap();
+        let rng = OsRandomSource::new();
+        let bogus = IdentityId::generate(&rng).unwrap();
         let err = session.rotate_identity_key(&bogus).unwrap_err();
         assert!(matches!(err, VaultError::IdentityNotFound(_)));
     }
@@ -2795,8 +2795,8 @@ mod tests {
         let vault = Vault::open(&path).unwrap();
         let mut session = vault.unlock(b"pw").unwrap();
 
-        let mut rng = OsRandomSource::new();
-        let bogus = IdentityId::generate(&mut rng).unwrap();
+        let rng = OsRandomSource::new();
+        let bogus = IdentityId::generate(&rng).unwrap();
         let err = session
             .revoke_identity(&bogus, RevokeReason::Compromised)
             .unwrap_err();
@@ -2965,8 +2965,8 @@ mod tests {
         let mut session = vault.unlock(b"pw").unwrap();
 
         let subject = session.create_identity(None).unwrap();
-        let mut rng = OsRandomSource::new();
-        let bogus = IdentityId::generate(&mut rng).unwrap();
+        let rng = OsRandomSource::new();
+        let bogus = IdentityId::generate(&rng).unwrap();
 
         let err = session
             .issue_credential(&bogus, subject, b"claims".to_vec(), None)

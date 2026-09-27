@@ -148,8 +148,8 @@ mod tests {
     }
 
     fn sample_record() -> KeyRecord {
-        let mut src = OsRandomSource::new();
-        let key_id = KeyId::generate(&mut src, "ed25519").unwrap();
+        let src = OsRandomSource::new();
+        let key_id = KeyId::generate(&src, "ed25519").unwrap();
         KeyRecord::new(
             KeyMetadata {
                 key_id,
@@ -180,9 +180,9 @@ mod tests {
 
     #[test]
     fn find_key_returns_none_for_unknown_id() {
-        let mut src = OsRandomSource::new();
+        let src = OsRandomSource::new();
         let body = VaultBody::new(sample_metadata());
-        let other = KeyId::generate(&mut src, "ed25519").unwrap();
+        let other = KeyId::generate(&src, "ed25519").unwrap();
         assert!(body.find_key(&other).is_none());
     }
 

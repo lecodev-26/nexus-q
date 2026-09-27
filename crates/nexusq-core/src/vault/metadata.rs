@@ -135,8 +135,8 @@ mod tests {
     use crate::crypto::random::OsRandomSource;
 
     fn sample_metadata() -> KeyMetadata {
-        let mut src = OsRandomSource::new();
-        let key_id = KeyId::generate(&mut src, "ed25519").unwrap();
+        let src = OsRandomSource::new();
+        let key_id = KeyId::generate(&src, "ed25519").unwrap();
         KeyMetadata {
             key_id,
             algorithm: Algorithm::Ed25519,

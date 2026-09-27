@@ -133,14 +133,14 @@ mod tests {
     use crate::vault::KeyId;
 
     fn sample_key_id(alg: &str) -> KeyId {
-        let mut rng = OsRandomSource::new();
-        KeyId::generate(&mut rng, alg).unwrap()
+        let rng = OsRandomSource::new();
+        KeyId::generate(&rng, alg).unwrap()
     }
 
     fn sample_identity() -> Identity {
-        let mut rng = OsRandomSource::new();
+        let rng = OsRandomSource::new();
         Identity {
-            id: IdentityId::generate(&mut rng).unwrap(),
+            id: IdentityId::generate(&rng).unwrap(),
             signing_key: sample_key_id("ed25519"),
             encryption_key: Some(sample_key_id("aes256gcm")),
             key_agreement_key: Some(sample_key_id("mlkem768")),

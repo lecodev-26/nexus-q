@@ -217,8 +217,8 @@ mod tests {
     use crate::crypto::sign;
 
     fn sample_id() -> IdentityId {
-        let mut rng = OsRandomSource::new();
-        IdentityId::generate(&mut rng).unwrap()
+        let rng = OsRandomSource::new();
+        IdentityId::generate(&rng).unwrap()
     }
 
     fn issue_sample() -> (Vec<u8>, VerifyingKey) {

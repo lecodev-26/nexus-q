@@ -72,7 +72,7 @@ impl IdentityId {
     ///
     /// Returns [`IdentityIdError::RandomFailure`] if the underlying
     /// random source fails.
-    pub fn generate<S: RandomSource>(source: &mut S) -> Result<Self, IdentityIdError> {
+    pub fn generate<S: RandomSource>(source: &S) -> Result<Self, IdentityIdError> {
         let mut buf = [0u8; RANDOM_BYTES];
         source
             .fill_bytes(&mut buf)
@@ -154,17 +154,17 @@ mod tests {
 
     #[test]
     fn generate_produces_expected_shape() {
-        let mut rng = OsRandomSource::new();
-        let id = IdentityId::generate(&mut rng).unwrap();
+        let rng = OsRandomSource::new();
+        let id = IdentityId::generate(&rng).unwrap();
         assert!(id.as_str().starts_with("nqi_"));
         assert_eq!(id.random_part().len(), RANDOM_HEX_LEN);
     }
 
     #[test]
     fn generate_produces_different_ids() {
-        let mut rng = OsRandomSource::new();
-        let a = IdentityId::generate(&mut rng).unwrap();
-        let b = IdentityId::generate(&mut rng).unwrap();
+        let rng = OsRandomSource::new();
+        let a = IdentityId::generate(&rng).unwrap();
+        let b = IdentityId::generate(&rng).unwrap();
         assert_ne!(a, b);
     }
 
@@ -224,8 +224,8 @@ mod tests {
 
     #[test]
     fn display_and_parse_are_roundtrip() {
-        let mut rng = OsRandomSource::new();
-        let id = IdentityId::generate(&mut rng).unwrap();
+        let rng = OsRandomSource::new();
+        let id = IdentityId::generate(&rng).unwrap();
         let s = id.to_string();
         let parsed: IdentityId = s.parse().unwrap();
         assert_eq!(id, parsed);

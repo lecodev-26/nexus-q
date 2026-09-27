@@ -100,8 +100,8 @@ mod tests {
     use crate::crypto::random::OsRandomSource;
 
     fn sample_key_id() -> KeyId {
-        let mut rng = OsRandomSource::new();
-        KeyId::generate(&mut rng, "ed25519").unwrap()
+        let rng = OsRandomSource::new();
+        KeyId::generate(&rng, "ed25519").unwrap()
     }
 
     #[test]

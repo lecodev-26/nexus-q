@@ -72,7 +72,7 @@ impl From<RandomError> for AeadError {
 /// # Errors
 ///
 /// Propagates the underlying source's failure.
-pub fn random_nonce<S: RandomSource>(source: &mut S) -> Result<[u8; NONCE_LEN], RandomError> {
+pub fn random_nonce<S: RandomSource>(source: &S) -> Result<[u8; NONCE_LEN], RandomError> {
     let mut nonce = [0u8; NONCE_LEN];
     source.fill_bytes(&mut nonce)?;
     Ok(nonce)
@@ -241,8 +241,8 @@ mod tests {
 
     #[test]
     fn random_nonce_has_expected_length() {
-        let mut src = crate::crypto::random::OsRandomSource::new();
-        let n = random_nonce(&mut src).unwrap();
+        let src = crate::crypto::random::OsRandomSource::new();
+        let n = random_nonce(&src).unwrap();
         assert_eq!(n.len(), NONCE_LEN);
     }
 }

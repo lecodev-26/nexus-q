@@ -249,8 +249,8 @@ mod tests {
         fs::write(&input, payload).unwrap();
 
         let kek = [0x42u8; 32];
-        let mut rng = crate::crypto::random::OsRandomSource::new();
-        let key_id = KeyId::generate(&mut rng, "aes256gcm").unwrap();
+        let rng = crate::crypto::random::OsRandomSource::new();
+        let key_id = KeyId::generate(&rng, "aes256gcm").unwrap();
         let record = KeyRecord::new(
             KeyMetadata {
                 key_id,

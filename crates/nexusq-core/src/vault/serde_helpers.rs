@@ -103,15 +103,15 @@ mod tests {
 
     #[test]
     fn key_id_roundtrip() {
-        let mut src = OsRandomSource::new();
-        let id = KeyId::generate(&mut src, "ed25519").unwrap();
+        let src = OsRandomSource::new();
+        let id = KeyId::generate(&src, "ed25519").unwrap();
         roundtrip(&id);
     }
 
     #[test]
     fn key_metadata_roundtrip() {
-        let mut src = OsRandomSource::new();
-        let key_id = KeyId::generate(&mut src, "ed25519").unwrap();
+        let src = OsRandomSource::new();
+        let key_id = KeyId::generate(&src, "ed25519").unwrap();
         let md = KeyMetadata {
             key_id,
             algorithm: Algorithm::Ed25519,

@@ -67,7 +67,7 @@ pub enum WrappingError {
 /// or [`WrappingError::Aead`] if the encryption fails (in practice this
 /// only happens for invalid key lengths, which we control).
 pub fn wrap(material: &[u8], kek: &[u8], key_id: &KeyId) -> Result<Vec<u8>, WrappingError> {
-    let mut rng = OsRandomSource::new();
+    let rng = OsRandomSource::new();
     let mut nonce = [0u8; NONCE_LEN];
     rng.fill_bytes(&mut nonce)?;
 
@@ -110,8 +110,8 @@ mod tests {
     use super::*;
 
     fn sample_key_id() -> KeyId {
-        let mut rng = OsRandomSource::new();
-        KeyId::generate(&mut rng, "ed25519").unwrap()
+        let rng = OsRandomSource::new();
+        KeyId::generate(&rng, "ed25519").unwrap()
     }
 
     const KEK: [u8; 32] = [0x42u8; 32];
