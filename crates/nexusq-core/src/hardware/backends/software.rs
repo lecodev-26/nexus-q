@@ -21,9 +21,9 @@ use std::path::{Path, PathBuf};
 use crate::crypto::sign::Signature;
 
 use super::super::{
-    AttestationProvider, AttestationReport, HardwareError, KeyHandle, KeyProvider, Measurement,
-    MixedRandomSource, RandomSource, SecureBoot, SecureBootState, SecureBuffer, SecureMemory,
-    SecureStorage, SoftwareTrng, StorageKey, TrngSource,
+    AttestationProvider, AttestationReport, HardwareError, KeyHandle, KeyProvider, MeasuredBoot,
+    Measurement, MixedRandomSource, RandomSource, Register, SecureBoot, SecureBootState,
+    SecureBuffer, SecureMemory, SecureStorage, SoftwareTrng, StorageKey, TrngSource,
 };
 
 /// Backend that uses ordinary OS facilities.
@@ -246,6 +246,24 @@ impl AttestationProvider for SoftwareBackend {
 }
 
 // =============================================================================
+// MeasuredBoot
+// =============================================================================
+
+impl MeasuredBoot for SoftwareBackend {
+    fn registers(&self) -> Result<Vec<Register>, HardwareError> {
+        // A general-purpose OS does not expose boot measurements to
+        // user space. Reporting an empty list would be worse than
+        // reporting unavailability, because callers could mistake an
+        // empty list for a verified boot.
+        Err(HardwareError::NotAvailable)
+    }
+
+    fn register(&self, _index: u32) -> Result<Register, HardwareError> {
+        Err(HardwareError::NotAvailable)
+    }
+}
+
+// =============================================================================
 // SecureBoot
 // =============================================================================
 
@@ -399,6 +417,14 @@ mod tests {
         let (_dir, b) = backend();
         let spec = super::super::super::KeySpec::Ed25519Sign;
         assert!(matches!(b.generate(spec), Err(HardwareError::NotSupported)));
+    }
+
+    #[test]
+    fn measured_boot_reports_unavailable() {
+        use super::super::super::MeasuredBoot as _;
+        let (_dir, b) = backend();
+        assert!(matches!(b.registers(), Err(HardwareError::NotAvailable)));
+        assert!(matches!(b.register(0), Err(HardwareError::NotAvailable)));
     }
 
     #[test]

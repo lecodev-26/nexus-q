@@ -29,6 +29,7 @@
 pub mod attestation;
 pub mod backend;
 pub mod key_provider;
+pub mod measured_boot;
 pub mod mixed_rng;
 pub mod secure_boot;
 pub mod secure_memory;
@@ -41,6 +42,7 @@ pub use attestation::{AttestationProvider, AttestationReport, Measurement};
 pub use backend::Backend;
 pub use backends::software::SoftwareBackend;
 pub use key_provider::{KeyProvider, KeySpec};
+pub use measured_boot::{MeasuredBoot, Register, RegisterAlgorithm};
 pub use mixed_rng::MixedRandomSource;
 pub use secure_boot::{BootComponent, RootOfTrust, SecureBoot, SecureBootState};
 pub use secure_memory::{SecureBuffer, SecureMemory};
