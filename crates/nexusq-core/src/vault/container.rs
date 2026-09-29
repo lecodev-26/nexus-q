@@ -20,6 +20,8 @@ use crate::crypto::random::{OsRandomSource, RandomError, RandomSource};
 
 use super::algorithm::Algorithm;
 use super::body::{CURRENT_SCHEMA_VERSION, VaultBody, VaultMetadata};
+use std::cell::RefCell;
+
 use super::envelope::{self, EnvelopeError};
 use super::header::{HeaderError, KdfParams, MAGIC, SALT_LEN, VaultHeader};
 use super::key_id::{KeyId, KeyIdError};
@@ -36,6 +38,7 @@ use crate::crypto::sign::{self, SignError, Signature};
 use crate::identity::{
     Credential, CredentialError, Identity, IdentityId, IdentityMetadata, IdentityStatus,
 };
+use crate::storage::{AuditEventSpec, AuditLog, AuditLogConfig, EventType};
 
 /// Number of bytes of the length prefix before the CBOR header.
 const HEADER_LEN_PREFIX: usize = 4;
@@ -170,6 +173,12 @@ pub enum VaultError {
     /// A credential operation failed.
     #[error("credential error: {0}")]
     Credential(#[from] CredentialError),
+
+    /// The audit log could not be written. The operation is refused:
+    /// a security-relevant action is never performed without being
+    /// logged (see `docs/SECURITY_MODEL.md` §7.6).
+    #[error("audit error: {0}")]
+    Audit(#[from] crate::storage::DbError),
 }
 
 /// A vault file on disk.
@@ -193,6 +202,11 @@ pub struct Session {
     kek: Zeroizing<[u8; kdf::DERIVED_KEY_LEN]>,
     body: VaultBody,
     state: VaultState,
+    /// Optional audit log. When present, every security-relevant
+    /// operation appends an event. The `RefCell` allows logging from
+    /// `&self` methods; a session is not shared across threads, so
+    /// interior mutability is safe here.
+    audit: RefCell<Option<AuditLog>>,
 }
 
 impl Vault {
@@ -287,6 +301,7 @@ impl Vault {
             kek,
             body,
             state: VaultState::Unlocked,
+            audit: RefCell::new(None),
         })
     }
 
@@ -1231,6 +1246,54 @@ impl Session {
         } else {
             Err(VaultError::StateDenied { state: self.state })
         }
+    }
+
+    // =========================================================================
+    // Audit log
+    // =========================================================================
+
+    /// Enables audit logging to the given directory.
+    ///
+    /// The directory must exist. Opening the log does not itself
+    /// append an event; the first event is written by the next
+    /// auditable operation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VaultError::StateDenied`] if the session is sealed
+    /// or compromised, or [`VaultError::Audit`] if the log cannot be
+    /// opened.
+    pub fn enable_audit(
+        &mut self,
+        audit_dir: impl AsRef<std::path::Path>,
+    ) -> Result<(), VaultError> {
+        self.require_writes_allowed()?;
+        let log = AuditLog::open_with(audit_dir.as_ref(), AuditLogConfig::default())?;
+        *self.audit.borrow_mut() = Some(log);
+        Ok(())
+    }
+
+    /// Returns `true` if the session has an audit log enabled.
+    #[must_use]
+    pub fn has_audit(&self) -> bool {
+        self.audit.borrow().is_some()
+    }
+
+    /// Appends an event to the audit log, if one is enabled.
+    ///
+    /// Returns `Ok(())` when no log is configured. Returns an error
+    /// when a log is configured but the write fails, which causes the
+    /// caller's operation to fail.
+    fn log_event(&self, subject: &str, event_type: EventType) -> Result<(), VaultError> {
+        let mut audit_ref = self.audit.borrow_mut();
+        if let Some(log) = audit_ref.as_mut() {
+            let spec = AuditEventSpec::new(event_type)
+                .with_actor("session")
+                .with_subject(subject);
+            let now = Timestamp::now().unwrap_or(Timestamp::from_secs(0));
+            log.append(now, spec)?;
+        }
+        Ok(())
     }
 
     /// Locks the session: persists the current body and returns the
@@ -3107,6 +3170,67 @@ mod tests {
         let err = session
             .issue_credential(&issuer, subject, b"claims".to_vec(), None)
             .unwrap_err();
+        assert!(matches!(err, VaultError::StateDenied { .. }));
+    }
+
+    // =========================================================================
+    // Audit integration tests
+    // =========================================================================
+
+    #[test]
+    fn session_starts_without_audit() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let session = vault.unlock(b"pw").unwrap();
+        assert!(!session.has_audit());
+    }
+
+    #[test]
+    fn enable_audit_attaches_a_log() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        let audit_dir = dir.path().join("audit");
+        std::fs::create_dir(&audit_dir).unwrap();
+
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        assert!(!session.has_audit());
+        session.enable_audit(&audit_dir).unwrap();
+        assert!(session.has_audit());
+        assert!(audit_dir.join("audit-00001.nqa").exists());
+    }
+
+    #[test]
+    fn enable_audit_rejects_missing_directory() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        let missing_audit_dir = dir.path().join("does-not-exist");
+
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let err = session.enable_audit(&missing_audit_dir).unwrap_err();
+        assert!(matches!(err, VaultError::Audit(_)));
+    }
+
+    #[test]
+    fn enable_audit_requires_write_access() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        let audit_dir = dir.path().join("audit");
+        std::fs::create_dir(&audit_dir).unwrap();
+
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+        session.seal().unwrap();
+
+        let err = session.enable_audit(&audit_dir).unwrap_err();
         assert!(matches!(err, VaultError::StateDenied { .. }));
     }
 
