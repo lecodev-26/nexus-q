@@ -464,6 +464,79 @@ Verification tools (Fase 12, CLI) can:
 - Verify the whole chain from the first segment.
 - Detect truncation (via `prev_segment` mismatch).
 
+### 7.5 Usage in code
+
+The audit log is exposed through the `storage` module. The typical
+flow inside a deployment is:
+
+```rust
+use nexusq_core::storage::AuditLog;
+use nexusq_core::vault::Vault;
+
+// 1. Open or create the vault.
+let vault = Vault::open("vault.nqv")?;
+
+// 2. Unlock to get a session.
+let mut session = vault.unlock(password)?;
+
+// 3. Attach an audit log living next to the vault.
+session.enable_audit("audit/")?;
+
+// 4. Perform operations. Every security-relevant call appends an
+//    event and persists the segment before returning.
+let key_id = session.generate_key(algorithm, purpose)?;
+session.activate_key(&key_id)?;
+
+// 5. On shutdown, lock the session. The audit log is already on
+//    disk; no explicit flush is needed.
+session.lock()?;
+```
+
+The directory passed to enable_audit must exist. The first call
+creates audit-00001.nqa inside it; later sessions continue from
+the highest-numbered segment.
+
+Failure to log means failure to operate. If a segment cannot be
+written (disk full, permissions revoked), the operation returns an
+error and the caller must treat it as failed. The session is not
+left in a half-audited state: the mutation that already happened
+stays in memory, but the caller knows the log did not record it and
+can decide how to proceed. This is documented behavior, not a
+rollback.
+
+Verification. To verify the log independently, open it again and
+call verify_all:
+
+```rust
+let log = AuditLog::open("audit/")?;
+log.verify_all()?;
+```
+
+verify_all walks every segment in numeric order, checks each
+segment's internal chain (index monotonicity, prev_hash linkage,
+per-event hash), and confirms that each segment's prev_segment
+matches its predecessor's segment_hash. Any mismatch is a tamper
+indication.
+
+Rotation. Segments rotate automatically at max_events (default
+1000). The rotation is transparent: appending past the threshold
+finalizes the current segment and starts a new one whose
+prev_segment is the hash of the closed segment.
+
+### 7.6 What is never logged
+
+The rules from SECURITY_MODEL.md §7.4 apply at the storage layer
+too:
+
+· Private keys or any key material.
+· Plaintext of user data.
+· Passwords or password-derived material.
+· Full ciphertexts (only hashes or identifiers).
+
+An event carries the actor, the subject (typically a KeyId or an
+IdentityId), the outcome, and a small opaque context blob that the
+application controls. The core library never fills context with
+data that could be sensitive.
 ---
 
 ## 8. Backup bundle (F-05)
