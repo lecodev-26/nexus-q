@@ -476,6 +476,7 @@ impl Session {
         record.validate()?;
 
         self.body.keys.push(record);
+        self.log_event(key_id.as_str(), EventType::KeyCreated)?;
         Ok(key_id)
     }
 
@@ -600,6 +601,7 @@ impl Session {
         identity.validate()?;
 
         self.body.identities.push(identity);
+        self.log_event(identity_id.as_str(), EventType::IdentityCreated)?;
         Ok(identity_id)
     }
 
@@ -684,6 +686,7 @@ impl Session {
         )?;
         let signing_key = sign::SigningKey::from_bytes(&seed_bytes)?;
         let signature = signing_key.sign(message);
+        self.log_event(id.as_str(), EventType::IdentitySigned)?;
         Ok(signature)
     }
 
@@ -790,6 +793,7 @@ impl Session {
             identity.metadata.version = current_version + 1;
         }
 
+        self.log_event(id.as_str(), EventType::IdentityKeyRotated)?;
         Ok(new_signing_key)
     }
 
@@ -843,6 +847,7 @@ impl Session {
         identity.metadata.status = new_status;
         identity.metadata.revoked_at = Some(now);
         identity.metadata.revocation_reason = Some(reason);
+        self.log_event(id.as_str(), EventType::IdentityRevoked)?;
         Ok(())
     }
 
@@ -912,6 +917,7 @@ impl Session {
             now,
             expires_at,
         )?;
+        self.log_event(issuer.as_str(), EventType::CredentialIssued)?;
         Ok(credential_bytes)
     }
 
@@ -946,6 +952,7 @@ impl Session {
 
         let verifying_key = sign::VerifyingKey::from_bytes(pk_bytes)?;
         let verified = Credential::verify_with_key(bytes, &verifying_key)?;
+        self.log_event(verified.issuer.as_str(), EventType::CredentialVerified)?;
         Ok(verified)
     }
 
@@ -977,6 +984,7 @@ impl Session {
             .ok_or_else(|| LifecycleError::KeyNotFound(key_id.clone()))?;
 
         let bytes = envelope::build_envelope(self.kek.as_ref(), record, plaintext, metadata)?;
+        self.log_event(key_id.as_str(), EventType::EnvelopeSealed)?;
         Ok(bytes)
     }
 
@@ -995,6 +1003,7 @@ impl Session {
 
         let lookup = |id: &KeyId| self.body.find_key(id).cloned();
         let plaintext = envelope::open_envelope(self.kek.as_ref(), envelope_bytes, lookup)?;
+        self.log_event("envelope", EventType::EnvelopeOpened)?;
         Ok(plaintext)
     }
 
@@ -1023,6 +1032,7 @@ impl Session {
 
         let path =
             super::file_ops::encrypt_file_with_key(input, self.kek.as_ref(), record, metadata)?;
+        self.log_event(key_id.as_str(), EventType::EnvelopeSealed)?;
         Ok(path)
     }
 
@@ -1043,6 +1053,7 @@ impl Session {
 
         let lookup = |id: &KeyId| self.body.find_key(id).cloned();
         super::file_ops::decrypt_file_with_key(input, output, self.kek.as_ref(), lookup)?;
+        self.log_event("envelope-file", EventType::EnvelopeOpened)?;
         Ok(())
     }
 
@@ -1072,6 +1083,7 @@ impl Session {
             .transition_to(KeyStatus::Active)
             .map_err(LifecycleError::from)?;
         record.metadata.status = new_status;
+        self.log_event(key_id.as_str(), EventType::KeyActivated)?;
         Ok(())
     }
 
@@ -1145,6 +1157,7 @@ impl Session {
             old_record.metadata.status = retired;
         }
 
+        self.log_event(new_id.as_str(), EventType::KeyRotated)?;
         Ok(new_id)
     }
 
@@ -1182,6 +1195,7 @@ impl Session {
             .transition_to(KeyStatus::Revoked)
             .map_err(LifecycleError::from)?;
         record.metadata.status = new_status;
+        self.log_event(key_id.as_str(), EventType::KeyRevoked)?;
         Ok(())
     }
 
@@ -1236,6 +1250,7 @@ impl Session {
         record.material = empty;
 
         record.metadata.status = KeyStatus::Destroyed;
+        self.log_event(key_id.as_str(), EventType::KeyDestroyed)?;
         Ok(())
     }
 
@@ -3232,6 +3247,90 @@ mod tests {
 
         let err = session.enable_audit(&audit_dir).unwrap_err();
         assert!(matches!(err, VaultError::StateDenied { .. }));
+    }
+
+    #[test]
+    fn audited_operations_append_events() {
+        let dir = TempDir::new().unwrap();
+        let vault_path = temp_path(&dir, "v.nqv");
+        let audit_dir = dir.path().join("audit");
+        std::fs::create_dir(&audit_dir).unwrap();
+
+        Vault::create(&vault_path, b"pw", None).unwrap();
+        let vault = Vault::open(&vault_path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+        session.enable_audit(&audit_dir).unwrap();
+
+        // Three operations that should each append an event.
+        let key_id = session
+            .generate_key(Algorithm::Ed25519, Purpose::Sign)
+            .unwrap();
+        session.activate_key(&key_id).unwrap();
+        session
+            .revoke_key(&key_id, crate::vault::lifecycle::RevokeReason::Compromised)
+            .unwrap();
+
+        // Reopen the audit log and verify.
+        let log = crate::storage::AuditLog::open(&audit_dir).unwrap();
+        assert_eq!(log.current_len(), 3);
+        log.verify_all().unwrap();
+    }
+
+    #[test]
+    fn identity_signed_is_audited() {
+        let dir = TempDir::new().unwrap();
+        let vault_path = temp_path(&dir, "v.nqv");
+        let audit_dir = dir.path().join("audit");
+        std::fs::create_dir(&audit_dir).unwrap();
+
+        Vault::create(&vault_path, b"pw", None).unwrap();
+        let vault = Vault::open(&vault_path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+        session.enable_audit(&audit_dir).unwrap();
+
+        let identity_id = session.create_identity(None).unwrap();
+        session.identity_sign(&identity_id, b"message").unwrap();
+
+        // create_identity → IdentityCreated
+        // generate_key (inside) → KeyCreated
+        // activate_key (inside) → KeyActivated
+        // identity_sign → IdentitySigned
+        let log = crate::storage::AuditLog::open(&audit_dir).unwrap();
+        assert_eq!(log.current_len(), 4);
+        log.verify_all().unwrap();
+    }
+
+    #[test]
+    fn audit_failure_fails_the_operation() {
+        let dir = TempDir::new().unwrap();
+        let vault_path = temp_path(&dir, "v.nqv");
+        let audit_dir = dir.path().join("audit");
+        std::fs::create_dir(&audit_dir).unwrap();
+
+        Vault::create(&vault_path, b"pw", None).unwrap();
+        let vault = Vault::open(&vault_path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+        session.enable_audit(&audit_dir).unwrap();
+
+        // Make the audit directory read-only so subsequent writes fail.
+        let mut perms = std::fs::metadata(&audit_dir).unwrap().permissions();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            perms.set_mode(0o500); // r-x for owner, no write
+            std::fs::set_permissions(&audit_dir, perms).unwrap();
+
+            // Now generate_key should fail because the audit write fails.
+            let err = session
+                .generate_key(Algorithm::Ed25519, Purpose::Sign)
+                .unwrap_err();
+            assert!(matches!(err, VaultError::Audit(_)));
+
+            // Restore permissions so the temp dir can be cleaned up.
+            let mut perms = std::fs::metadata(&audit_dir).unwrap().permissions();
+            perms.set_mode(0o700);
+            std::fs::set_permissions(&audit_dir, perms).unwrap();
+        }
     }
 
     #[test]
