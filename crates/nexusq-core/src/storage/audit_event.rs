@@ -42,8 +42,11 @@ pub const GENESIS_HASH: [u8; HASH_LEN] = [0u8; HASH_LEN];
 /// The kind of event being recorded.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum EventType {
+    // --- Key lifecycle ---
     /// A key was created.
     KeyCreated,
+    /// A key was activated.
+    KeyActivated,
     /// A key was used for a cryptographic operation.
     KeyUsed,
     /// A key was rotated.
@@ -56,6 +59,36 @@ pub enum EventType {
     KeyExported,
     /// An operation was refused by policy.
     KeyAccessDenied,
+
+    // --- Identity lifecycle ---
+    /// An identity was created.
+    IdentityCreated,
+    /// An identity's signing key was rotated.
+    IdentityKeyRotated,
+    /// An identity was revoked.
+    IdentityRevoked,
+    /// An identity produced a signature.
+    IdentitySigned,
+
+    // --- Credentials ---
+    /// A credential was issued.
+    CredentialIssued,
+    /// A credential was verified.
+    CredentialVerified,
+
+    // --- Envelope ---
+    /// An envelope was sealed (data encrypted).
+    EnvelopeSealed,
+    /// An envelope was opened (data decrypted).
+    EnvelopeOpened,
+
+    // --- Backup ---
+    /// A backup was exported.
+    BackupExported,
+    /// A backup was imported.
+    BackupImported,
+
+    // --- Vault lifecycle ---
     /// A vault was created.
     VaultCreated,
     /// A vault was unlocked.
@@ -64,6 +97,8 @@ pub enum EventType {
     VaultLocked,
     /// A vault was sealed.
     VaultSealed,
+
+    // --- Session and policy ---
     /// A session ended.
     SessionEnded,
     /// A policy was changed.
@@ -81,17 +116,41 @@ impl EventType {
     #[must_use]
     pub fn as_str(&self) -> &str {
         match self {
+            // Key lifecycle
             Self::KeyCreated => "key_created",
+            Self::KeyActivated => "key_activated",
             Self::KeyUsed => "key_used",
             Self::KeyRotated => "key_rotated",
             Self::KeyRevoked => "key_revoked",
             Self::KeyDestroyed => "key_destroyed",
             Self::KeyExported => "key_exported",
             Self::KeyAccessDenied => "key_access_denied",
+
+            // Identity lifecycle
+            Self::IdentityCreated => "identity_created",
+            Self::IdentityKeyRotated => "identity_key_rotated",
+            Self::IdentityRevoked => "identity_revoked",
+            Self::IdentitySigned => "identity_signed",
+
+            // Credentials
+            Self::CredentialIssued => "credential_issued",
+            Self::CredentialVerified => "credential_verified",
+
+            // Envelope
+            Self::EnvelopeSealed => "envelope_sealed",
+            Self::EnvelopeOpened => "envelope_opened",
+
+            // Backup
+            Self::BackupExported => "backup_exported",
+            Self::BackupImported => "backup_imported",
+
+            // Vault lifecycle
             Self::VaultCreated => "vault_created",
             Self::VaultUnlocked => "vault_unlocked",
             Self::VaultLocked => "vault_locked",
             Self::VaultSealed => "vault_sealed",
+
+            // Session and policy
             Self::SessionEnded => "session_ended",
             Self::PolicyChanged => "policy_changed",
             Self::MigrationPerformed => "migration_performed",
@@ -346,7 +405,42 @@ mod tests {
 
     #[test]
     fn event_type_strings_are_stable() {
+        // Key lifecycle
         assert_eq!(EventType::KeyCreated.as_str(), "key_created");
+        assert_eq!(EventType::KeyActivated.as_str(), "key_activated");
+        assert_eq!(EventType::KeyUsed.as_str(), "key_used");
+        assert_eq!(EventType::KeyRotated.as_str(), "key_rotated");
+        assert_eq!(EventType::KeyRevoked.as_str(), "key_revoked");
+        assert_eq!(EventType::KeyDestroyed.as_str(), "key_destroyed");
+        assert_eq!(EventType::KeyExported.as_str(), "key_exported");
+        assert_eq!(EventType::KeyAccessDenied.as_str(), "key_access_denied");
+
+        // Identity
+        assert_eq!(EventType::IdentityCreated.as_str(), "identity_created");
+        assert_eq!(
+            EventType::IdentityKeyRotated.as_str(),
+            "identity_key_rotated"
+        );
+        assert_eq!(EventType::IdentityRevoked.as_str(), "identity_revoked");
+        assert_eq!(EventType::IdentitySigned.as_str(), "identity_signed");
+
+        // Credentials
+        assert_eq!(EventType::CredentialIssued.as_str(), "credential_issued");
+        assert_eq!(
+            EventType::CredentialVerified.as_str(),
+            "credential_verified"
+        );
+
+        // Envelope
+        assert_eq!(EventType::EnvelopeSealed.as_str(), "envelope_sealed");
+        assert_eq!(EventType::EnvelopeOpened.as_str(), "envelope_opened");
+
+        // Backup
+        assert_eq!(EventType::BackupExported.as_str(), "backup_exported");
+        assert_eq!(EventType::BackupImported.as_str(), "backup_imported");
+
+        // Vault and policy
+        assert_eq!(EventType::VaultCreated.as_str(), "vault_created");
         assert_eq!(EventType::VaultUnlocked.as_str(), "vault_unlocked");
         assert_eq!(EventType::PolicyChanged.as_str(), "policy_changed");
         assert_eq!(EventType::Other("custom".into()).as_str(), "custom");
