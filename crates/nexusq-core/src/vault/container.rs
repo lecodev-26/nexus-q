@@ -38,8 +38,8 @@ use crate::crypto::sign::{self, SignError, Signature};
 use crate::identity::{
     Credential, CredentialError, Identity, IdentityId, IdentityMetadata, IdentityStatus,
 };
-use crate::policy::PolicySet;
-use crate::storage::{AuditEventSpec, AuditLog, AuditLogConfig, EventType};
+use crate::policy::{PolicyContext, PolicyDecision, PolicyOperation, PolicySet};
+use crate::storage::{AuditEventSpec, AuditLog, AuditLogConfig, EventOutcome, EventType};
 
 /// Number of bytes of the length prefix before the CBOR header.
 const HEADER_LEN_PREFIX: usize = 4;
@@ -180,6 +180,10 @@ pub enum VaultError {
     /// logged (see `docs/SECURITY_MODEL.md` §7.6).
     #[error("audit error: {0}")]
     Audit(#[from] crate::storage::DbError),
+
+    /// The policy engine refused the operation.
+    #[error("operation denied by policy")]
+    PolicyDenied(PolicyDecision),
 }
 
 /// A vault file on disk.
@@ -426,6 +430,7 @@ impl Session {
         purpose: Purpose,
     ) -> Result<KeyId, VaultError> {
         self.require_writes_allowed()?;
+        self.check_policy(PolicyOperation::KeyCreate, "new-key", None, None)?;
 
         if !purpose.is_allowed_for(algorithm) {
             return Err(VaultError::PurposeNotAllowed { algorithm, purpose });
@@ -567,6 +572,7 @@ impl Session {
     /// registration fails.
     pub fn create_identity(&mut self, label: Option<String>) -> Result<IdentityId, VaultError> {
         self.require_writes_allowed()?;
+        self.check_policy(PolicyOperation::IdentityCreate, "new-identity", None, None)?;
 
         // Generate the signing key inside the vault.
         let signing_key = self.generate_key(Algorithm::Ed25519, Purpose::Sign)?;
@@ -649,6 +655,8 @@ impl Session {
     /// Active, [`VaultError::Lifecycle`] if the signing key is not
     /// Active, or another error if unwrapping or signing fails.
     pub fn identity_sign(&self, id: &IdentityId, message: &[u8]) -> Result<Signature, VaultError> {
+        self.check_policy(PolicyOperation::IdentitySign, id.as_str(), None, Some(id))?;
+
         let identity = self
             .body
             .find_identity(id)
@@ -749,6 +757,12 @@ impl Session {
     /// fails.
     pub fn rotate_identity_key(&mut self, id: &IdentityId) -> Result<KeyId, VaultError> {
         self.require_writes_allowed()?;
+        self.check_policy(
+            PolicyOperation::IdentityRotateKey,
+            id.as_str(),
+            None,
+            Some(id),
+        )?;
 
         // Snapshot what we need before mutating.
         let (old_signing_key, current_version) = {
@@ -821,6 +835,7 @@ impl Session {
         reason: RevokeReason,
     ) -> Result<(), VaultError> {
         self.require_writes_allowed()?;
+        self.check_policy(PolicyOperation::IdentityRevoke, id.as_str(), None, Some(id))?;
 
         let now = Timestamp::now().unwrap_or(Timestamp::from_secs(0));
 
@@ -876,6 +891,12 @@ impl Session {
     ) -> Result<Vec<u8>, VaultError> {
         // Signing requires write access, because it unwraps key material.
         self.require_writes_allowed()?;
+        self.check_policy(
+            PolicyOperation::CredentialIssue,
+            issuer.as_str(),
+            None,
+            Some(issuer),
+        )?;
 
         let identity = self
             .body
@@ -978,6 +999,17 @@ impl Session {
         metadata: Vec<u8>,
     ) -> Result<Vec<u8>, VaultError> {
         self.require_writes_allowed()?;
+        let current_status = self
+            .body
+            .find_key(key_id)
+            .map(KeyRecord::status)
+            .ok_or_else(|| LifecycleError::KeyNotFound(key_id.clone()))?;
+        self.check_policy(
+            PolicyOperation::EnvelopeSeal,
+            key_id.as_str(),
+            Some((key_id, current_status)),
+            None,
+        )?;
 
         let record = self
             .body
@@ -1001,6 +1033,7 @@ impl Session {
     /// failures (unknown key, tampered data, wrong mode).
     pub fn decrypt(&self, envelope_bytes: &[u8]) -> Result<Zeroizing<Vec<u8>>, VaultError> {
         self.require_writes_allowed()?;
+        self.check_policy(PolicyOperation::EnvelopeOpen, "envelope", None, None)?;
 
         let lookup = |id: &KeyId| self.body.find_key(id).cloned();
         let plaintext = envelope::open_envelope(self.kek.as_ref(), envelope_bytes, lookup)?;
@@ -1025,6 +1058,17 @@ impl Session {
         metadata: Vec<u8>,
     ) -> Result<std::path::PathBuf, VaultError> {
         self.require_writes_allowed()?;
+        let current_status = self
+            .body
+            .find_key(key_id)
+            .map(KeyRecord::status)
+            .ok_or_else(|| LifecycleError::KeyNotFound(key_id.clone()))?;
+        self.check_policy(
+            PolicyOperation::EnvelopeSeal,
+            key_id.as_str(),
+            Some((key_id, current_status)),
+            None,
+        )?;
 
         let record = self
             .body
@@ -1051,6 +1095,7 @@ impl Session {
         output: impl AsRef<std::path::Path>,
     ) -> Result<(), VaultError> {
         self.require_writes_allowed()?;
+        self.check_policy(PolicyOperation::EnvelopeOpen, "envelope-file", None, None)?;
 
         let lookup = |id: &KeyId| self.body.find_key(id).cloned();
         super::file_ops::decrypt_file_with_key(input, output, self.kek.as_ref(), lookup)?;
@@ -1073,6 +1118,18 @@ impl Session {
     /// [`LifecycleError::WrongStatus`] if it is not in `Generated`.
     pub fn activate_key(&mut self, key_id: &KeyId) -> Result<(), VaultError> {
         self.require_writes_allowed()?;
+        let current_status = self
+            .body
+            .find_key(key_id)
+            .map(KeyRecord::status)
+            .ok_or_else(|| LifecycleError::KeyNotFound(key_id.clone()))?;
+        self.check_policy(
+            PolicyOperation::KeyActivate,
+            key_id.as_str(),
+            Some((key_id, current_status)),
+            None,
+        )?;
+
         let record = self
             .body
             .find_key_mut(key_id)
@@ -1108,7 +1165,7 @@ impl Session {
         self.require_writes_allowed()?;
 
         // Read the pieces we need before mutating anything.
-        let (algorithm, purpose, old_version) = {
+        let (algorithm, purpose, old_version, current_status) = {
             let record = self
                 .body
                 .find_key(key_id)
@@ -1125,8 +1182,16 @@ impl Session {
                 record.algorithm(),
                 record.purpose(),
                 record.metadata.version,
+                record.status(),
             )
         };
+
+        self.check_policy(
+            PolicyOperation::KeyRotate,
+            key_id.as_str(),
+            Some((key_id, current_status)),
+            None,
+        )?;
 
         // Generate the replacement.
         let new_id = self.generate_key(algorithm, purpose)?;
@@ -1177,6 +1242,18 @@ impl Session {
     /// permit revocation.
     pub fn revoke_key(&mut self, key_id: &KeyId, _reason: RevokeReason) -> Result<(), VaultError> {
         self.require_writes_allowed()?;
+        let current_status = self
+            .body
+            .find_key(key_id)
+            .map(KeyRecord::status)
+            .ok_or_else(|| LifecycleError::KeyNotFound(key_id.clone()))?;
+        self.check_policy(
+            PolicyOperation::KeyRevoke,
+            key_id.as_str(),
+            Some((key_id, current_status)),
+            None,
+        )?;
+
         let record = self
             .body
             .find_key_mut(key_id)
@@ -1220,6 +1297,18 @@ impl Session {
         _confirmation: DestructionConfirmation,
     ) -> Result<(), VaultError> {
         self.require_writes_allowed()?;
+        let current_status = self
+            .body
+            .find_key(key_id)
+            .map(KeyRecord::status)
+            .ok_or_else(|| LifecycleError::KeyNotFound(key_id.clone()))?;
+        self.check_policy(
+            PolicyOperation::KeyDestroy,
+            key_id.as_str(),
+            Some((key_id, current_status)),
+            None,
+        )?;
+
         let record = self
             .body
             .find_key_mut(key_id)
@@ -1341,21 +1430,76 @@ impl Session {
         self.audit.borrow().is_some()
     }
 
-    /// Appends an event to the audit log, if one is enabled.
+    /// Appends a success event to the audit log, if one is enabled.
     ///
     /// Returns `Ok(())` when no log is configured. Returns an error
     /// when a log is configured but the write fails, which causes the
     /// caller's operation to fail.
     fn log_event(&self, subject: &str, event_type: EventType) -> Result<(), VaultError> {
+        self.log_event_with_outcome(subject, event_type, EventOutcome::Success)
+    }
+
+    /// Appends an event with the given outcome to the audit log.
+    fn log_event_with_outcome(
+        &self,
+        subject: &str,
+        event_type: EventType,
+        outcome: EventOutcome,
+    ) -> Result<(), VaultError> {
         let mut audit_ref = self.audit.borrow_mut();
         if let Some(log) = audit_ref.as_mut() {
             let spec = AuditEventSpec::new(event_type)
                 .with_actor("session")
-                .with_subject(subject);
+                .with_subject(subject)
+                .with_outcome(outcome);
             let now = Timestamp::now().unwrap_or(Timestamp::from_secs(0));
             log.append(now, spec)?;
         }
         Ok(())
+    }
+
+    /// Checks the vault's policy engine for the given operation.
+    ///
+    /// When the vault has no policies, this is a no-op. When it does,
+    /// the engine is consulted with a context built from the given
+    /// arguments. An operation that is not permitted returns
+    /// [`VaultError::PolicyDenied`] and, if an audit log is enabled,
+    /// records a `KeyAccessDenied` event with the `Denied` outcome.
+    ///
+    /// `subject` is used for the audit record; it should be the key or
+    /// identity the operation is about, or a fixed string for
+    /// operations without one.
+    fn check_policy(
+        &self,
+        operation: PolicyOperation,
+        subject: &str,
+        key: Option<(&KeyId, KeyStatus)>,
+        identity: Option<&IdentityId>,
+    ) -> Result<(), VaultError> {
+        let Some(policies) = self.body.policies.as_ref() else {
+            return Ok(());
+        };
+
+        let now = Timestamp::now().unwrap_or(Timestamp::from_secs(0));
+        let mut context = PolicyContext::new(operation, now);
+        if let Some((key_id, status)) = key {
+            context = context.with_key(key_id.clone(), status);
+        }
+        if let Some(identity_id) = identity {
+            context = context.with_identity(identity_id.clone());
+        }
+
+        let decision = policies
+            .evaluate(&context)
+            .map_err(|_| VaultError::PolicyDenied(PolicyDecision::NoDecision))?;
+
+        if decision.permits() {
+            return Ok(());
+        }
+
+        // Deny or no decision: record and refuse.
+        self.log_event_with_outcome(subject, EventType::KeyAccessDenied, EventOutcome::Denied)?;
+        Err(VaultError::PolicyDenied(decision))
     }
 
     /// Locks the session: persists the current body and returns the
