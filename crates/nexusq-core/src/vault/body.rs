@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{KeyRecord, Timestamp};
 use crate::identity::Identity;
+use crate::policy::PolicySet;
 
 /// Current body schema version.
 ///
@@ -81,6 +82,18 @@ pub struct VaultBody {
     /// keep loading.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub identities: Vec<Identity>,
+
+    /// Access control policies for this vault.
+    ///
+    /// `None` means "no policy engine is active": every operation is
+    /// allowed, matching the behavior of vaults created before the
+    /// policy engine existed. `Some(set)` activates evaluation, and
+    /// the set's default-deny rule takes over.
+    ///
+    /// The field is optional on deserialization for the same reason
+    /// as `identities`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policies: Option<PolicySet>,
 }
 
 impl VaultBody {
@@ -91,6 +104,7 @@ impl VaultBody {
             metadata,
             keys: Vec::new(),
             identities: Vec::new(),
+            policies: None,
         }
     }
 

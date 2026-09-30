@@ -38,6 +38,7 @@ use crate::crypto::sign::{self, SignError, Signature};
 use crate::identity::{
     Credential, CredentialError, Identity, IdentityId, IdentityMetadata, IdentityStatus,
 };
+use crate::policy::PolicySet;
 use crate::storage::{AuditEventSpec, AuditLog, AuditLogConfig, EventType};
 
 /// Number of bytes of the length prefix before the CBOR header.
@@ -1261,6 +1262,52 @@ impl Session {
         } else {
             Err(VaultError::StateDenied { state: self.state })
         }
+    }
+
+    // =========================================================================
+    // Policies
+    // =========================================================================
+
+    /// Returns the vault's policy set, if any.
+    ///
+    /// `None` means the policy engine is not active: every operation
+    /// is allowed.
+    #[must_use]
+    pub fn policies(&self) -> Option<&PolicySet> {
+        self.body.policies.as_ref()
+    }
+
+    /// Activates a policy set for the current session.
+    ///
+    /// Once set, every auditable operation is evaluated against the
+    /// set before proceeding. The default-deny rule applies: an
+    /// operation with no matching policy is refused.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VaultError::StateDenied`] if the session is sealed
+    /// or compromised.
+    pub fn set_policies(&mut self, policies: PolicySet) -> Result<(), VaultError> {
+        self.require_writes_allowed()?;
+        self.body.policies = Some(policies);
+        self.log_event("vault", EventType::PolicyChanged)?;
+        Ok(())
+    }
+
+    /// Deactivates the policy engine for the current session.
+    ///
+    /// After this call, every operation is allowed again, matching
+    /// the behavior of a vault with no policies configured.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VaultError::StateDenied`] if the session is sealed
+    /// or compromised.
+    pub fn clear_policies(&mut self) -> Result<(), VaultError> {
+        self.require_writes_allowed()?;
+        self.body.policies = None;
+        self.log_event("vault", EventType::PolicyChanged)?;
+        Ok(())
     }
 
     // =========================================================================
@@ -3331,6 +3378,113 @@ mod tests {
             perms.set_mode(0o700);
             std::fs::set_permissions(&audit_dir, perms).unwrap();
         }
+    }
+
+    // =========================================================================
+    // Policy tests
+    // =========================================================================
+
+    #[test]
+    fn new_vault_has_no_policies() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let session = vault.unlock(b"pw").unwrap();
+        assert!(session.policies().is_none());
+    }
+
+    #[test]
+    fn set_policies_attaches_a_set() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let mut set = crate::policy::PolicySet::new();
+        set.add(
+            crate::policy::Policy::new("allow-all", crate::policy::PolicyEffect::Allow)
+                .for_operations(vec![crate::policy::PolicyOperation::KeyCreate])
+                .on(crate::policy::PolicyTarget::All),
+        );
+        session.set_policies(set).unwrap();
+
+        assert!(session.policies().is_some());
+        assert_eq!(session.policies().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn clear_policies_removes_the_set() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let set = crate::policy::PolicySet::new();
+        session.set_policies(set).unwrap();
+        assert!(session.policies().is_some());
+
+        session.clear_policies().unwrap();
+        assert!(session.policies().is_none());
+    }
+
+    #[test]
+    fn set_policies_requires_write_access() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+        session.seal().unwrap();
+
+        let set = crate::policy::PolicySet::new();
+        let err = session.set_policies(set).unwrap_err();
+        assert!(matches!(err, VaultError::StateDenied { .. }));
+    }
+
+    #[test]
+    fn policies_persist_across_lock_and_unlock() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+
+        {
+            let vault = Vault::open(&path).unwrap();
+            let mut session = vault.unlock(b"pw").unwrap();
+            let mut set = crate::policy::PolicySet::new();
+            set.add(
+                crate::policy::Policy::new("allow-sign", crate::policy::PolicyEffect::Allow)
+                    .for_operations(vec![crate::policy::PolicyOperation::Sign])
+                    .on(crate::policy::PolicyTarget::All),
+            );
+            session.set_policies(set).unwrap();
+            session.lock().unwrap();
+        }
+
+        let vault = Vault::open(&path).unwrap();
+        let session = vault.unlock(b"pw").unwrap();
+        assert_eq!(session.policies().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn set_policies_emits_policy_changed_event() {
+        let dir = TempDir::new().unwrap();
+        let vault_path = temp_path(&dir, "v.nqv");
+        let audit_dir = dir.path().join("audit");
+        std::fs::create_dir(&audit_dir).unwrap();
+
+        Vault::create(&vault_path, b"pw", None).unwrap();
+        let vault = Vault::open(&vault_path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+        session.enable_audit(&audit_dir).unwrap();
+
+        let set = crate::policy::PolicySet::new();
+        session.set_policies(set).unwrap();
+
+        let log = crate::storage::AuditLog::open(&audit_dir).unwrap();
+        assert_eq!(log.current_len(), 1);
     }
 
     #[test]
