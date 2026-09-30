@@ -116,7 +116,7 @@ Each commit is atomic: one logical change. Reverts are cheap.
 - All eight documents reviewed and committed.
 - No open question blocks Fase 1.
 
-**Status:** ✅ Complete.
+**Status:** Complete.
 
 ---
 
@@ -199,7 +199,7 @@ workspace.
 - [ ] Rotation and revocation have end-to-end tests (Phase 4).
 - [ ] Audit events verified for every operation (Phase 4).
 
-**Status:** ✅ Structural part complete. Operational part (rotation,
+**Status:** Structural part complete. Operational part (rotation,
 revocation, destruction as actual vault operations) is implemented in
 Phase 4 where it can be tied to persistence and audit.
 
@@ -232,7 +232,7 @@ and metadata.
 - [x] Atomic write verified: temp file, fsync, rename, directory
       fsync. Concurrent writers use unique temp names.
 
-**Status:** ✅ Complete, except for access control (Phase 11) and
+**Status:** Complete, except for access control (Phase 11) and
 audit log integration (Phase 5+). Those are tracked separately and do
 not block moving to Phase 5.
 
@@ -261,7 +261,7 @@ protect real data.
 - [x] Envelopes to public keys can be decrypted by the recipient.
 - [x] Metadata is authenticated.
 
-**Status:** ✅ Complete, except for CLI integration (Phase 12).
+**Status:** Complete, except for CLI integration (Phase 12).
 
 ---
 
@@ -394,7 +394,7 @@ RISC-V and enclave platforms.
       migration is needed.
 - [x] Corrupt files are detected and refused.
 
-**Status:** ✅ Complete for v1.0. The two deferred items are tracked
+**Status:** Complete for v1.0. The two deferred items are tracked
 in Fase 15 and will be addressed before the security engineering
 milestone closes.
 
@@ -406,19 +406,34 @@ milestone closes.
 
 **Deliverables:**
 
-- Policy definition (Rust structs, or small DSL)
-- Policy evaluation: `allow`, `deny`, `require_authentication`,
-  `require_hardware`, `require_attestation`
-- Frequency / rate constraints
-- Policy changes are audited
-- Default-deny enforced
+- [x] Policy definition as Rust structs (no DSL, by design).
+- [x] Policy evaluation: the evaluator returns Allow, Deny, or
+      NoDecision. Conditions cover caller identity, key status, time
+      windows and attestation.
+- [x] Default-deny: attaching a PolicySet — even an empty one —
+      turns the engine on, and every operation must be explicitly
+      allowed. A vault with no policies keeps its historical
+      permissive behavior.
+- [x] All auditable operations respect policy: key lifecycle,
+      identity, credentials, and envelope.
+- [x] Policy violations produce audit events: a denied operation
+      records KeyAccessDenied with the Denied outcome before the
+      error returns.
+- [x] Policy changes are audited: set_policies and clear_policies
+      emit PolicyChanged events.
+- [ ] Frequency / rate constraints. Deferred to v1.x: the evaluator
+      is deliberately stateless.
 
 **Exit criteria:**
 
-- Policies can be defined, loaded, and applied.
-- Deny-by-default verified.
-- All key operations respect policy.
-- Policy violations produce audit events.
+- [x] Policies can be defined, loaded, and applied.
+- [x] Deny-by-default verified.
+- [x] All key operations respect policy.
+- [x] Policy violations produce audit events.
+
+**Status:** Complete for v1.0. Rate limiting is tracked as v1.x
+work; a stateless evaluator cannot express it, and the design choice
+to keep the engine stateless is deliberate.
 
 ---
 
