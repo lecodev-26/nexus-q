@@ -242,6 +242,14 @@ pub struct DataEncryptArgs {
     #[arg(long)]
     pub key_id: String,
 
+    /// Optional metadata to embed in the envelope.
+    #[arg(long)]
+    pub metadata: Option<String>,
+
+    /// Read the vault password from a file instead of prompting.
+    #[arg(long, value_name = "PATH")]
+    pub password_file: Option<PathBuf>,
+
     /// Input file to encrypt.
     pub input: PathBuf,
 }
@@ -252,11 +260,16 @@ pub struct DataDecryptArgs {
     /// Path of the vault file.
     pub vault: PathBuf,
 
+    /// Read the vault password from a file instead of prompting.
+    #[arg(long, value_name = "PATH")]
+    pub password_file: Option<PathBuf>,
+
     /// Input envelope file (`.nqx`).
     pub input: PathBuf,
 
     /// Output file to write plaintext to.
-    pub output: PathBuf,
+    #[arg(value_name = "OUTPUT")]
+    pub output_path: PathBuf,
 }
 
 // =============================================================================
@@ -366,7 +379,8 @@ pub struct CredentialIssueArgs {
     pub claims: String,
 
     /// Output file for the credential.
-    pub output: PathBuf,
+    #[arg(value_name = "OUTPUT")]
+    pub output_path: PathBuf,
 }
 
 /// Arguments for `credential verify`.

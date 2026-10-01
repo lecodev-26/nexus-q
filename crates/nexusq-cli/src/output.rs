@@ -32,13 +32,6 @@ impl Output {
         }
     }
 
-    /// Creates an output from a message and a JSON value that mirrors
-    /// it.
-    #[must_use]
-    pub fn message(human: impl Into<String>, json: Value) -> Self {
-        Self::new(human, json)
-    }
-
     /// Returns the string to print for the given format.
     #[must_use]
     pub fn render(&self, format: OutputFormat) -> String {
