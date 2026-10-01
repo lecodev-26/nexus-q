@@ -95,6 +95,13 @@ pub struct VaultCreateArgs {
     /// Optional human-readable label.
     #[arg(long)]
     pub label: Option<String>,
+
+    /// Read the password from a file instead of prompting.
+    ///
+    /// The file's contents are used verbatim, with one trailing
+    /// newline stripped. Intended for scripts and CI.
+    #[arg(long, value_name = "PATH")]
+    pub password_file: Option<PathBuf>,
 }
 
 /// Arguments for `vault status`.

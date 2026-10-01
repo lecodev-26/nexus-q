@@ -9,6 +9,7 @@ mod commands;
 mod error;
 mod exit_codes;
 mod output;
+mod passwords;
 
 use clap::Parser as _;
 
