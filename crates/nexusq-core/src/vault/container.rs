@@ -301,12 +301,25 @@ impl Vault {
 
         let body = self.read_body(&kek)?;
 
+        // If the vault is configured with an audit log, open it now.
+        // A failure to open is a failure to unlock: the vault promises
+        // to record its operations, and pretending otherwise would be
+        // worse than refusing to run.
+        let audit = match &body.audit_dir {
+            Some(dir) => {
+                let resolved = resolve_audit_path(&self.path, Path::new(dir));
+                let log = AuditLog::open_with(&resolved, AuditLogConfig::default())?;
+                RefCell::new(Some(log))
+            }
+            None => RefCell::new(None),
+        };
+
         Ok(Session {
             vault: self.clone(),
             kek,
             body,
             state: VaultState::Unlocked,
-            audit: RefCell::new(None),
+            audit,
         })
     }
 
@@ -1399,6 +1412,59 @@ impl Session {
         Ok(())
     }
 
+    /// Configures an audit log directory for the vault.
+    ///
+    /// The directory must already exist. On success the field is
+    /// stored in the vault body and, from the next unlock onward, the
+    /// log is opened automatically and every auditable operation
+    /// appends an event. The current session also opens it
+    /// immediately.
+    ///
+    /// A relative path is resolved against the directory containing
+    /// the vault file, so the vault and its log can be moved together.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VaultError::StateDenied`] if the session is sealed
+    /// or compromised, [`VaultError::Audit`] if the directory does not
+    /// exist or the log cannot be opened, or another vault error if
+    /// the change cannot be persisted.
+    pub fn set_audit_dir(&mut self, audit_dir: &Path) -> Result<(), VaultError> {
+        self.require_writes_allowed()?;
+
+        // Open the log first so a bad path fails before we touch the
+        // body.
+        let resolved = resolve_audit_path(&self.vault.path, audit_dir);
+        let log = AuditLog::open_with(&resolved, AuditLogConfig::default())?;
+
+        *self.audit.borrow_mut() = Some(log);
+        self.body.audit_dir = Some(audit_dir.to_string_lossy().into_owned());
+        self.log_event("vault", EventType::AuditConfigured)?;
+        Ok(())
+    }
+
+    /// Removes the audit log configuration from the vault.
+    ///
+    /// The current session stops writing to the log. The directory
+    /// itself and its files are untouched.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VaultError::StateDenied`] if the session is sealed
+    /// or compromised.
+    pub fn remove_audit_dir(&mut self) -> Result<(), VaultError> {
+        self.require_writes_allowed()?;
+        self.body.audit_dir = None;
+        *self.audit.borrow_mut() = None;
+        Ok(())
+    }
+
+    /// Returns the configured audit directory, if any.
+    #[must_use]
+    pub fn audit_dir(&self) -> Option<&str> {
+        self.body.audit_dir.as_deref()
+    }
+
     // =========================================================================
     // Audit log
     // =========================================================================
@@ -1699,6 +1765,20 @@ fn generate_material<S: RandomSource>(
         }
     };
     Ok(result)
+}
+
+/// Resolves an audit path against the directory of the vault file.
+///
+/// Relative paths are joined to the vault's parent; absolute paths
+/// are returned unchanged. A vault with no parent (a bare filename)
+/// resolves relative to the current working directory, matching how
+/// the vault file itself is opened.
+fn resolve_audit_path(vault_path: &Path, audit_dir: &Path) -> PathBuf {
+    if audit_dir.is_absolute() {
+        return audit_dir.to_path_buf();
+    }
+    let parent = vault_path.parent().unwrap_or_else(|| Path::new("."));
+    parent.join(audit_dir)
 }
 
 #[cfg(test)]

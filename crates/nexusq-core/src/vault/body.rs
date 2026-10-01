@@ -94,6 +94,18 @@ pub struct VaultBody {
     /// as `identities`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub policies: Option<PolicySet>,
+
+    /// Directory that holds this vault's audit log, if any.
+    ///
+    /// When set, unlocking the vault opens the log automatically and
+    /// every auditable operation appends an event. When `None`, no
+    /// log is written.
+    ///
+    /// A relative path is resolved against the directory containing
+    /// the vault file, so a vault can be moved together with its
+    /// audit log without editing the configuration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audit_dir: Option<String>,
 }
 
 impl VaultBody {
@@ -105,6 +117,7 @@ impl VaultBody {
             keys: Vec::new(),
             identities: Vec::new(),
             policies: None,
+            audit_dir: None,
         }
     }
 

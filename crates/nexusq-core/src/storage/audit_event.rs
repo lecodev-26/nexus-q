@@ -98,6 +98,10 @@ pub enum EventType {
     /// A vault was sealed.
     VaultSealed,
 
+    // --- Audit log ---
+    /// The audit log configuration was changed.
+    AuditConfigured,
+
     // --- Session and policy ---
     /// A session ended.
     SessionEnded,
@@ -149,6 +153,9 @@ impl EventType {
             Self::VaultUnlocked => "vault_unlocked",
             Self::VaultLocked => "vault_locked",
             Self::VaultSealed => "vault_sealed",
+
+            // Audit log
+            Self::AuditConfigured => "audit_configured",
 
             // Session and policy
             Self::SessionEnded => "session_ended",
