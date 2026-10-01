@@ -7,11 +7,13 @@ use crate::error::CliError;
 /// Runs a `credential` subcommand.
 pub fn run(command: CredentialCommand, _global: &GlobalOptions) -> Result<(), CliError> {
     match command {
-        CredentialCommand::Issue(_args) => not_yet("credential issue"),
-        CredentialCommand::Verify(_args) => not_yet("credential verify"),
+        CredentialCommand::Issue(_args) => unavailable("credential issue"),
+        CredentialCommand::Verify(_args) => unavailable("credential verify"),
     }
 }
 
-fn not_yet(what: &str) -> Result<(), CliError> {
-    Err(CliError::Generic(format!("{what} is not implemented yet")))
+fn unavailable(what: &str) -> Result<(), CliError> {
+    Err(CliError::Usage(format!(
+        "{what}: command not available in this build"
+    )))
 }

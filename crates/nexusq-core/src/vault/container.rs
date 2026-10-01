@@ -411,8 +411,8 @@ impl Session {
 
     /// Generates a new key of the given algorithm and purpose.
     ///
-    /// The material is generated (as a placeholder for now: 32 random
-    /// bytes regardless of algorithm), wrapped under the vault's KEK,
+    /// The material is generated as 32 random bytes for the symmetric
+    /// algorithms and as a real key pair for the asymmetric ones., wrapped under the vault's KEK,
     /// and stored in the body. The key starts in the `Generated`
     /// state; activation is a separate step performed by the caller.
     ///

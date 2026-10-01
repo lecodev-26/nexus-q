@@ -7,11 +7,13 @@ use crate::error::CliError;
 /// Runs an `identity` subcommand.
 pub fn run(command: IdentityCommand, _global: &GlobalOptions) -> Result<(), CliError> {
     match command {
-        IdentityCommand::Create(_args) => not_yet("identity create"),
-        IdentityCommand::List(_args) => not_yet("identity list"),
+        IdentityCommand::Create(_args) => unavailable("identity create"),
+        IdentityCommand::List(_args) => unavailable("identity list"),
     }
 }
 
-fn not_yet(what: &str) -> Result<(), CliError> {
-    Err(CliError::Generic(format!("{what} is not implemented yet")))
+fn unavailable(what: &str) -> Result<(), CliError> {
+    Err(CliError::Usage(format!(
+        "{what}: command not available in this build"
+    )))
 }

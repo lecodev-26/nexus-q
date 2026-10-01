@@ -8,9 +8,8 @@
 //!   passed with `--password-file`. Used by scripts and CI, where no
 //!   TTY is available.
 //!
-//! A third path some tools offer, passing the password on the command
-//! line, is deliberately **not** supported: it lands in shell history
-//! and process listings.
+//! Passing the password on the command line is not supported: it
+//! lands in shell history and process listings.
 
 use std::fs;
 use std::path::Path;

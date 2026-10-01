@@ -61,8 +61,8 @@ impl CliError {
 
 /// Maps a vault error to a CLI error.
 ///
-/// The variant chosen is deliberately coarse: it distinguishes the
-/// categories a script can act on, not every internal cause.
+/// The mapping is coarse on purpose: a script branches on categories,
+/// not on every internal cause.
 impl From<VaultError> for CliError {
     fn from(err: VaultError) -> Self {
         match err {
