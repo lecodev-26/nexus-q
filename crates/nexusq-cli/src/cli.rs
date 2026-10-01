@@ -394,6 +394,14 @@ pub struct CredentialIssueArgs {
     #[arg(long)]
     pub claims: String,
 
+    /// Optional expiration as a UNIX timestamp in seconds.
+    #[arg(long, value_name = "SECONDS")]
+    pub expires_at: Option<u64>,
+
+    /// Read the vault password from a file instead of prompting.
+    #[arg(long, value_name = "PATH")]
+    pub password_file: Option<PathBuf>,
+
     /// Output file for the credential.
     #[arg(value_name = "OUTPUT")]
     pub output_path: PathBuf,
@@ -404,6 +412,10 @@ pub struct CredentialIssueArgs {
 pub struct CredentialVerifyArgs {
     /// Path of the vault file.
     pub vault: PathBuf,
+
+    /// Read the vault password from a file instead of prompting.
+    #[arg(long, value_name = "PATH")]
+    pub password_file: Option<PathBuf>,
 
     /// Credential file.
     pub input: PathBuf,

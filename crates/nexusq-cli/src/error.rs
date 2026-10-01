@@ -73,6 +73,12 @@ impl From<VaultError> for CliError {
                 Self::Authorization(err.to_string())
             }
             VaultError::IdentityNotUsable { .. } => Self::Authorization(err.to_string()),
+            VaultError::Signature(_) => Self::Integrity(err.to_string()),
+            VaultError::Credential(ref inner)
+                if matches!(inner, nexusq_core::identity::CredentialError::Signature(_)) =>
+            {
+                Self::Integrity(err.to_string())
+            }
             VaultError::Corrupt(_)
             | VaultError::BadMagic
             | VaultError::UnsupportedVersion(_)
