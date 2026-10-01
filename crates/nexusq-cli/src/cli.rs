@@ -139,6 +139,14 @@ pub struct KeyGenerateArgs {
     /// Purpose of the new key.
     #[arg(long, value_enum)]
     pub purpose: PurposeArg,
+
+    /// Activate the key immediately after creating it.
+    #[arg(long)]
+    pub activate: bool,
+
+    /// Read the vault password from a file instead of prompting.
+    #[arg(long, value_name = "PATH")]
+    pub password_file: Option<PathBuf>,
 }
 
 /// Arguments for `key list`.
@@ -146,6 +154,10 @@ pub struct KeyGenerateArgs {
 pub struct KeyListArgs {
     /// Path of the vault file.
     pub vault: PathBuf,
+
+    /// Read the vault password from a file instead of prompting.
+    #[arg(long, value_name = "PATH")]
+    pub password_file: Option<PathBuf>,
 }
 
 /// Arguments for `key info`.
@@ -156,33 +168,54 @@ pub struct KeyInfoArgs {
 
     /// Key identifier.
     pub key_id: String,
+
+    /// Read the vault password from a file instead of prompting.
+    #[arg(long, value_name = "PATH")]
+    pub password_file: Option<PathBuf>,
 }
 
 /// Supported algorithms for the CLI.
+///
+/// The values match the canonical identifiers from
+/// `nexusq_core::vault::Algorithm::as_str`, so the strings a user
+/// types on the command line and the strings stored in the vault are
+/// the same.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum AlgorithmArg {
     /// Ed25519 signing key.
+    #[value(name = "ed25519")]
     Ed25519,
     /// ML-KEM-768 post-quantum KEM key.
+    #[value(name = "mlkem768")]
     MlKem768,
     /// AES-256-GCM symmetric key.
+    #[value(name = "aes256gcm")]
     Aes256Gcm,
     /// ChaCha20-Poly1305 symmetric key.
+    #[value(name = "chacha20poly1305")]
     ChaCha20Poly1305,
 }
 
 /// Supported purposes for the CLI.
+///
+/// The values match the canonical identifiers from
+/// `nexusq_core::vault::Purpose::as_str`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum PurposeArg {
     /// Signing.
+    #[value(name = "sign")]
     Sign,
     /// Encryption.
+    #[value(name = "encrypt")]
     Encrypt,
     /// Decryption.
+    #[value(name = "decrypt")]
     Decrypt,
     /// Key agreement.
+    #[value(name = "key_agreement")]
     KeyAgreement,
     /// Key wrapping.
+    #[value(name = "wrap")]
     Wrap,
 }
 

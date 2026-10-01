@@ -619,6 +619,7 @@ name = "nexusq-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "hex",
  "nexusq-core",
  "rpassword",
  "serde_json",
