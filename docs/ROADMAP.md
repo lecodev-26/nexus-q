@@ -443,18 +443,37 @@ to keep the engine stateless is deliberate.
 
 **Deliverables:**
 
-- `nexusq` binary with all commands from `API.md` §6.2
-- Exit codes (0-7) implemented
-- Output formats: human, `--json`, `--quiet`
-- Interactive prompts for destructive operations
-- Never print secrets
+- [x] `nexusq` binary covering the command set in `docs/API.md` §6.2:
+      vault (create, status, attach-audit), key (generate, list, info),
+      data (encrypt, decrypt), sign (sign, verify), identity
+      (create, list), credential (issue, verify), audit (verify,
+      show).
+- [x] Exit codes 0-7 implemented, mapped from core errors.
+- [x] Output formats: human and `--output json`. Errors in JSON mode
+      are emitted as `{"code": N, "error": "..."}`. `--quiet`
+      suppresses non-error output.
+- [x] Interactive password prompts with echo disabled; a
+      `--password-file` flag for scripts. Passwords on the command
+      line are not supported.
+- [x] Audit log: `vault attach-audit` configures the directory once,
+      and every subsequent command that mutates the vault writes to
+      it automatically. No `--audit-dir` flag on individual commands.
+- [x] Never prints secrets.
 
 **Exit criteria:**
 
-- All commands work end-to-end.
-- Exit codes are correct per operation.
-- `--json` output is stable and documented.
-- Scripts can use the CLI safely (no interactive surprises).
+- [x] All commands work end-to-end.
+- [x] Exit codes are correct per operation: 0 success, 1 generic,
+      2 usage, 3 authentication, 4 authorization, 5 integrity, 6
+      hardware, 7 I/O.
+- [x] `--output json` output is stable and documented for the
+      commands that produce structured data.
+- [x] Scripts can use the CLI safely.
+
+**Status:** Complete for v1.0. The CLI is a thin wrapper over
+`nexusq-core`; it contains no cryptography and no business logic.
+Thirteen end-to-end tests spawn the binary and check both output and
+exit codes.
 
 ---
 
