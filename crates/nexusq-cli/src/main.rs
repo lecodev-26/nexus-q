@@ -13,24 +13,22 @@ mod passwords;
 
 use clap::Parser as _;
 
-use crate::cli::{Cli, Command};
+use crate::cli::{Cli, Command, OutputFormat};
 use crate::error::CliError;
 
 fn main() {
     let cli = Cli::parse();
+    let format = cli.output;
     match run(cli) {
         Ok(()) => std::process::exit(exit_codes::SUCCESS),
         Err(err) => {
-            eprintln!("error: {err}");
+            print_error(&err, format);
             std::process::exit(err.exit_code());
         }
     }
 }
 
 fn run(cli: Cli) -> Result<(), CliError> {
-    // Split the CLI into the global options and the subcommand so the
-    // subcommand can be moved into its own handler without keeping
-    // `cli` around.
     let Cli {
         output,
         quiet,
@@ -49,10 +47,26 @@ fn run(cli: Cli) -> Result<(), CliError> {
     }
 }
 
+fn print_error(err: &CliError, format: OutputFormat) {
+    match format {
+        OutputFormat::Human => eprintln!("error: {err}"),
+        OutputFormat::Json => {
+            let value = serde_json::json!({
+                "error": err.to_string(),
+                "code": err.exit_code(),
+            });
+            match serde_json::to_string(&value) {
+                Ok(text) => eprintln!("{text}"),
+                Err(_) => eprintln!("error: {err}"),
+            }
+        }
+    }
+}
+
 /// Global options passed to every subcommand.
 pub struct GlobalOptions {
     /// Selected output format.
-    pub output: cli::OutputFormat,
+    pub output: OutputFormat,
     /// Whether to suppress non-error output.
     pub quiet: bool,
 }
