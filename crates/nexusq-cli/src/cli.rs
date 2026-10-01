@@ -84,6 +84,8 @@ pub enum VaultCommand {
     Create(VaultCreateArgs),
     /// Show a vault's status without unlocking it.
     Status(VaultStatusArgs),
+    /// Attach an audit log directory to the vault.
+    AttachAudit(VaultAttachAuditArgs),
 }
 
 /// Arguments for `vault create`.
@@ -109,6 +111,20 @@ pub struct VaultCreateArgs {
 pub struct VaultStatusArgs {
     /// Path of the vault file.
     pub path: PathBuf,
+}
+
+/// Arguments for `vault attach-audit`.
+#[derive(Debug, Args)]
+pub struct VaultAttachAuditArgs {
+    /// Path of the vault file.
+    pub vault: PathBuf,
+
+    /// Directory to write audit segments to.
+    pub audit_dir: PathBuf,
+
+    /// Read the vault password from a file instead of prompting.
+    #[arg(long, value_name = "PATH")]
+    pub password_file: Option<PathBuf>,
 }
 
 // =============================================================================
@@ -430,6 +446,8 @@ pub struct CredentialVerifyArgs {
 pub enum AuditCommand {
     /// Verify the audit chain.
     Verify(AuditVerifyArgs),
+    /// Show the events in the audit log.
+    Show(AuditShowArgs),
 }
 
 /// Arguments for `audit verify`.
@@ -437,6 +455,17 @@ pub enum AuditCommand {
 pub struct AuditVerifyArgs {
     /// Directory containing audit segments.
     pub audit_dir: PathBuf,
+}
+
+/// Arguments for `audit show`.
+#[derive(Debug, Args)]
+pub struct AuditShowArgs {
+    /// Directory containing audit segments.
+    pub audit_dir: PathBuf,
+
+    /// Show only the last N events.
+    #[arg(long, value_name = "N")]
+    pub last: Option<usize>,
 }
 
 #[cfg(test)]

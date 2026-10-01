@@ -4,16 +4,19 @@ use nexusq_core::vault::Vault;
 use serde_json::json;
 
 use crate::GlobalOptions;
-use crate::cli::{VaultCommand, VaultCreateArgs, VaultStatusArgs};
+use crate::cli::{VaultAttachAuditArgs, VaultCommand, VaultCreateArgs, VaultStatusArgs};
 use crate::error::CliError;
 use crate::output::Output;
 use crate::passwords;
+
+use super::mutate_vault;
 
 /// Runs a `vault` subcommand.
 pub fn run(command: VaultCommand, global: &GlobalOptions) -> Result<(), CliError> {
     match command {
         VaultCommand::Create(args) => create(args, global),
         VaultCommand::Status(args) => status(args, global),
+        VaultCommand::AttachAudit(args) => attach_audit(args, global),
     }
 }
 
@@ -70,6 +73,28 @@ fn status(args: VaultStatusArgs, global: &GlobalOptions) -> Result<(), CliError>
         },
         "salt_len": header.salt.len(),
         "state": "locked",
+    });
+
+    if !global.quiet {
+        println!("{}", Output::new(human, json).render(global.output));
+    }
+    Ok(())
+}
+
+fn attach_audit(args: VaultAttachAuditArgs, global: &GlobalOptions) -> Result<(), CliError> {
+    let audit_dir = args.audit_dir.clone();
+    mutate_vault(&args.vault, args.password_file.as_deref(), |session| {
+        session.set_audit_dir(&audit_dir).map_err(CliError::from)
+    })?;
+
+    let human = format!(
+        "Audit log attached\nVault:     {}\nDirectory: {}",
+        args.vault.display(),
+        args.audit_dir.display(),
+    );
+    let json = json!({
+        "vault": args.vault.to_string_lossy(),
+        "audit_dir": args.audit_dir.to_string_lossy(),
     });
 
     if !global.quiet {
