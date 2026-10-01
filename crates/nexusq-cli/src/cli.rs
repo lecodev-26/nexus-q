@@ -291,9 +291,13 @@ pub struct SignSignArgs {
     /// Path of the vault file.
     pub vault: PathBuf,
 
-    /// Key to sign with.
+    /// Identity that signs.
     #[arg(long)]
-    pub key_id: String,
+    pub identity: String,
+
+    /// Read the vault password from a file instead of prompting.
+    #[arg(long, value_name = "PATH")]
+    pub password_file: Option<PathBuf>,
 
     /// File to sign.
     pub input: PathBuf,
@@ -305,9 +309,13 @@ pub struct SignVerifyArgs {
     /// Path of the vault file.
     pub vault: PathBuf,
 
-    /// Key the signature was made with.
+    /// Identity the signature was made with.
     #[arg(long)]
-    pub key_id: String,
+    pub identity: String,
+
+    /// Read the vault password from a file instead of prompting.
+    #[arg(long, value_name = "PATH")]
+    pub password_file: Option<PathBuf>,
 
     /// File that was signed.
     pub input: PathBuf,
