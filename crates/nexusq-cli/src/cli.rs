@@ -338,6 +338,10 @@ pub struct IdentityCreateArgs {
     /// Optional label.
     #[arg(long)]
     pub label: Option<String>,
+
+    /// Read the vault password from a file instead of prompting.
+    #[arg(long, value_name = "PATH")]
+    pub password_file: Option<PathBuf>,
 }
 
 /// Arguments for `identity list`.
@@ -345,6 +349,10 @@ pub struct IdentityCreateArgs {
 pub struct IdentityListArgs {
     /// Path of the vault file.
     pub vault: PathBuf,
+
+    /// Read the vault password from a file instead of prompting.
+    #[arg(long, value_name = "PATH")]
+    pub password_file: Option<PathBuf>,
 }
 
 // =============================================================================
