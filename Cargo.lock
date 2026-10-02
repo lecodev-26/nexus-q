@@ -615,6 +615,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "nexusq-c"
+version = "0.1.0"
+dependencies = [
+ "nexusq-core",
+ "tempfile",
+]
+
+[[package]]
 name = "nexusq-cli"
 version = "0.1.0"
 dependencies = [

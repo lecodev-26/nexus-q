@@ -4,6 +4,7 @@ members = [
     "crates/nexusq-core",
     "crates/nexusq-cli",
     "crates/nexusq-server",
+    "crates/nexusq-c",
 ]
 
 [workspace.package]
