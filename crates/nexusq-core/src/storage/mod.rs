@@ -20,3 +20,33 @@ pub use backup::{
 pub use db::{
     DbError, FORMAT_VERSION as DB_FORMAT_VERSION, MAGIC as DB_MAGIC, Record, RecordKind, StorageDb,
 };
+
+/// Error type for storage operations.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum StorageError {
+    /// Database operation failed.
+    #[error("db error: {0}")]
+    Db(#[from] DbError),
+
+    /// Backup operation failed.
+    #[error("backup error: {0}")]
+    Backup(#[from] BackupError),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn from_db_error() {
+        let err: StorageError = DbError::BadMagic.into();
+        assert!(matches!(err, StorageError::Db(_)));
+    }
+
+    #[test]
+    fn from_backup_error() {
+        let err: StorageError = BackupError::BadMagic.into();
+        assert!(matches!(err, StorageError::Backup(_)));
+    }
+}
