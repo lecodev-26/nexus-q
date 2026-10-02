@@ -1,6 +1,6 @@
 [package]
 name = "nexusq-cli"
-description = "Command-line interface for AXIOM NEXUS-Q"
+description = "Command-line interface for NEXUS-Q"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

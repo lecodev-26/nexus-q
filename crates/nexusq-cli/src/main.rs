@@ -1,4 +1,4 @@
-//! `nexusq` — command-line interface for AXIOM NEXUS-Q.
+//! `nexusq` — command-line interface for NEXUS-Q.
 //!
 //! The CLI is a thin wrapper over `nexusq-core`. It parses arguments,
 //! calls the library, formats the result, and maps errors to exit

@@ -1,4 +1,4 @@
-# AXIOM NEXUS-Q — Architecture
+# NEXUS-Q — Architecture
 
 > **Status:** Draft (Fase 0)
 > **Audience:** Contributors, reviewers, integrators
@@ -8,7 +8,7 @@
 
 ## 1. Purpose
 
-This document describes how AXIOM NEXUS-Q is structured internally: what
+This document describes how NEXUS-Q is structured internally: what
 components exist, what each one is responsible for, and how they interact.
 
 It is **not** a threat model (see `THREAT_MODEL.md`), nor a cryptography

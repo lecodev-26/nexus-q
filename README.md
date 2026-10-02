@@ -1,136 +1,153 @@
-# AXIOM NEXUS-Q
+# NEXUS-Q
 
 > Post-quantum cryptographic security engine for protecting data, keys, and identities.
 
-**Estado**: 🚧 En desarrollo activo — Fase 0 (Fundaciones)
+**Status**: In active development. Phase 13 of 23 (SDK / API).
 
 ---
 
-## ¿Qué es NEXUS-Q?
+## What is NEXUS-Q?
 
-NEXUS-Q es un motor de seguridad criptográfica post-cuántica diseñado para proteger:
+NEXUS-Q is a post-quantum cryptographic security engine designed to
+protect:
 
-- **Datos** — cifrado autenticado de archivos y flujos
-- **Claves** — gestión completa de ciclo de vida (generación, rotación, revocación, destrucción)
-- **Identidades** — firmas digitales y credenciales verificables
+- **Data** — authenticated encryption of files and streams.
+- **Keys** — full lifecycle management (generation, rotation,
+  revocation, destruction).
+- **Identities** — digital signatures and verifiable credentials.
 
-Está pensado para ser usado por:
+It is meant to be used by:
 
-- Aplicaciones (Web, Server, Mobile)
-- Servidores
-- Dispositivos con hardware seguro (TPM, HSM, Secure Element, RISC-V, Enclave)
-
----
-
-## Principios de diseño
-
-1. **No inventamos criptografía.** Solo algoritmos estandarizados y bibliotecas auditadas.
-2. **Library-first.** El núcleo es una librería Rust; el CLI, la API y el server son capas encima.
-3. **Hardware-agnóstico.** Abstracción desde el día 1 para soportar software, TPM, HSM y entornos seguros.
-4. **Zeroización.** Los secretos se destruyen en memoria cuando es viable.
-5. **Trazabilidad.** Toda operación sensible queda en un audit log.
-6. **Seguridad desde los cimientos.** Threat model y reglas criptográficas antes que código.
+- Applications (web, server, mobile).
+- Servers.
+- Devices with secure hardware (TPM, HSM, Secure Element, RISC-V,
+  enclave).
 
 ---
 
-## Arquitectura (visión)
+## Design principles
 
-```
-
-┌─────────────────────────┐
-│       Aplicaciones      │
-│ Web / Server / Mobile   │
-└────────────┬────────────┘
-│
-SDK / API / CLI
-│
-┌────────────▼────────────┐
-│      NEXUS-Q CORE       │
-│                         │
-│ Crypto │ Vault │ ID     │
-│ Policy │ Storage │ Audit │
-└─────┬─────────┬─────────┘
-│         │
-┌─────▼───┐ ┌──▼───────────┐
-│Software │ │  Hardware    │
-│Backend  │ │  Backend     │
-└─────────┘ └──────────────┘
-│
-┌──────────▼─────────┐
-│ TRNG / HSM / TPM   │
-│ Secure Element     │
-│ RISC-V / Enclave   │
-└────────────────────┘
-
-```
+1. **We do not invent cryptography.** Only standardized algorithms
+   and audited libraries.
+2. **Library-first.** The core is a Rust library; the CLI, SDKs and
+   server are layers on top.
+3. **Hardware-agnostic.** Abstraction from day one, so software, TPM,
+   HSM and secure environments are interchangeable.
+4. **Zeroization.** Secrets are wiped from memory when no longer
+   needed.
+5. **Auditability.** Every security-relevant operation is recorded in
+   a tamper-evident log.
+6. **Security from the ground up.** Threat model and cryptographic
+   rules before code.
 
 ---
 
-## Estado del proyecto
+## Repository layout
 
-Fase actual: **Fase 1 — Project restructuring**
+The project is a Cargo workspace with three crates:
 
-- [x] Estructura inicial del repositorio
-- [x] Documentación de arquitectura
-- [x] Threat model
-- [x] Reglas criptográficas
-- [x] Definición de alcance de v1.0
-
-Ver [`docs/ROADMAP.md`](docs/ROADMAP.md) para el plan completo.
-
----
-
-## Requisitos
-
-- **Rust** 1.98+ (edition 2024)
-- **Clang** 21+
-- **Git** 2.55+
-- Plataformas objetivo:
-  - Linux (x86_64, aarch64)
-  - Android / Termux (aarch64)
-  - macOS (futuro)
-  - Windows (futuro)
+- `crates/nexusq-core` — the library. All cryptography, vault, key
+  management, identity, policy, storage and hardware abstraction
+  live here.
+- `crates/nexusq-cli` — the `nexusq` binary. A thin wrapper over the
+  library; no cryptography.
+- `crates/nexusq-server` — the `nexusq-server` binary. Placeholder
+  for a future network service.
 
 ---
 
-## Compilación
+## Status
 
-> El workspace y los tres crates están definidos. La implementación
-> real llega en fases posteriores.
+Completed:
+
+- Foundation documents, threat model, cryptographic rules.
+- Crypto core: ML-KEM-768 hybrid with X25519, AES-256-GCM,
+  ChaCha20-Poly1305, Ed25519, SHA-2, SHA-3, Argon2id, HKDF.
+- Key management with full lifecycle.
+- Encrypted vault (format F-01) with atomic writes.
+- Envelope encryption (format F-02).
+- Identities with signing, verification, rotation, revocation and
+  signed credentials.
+- Hardware abstraction traits for software, TPM, HSM, Secure Element
+  and RISC-V.
+- TRNG support with health checks and mixing.
+- Cross-compilation to RISC-V verified.
+- Storage: audit log with hash chaining, backup bundle, storage DB.
+- Policy engine with deny-by-default.
+- CLI covering vault, key, data, sign, identity, credential and audit
+  commands.
+
+In progress:
+
+- SDK / API (Phase 13).
+
+See `docs/ROADMAP.md` for the full plan.
+
+---
+
+## Requirements
+
+- **Rust** 1.98 or newer (edition 2024).
+- **Clang** 21 or newer.
+- **Git** 2.55 or newer.
+- Target platforms:
+  - Linux (x86_64, aarch64).
+  - Android / Termux (aarch64).
+  - RISC-V (riscv64gc-unknown-linux-gnu) — build verified.
+  - macOS and Windows: planned.
+
+---
+
+## Building
 
 ```bash
 cargo build
 cargo test
 ```
 
----
+To build the CLI:
 
-Documentación
+```bash
+cargo build -p nexusq-cli
+```
 
-Toda la documentación técnica vive en docs/:
+The binary is at target/debug/nexusq.
 
-· ARCHITECTURE.md — diseño del sistema
-· THREAT_MODEL.md — contra qué nos protegemos
-· CRYPTOGRAPHY.md — algoritmos y reglas
-· KEY_MANAGEMENT.md — ciclo de vida de claves
-· SECURITY_MODEL.md — modelo de seguridad
-· STORAGE.md — almacenamiento persistente
-· API.md — interfaces públicas
-· ROADMAP.md — plan por fases
+To build for RISC-V, see docs/CROSS_COMPILE.md.
 
 ---
 
-## Licencia
+Documentation
 
-Dual-licensed bajo tu elección de:
+All technical documentation lives in docs/:
 
-- **MIT License** — ver [`LICENSE-MIT`](LICENSE-MIT)
-- **Apache License 2.0** — ver [`LICENSE-APACHE`](LICENSE-APACHE)
-
-Esto sigue la convención del ecosistema Rust (misma elección que Rust, Tokio, Serde).
+· ARCHITECTURE.md — system design.
+· THREAT_MODEL.md — what we protect against.
+· CRYPTOGRAPHY.md — algorithms and rules.
+· KEY_MANAGEMENT.md — key lifecycle.
+· SECURITY_MODEL.md — security guarantees.
+· STORAGE.md — persistent formats.
+· API.md — public interfaces.
+· POLICY.md — access control engine.
+· SECURE_BOOT.md — secure and measured boot.
+· CROSS_COMPILE.md — cross-compilation guide.
+· ROADMAP.md — the phased plan.
+· adr/ — architecture decision records.
 
 ---
 
-## Aviso
+License
 
-Este proyecto está en fase temprana de desarrollo. No usar en producción todavía.
+Dual-licensed under your choice of:
+
+· MIT License — see LICENSE-MIT.
+· Apache License 2.0 — see LICENSE-APACHE.
+
+This follows the Rust ecosystem convention (the same choice as Rust,
+Tokio and Serde).
+
+---
+
+Warning
+
+This project is in early development. Do not use it in production yet.

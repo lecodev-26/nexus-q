@@ -1,6 +1,6 @@
 [package]
 name = "nexusq-server"
-description = "Network server for AXIOM NEXUS-Q"
+description = "Network server for NEXUS-Q"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -1,6 +1,6 @@
 [package]
 name = "nexusq-core"
-description = "Core library for AXIOM NEXUS-Q"
+description = "Core library for NEXUS-Q"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

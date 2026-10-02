@@ -9,8 +9,8 @@ practical recipe; the rationale for portability lives in
 
 | Host                    | Target                          | Status      |
 |-------------------------|---------------------------------|-------------|
-| aarch64-linux-android   | aarch64-linux-android (native)  | ✅ Verified |
-| aarch64-linux-android   | riscv64gc-unknown-linux-gnu     | ✅ Verified (2026-09-27) |
+| aarch64-linux-android   | aarch64-linux-android (native)  | Verified |
+| aarch64-linux-android   | riscv64gc-unknown-linux-gnu     | Verified (2026-09-27) |
 | x86_64-linux-gnu        | x86_64-linux-gnu (native)       | Untested but trivial |
 
 The RISC-V cross-compile is significant because it exercises the whole
@@ -79,7 +79,7 @@ without mounting anything:
 ```bash
 proot-distro login debian -- bash -c "
   export PATH=/root/.cargo/bin:\$PATH
-  cd /data/data/com.termux/files/home/projects/axiom-nexus-q
+  cd /data/data/com.termux/files/home/projects/nexusq
   cargo build --target riscv64gc-unknown-linux-gnu -p nexusq-core
 "
 ```
@@ -91,7 +91,7 @@ Verifying the artifacts
 
 ```bash
 proot-distro login debian -- bash -c "
-  cd /data/data/com.termux/files/home/projects/axiom-nexus-q
+  cd /data/data/com.termux/files/home/projects/nexusq
   file target/riscv64gc-unknown-linux-gnu/debug/deps/*.o
 "
 ```

@@ -1,4 +1,4 @@
-# AXIOM NEXUS-Q — Storage
+# NEXUS-Q — Storage
 
 > **Status:** Draft (Fase 0)
 > **Audience:** Contributors, integrators, security reviewers

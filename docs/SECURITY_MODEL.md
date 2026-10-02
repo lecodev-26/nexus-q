@@ -1,4 +1,4 @@
-# AXIOM NEXUS-Q — Security Model
+# NEXUS-Q — Security Model
 
 > **Status:** Draft (Fase 0)
 > **Audience:** Contributors, security reviewers, architects

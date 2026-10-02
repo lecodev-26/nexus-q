@@ -1,4 +1,4 @@
-# AXIOM NEXUS-Q — Cryptography
+# NEXUS-Q — Cryptography
 
 > **Status:** Draft (Fase 0)
 > **Audience:** Contributors, cryptographers, security reviewers

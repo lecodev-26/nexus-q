@@ -1,4 +1,4 @@
-# AXIOM NEXUS-Q — Roadmap
+# NEXUS-Q — Roadmap
 
 > **Status:** Living document (Fase 0)
 > **Audience:** Contributors, users, stakeholders
@@ -8,7 +8,7 @@
 
 ## 1. End goal
 
-> **AXIOM NEXUS-Q** is a post-quantum cryptographic security engine for
+> **NEXUS-Q** is a post-quantum cryptographic security engine for
 > protecting data, keys, and identities. It is usable by applications,
 > servers, and devices — from a laptop with no special hardware to an
 > embedded device with a Secure Element.
@@ -735,56 +735,48 @@ channels.
 
 ### v2.0 — Platform
 
-AXIOM NEXUS-Q becomes the cryptographic core of a broader platform:
+NEXUS-Q becomes the cryptographic core of a broader platform. The
+platform has three pillars:
 
-```
+- **NEXUS-Q** — post-quantum cryptography for data, keys and
+  identities.
+- **Identity Platform** — a layer on top of NEXUS-Q that manages
+  organizations, roles and credentials across devices.
+- **Hardware Security** — attestation and secure boot on devices
+  that expose a TPM, HSM, Secure Element or RISC-V root of trust.
 
-AXIOM NEXUS
-│
-┌────────────┼────────────┐
-▼            ▼            ▼
-NEXUS-Q       Identity      Hardware
-Crypto        Platform       Security
-│            │            │
-└────────────┼────────────┘
-▼
-AXIOM SECURITY
-PLATFORM
-
-```
-
-At that point, NEXUS-Q is no longer just a project on GitHub — it is
+At that point, NEXUS-Q is no longer just a project on GitHub. It is
 infrastructure.
 
 ---
 
 ## 27. Phase summary
 
-| Phase | Name                          | Status |
-|-------|-------------------------------|--------|
-| 0     | Architecture and foundations  | ✅ Done |
-| 1     | Project restructuring         | ⏳ Next |
-| 2     | Crypto Core                   | Pending |
-| 3     | Key Management                | Pending |
-| 4     | NEXUS Vault                   | Pending |
-| 5     | Envelope Encryption           | Pending |
-| 6     | Identity                      | Pending |
-| 7     | Hardware Abstraction          | Pending |
-| 8     | TRNG                          | Pending |
-| 9     | RISC-V / Secure Environment   | Pending |
-| 10    | Storage                       | Pending |
-| 11    | Policy Engine                 | Pending |
-| 12    | CLI                           | Pending |
-| 13    | SDK / API                     | Pending |
-| 14    | Server Mode                   | Pending |
-| 15    | Security Engineering          | Pending |
-| 16    | Side Channel / Hardening      | Pending |
-| 17    | Benchmarking                  | Pending |
-| 18    | Observability                 | Pending |
-| 19    | Deployment                    | Pending |
-| 20    | User Documentation            | Pending |
-| 21    | Audit                         | Pending |
-| 22    | v1.0                          | Pending |
+| Phase | Name                          | Status      |
+|-------|-------------------------------|-------------|
+| 0     | Architecture and foundations  | Complete    |
+| 1     | Project restructuring         | Complete    |
+| 2     | Crypto Core                   | Complete    |
+| 3     | Key Management                | Complete    |
+| 4     | NEXUS Vault                   | Complete    |
+| 5     | Envelope Encryption           | Complete    |
+| 6     | Identity                      | Complete    |
+| 7     | Hardware Abstraction          | Complete    |
+| 8     | TRNG                          | Complete    |
+| 9     | RISC-V / Secure Environment   | Complete    |
+| 10    | Storage                       | Complete    |
+| 11    | Policy Engine                 | Complete    |
+| 12    | CLI                           | Complete    |
+| 13    | SDK / API                     | In progress |
+| 14    | Server Mode                   | Pending     |
+| 15    | Security Engineering          | Pending     |
+| 16    | Side Channel / Hardening      | Pending     |
+| 17    | Benchmarking                  | Pending     |
+| 18    | Observability                 | Pending     |
+| 19    | Deployment                    | Pending     |
+| 20    | User Documentation            | Pending     |
+| 21    | Audit                         | Pending     |
+| 22    | v1.0                          | Pending     |
 
 ---
 

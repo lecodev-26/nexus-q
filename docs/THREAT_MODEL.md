@@ -1,4 +1,4 @@
-# AXIOM NEXUS-Q — Threat Model
+# NEXUS-Q — Threat Model
 
 > **Status:** Draft (Fase 0)
 > **Audience:** Contributors, reviewers, security auditors

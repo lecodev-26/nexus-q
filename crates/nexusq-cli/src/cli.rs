@@ -10,7 +10,7 @@ use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
-/// `nexusq` — command-line interface for AXIOM NEXUS-Q.
+/// `nexusq` — command-line interface for NEXUS-Q.
 #[derive(Debug, Parser)]
 #[command(
     name = "nexusq",

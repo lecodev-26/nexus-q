@@ -1,4 +1,4 @@
-# AXIOM NEXUS-Q — Public API
+# NEXUS-Q — Public API
 
 > **Status:** Draft (Fase 0)
 > **Audience:** Contributors, integrators, SDK authors

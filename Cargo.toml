@@ -12,7 +12,7 @@ edition = "2024"
 rust-version = "1.85"
 authors = ["lecodev-26 <325287752+lecodev-26@users.noreply.github.com>"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/lecodev-26/axiom-nexus-q"
+repository = "https://github.com/lecodev-26/nexusq"
 
 [workspace.dependencies]
 nexusq-core = { path = "crates/nexusq-core", version = "0.1.0" }

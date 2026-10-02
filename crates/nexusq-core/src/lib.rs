@@ -1,4 +1,4 @@
-//! AXIOM NEXUS-Q core library.
+//! NEXUS-Q core library.
 //!
 //! Post-quantum cryptographic engine for protecting data, keys, and
 //! identities. This crate is the library that every other component

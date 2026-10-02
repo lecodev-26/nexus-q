@@ -1,4 +1,4 @@
-# AXIOM NEXUS-Q — Key Management
+# NEXUS-Q — Key Management
 
 > **Status:** Draft (Fase 0)
 > **Audience:** Contributors, security reviewers, integrators
