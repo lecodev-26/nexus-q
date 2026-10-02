@@ -1,0 +1,20 @@
+[package]
+name = "nexusq-py"
+description = "Python bindings for NEXUS-Q"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "nexusq"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+nexusq-core = { workspace = true }
+pyo3 = { version = "0.28", features = ["extension-module", "abi3-py314"] }
+
+[dev-dependencies]
+tempfile = { workspace = true }
