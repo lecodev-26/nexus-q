@@ -9,7 +9,7 @@ license.workspace = true
 repository.workspace = true
 
 [lib]
-name = "nexusq"
+name = "nexusq_py"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
