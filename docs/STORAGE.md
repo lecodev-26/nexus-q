@@ -1,6 +1,6 @@
 # NEXUS-Q — Storage
 
-> **Status:** Draft (Fase 0)
+> **Status:** Living reference document
 > **Audience:** Contributors, integrators, security reviewers
 > **Scope:** On-disk formats, atomicity, recovery, versioning and migration
 

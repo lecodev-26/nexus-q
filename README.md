@@ -44,15 +44,15 @@ It is meant to be used by:
 
 ## Repository layout
 
-The project is a Cargo workspace with three crates:
+The project is a Cargo workspace with five Rust crates, plus language bindings:
 
 - `crates/nexusq-core` — the library. All cryptography, vault, key
   management, identity, policy, storage and hardware abstraction
   live here.
 - `crates/nexusq-cli` — the `nexusq` binary. A thin wrapper over the
   library; no cryptography.
-- `crates/nexusq-server` — the `nexusq-server` binary. Placeholder
-  for a future network service.
+- `crates/nexusq-server` — the `nexusq-server` binary. Server foundation;
+  network API work is scheduled for Phase 14.
 
 ---
 
@@ -87,9 +87,9 @@ See `docs/ROADMAP.md` for the full plan.
 
 ## Requirements
 
-- **Rust** 1.98 or newer (edition 2024).
-- **Clang** 21 or newer.
-- **Git** 2.55 or newer.
+- **Rust** 1.85 or newer (edition 2024).
+- **Git** for repository operations.
+- Additional SDK toolchains are only required when building a specific binding (C/C++, Python, Go, Ruby).
 - Target platforms:
   - Linux (x86_64, aarch64).
   - Android / Termux (aarch64).

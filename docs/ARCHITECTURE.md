@@ -1,6 +1,6 @@
 # NEXUS-Q — Architecture
 
-> **Status:** Draft (Fase 0)
+> **Status:** Living reference document
 > **Audience:** Contributors, reviewers, integrators
 > **Scope:** System-level architecture, module boundaries, data flow
 
@@ -40,7 +40,7 @@ is a consumer of that library:
 
 - The CLI (`nexusq`) is a thin wrapper
 - The server (`nexusq-server`) is another wrapper
-- The SDKs (Rust, C, Python, TypeScript) bind to the library API
+- The SDKs (Rust, C, C++, Python, Go, Ruby, with additional SDKs planned for CI) bind to the library API
 - The hardware backends plug in through traits
 
 No business logic lives outside the library.
@@ -141,8 +141,10 @@ one immediately below it. Nothing skips layers.
 
 ## 4. Core modules (L3)
 
-The NEXUS-Q Core is composed of six modules. Each one has a single
-responsibility and a narrow public interface within the crate.
+The NEXUS-Q Core currently exposes six top-level modules: `crypto`, `vault`,
+`identity`, `policy`, `storage`, and `hardware`. Audit is implemented as a
+subsystem of `storage`, not as a separate top-level Rust module. Each module
+has a single responsibility and a narrow public interface.
 
 ### 4.1 `crypto`
 
@@ -195,7 +197,6 @@ policy (delegates to `policy`).
 - Policy definition (key + operation + context)
 - Evaluation (`allow`, `deny`, `require_*`)
 - Context requirements: authentication, hardware, attestation
-- Frequency / rate constraints
 
 This is where NEXUS-Q stops being "just crypto" and becomes a **policy
 enforcement layer**.
@@ -217,16 +218,19 @@ how to store bytes safely.
 
 **Depends on:** `crypto` (for encryption of metadata), `error`.
 
-### 4.6 `audit`
+### 4.6 `hardware`
 
-**Responsibility:** tamper-evident event log.
+**Responsibility:** hardware/backend abstraction and platform security state.
 
-- Records security-relevant events (`KEY_CREATED`, `VAULT_UNLOCKED`, ...)
-- Never records secrets
-- Append-only
-- Verifiable integrity
+- `Backend` aggregation
+- OS/TRNG and mixed randomness
+- Secure storage, secure memory and key providers
+- Secure boot and measured boot
+- Attestation provider/verifier
 
-**Depends on:** `crypto` (for MAC/chaining), `storage`, `error`.
+The tamper-evident audit log is implemented inside `storage` (`audit_event`,
+`audit_segment`, `audit_log`). Audit records never contain secret material
+and are protected by hash chaining.
 
 ---
 
@@ -234,39 +238,47 @@ how to store bytes safely.
 
 The core exposes a small, deliberate API. Everything else stays private.
 
-Conceptual shape (final signatures in `API.md`):
+Current public shape:
 
 ```rust
 // Vault lifecycle
-Nexus::new(config) -> Result<Nexus, Error>
-vault.create() -> Result<Vault, Error>
-vault.unlock(credential) -> Result<Session, Error>
-vault.lock(session) -> Result<(), Error>
+let vault = Vault::create(path, password, label)?;
+let session = vault.unlock(password)?;
 
 // Keys
-keys.generate(session, algorithm, purpose) -> Result<KeyId, Error>
-keys.rotate(session, key_id) -> Result<KeyId, Error>
-keys.revoke(session, key_id) -> Result<(), Error>
-keys.destroy(session, key_id) -> Result<(), Error>
+let key_id = session.generate_key(algorithm, purpose)?;
+session.activate_key(&key_id)?;
+let new_key_id = session.rotate_key(&key_id)?;
+session.revoke_key(&key_id, reason)?;
+session.destroy_key(&key_id, confirmation)?;
 
 // Data protection
-data.encrypt(session, key_id, plaintext) -> Result<Ciphertext, Error>
-data.decrypt(session, key_id, ciphertext) -> Result<Plaintext, Error>
+let envelope = session.encrypt(&key_id, plaintext, metadata)?;
+let plaintext = session.decrypt(&envelope)?;
 
 // Identity
-identity.sign(session, identity_id, message) -> Result<Signature, Error>
-identity.verify(identity_id, message, signature) -> Result<(), Error>
+let identity_id = session.create_identity(label)?;
+let signature = session.identity_sign(&identity_id, message)?;
+let valid = session.identity_verify(&identity_id, message, &signature)?;
+
+// Lock
+let vault = session.lock()?;
 ```
 
-The concrete API will be refined during Fase 13 (SDK). This document
-records the shape.
+The concrete API is implemented in the current `nexusq-core` public
+surface and exposed through the Phase 13 bindings. This document records
+the architectural shape; `docs/API.md` and the crate source define the
+current callable surface.
 
 ---
 
 ## 6. Backend traits (L2)
 
-The boundary between L3 (core) and L2 (backends) is defined by **five
-traits**. Every backend must implement all of them. The software backend
+The boundary between L3 (core) and L2 (backends) is defined by the
+`Backend` abstraction plus dedicated hardware traits for randomness, secure
+storage, key operations, secure memory, secure boot, measured boot and
+attestation. The software backend provides honest software/default behavior;
+hardware backends can replace individual capabilities. The software backend
 provides default implementations; hardware backends override specific
 methods.
 

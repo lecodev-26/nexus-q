@@ -7,7 +7,7 @@
 //! See `crate::exit_codes` for the code constants and `docs/API.md`
 //! §6.3 for their meaning.
 
-use nexusq_core::vault::VaultError;
+use nexusq_core::{hardware::HardwareError, vault::VaultError};
 
 use crate::exit_codes;
 
@@ -63,6 +63,12 @@ impl CliError {
 ///
 /// The mapping is coarse on purpose: a script branches on categories,
 /// not on every internal cause.
+impl From<HardwareError> for CliError {
+    fn from(err: HardwareError) -> Self {
+        Self::Hardware(err.to_string())
+    }
+}
+
 impl From<VaultError> for CliError {
     fn from(err: VaultError) -> Self {
         match err {

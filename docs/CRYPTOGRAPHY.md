@@ -1,6 +1,6 @@
 # NEXUS-Q — Cryptography
 
-> **Status:** Draft (Fase 0)
+> **Status:** Living reference document
 > **Audience:** Contributors, cryptographers, security reviewers
 > **Scope:** Algorithms, parameters, and cryptographic rules
 
@@ -12,9 +12,9 @@ This document specifies **which cryptographic algorithms NEXUS-Q uses, with
 which parameters, and under which rules**. It is the authoritative reference
 for anyone implementing or reviewing NEXUS-Q's crypto.
 
-The **implementation** (specific crates, versions, feature flags) is
-decided during Fase 2 and documented separately. This document commits to
-*families and algorithms*, not to library choices.
+The document records both the cryptographic policy and the current implementation
+status. Planned algorithms must not be described as available until they are
+implemented, tested and added to `vault::Algorithm`.
 
 ---
 
@@ -50,11 +50,11 @@ allowed in the core.
 | Family         | Purpose                                     | Algorithms (see §4) |
 |----------------|---------------------------------------------|---------------------|
 | Randomness     | Entropy for keys, nonces, salts            | OS RNG, TRNG        |
-| Hashing        | Digests, commitments, key derivation input | SHA-2, SHA-3, BLAKE2 |
+| Hashing        | Digests, commitments, key derivation input | SHA-2, SHA-3 (implemented); BLAKE2 (not currently exposed) |
 | KDF            | Deriving keys from passwords / key material | Argon2id, HKDF     |
 | AEAD           | Symmetric authenticated encryption          | AES-256-GCM, ChaCha20-Poly1305 |
 | KEM            | Post-quantum key encapsulation              | ML-KEM (Kyber)      |
-| Signatures     | Digital signatures                          | ML-DSA (Dilithium), SLH-DSA (SPHINCS+), Ed25519 |
+| Signatures     | Digital signatures                          | Ed25519 (implemented); ML-DSA and SLH-DSA (planned) |
 
 Anything outside these families (e.g., raw RSA, ECDSA on arbitrary curves,
 custom MACs) is forbidden.
@@ -225,9 +225,9 @@ SP 800-38D), ECB in any form, any custom mode.
 **Primary:** ML-KEM (FIPS 203)
 
 - Formerly known as CRYSTALS-Kyber.
-- Security levels:
-  - ML-KEM-768 (NIST level 3) — **default**
-  - ML-KEM-1024 (NIST level 5) — for long-term keys
+- Security level currently implemented:
+  - ML-KEM-768 (NIST level 3) — default
+  - ML-KEM-1024 is specified for future support but is not currently exposed
 - Used for: establishing session keys, wrapping data keys, any
   public-key-based key agreement.
 - Public key size: 1184 bytes (ML-KEM-768), 1568 bytes (ML-KEM-1024)
@@ -253,7 +253,7 @@ SP 800-38D), ECB in any form, any custom mode.
 
 ### 4.6 Digital signatures
 
-**Primary (PQC):** ML-DSA (FIPS 204)
+**Planned primary (PQC):** ML-DSA (FIPS 204)
 
 - Formerly CRYSTALS-Dilithium.
 - Security levels:
@@ -263,7 +263,7 @@ SP 800-38D), ECB in any form, any custom mode.
 - Public key: 1952 bytes (ML-DSA-65), 2592 bytes (ML-DSA-87)
 - Signature: 3309 bytes (ML-DSA-65), 4627 bytes (ML-DSA-87)
 
-**Secondary (PQC, stateless hash-based):** SLH-DSA (FIPS 205)
+**Planned secondary (PQC, stateless hash-based):** SLH-DSA (FIPS 205)
 
 - Formerly SPHINCS+.
 - Variants: SLH-DSA-SHA2-128s, SLH-DSA-SHA2-128f, and larger.
@@ -273,11 +273,13 @@ SP 800-38D), ECB in any form, any custom mode.
   security.
 - Not the default; selected per-use-case.
 
-**Classical (for compatibility, not for new keys):** Ed25519 (RFC 8032)
+**Currently implemented signature:** Ed25519 (RFC 8032)
 
 - Used for: verifying signatures made by legacy systems; importing
   existing Ed25519 keys for transition.
-- **Not** used to generate new long-term keys in v1.0.
+- Current NEXUS-Q identity operations use Ed25519. Migration to a PQC signature
+  scheme is a planned crypto milestone; until then Ed25519 is a classical signature
+  and must not be described as post-quantum protection.
 
 **Forbidden:**
 
@@ -303,6 +305,28 @@ SP 800-38D), ECB in any form, any custom mode.
 | `rand::thread_rng` | Not guaranteed CSPRNG on all platforms |
 
 ---
+
+## 4.8 Current implementation matrix
+
+As of Phase 13, the code actually exposes:
+
+| Primitive | Current status |
+|---|---|
+| OS randomness | Implemented |
+| TRNG + mixed RNG | Implemented behind hardware abstractions |
+| SHA-256 / SHA-512 / SHA3-256 / SHA3-512 | Implemented |
+| Argon2id / HKDF-SHA256 | Implemented |
+| AES-256-GCM / ChaCha20-Poly1305 | Implemented |
+| ML-KEM-768 | Implemented |
+| ML-KEM-768 + X25519 hybrid | Implemented |
+| Ed25519 | Implemented |
+| ML-DSA | Planned |
+| SLH-DSA | Planned |
+| ML-KEM-1024 | Planned |
+| BLAKE2 | Not exposed by the current public crypto module |
+
+This matrix prevents the design specification from being mistaken for a
+claim that every future algorithm is already shipped.
 
 ## 5. Composition rules
 
@@ -383,7 +407,7 @@ Examples:
 | Argon2id iterations| 3                      | |
 | HKDF output        | 32 bytes               | Per derived key |
 | KEM (default)      | ML-KEM-768 + X25519    | Hybrid |
-| Signature default  | ML-DSA-65              | |
+| Signature default  | Ed25519 (current)      | ML-DSA-65 is planned |
 | Random salt        | 128–256 bits           | Unique per use |
 
 ---
@@ -467,7 +491,8 @@ algorithm we do not trust, we refuse the operation; we do not fall back.
 - [ ] Nonce management strategy for high-throughput servers
 - [ ] Whether to use HPKE directly for envelope encryption
 
-These are resolved in Fase 2 (Crypto Core).
+Open items are resolved as the corresponding crypto implementation lands;
+implemented behavior is authoritative in the crate source and tests.
 
 ---
 

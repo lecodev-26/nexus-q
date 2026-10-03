@@ -1,6 +1,6 @@
 # NEXUS-Q — Key Management
 
-> **Status:** Draft (Fase 0)
+> **Status:** Living reference document
 > **Audience:** Contributors, security reviewers, integrators
 > **Scope:** Key types, lifecycle, metadata, rotation, revocation, destruction
 

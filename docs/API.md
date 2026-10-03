@@ -1,6 +1,6 @@
 # NEXUS-Q — Public API
 
-> **Status:** Draft (Fase 0)
+> **Status:** Living reference document
 > **Audience:** Contributors, integrators, SDK authors
 > **Scope:** Public interfaces, layers, principles, versioning
 
@@ -13,7 +13,8 @@ consumer of the library, CLI, or server can call, and under which
 guarantees. It is the contract between NEXUS-Q and the code that uses it.
 
 This document describes **shape and semantics**, not implementation.
-Concrete signatures are finalized during Fase 13 (SDK/API).
+Concrete signatures are implemented in the current `nexusq-core` API and
+mirrored by the Phase 13 language bindings.
 
 ---
 
@@ -26,7 +27,7 @@ NEXUS-Q exposes four layers of API, from lowest to highest:
 | L-A    | Rust library (`nexusq`) | Rust   | 2–6  |
 | L-B    | CLI (`nexusq` binary) | CLI      | 12   |
 | L-C    | Server (`nexusq-server`) | HTTP/IPC | 14 |
-| L-D    | SDKs (Rust, C, Python, TypeScript) | Multiple | 13 |
+| L-D    | SDKs (Rust, C, C++, Python, Go, Ruby, CI-only TypeScript/Java/Kotlin/C#/Swift/Dart) | Multiple | 13/19 |
 
 **Rule:** all layers are thin wrappers over L-A. No layer re-implements
 logic that lives in the library. If a behavior exists in the CLI, it
@@ -38,8 +39,10 @@ exists in the library first.
 
 ### 3.1 Strong types over bytes
 
-Wherever possible, the API uses typed values (`KeyId`, `Ciphertext`,
-`Signature`) instead of raw `Vec<u8>`. This prevents argument-swapping
+Wherever possible, the API uses typed identifiers and structured records
+(`KeyId`, `IdentityId`, `KeyRecord`, `Signature`) instead of ambiguous raw
+values. Envelope payloads are currently represented as encoded `Vec<u8>`
+inside the core API. This prevents argument-swapping
 bugs and makes the API self-documenting.
 
 ### 3.2 Fail-closed, always
@@ -70,8 +73,10 @@ ciphertext", or between "unknown user" and "wrong password". See
 
 ### 3.6 Zeroization on drop
 
-Types that hold secrets (`Session`, `Plaintext`, `PrivateKey`) zeroize
-their contents when dropped. This is documented on each type.
+Secret-bearing buffers returned by the core use zeroizing wrappers where
+appropriate (for example, decrypted plaintext). Secret key material is
+kept inside the vault/session boundary rather than exposed as a public
+private-key type.
 
 ### 3.7 Thread safety
 
@@ -92,112 +97,75 @@ security-critical path.
 
 The Rust library is the primary interface. Everything else builds on it.
 
-### 4.1 Top-level types
+### 4.1 Current top-level surface
+
+The current Rust API is centered on `Vault` and `Session` rather than a
+separate `Nexus` façade:
 
 ```rust
-pub struct Nexus { /* ... */ }
-pub struct Vault { /* ... */ }
-pub struct Session { /* ... */ }
-pub struct KeyId { /* ... */ }
-pub struct IdentityId { /* ... */ }
-pub struct Ciphertext { /* ... */ }
-pub struct Plaintext { /* ... */ }  // zeroizes on drop
-pub struct Signature { /* ... */ }
-pub struct PublicKey { /* ... */ }
-// Private keys are never exposed as a public struct.
+let vault = Vault::create(path, password, label)?;
+let session = vault.unlock(password)?;
+
+let key_id = session.generate_key(Algorithm::Ed25519, Purpose::Sign)?;
+let signature = session.identity_sign(&identity_id, message)?;
+
+let envelope = session.encrypt(&key_id, plaintext, metadata)?;
+let plaintext = session.decrypt(&envelope)?;
+
+let vault = session.lock()?;
 ```
+
+The exact signatures and error types are defined by `nexusq-core`; the
+examples above are intentionally representative rather than a second API
+specification.
 
 ### 4.2 Errors
 
-```rust
-pub enum Error {
-    Crypto(CryptoError),
-    Vault(VaultError),
-    Storage(StorageError),
-    Hardware(HardwareError),
-    Identity(IdentityError),
-    Policy(PolicyError),
-}
-```
-
-Each variant carries structured data, never raw strings, so downstream
-code can match on the cause.
+The core exposes the unified `nexusq_core::Error` plus module-specific
+errors (`VaultError`, `CryptoError`, `StorageError`, `HardwareError`,
+`IdentityError`, and `PolicyError`). Bindings translate those failures into
+the native error model of each language.
 
 ### 4.3 Lifecycle
 
+The current lifecycle is:
+
 ```rust
-// Create or open a Nexus instance (does not unlock the vault).
-let nexus = Nexus::new(config)?;
-
-// Create a vault (first time).
-let vault = nexus.create_vault(password)?;
-
-// Or open an existing vault.
-let vault = nexus.open_vault(path)?;
-
-// Unlock with a credential; get a session.
+let vault = Vault::create(path, password, label)?;
 let session = vault.unlock(password)?;
-
-// ... use the session ...
-
-// Lock the vault; session is consumed.
-vault.lock(session)?;
+// use session
+let vault = session.lock()?;
 ```
+
+`Vault::open(path)` is used to reopen an existing vault. There is no global
+`Nexus` object and no asynchronous core API.
 
 ### 4.4 Key operations
 
-```rust
-// Generate a new key.
-let key_id: KeyId = session.generate_key(
-    Algorithm::MlDsa65,
-    Purpose::Sign,
-)?;
-
-// Rotate.
-let new_key_id = session.rotate_key(&key_id)?;
-
-// Revoke (marks key unusable for new ops).
-session.revoke_key(&key_id, RevokeReason::Compromised)?;
-
-// Destroy (erases material; requires confirmation).
-session.destroy_key(&key_id, DestructionConfirmation::Explicit)?;
-```
+The session exposes key creation, lookup, activation, rotation, revocation
+and destruction, subject to algorithm-purpose validation and policy.
 
 ### 4.5 Data encryption
 
+The current session API encrypts data into the NEXUS-Q envelope format and
+returns the encoded envelope bytes. File helpers are available separately.
+
 ```rust
-// Encrypt a file to the vault (no recipient key needed).
-let ciphertext = session.encrypt(
-    &key_id,
-    Plaintext::from_bytes(data),
-    EnvelopeMetadata::empty(),
-)?;
+let envelope = session.encrypt(&key_id, data, metadata)?;
+let plaintext = session.decrypt(&envelope)?;
 
-// Encrypt to a recipient's public key.
-let ciphertext = session.encrypt_to_public_key(
-    recipient_public_key,
-    Plaintext::from_bytes(data),
-    EnvelopeMetadata::empty(),
-)?;
-
-// Decrypt.
-let plaintext = session.decrypt(&ciphertext)?;
-// plaintext zeroizes on drop
+let encrypted_path = session.encrypt_file(input_path, &key_id, metadata)?;
+session.decrypt_file(&encrypted_path, output_path)?;
 ```
 
 ### 4.6 Signatures
 
-```rust
-let signature = session.sign(
-    &signing_key_id,
-    &message,
-)?;
+Identity signatures are currently exposed through the identity API:
 
-session.verify(
-    &signing_key_id,
-    &message,
-    &signature,
-)?;
+```rust
+let identity_id = session.create_identity(Some("alice".into()))?;
+let signature = session.identity_sign(&identity_id, message)?;
+let valid = session.identity_verify(&identity_id, message, &signature)?;
 ```
 
 ### 4.7 Identity

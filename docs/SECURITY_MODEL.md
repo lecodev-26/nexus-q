@@ -1,6 +1,6 @@
 # NEXUS-Q — Security Model
 
-> **Status:** Draft (Fase 0)
+> **Status:** Living reference document
 > **Audience:** Contributors, security reviewers, architects
 > **Scope:** Security guarantees, trust components, session and audit model
 

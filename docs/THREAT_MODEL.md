@@ -1,6 +1,6 @@
 # NEXUS-Q — Threat Model
 
-> **Status:** Draft (Fase 0)
+> **Status:** Living reference document
 > **Audience:** Contributors, reviewers, security auditors
 > **Scope:** Adversaries, assets, trust boundaries, out-of-scope threats
 
@@ -113,9 +113,10 @@ adversary has all the capabilities of the weaker ones.
   (CRQC), or records traffic today to decrypt it later (harvest-now,
   decrypt-later).
 - **Goal:** break classical public-key cryptography (RSA, ECDH, ECDSA).
-- **NEXUS-Q defense:** **primary design goal**. All public-key operations
-  use post-quantum algorithms (KEM, signatures) standardized by NIST or
-  equivalent bodies. Symmetric primitives use 256-bit security levels.
+- **NEXUS-Q defense:** **primary design goal**. Current key-establishment
+  uses the ML-KEM-768/X25519 hybrid. Identity signatures currently use
+  Ed25519, so current signature operations are classical; ML-DSA/SLH-DSA
+  support is planned. Symmetric primitives use 256-bit keys.
 
 ### 3.9 Supply-chain adversary (A-supply)
 
@@ -410,8 +411,10 @@ What NEXUS-Q **does** claim, in plain terms:
    signature scheme is unbroken.
 4. **Forward secrecy of session keys** (Fase 14+): a compromised
    long-term key does not reveal past session keys.
-5. **Post-quantum resistance** of all public-key operations against
-   quantum adversaries, assuming NIST PQC standards hold.
+5. **Post-quantum key-establishment resistance** through the implemented
+   ML-KEM-768/X25519 hybrid, assuming the underlying schemes and construction
+   remain secure. Current Ed25519 signatures are classical and are not
+   post-quantum secure.
 6. **Tamper-evidence of the audit log**: any modification of a past
    entry invalidates the chain.
 7. **Fail-closed behavior**: on any error, no partial plaintext is

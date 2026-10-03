@@ -1,6 +1,6 @@
 # NEXUS-Q — Roadmap
 
-> **Status:** Living document (Fase 0)
+> **Status:** Living document — Phase 13 in progress
 > **Audience:** Contributors, users, stakeholders
 > **Scope:** Phased development plan from bootstrap to v1.0 and beyond
 
@@ -138,7 +138,7 @@ workspace.
   - `src/storage/`
   - `src/policy/`
 - Error hierarchy (`CryptoError`, `VaultError`, ...)
-- Fundamental types (`KeyId`, `Algorithm`, `Ciphertext`, ...)
+- Fundamental types (`KeyId`, `Algorithm`, envelope bytes, ...)
 - CI: build, clippy, fmt, test on push
 
 **Exit criteria:**
@@ -162,7 +162,7 @@ workspace.
 - KDF wrappers (Argon2id, HKDF)
 - AEAD wrappers (AES-256-GCM, ChaCha20-Poly1305)
 - KEM wrappers (ML-KEM-768, ML-KEM-1024, hybrid with X25519)
-- Signature wrappers (ML-DSA-65, ML-DSA-87, SLH-DSA, Ed25519 legacy)
+- Signature wrappers (Ed25519 currently implemented; ML-DSA/SLH-DSA planned)
 - Key serialization / deserialization
 - Zeroization on drop for all secret types
 - Unit tests per primitive
@@ -170,8 +170,8 @@ workspace.
 
 **Exit criteria:**
 
-- All primitives implemented and tested.
-- KATs pass for every algorithm.
+- All primitives selected for the current release scope are implemented and tested.
+- KATs pass for every applicable algorithm; future PQ signature/KEM variants remain tracked explicitly.
 - Negative tests (wrong key, corrupted ciphertext, malformed input)
   pass.
 - No panics on untrusted input.
@@ -698,7 +698,7 @@ channels.
 
 **Definition of v1.0:** all of the following must be true:
 
-- ✓ PQC crypto (ML-KEM, ML-DSA, SLH-DSA) implemented and tested
+- ✓ Crypto core is implemented and tested; v1.0 additionally requires the planned PQ signature implementations (ML-DSA/SLH-DSA) to be completed
 - ✓ Key management (lifecycle, rotation, revocation, destruction)
 - ✓ Secure vault (format F-01, atomic writes, crash-safe)
 - ✓ Envelope encryption (format F-02)
@@ -731,9 +731,8 @@ channels.
 
 ### v1.1 — Ecosystem expansion
 
-- Python SDK
+- Expanded SDKs beyond the Phase 13 baseline
 - TypeScript SDK
-- C SDK
 - Better hardware support (TPM 2.0 mature, first HSM integration)
 - Remote vault (access vault over network)
 - Improved audit system

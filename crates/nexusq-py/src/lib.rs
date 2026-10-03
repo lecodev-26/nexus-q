@@ -1,8 +1,8 @@
 //! Python bindings for NEXUS-Q.
 //!
 //! This crate exposes the library through PyO3. It is a thin
-//! translation layer: every function opens a session, calls into
-//! `nexusq-core`, and marshals the result into Python objects. No
+//! translation layer that delegates directly to `nexusq-core` and
+//! marshals results and errors into Python objects. No
 //! cryptography and no business logic live here.
 
 use pyo3::exceptions::PyValueError;
