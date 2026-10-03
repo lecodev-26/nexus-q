@@ -481,19 +481,31 @@ exit codes.
 
 **Objective:** Expose the library in multiple languages.
 
-**Deliverables:**
+**Deliverables (built in Termux, part of this repository):**
 
 - Rust SDK (stable public API)
-- C SDK (`cbindgen` header)
-- Python SDK (PyO3, published to PyPI)
-- TypeScript SDK (WASM, for Node.js and browsers)
+- C SDK (`cbindgen` header, `crates/nexusq-c`)
+- C++ SDK (header-only wrapper, `crates/nexusq-cpp`)
+- Python SDK (PyO3 + maturin, `crates/nexusq-py`)
+- Go SDK (cgo, `bindings/go`)
+- Ruby SDK (UniFFI, `bindings/ruby`)
+- PHP SDK (planned)
+
+**Deliverables (CI-only, land with Phase 19):**
+
+- TypeScript / JavaScript SDK (WASM, Node.js and browsers)
+- Java / Kotlin SDK (JNI)
+- C# / .NET SDK (P/Invoke)
+- Swift SDK (Swift Package)
+- Dart / Flutter SDK (FFI)
 
 **Exit criteria:**
 
 - Each SDK provides the same semantics as the Rust library.
 - Cross-SDK tests confirm consistent behavior.
 - Documentation per SDK.
-- Published packages (crates.io, PyPI, npm).
+- Published packages (crates.io, PyPI, npm, RubyGems, Packagist,
+  NuGet, Maven Central, pub.dev).
 
 ---
 
