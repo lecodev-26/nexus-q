@@ -1,34 +1,29 @@
-#!/usr/bin/env ruby
 # frozen_string_literal: true
+
+# Smoke test for the NEXUS-Q Ruby SDK.
 #
-# End-to-end smoke test for the Ruby SDK.
-#
-# Creates a vault, verifies its basic properties, and removes the file.
-# Run from the repository root with:
-#
-#     LD_LIBRARY_PATH=target/debug ruby bindings/ruby/examples/smoke/smoke.rb
+# Run from the repository root:
+#   NEXUSQ_LIBRARY=target/debug/libnexusq.so ruby bindings/ruby/examples/smoke/smoke.rb
 
-require 'rubygems'
-require 'fileutils'
-require 'tmpdir'
+require "rubygems"
+require "tmpdir"
+require_relative "../../nexusq"
 
-$LOAD_PATH.unshift(File.expand_path('../../', __dir__))
-require 'nexusq'
+puts "nexusq version: #{Nexusq.version}"
 
-def assert(condition, message)
-  raise "ASSERTION FAILED: #{message}" unless condition
-  puts "ok - #{message}"
-end
+path = File.join(Dir.tmpdir, "nexusq_ruby_smoke_#{$$}.nqv")
+File.delete(path) if File.exist?(path)
 
-Dir.mktmpdir('nexusq-ruby-smoke-') do |dir|
-  vault_path = File.join(dir, 'test.nqv')
-  password = 'correct horse battery staple'
+begin
+  vault = Nexusq::Vault.create(path, "ruby-test", "ruby-smoke")
 
-  vault = Nexusq::Vault.new_from_path(vault_path, password, 'smoke-test')
+  abort "vault file was not created" unless File.file?(path)
+  abort "vault.path does not match input" unless vault.path == path
+  abort "format_version must be 1" unless vault.format_version == 1
 
-  assert(File.exist?(vault_path), 'vault file exists on disk')
-  assert(vault.path == vault_path, 'vault.path matches input path')
-  assert(vault.format_version == 1, 'format_version is 1')
-
-  puts 'smoke test passed'
+  puts "vault created at #{vault.path}"
+  puts "vault format version: #{vault.format_version}"
+  puts "smoke test passed"
+ensure
+  File.delete(path) if File.exist?(path)
 end

@@ -488,7 +488,7 @@ exit codes.
 - C++ SDK (header-only wrapper, `crates/nexusq-cpp`)
 - Python SDK (PyO3 + maturin, `crates/nexusq-py`)
 - Go SDK (cgo, `bindings/go`)
-- Ruby SDK (UniFFI, `bindings/ruby`)
+- Ruby SDK (FFI over the C SDK, `bindings/ruby`)
 - PHP SDK (planned)
 
 **Deliverables (CI-only, land with Phase 19):**

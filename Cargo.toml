@@ -6,7 +6,6 @@ members = [
     "crates/nexusq-server",
     "crates/nexusq-c",
     "crates/nexusq-py",
-    "crates/nexusq-ruby",
 ]
 
 [workspace.package]
