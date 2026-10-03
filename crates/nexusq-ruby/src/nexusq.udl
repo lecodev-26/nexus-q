@@ -1,0 +1,16 @@
+namespace nexusq {
+    string version();
+};
+
+[Error]
+enum NexusqError {
+    "InvalidInput",
+    "Operation",
+};
+
+interface Vault {
+    [Name=new_from_path, Throws=NexusqError]
+    constructor(string path, string password, string? label);
+    string path();
+    u8 format_version();
+};
