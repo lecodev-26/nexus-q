@@ -489,7 +489,7 @@ exit codes.
 - Python SDK (PyO3 + maturin, `crates/nexusq-py`)
 - Go SDK (cgo, `bindings/go`)
 - Ruby SDK (FFI over the C SDK, `bindings/ruby`)
-- PHP SDK (planned)
+- PHP SDK (FFI over the C SDK, `bindings/php`)
 
 **Deliverables (CI-only, land with Phase 19):**
 

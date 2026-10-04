@@ -1,0 +1,107 @@
+name: SDK CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  c-sdk:
+    name: Build C SDK prerequisite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build C SDK
+        run: cargo build -p nexusq-c --release
+      - name: Run C SDK tests
+        run: cargo test -p nexusq-c
+
+  typescript-wasm:
+    name: TypeScript / JavaScript WASM toolchain
+    runs-on: ubuntu-latest
+    needs: c-sdk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install WASM tooling
+        run: |
+          cargo install wasm-bindgen-cli --locked
+          cargo install wasm-pack --locked
+      - name: Verify WASM toolchain
+        run: |
+          rustup target list --installed
+          wasm-bindgen --version
+          wasm-pack --version
+          node --version
+          npm --version
+
+  java-kotlin-uniffi:
+    name: Java / Kotlin UniFFI toolchain
+    runs-on: ubuntu-latest
+    needs: c-sdk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: fwcd/setup-kotlin@v1
+        with:
+          version: '2.1.20'
+      - name: Install UniFFI generator
+        run: cargo install uniffi_bindgen --locked
+      - name: Verify JVM and UniFFI toolchain
+        run: |
+          java -version
+          kotlinc -version
+          uniffi-bindgen --help
+
+  dotnet:
+    name: C# / .NET P/Invoke toolchain
+    runs-on: ubuntu-latest
+    needs: c-sdk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.x'
+      - name: Verify .NET toolchain
+        run: dotnet --info
+
+  swift:
+    name: Swift / Swift Package toolchain
+    runs-on: macos-14
+    needs: c-sdk
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Swift toolchain
+        run: |
+          swift --version
+          swift package --version
+          clang --version
+
+  dart-flutter:
+    name: Dart / Flutter FFI toolchain
+    runs-on: ubuntu-latest
+    needs: c-sdk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Verify Dart / Flutter toolchain
+        run: |
+          dart --version
+          flutter --version
+          flutter doctor -v
