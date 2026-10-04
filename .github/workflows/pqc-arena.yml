@@ -1,0 +1,58 @@
+name: PQC Benchmark Arena
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  validate-registry:
+    name: Validate Arena registry
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Validate JSON registry and schema
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for path in Path("arena").rglob("*.json"):
+              with path.open() as f:
+                  json.load(f)
+              print("valid:", path)
+          required = [
+              "arena/registry/algorithms.json",
+              "arena/registry/implementations.json",
+              "arena/registry/matrix.json",
+              "arena/schemas/benchmark-result.schema.json",
+          ]
+          for path in required:
+              assert Path(path).is_file(), path
+          print("Arena registry structure: OK")
+          PY
+
+  nexusq-reference:
+    name: NEXUS-Q reference benchmark
+    runs-on: ubuntu-latest
+    needs: validate-registry
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run and archive reference benchmark
+        run: |
+          mkdir -p arena/results
+          cargo bench -p nexusq-core --bench crypto_baseline | tee arena/results/nexusq-reference.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pqc-arena-nexusq-reference
+          path: arena/results/nexusq-reference.txt
+
+# External implementations will be added only with pinned versions/commits,
+# semantically equivalent adapters, and recorded build/CPU feature metadata.
+# RISC-V and embedded remain dedicated-runner/hardware execution gates.

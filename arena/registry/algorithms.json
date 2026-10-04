@@ -1,0 +1,160 @@
+{
+  "schema_version": 1,
+  "generated_scope": "initial-pqc-arena-registry",
+  "algorithms": [
+    {
+      "id": "ml-kem-512",
+      "family": "KEM",
+      "status": "STANDARD",
+      "standard": "FIPS 203",
+      "parameter_set": "512"
+    },
+    {
+      "id": "ml-kem-768",
+      "family": "KEM",
+      "status": "STANDARD",
+      "standard": "FIPS 203",
+      "parameter_set": "768"
+    },
+    {
+      "id": "ml-kem-1024",
+      "family": "KEM",
+      "status": "STANDARD",
+      "standard": "FIPS 203",
+      "parameter_set": "1024"
+    },
+    {
+      "id": "ml-dsa-44",
+      "family": "SIGNATURE",
+      "status": "STANDARD",
+      "standard": "FIPS 204",
+      "parameter_set": "44"
+    },
+    {
+      "id": "ml-dsa-65",
+      "family": "SIGNATURE",
+      "status": "STANDARD",
+      "standard": "FIPS 204",
+      "parameter_set": "65"
+    },
+    {
+      "id": "ml-dsa-87",
+      "family": "SIGNATURE",
+      "status": "STANDARD",
+      "standard": "FIPS 204",
+      "parameter_set": "87"
+    },
+    {
+      "id": "slh-dsa",
+      "family": "SIGNATURE",
+      "status": "STANDARD",
+      "standard": "FIPS 205",
+      "parameter_set": "multiple"
+    },
+    {
+      "id": "hqc",
+      "family": "KEM",
+      "status": "SELECTED_FOR_STANDARDIZATION",
+      "standard": "NIST PQC",
+      "parameter_set": "multiple"
+    },
+    {
+      "id": "fn-dsa-falcon",
+      "family": "SIGNATURE",
+      "status": "SELECTED_FOR_STANDARDIZATION",
+      "standard": "NIST PQC",
+      "parameter_set": "multiple"
+    },
+    {
+      "id": "faest",
+      "family": "SIGNATURE",
+      "status": "UNDER_EVALUATION",
+      "standard": "NIST additional signatures",
+      "parameter_set": "multiple"
+    },
+    {
+      "id": "mayo",
+      "family": "SIGNATURE",
+      "status": "UNDER_EVALUATION",
+      "standard": "NIST additional signatures",
+      "parameter_set": "multiple"
+    },
+    {
+      "id": "mqom",
+      "family": "SIGNATURE",
+      "status": "UNDER_EVALUATION",
+      "standard": "NIST additional signatures",
+      "parameter_set": "multiple"
+    },
+    {
+      "id": "qr-uov",
+      "family": "SIGNATURE",
+      "status": "UNDER_EVALUATION",
+      "standard": "NIST additional signatures",
+      "parameter_set": "multiple"
+    },
+    {
+      "id": "sdith",
+      "family": "SIGNATURE",
+      "status": "UNDER_EVALUATION",
+      "standard": "NIST additional signatures",
+      "parameter_set": "multiple"
+    },
+    {
+      "id": "snova",
+      "family": "SIGNATURE",
+      "status": "UNDER_EVALUATION",
+      "standard": "NIST additional signatures",
+      "parameter_set": "multiple"
+    },
+    {
+      "id": "sqisign",
+      "family": "SIGNATURE",
+      "status": "UNDER_EVALUATION",
+      "standard": "NIST additional signatures",
+      "parameter_set": "multiple"
+    },
+    {
+      "id": "uov",
+      "family": "SIGNATURE",
+      "status": "UNDER_EVALUATION",
+      "standard": "NIST additional signatures",
+      "parameter_set": "multiple"
+    },
+    {
+      "id": "bike",
+      "family": "KEM",
+      "status": "ALTERNATIVE",
+      "standard": "PQC alternative",
+      "parameter_set": "multiple"
+    },
+    {
+      "id": "classic-mceliece",
+      "family": "KEM",
+      "status": "ALTERNATIVE",
+      "standard": "PQC alternative",
+      "parameter_set": "multiple"
+    },
+    {
+      "id": "frodokem",
+      "family": "KEM",
+      "status": "ALTERNATIVE",
+      "standard": "PQC alternative",
+      "parameter_set": "multiple"
+    },
+    {
+      "id": "ntru",
+      "family": "KEM",
+      "status": "ALTERNATIVE",
+      "standard": "PQC alternative",
+      "parameter_set": "multiple"
+    },
+    {
+      "id": "ntru-prime",
+      "family": "KEM",
+      "status": "ALTERNATIVE",
+      "standard": "PQC alternative",
+      "parameter_set": "multiple"
+    }
+  ]
+}

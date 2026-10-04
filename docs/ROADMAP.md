@@ -605,7 +605,7 @@ TRNG/secure-environment checks, and release reproducibility.
 
 **Objective:** Measure performance honestly.
 
-**Delivery status:** **Green for v1 delivery readiness.** A low-iteration crypto/Vault benchmark harness now measures the critical local operations on Android/Termux, with measured results recorded in `BENCHMARKS.md`. A CI workflow is prepared for x86_64 Linux and ARM64 Linux and records toolchain/metadata alongside benchmark artifacts. RISC-V and embedded execution remain dedicated-runner/hardware gates and are not represented by cross-compilation claims.
+**Delivery status:** **Green for v1 delivery readiness.** A low-iteration crypto/Vault benchmark harness measures the critical local operations on Android/Termux, with measured results recorded in BENCHMARKS.md. CI is prepared for x86_64 Linux and ARM64 Linux. The Phase 17 expansion now defines the PQC Benchmark Arena: a versioned registry, normalized result schema, fairness protocol, and CI validation/reference benchmark for comparing NEXUS-Q with relevant maintained PQC implementations. External implementations are added only with pinned versions/commits and semantically equivalent workloads. RISC-V and embedded execution remain dedicated-runner/hardware gates.
 
 **Deliverables:**
 
@@ -803,11 +803,11 @@ infrastructure.
 | 10    | Storage                       | Complete    |
 | 11    | Policy Engine                 | Complete    |
 | 12    | CLI                           | Complete    |
-| 13    | SDK / API                     | In progress |
-| 14    | Server Mode                   | Pending     |
-| 15    | Security Engineering          | Pending     |
-| 16    | Side Channel / Hardening      | Pending     |
-| 17    | Benchmarking                  | Pending     |
+| 13    | SDK / API                     | Green       |
+| 14    | Server Mode                   | Green       |
+| 15    | Security Engineering          | Green       |
+| 16    | Side Channel / Hardening      | Green       |
+| 17    | Benchmarking                  | Green       |
 | 18    | Observability                 | Pending     |
 | 19    | Deployment                    | Pending     |
 | 20    | User Documentation            | Pending     |

@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "implementations": [
+    {
+      "id": "nexusq",
+      "name": "NEXUS-Q",
+      "language": "Rust",
+      "role": "reference",
+      "status": "ACTIVE",
+      "source": "local-repository"
+    },
+    {
+      "id": "liboqs",
+      "name": "Open Quantum Safe / liboqs",
+      "language": "C",
+      "role": "general-purpose",
+      "status": "ACTIVE",
+      "version": "0.16.0",
+      "source": "https://openquantumsafe.org/liboqs/"
+    },
+    {
+      "id": "circl",
+      "name": "Cloudflare CIRCL",
+      "language": "Go",
+      "role": "general-purpose",
+      "status": "ACTIVE",
+      "source": "https://github.com/cloudflare/circl"
+    },
+    {
+      "id": "openssl",
+      "name": "OpenSSL",
+      "language": "C",
+      "role": "general-purpose-and-protocol",
+      "status": "ACTIVE",
+      "source": "https://openssl-library.org/"
+    },
+    {
+      "id": "aws-lc",
+      "name": "AWS-LC",
+      "language": "C",
+      "role": "general-purpose-and-protocol",
+      "status": "ACTIVE",
+      "source": "https://github.com/aws/aws-lc"
+    },
+    {
+      "id": "boringssl",
+      "name": "BoringSSL",
+      "language": "C/C++",
+      "role": "protocol-and-general-purpose",
+      "status": "ACTIVE",
+      "source": "https://boringssl.googlesource.com/boringssl/"
+    },
+    {
+      "id": "botan",
+      "name": "Botan",
+      "language": "C++",
+      "role": "general-purpose",
+      "status": "ACTIVE",
+      "source": "https://botan.randombit.net/"
+    },
+    {
+      "id": "rustcrypto-kems",
+      "name": "RustCrypto KEMs",
+      "language": "Rust",
+      "role": "Rust-library-ecosystem",
+      "status": "ACTIVE",
+      "source": "https://github.com/RustCrypto/KEMs"
+    },
+    {
+      "id": "pq-code-package",
+      "name": "PQ Code Package native implementations",
+      "language": "C",
+      "role": "optimized-native",
+      "status": "ACTIVE",
+      "source": "https://github.com/aws/aws-lc"
+    }
+  ]
+}

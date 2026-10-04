@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NEXUS-Q PQC Benchmark Result",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "run_id",
+    "implementation",
+    "algorithm",
+    "operation",
+    "environment",
+    "measurement"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "implementation": {
+      "type": "object",
+      "required": [
+        "id",
+        "version"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "commit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "algorithm": {
+      "type": "object",
+      "required": [
+        "id",
+        "parameter_set"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "parameter_set": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "operation": {
+      "enum": [
+        "keygen",
+        "encaps",
+        "decaps",
+        "sign",
+        "verify",
+        "workflow",
+        "tls-handshake",
+        "api-request",
+        "vault-operation"
+      ]
+    },
+    "environment": {
+      "type": "object",
+      "required": [
+        "target",
+        "os",
+        "cpu",
+        "compiler"
+      ],
+      "properties": {
+        "target": {
+          "type": "string"
+        },
+        "os": {
+          "type": "string"
+        },
+        "cpu": {
+          "type": "string"
+        },
+        "cpu_features": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "compiler": {
+          "type": "string"
+        },
+        "compiler_version": {
+          "type": "string"
+        },
+        "optimization": {
+          "type": "string"
+        },
+        "harness_version": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "measurement": {
+      "type": "object",
+      "required": [
+        "iterations",
+        "latency_ns"
+      ],
+      "properties": {
+        "iterations": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "warmups": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "latency_ns": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "throughput_ops_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "memory_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "measurement_method": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "sizes": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "public_key_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "secret_key_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "ciphertext_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "signature_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
