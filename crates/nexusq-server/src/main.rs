@@ -11,7 +11,7 @@ use std::{
 
 use axum::{
     Json, Router,
-    extract::State,
+    extract::{DefaultBodyLimit, State},
     http::{Request, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
@@ -28,6 +28,8 @@ use tower::ServiceBuilder;
 
 const DEFAULT_ADDR: &str = "127.0.0.1:8443";
 const DEFAULT_RATE_LIMIT: u32 = 60;
+const SESSION_TIMEOUT: Duration = Duration::from_secs(15 * 60);
+const MAX_REQUEST_BODY_BYTES: usize = 1024 * 1024;
 
 #[derive(Clone)]
 struct AppState {
@@ -39,6 +41,7 @@ struct AppState {
 struct ServerVault {
     vault: Vault,
     session: Option<Session>,
+    last_activity: Option<Instant>,
 }
 
 struct AuthConfig {
@@ -150,6 +153,7 @@ async fn main() -> StdResult<(), Box<dyn std::error::Error>> {
         vault: Arc::new(Mutex::new(ServerVault {
             vault,
             session: None,
+            last_activity: None,
         })),
         auth: Arc::new(AuthConfig {
             bearer_token: token,
@@ -202,10 +206,15 @@ fn build_app(state: AppState) -> Router {
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,
+        ))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            session_timeout_middleware,
         ));
 
     public
         .merge(protected)
+        .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
         .layer(ServiceBuilder::new().layer(middleware::from_fn_with_state(
             state.clone(),
             rate_limit_middleware,
@@ -243,15 +252,19 @@ async fn rate_limit_middleware(
     request: Request<axum::body::Body>,
     next: Next,
 ) -> Response {
-    let client = request
-        .headers()
-        .get("x-forwarded-for")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("local")
-        .split(',')
-        .next()
-        .unwrap_or("local")
-        .trim();
+    let client = if env::var("NEXUSQ_TRUSTED_TLS_TERMINATION").as_deref() == Ok("1") {
+        request
+            .headers()
+            .get("x-forwarded-for")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("proxy")
+            .split(',')
+            .next()
+            .unwrap_or("proxy")
+            .trim()
+    } else {
+        "local"
+    };
     if !state.limiter.allow(client) {
         return (StatusCode::TOO_MANY_REQUESTS, "rate limit exceeded").into_response();
     }
@@ -273,6 +286,46 @@ async fn auth_middleware(
         return (StatusCode::UNAUTHORIZED, "authentication required").into_response();
     }
     next.run(request).await
+}
+
+async fn session_timeout_middleware(
+    State(state): State<AppState>,
+    request: Request<axum::body::Body>,
+    next: Next,
+) -> Response {
+    {
+        let mut server_vault = state.vault.lock().await;
+        if let Some(last_activity) = server_vault.last_activity {
+            if last_activity.elapsed() >= SESSION_TIMEOUT {
+                if let Some(session) = server_vault.session.take() {
+                    match session.lock() {
+                        Ok(vault) => {
+                            server_vault.vault = vault;
+                            server_vault.last_activity = None;
+                            tracing::info!("vault session expired due to inactivity");
+                        }
+                        Err(err) => {
+                            server_vault.session = None;
+                            server_vault.last_activity = None;
+                            tracing::error!(error = %err, "failed to persist expired vault session");
+                            return (StatusCode::INTERNAL_SERVER_ERROR, "internal server error")
+                                .into_response();
+                        }
+                    }
+                } else {
+                    server_vault.last_activity = None;
+                }
+            }
+        }
+    }
+
+    let response = next.run(request).await;
+
+    let mut server_vault = state.vault.lock().await;
+    if server_vault.session.is_some() {
+        server_vault.last_activity = Some(Instant::now());
+    }
+    response
 }
 
 fn is_bearer_authorized(value: &str, expected: &str) -> bool {
@@ -322,6 +375,7 @@ async fn unlock(
         .unlock(input.password.as_bytes())
         .map_err(|err| ApiError::Core(err.into()))?;
     vault.session = Some(session);
+    vault.last_activity = Some(Instant::now());
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -330,6 +384,7 @@ async fn lock(State(state): State<AppState>) -> StdResult<StatusCode, ApiError> 
     let Some(session) = vault.session.take() else {
         return Err(ApiError::Conflict);
     };
+    vault.last_activity = None;
     match session.lock() {
         Ok(locked) => {
             vault.vault = locked;
@@ -617,12 +672,52 @@ mod tests {
             vault: Arc::new(Mutex::new(ServerVault {
                 vault: Vault::open(path).unwrap(),
                 session: None,
+                last_activity: None,
             })),
             auth: Arc::new(AuthConfig {
                 bearer_token: "test-token-with-at-least-32-bytes-long".to_owned(),
             }),
             limiter: Arc::new(RateLimiter::new(60, Duration::from_secs(60))),
         }
+    }
+
+    #[tokio::test]
+    async fn expired_session_is_locked_before_protected_request() {
+        let dir =
+            std::env::temp_dir().join(format!("nexusq-server-timeout-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let vault_path = dir.join("vault.nqx");
+        Vault::create(&vault_path, b"test-password", Some("server-test".into())).unwrap();
+
+        let state = test_state(vault_path.clone());
+        {
+            let mut server_vault = state.vault.lock().await;
+            server_vault.session = Some(server_vault.vault.unlock(b"test-password").unwrap());
+            server_vault.last_activity =
+                Some(Instant::now() - SESSION_TIMEOUT - Duration::from_secs(1));
+        }
+        let app = build_app(state);
+        use axum::body::Body;
+        use axum::http::{Request, StatusCode};
+        use tower::ServiceExt;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/vault/status")
+                    .header(
+                        "authorization",
+                        "Bearer test-token-with-at-least-32-bytes-long",
+                    )
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[tokio::test]
