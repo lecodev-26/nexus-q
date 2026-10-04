@@ -48,3 +48,6 @@ Thumbs.db
 /coverage/
 *.profraw
 *.profdata
+
+# Nested Rust build output
+**/target/

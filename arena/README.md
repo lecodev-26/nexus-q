@@ -47,3 +47,7 @@ The JSON schema in arena/schemas/benchmark-result.schema.json is the source cont
 4. Do not publish a single composite score in the first Arena release.
 5. Deprecated/broken algorithms may be recorded historically but do not enter the secure ranking.
 6. A result is reproducible only when its environment and source revision are recorded.
+
+## First real comparison
+
+The first adapter pair is NEXUS-Q vs liboqs 0.16.0 for plain ML-KEM-768, ML-KEM-1024 and ML-DSA-65. NEXUS-Q hybrid KEM measurements remain separate; the Arena adapter intentionally uses plain ML-KEM for semantic equivalence.

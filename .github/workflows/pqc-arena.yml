@@ -44,15 +44,63 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Run and archive reference benchmark
+      - name: Build Arena reference runner
+        run: cargo build --release --manifest-path arena/runners/nexusq/Cargo.toml
+      - name: Run and validate NEXUS-Q adapter
+        env:
+          NEXUSQ_COMMIT: ${{ github.sha }}
         run: |
-          mkdir -p arena/results
-          cargo bench -p nexusq-core --bench crypto_baseline | tee arena/results/nexusq-reference.txt
+          mkdir -p arena/results/ci
+          ./arena/runners/nexusq/target/release/nexusq-arena-runner | tee arena/results/ci/nexusq-reference.jsonl
+          python3 -c 'import json; from pathlib import Path; rows=[json.loads(x) for x in Path("arena/results/ci/nexusq-reference.jsonl").read_text().splitlines() if x.startswith("{")]; assert len(rows)==9; assert all(r["implementation"]["id"]=="nexusq" for r in rows); print("NEXUS-Q Arena records:",len(rows))'
       - uses: actions/upload-artifact@v4
         with:
           name: pqc-arena-nexusq-reference
-          path: arena/results/nexusq-reference.txt
+          path: arena/results/ci/nexusq-reference.jsonl
 
 # External implementations will be added only with pinned versions/commits,
 # semantically equivalent adapters, and recorded build/CPU feature metadata.
 # RISC-V and embedded remain dedicated-runner/hardware execution gates.
+
+  liboqs-reference:
+    name: liboqs 0.16.0 reference adapter
+    runs-on: ubuntu-latest
+    needs: validate-registry
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install liboqs build dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build gcc
+      - name: Fetch pinned liboqs
+        run: git clone --depth 1 --branch 0.16.0 https://github.com/open-quantum-safe/liboqs.git .arena-liboqs
+      - name: Build liboqs
+        run: cmake -S .arena-liboqs -B .arena-liboqs/build -G Ninja -DOQS_BUILD_ONLY_LIB=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release
+      - name: Compile Arena adapter
+        run: gcc -O3 -std=c11 -I.arena-liboqs/build/include -I.arena-liboqs/src arena/adapters/liboqs/runner.c .arena-liboqs/build/lib/liboqs.a -lcrypto -ldl -lpthread -lm -o arena-liboqs-runner
+      - name: Run adapter and validate JSONL
+        run: |
+          mkdir -p arena/results/ci
+          ./arena-liboqs-runner | tee arena/results/ci/liboqs-0.16.0.jsonl
+          python3 -c 'import json; from pathlib import Path; rows=[json.loads(x) for x in Path("arena/results/ci/liboqs-0.16.0.jsonl").read_text().splitlines() if x.startswith("{")]; assert len(rows)==9; assert all(r["implementation"]["id"]=="liboqs" for r in rows); print("liboqs Arena records:",len(rows))'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pqc-arena-liboqs-0.16.0
+          path: arena/results/ci/liboqs-0.16.0.jsonl
+
+  compare-schema:
+    name: Validate normalized adapter output
+    runs-on: ubuntu-latest
+    needs: [nexusq-reference, liboqs-reference]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download NEXUS-Q artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pqc-arena-nexusq-reference
+          path: arena/results/ci/nexusq
+      - name: Download liboqs artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pqc-arena-liboqs-0.16.0
+          path: arena/results/ci/liboqs
+      - name: Validate normalized JSONL
+        run: python3 -c 'import json; from pathlib import Path; files=list(Path("arena/results/ci").rglob("*.jsonl")); assert files; [json.loads(x) for p in files for x in p.read_text().splitlines() if x.startswith("{")]; print("normalized Arena output: OK")'

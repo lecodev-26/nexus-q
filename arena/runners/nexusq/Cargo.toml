@@ -1,0 +1,9 @@
+[package]
+name = "nexusq-arena-runner"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+nexusq-core = { path = "../../../crates/nexusq-core" }
+serde_json = "1"
