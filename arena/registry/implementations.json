@@ -73,7 +73,12 @@
       "language": "Rust",
       "role": "Rust-library-ecosystem",
       "status": "ACTIVE",
-      "source": "https://github.com/RustCrypto/KEMs"
+      "source": "https://github.com/RustCrypto/KEMs",
+      "version": "ml-kem-0.3.2 + hqc-kem-0.1.0-rc.0",
+      "source_refs": [
+        "ml-kem@440768245bba59784b504269cb3087a6c21af45c",
+        "hqc-kem@1a50023ab1dcebaaf500646589c76a3f0efade1f"
+      ]
     },
     {
       "id": "pq-code-package",

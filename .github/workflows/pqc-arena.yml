@@ -366,10 +366,53 @@ jobs:
           name: pqc-arena-botan-3.13.0
           path: arena/results/ci/botan-3.13.0.jsonl
 
+  rustcrypto-kems-reference:
+    name: RustCrypto KEMs reference adapter
+    runs-on: ubuntu-latest
+    needs: validate-registry
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build pinned RustCrypto adapter
+        working-directory: arena/adapters/rustcrypto-kems
+        env:
+          RUSTFLAGS: "-Dwarnings"
+        run: |
+          cargo build --release
+      - name: Run RustCrypto adapter and validate schema
+        working-directory: arena/adapters/rustcrypto-kems
+        env:
+          ARENA_TARGET: x86_64-linux-gnu
+          ARENA_OS: Ubuntu
+          ARENA_CPU: github-actions
+          ARENA_OPT: release
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/arena/results/ci"
+          ARENA_COMPILER_VERSION="$(rustc --version)" ./target/release/nexusq-arena-rustcrypto-kems | tee "$GITHUB_WORKSPACE/arena/results/ci/rustcrypto-kems.jsonl"
+          cd "$GITHUB_WORKSPACE"
+          python3 -m pip install --disable-pip-version-check --no-input 'jsonschema==4.26.0'
+          python3 - <<'PY2'
+          import json
+          from pathlib import Path
+          import jsonschema
+          schema=json.loads(Path("arena/schemas/benchmark-result.schema.json").read_text())
+          rows=[json.loads(x) for x in Path("arena/results/ci/rustcrypto-kems.jsonl").read_text().splitlines() if x.startswith("{")]
+          assert len(rows)==6
+          for row in rows: jsonschema.Draft202012Validator(schema).validate(row)
+          assert {r["implementation"]["id"] for r in rows}=={"rustcrypto-kems"}
+          assert {(r["algorithm"]["id"],r["algorithm"]["parameter_set"],r["operation"]) for r in rows} == {
+              ("ml-kem","768","keygen"),("ml-kem","768","encaps"),("ml-kem","768","decaps"),
+              ("hqc","128","keygen"),("hqc","128","encaps"),("hqc","128","decaps")
+          }
+          PY2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pqc-arena-rustcrypto-kems
+          path: arena/results/ci/rustcrypto-kems.jsonl
+
   compare-schema:
     name: Validate normalized adapter output
     runs-on: ubuntu-latest
-    needs: [nexusq-reference, liboqs-reference, circl-reference, openssl-reference, aws-lc-reference, botan-reference]
+    needs: [nexusq-reference, liboqs-reference, circl-reference, openssl-reference, aws-lc-reference, botan-reference, rustcrypto-kems-reference]
     steps:
       - uses: actions/checkout@v4
       - name: Download NEXUS-Q artifact
@@ -402,6 +445,11 @@ jobs:
         with:
           name: pqc-arena-botan-3.13.0
           path: arena/results/ci/botan
+      - name: Download RustCrypto artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pqc-arena-rustcrypto-kems
+          path: arena/results/ci/rustcrypto-kems
       - name: Validate normalized JSONL against schema
         run: |
           python3 -m pip install --disable-pip-version-check --no-input 'jsonschema==4.26.0'
@@ -413,7 +461,7 @@ jobs:
           files = list(Path("arena/results/ci").rglob("*.jsonl"))
           assert files
           rows = [json.loads(x) for p in files for x in p.read_text().splitlines() if x.startswith("{")]
-          assert len(rows) == 51, len(rows)
+          assert len(rows) == 57, len(rows)
           for row in rows:
               jsonschema.Draft202012Validator(schema).validate(row)
           matrix = {(r["algorithm"]["id"], r["algorithm"]["parameter_set"], r["operation"]) for r in rows}
@@ -421,8 +469,9 @@ jobs:
               ("ml-kem", "768", "keygen"), ("ml-kem", "768", "encaps"), ("ml-kem", "768", "decaps"),
               ("ml-kem", "1024", "keygen"), ("ml-kem", "1024", "encaps"), ("ml-kem", "1024", "decaps"),
               ("ml-dsa", "65", "keygen"), ("ml-dsa", "65", "sign"), ("ml-dsa", "65", "verify"),
+              ("hqc", "128", "keygen"), ("hqc", "128", "encaps"), ("hqc", "128", "decaps"),
           }
           assert matrix == expected, matrix
-          assert {r["implementation"]["id"] for r in rows} == {"nexusq", "liboqs", "circl", "openssl", "aws-lc", "botan"}
+          assert {r["implementation"]["id"] for r in rows} == {"nexusq", "liboqs", "circl", "openssl", "aws-lc", "botan", "rustcrypto-kems"}
           print("normalized Arena schema/matrix: OK", len(rows))
           PY

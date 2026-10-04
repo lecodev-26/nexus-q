@@ -1,0 +1,15 @@
+[package]
+name = "nexusq-arena-rustcrypto-kems"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+
+[dependencies]
+ml-kem = { git = "https://github.com/RustCrypto/KEMs.git", rev = "440768245bba59784b504269cb3087a6c21af45c", features = ["getrandom"] }
+hqc-kem = { git = "https://github.com/RustCrypto/KEMs.git", rev = "1a50023ab1dcebaaf500646589c76a3f0efade1f" }
+kem = "0.3"
+rand = "0.10"
+serde_json = "1"
+
+[workspace]

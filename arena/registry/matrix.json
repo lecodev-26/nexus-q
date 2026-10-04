@@ -140,15 +140,17 @@
       "implementation": "rustcrypto-kems",
       "algorithm": "ml-kem-768",
       "tier": "primitive",
-      "status": "PLANNED",
-      "adapter": "arena/adapters/rustcrypto-kems"
+      "status": "CI_READY",
+      "adapter": "arena/adapters/rustcrypto-kems",
+      "ci": true
     },
     {
       "implementation": "rustcrypto-kems",
       "algorithm": "hqc",
       "tier": "primitive",
-      "status": "PLANNED",
-      "adapter": "arena/adapters/rustcrypto-kems"
+      "status": "CI_READY",
+      "adapter": "arena/adapters/rustcrypto-kems",
+      "ci": true
     },
     {
       "implementation": "boringssl",
