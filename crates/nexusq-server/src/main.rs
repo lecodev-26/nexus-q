@@ -18,6 +18,7 @@ use axum::{
     routing::{get, post},
 };
 use nexusq_core::{
+    crypto::sign::Signature,
     prelude::*,
     vault::{DestructionConfirmation, RevokeReason},
 };
@@ -84,6 +85,19 @@ struct DecryptRequest {
 }
 
 #[derive(serde::Deserialize)]
+struct SignRequest {
+    identity_id: String,
+    message: String,
+}
+
+#[derive(serde::Deserialize)]
+struct VerifyRequest {
+    identity_id: String,
+    message: String,
+    signature: String,
+}
+
+#[derive(serde::Deserialize)]
 struct CreateKeyRequest {
     algorithm: String,
     purpose: String,
@@ -105,6 +119,12 @@ struct KeyResponse {
 #[derive(Serialize)]
 struct DataResponse {
     data: String,
+}
+
+#[derive(Serialize)]
+struct AuditResponse {
+    verified: bool,
+    current_segment_events: Vec<nexusq_core::storage::AuditEvent>,
 }
 
 #[tokio::main]
@@ -140,33 +160,7 @@ async fn main() -> StdResult<(), Box<dyn std::error::Error>> {
         )),
     };
 
-    let public = Router::new()
-        .route("/health", get(health))
-        .route("/v1/health", get(health))
-        .route("/v1/version", get(version));
-
-    let protected = Router::new()
-        .route("/v1/vault/unlock", post(unlock))
-        .route("/v1/vault/lock", post(lock))
-        .route("/v1/vault/status", get(status))
-        .route("/v1/keys", get(list_keys).post(create_key))
-        .route("/v1/keys/{key_id}/rotate", post(rotate_key))
-        .route("/v1/keys/{key_id}/revoke", post(revoke_key))
-        .route("/v1/keys/{key_id}/destroy", post(destroy_key))
-        .route("/v1/encrypt", post(encrypt))
-        .route("/v1/decrypt", post(decrypt))
-        .layer(middleware::from_fn_with_state(
-            state.clone(),
-            auth_middleware,
-        ));
-
-    let app = public
-        .merge(protected)
-        .layer(ServiceBuilder::new().layer(middleware::from_fn_with_state(
-            state.clone(),
-            rate_limit_middleware,
-        )))
-        .with_state(state);
+    let app = build_app(state);
 
     let addr: SocketAddr = env::var("NEXUSQ_SERVER_ADDR")
         .unwrap_or_else(|_| DEFAULT_ADDR.into())
@@ -183,6 +177,40 @@ async fn main() -> StdResult<(), Box<dyn std::error::Error>> {
         .with_graceful_shutdown(shutdown_signal())
         .await?;
     Ok(())
+}
+
+fn build_app(state: AppState) -> Router {
+    let public = Router::new()
+        .route("/health", get(health))
+        .route("/v1/health", get(health))
+        .route("/v1/version", get(version));
+
+    let protected = Router::new()
+        .route("/v1/vault/unlock", post(unlock))
+        .route("/v1/vault/lock", post(lock))
+        .route("/v1/vault/status", get(status))
+        .route("/v1/keys", get(list_keys).post(create_key))
+        .route("/v1/keys/{key_id}/rotate", post(rotate_key))
+        .route("/v1/keys/{key_id}/revoke", post(revoke_key))
+        .route("/v1/keys/{key_id}/destroy", post(destroy_key))
+        .route("/v1/encrypt", post(encrypt))
+        .route("/v1/decrypt", post(decrypt))
+        .route("/v1/sign", post(sign))
+        .route("/v1/verify", post(verify))
+        .route("/v1/audit", get(audit))
+        .route("/v1/audit/verify", post(verify_audit))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            auth_middleware,
+        ));
+
+    public
+        .merge(protected)
+        .layer(ServiceBuilder::new().layer(middleware::from_fn_with_state(
+            state.clone(),
+            rate_limit_middleware,
+        )))
+        .with_state(state)
 }
 
 impl RateLimiter {
@@ -442,6 +470,76 @@ async fn encrypt(
     }))
 }
 
+async fn sign(
+    State(state): State<AppState>,
+    Json(input): Json<SignRequest>,
+) -> StdResult<Json<DataResponse>, ApiError> {
+    let vault = state.vault.lock().await;
+    let Some(session) = vault.session.as_ref() else {
+        return Err(ApiError::Locked);
+    };
+    let identity_id = input
+        .identity_id
+        .parse()
+        .map_err(|_| ApiError::BadRequest("invalid identity_id"))?;
+    let signature = session
+        .identity_sign(&identity_id, input.message.as_bytes())
+        .map_err(|err| ApiError::Core(err.into()))?;
+    Ok(Json(DataResponse {
+        data: base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            signature.to_bytes().as_slice(),
+        ),
+    }))
+}
+
+async fn verify(
+    State(state): State<AppState>,
+    Json(input): Json<VerifyRequest>,
+) -> StdResult<StatusCode, ApiError> {
+    let vault = state.vault.lock().await;
+    let Some(session) = vault.session.as_ref() else {
+        return Err(ApiError::Locked);
+    };
+    let identity_id = input
+        .identity_id
+        .parse()
+        .map_err(|_| ApiError::BadRequest("invalid identity_id"))?;
+    let signature_bytes =
+        base64::Engine::decode(&base64::engine::general_purpose::STANDARD, input.signature)
+            .map_err(|_| ApiError::BadRequest("invalid signature encoding"))?;
+    let signature = Signature::from_bytes(&signature_bytes)
+        .map_err(|_| ApiError::BadRequest("invalid signature"))?;
+    session
+        .identity_verify(&identity_id, input.message.as_bytes(), &signature)
+        .map_err(|err| ApiError::Core(err.into()))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn audit(State(state): State<AppState>) -> StdResult<Json<AuditResponse>, ApiError> {
+    let vault = state.vault.lock().await;
+    let Some(session) = vault.session.as_ref() else {
+        return Err(ApiError::Locked);
+    };
+    let events = session.audit_events().unwrap_or_default();
+    let verified = session.verify_audit().is_ok();
+    Ok(Json(AuditResponse {
+        verified,
+        current_segment_events: events,
+    }))
+}
+
+async fn verify_audit(State(state): State<AppState>) -> StdResult<StatusCode, ApiError> {
+    let vault = state.vault.lock().await;
+    let Some(session) = vault.session.as_ref() else {
+        return Err(ApiError::Locked);
+    };
+    session
+        .verify_audit()
+        .map_err(|err| ApiError::Core(err.into()))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 async fn decrypt(
     State(state): State<AppState>,
     Json(input): Json<DecryptRequest>,
@@ -512,5 +610,96 @@ mod tests {
         assert!(limiter.allow("client"));
         assert!(!limiter.allow("client"));
         assert!(limiter.allow("other-client"));
+    }
+
+    fn test_state(path: std::path::PathBuf) -> AppState {
+        AppState {
+            vault: Arc::new(Mutex::new(ServerVault {
+                vault: Vault::open(path).unwrap(),
+                session: None,
+            })),
+            auth: Arc::new(AuthConfig {
+                bearer_token: "test-token-with-at-least-32-bytes-long".to_owned(),
+            }),
+            limiter: Arc::new(RateLimiter::new(60, Duration::from_secs(60))),
+        }
+    }
+
+    #[tokio::test]
+    async fn http_health_auth_and_unlock_smoke() {
+        use axum::body::Body;
+        use axum::http::{Method, Request};
+        use tower::ServiceExt;
+
+        let dir = std::env::temp_dir().join(format!("nexusq-server-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let vault_path = dir.join("vault.nqx");
+        let vault =
+            Vault::create(&vault_path, b"test-password", Some("server-test".into())).unwrap();
+        drop(vault);
+
+        let app = build_app(test_state(vault_path.clone()));
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/v1/vault/status")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/v1/vault/unlock")
+                    .header(
+                        "authorization",
+                        "Bearer test-token-with-at-least-32-bytes-long",
+                    )
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"password":"test-password"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/v1/vault/status")
+                    .header(
+                        "authorization",
+                        "Bearer test-token-with-at-least-32-bytes-long",
+                    )
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

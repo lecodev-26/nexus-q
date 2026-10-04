@@ -534,6 +534,27 @@ impl Session {
         self.state
     }
 
+    /// Returns a snapshot of the current audit segment, when auditing is enabled.
+    #[must_use]
+    pub fn audit_events(&self) -> Option<Vec<crate::storage::AuditEvent>> {
+        self.audit
+            .borrow()
+            .as_ref()
+            .map(|log| log.current_events().to_vec())
+    }
+
+    /// Verifies the complete on-disk audit chain, when auditing is enabled.
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying audit database error if verification fails.
+    pub fn verify_audit(&self) -> Result<(), VaultError> {
+        match self.audit.borrow().as_ref() {
+            Some(log) => log.verify_all().map_err(VaultError::Audit),
+            None => Ok(()),
+        }
+    }
+
     /// Seals the session: reads remain allowed, writes are refused.
     ///
     /// # Errors

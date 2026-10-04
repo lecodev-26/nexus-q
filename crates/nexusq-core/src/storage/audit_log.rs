@@ -157,6 +157,12 @@ impl AuditLog {
         &self.current_path
     }
 
+    /// Returns the events in the current segment.
+    #[must_use]
+    pub fn current_events(&self) -> &[AuditEvent] {
+        self.current.events()
+    }
+
     /// Returns the number of segments currently on disk.
     ///
     /// # Errors

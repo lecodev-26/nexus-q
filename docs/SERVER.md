@@ -15,7 +15,9 @@ The server provides:
 - Per-client request rate limiting.
 - Vault lock/unlock/status.
 - Key listing, creation, rotation, revocation and destruction.
+- Identity signing and signature verification.
 - Envelope encryption and decryption.
+- Audit inspection and full audit-chain verification.
 - Core policy enforcement through nexusq-core.
 - Graceful shutdown on SIGINT.
 - Loopback-only TCP by default.
@@ -46,9 +48,9 @@ Remote deployments must terminate TLS before traffic reaches the service.
 A non-loopback bind without NEXUSQ_TRUSTED_TLS_TERMINATION=1 is rejected.
 
 The direct server currently implements bearer authentication. Native mTLS,
-signed-challenge authentication, Unix-domain-socket transport and the complete
-audit HTTP surface remain Phase 14 work items and are intentionally not
-represented as implemented.
+signed-challenge authentication and Unix-domain-socket transport remain future
+transport/authentication work. The current HTTP surface includes the audit
+inspection and audit-chain verification endpoints.
 
 ## Error handling
 
