@@ -153,6 +153,22 @@
       "ci": true
     },
     {
+      "implementation": "pq-code-package",
+      "algorithm": "ml-kem-768",
+      "tier": "primitive",
+      "status": "CI_READY",
+      "adapter": "arena/adapters/pq-code-package",
+      "ci": true
+    },
+    {
+      "implementation": "pq-code-package",
+      "algorithm": "ml-dsa-65",
+      "tier": "primitive",
+      "status": "CI_READY",
+      "adapter": "arena/adapters/pq-code-package",
+      "ci": true
+    },
+    {
       "implementation": "boringssl",
       "algorithm": "ml-kem-768",
       "tier": "primitive",
@@ -165,20 +181,6 @@
       "tier": "primitive",
       "status": "PLANNED",
       "adapter": "arena/adapters/boringssl"
-    },
-    {
-      "implementation": "pq-code-package",
-      "algorithm": "ml-kem-768",
-      "tier": "primitive",
-      "status": "PLANNED",
-      "adapter": "arena/adapters/pq-code-package"
-    },
-    {
-      "implementation": "pq-code-package",
-      "algorithm": "ml-dsa-65",
-      "tier": "primitive",
-      "status": "PLANNED",
-      "adapter": "arena/adapters/pq-code-package"
     }
   ]
 }

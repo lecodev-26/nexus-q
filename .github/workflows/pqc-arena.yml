@@ -48,7 +48,8 @@ jobs:
               ("liboqs", "ml-kem-768"), ("liboqs", "ml-kem-1024"), ("liboqs", "ml-dsa-65"),
               ("circl", "ml-kem-768"), ("circl", "ml-dsa-65"),
               ("openssl", "ml-kem-768"), ("openssl", "ml-dsa-65"), ("openssl", "slh-dsa"),
-              ("aws-lc", "ml-kem-768"), ("aws-lc", "ml-dsa-65")
+              ("aws-lc", "ml-kem-768"), ("aws-lc", "ml-dsa-65"),
+              ("pq-code-package", "ml-kem-768"), ("pq-code-package", "ml-dsa-65")
           }
           implementations = {x["id"] for x in json.loads(Path("arena/registry/implementations.json").read_text())["implementations"]}
           assert implementations == {
@@ -409,10 +410,69 @@ jobs:
           name: pqc-arena-rustcrypto-kems
           path: arena/results/ci/rustcrypto-kems.jsonl
 
+  pq-code-package-reference:
+    name: PQ Code Package native reference adapters
+    runs-on: ubuntu-latest
+    needs: validate-registry
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native build dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential
+      - name: Fetch pinned PQ Code Package sources
+        run: |
+          git clone --depth 1 --branch v2.0.0 https://github.com/pq-code-package/mlkem-native.git .arena-mlkem-native
+          test "$(git -C .arena-mlkem-native describe --tags --exact-match HEAD)" = "v2.0.0"
+          git clone --depth 1 --branch v1.0.0-beta2 https://github.com/pq-code-package/mldsa-native.git .arena-mldsa-native
+          test "$(git -C .arena-mldsa-native describe --tags --exact-match HEAD)" = "v1.0.0-beta2"
+      - name: Build pinned native libraries
+        run: |
+          make -C .arena-mlkem-native/examples/monolithic_build_native build
+          make -C .arena-mldsa-native/examples/monolithic_build_native build
+      - name: Compile Arena adapter
+        run: |
+          cc -std=c11 -O3 -Wall -Wextra -Werror \
+            -I"$GITHUB_WORKSPACE/.arena-mlkem-native/examples/monolithic_build_native/mlkem_native" \
+            -I"$GITHUB_WORKSPACE/.arena-mldsa-native/examples/monolithic_build_native/mldsa_native" \
+            arena/adapters/pq-code-package/runner.c \
+            "$GITHUB_WORKSPACE/.arena-mlkem-native/examples/monolithic_build_native/build/libmlkem768.a" \
+            "$GITHUB_WORKSPACE/.arena-mldsa-native/examples/monolithic_build_native/build/libmldsa65.a" \
+            -o arena-pq-code-package-runner
+      - name: Run adapter and validate JSONL
+        env:
+          PQCP_VERSION: "mlkem-native-v2.0.0 + mldsa-native-v1.0.0-beta2"
+          PQCP_COMMIT: "mlkem-native:v2.0.0;mldsa-native:v1.0.0-beta2"
+          ARENA_OPT: release
+          ARENA_TARGET: x86_64-linux-gnu
+          ARENA_OS: Ubuntu
+          ARENA_CPU: github-actions
+          ARENA_COMPILER: cc
+        run: |
+          mkdir -p arena/results/ci
+          ARENA_COMPILER_VERSION="$(cc --version | head -1)" ./arena-pq-code-package-runner | tee arena/results/ci/pq-code-package.jsonl
+          python3 -m pip install --disable-pip-version-check --no-input 'jsonschema==4.26.0'
+          python3 - <<'PY2'
+          import json
+          from pathlib import Path
+          import jsonschema
+          schema=json.loads(Path("arena/schemas/benchmark-result.schema.json").read_text())
+          rows=[json.loads(x) for x in Path("arena/results/ci/pq-code-package.jsonl").read_text().splitlines() if x.startswith("{")]
+          assert len(rows)==6
+          for row in rows: jsonschema.Draft202012Validator(schema).validate(row)
+          assert {r["implementation"]["id"] for r in rows}=={"pq-code-package"}
+          assert {(r["algorithm"]["id"],r["algorithm"]["parameter_set"],r["operation"]) for r in rows} == {
+              ("ml-kem","768","keygen"),("ml-kem","768","encaps"),("ml-kem","768","decaps"),
+              ("ml-dsa","65","keygen"),("ml-dsa","65","sign"),("ml-dsa","65","verify")
+          }
+          PY2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pqc-arena-pq-code-package
+          path: arena/results/ci/pq-code-package.jsonl
+
   compare-schema:
     name: Validate normalized adapter output
     runs-on: ubuntu-latest
-    needs: [nexusq-reference, liboqs-reference, circl-reference, openssl-reference, aws-lc-reference, botan-reference, rustcrypto-kems-reference]
+    needs: [nexusq-reference, liboqs-reference, circl-reference, openssl-reference, aws-lc-reference, botan-reference, rustcrypto-kems-reference, pq-code-package-reference]
     steps:
       - uses: actions/checkout@v4
       - name: Download NEXUS-Q artifact
@@ -450,6 +510,11 @@ jobs:
         with:
           name: pqc-arena-rustcrypto-kems
           path: arena/results/ci/rustcrypto-kems
+      - name: Download PQ Code Package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pqc-arena-pq-code-package
+          path: arena/results/ci/pq-code-package
       - name: Validate normalized JSONL against schema
         run: |
           python3 -m pip install --disable-pip-version-check --no-input 'jsonschema==4.26.0'
@@ -461,7 +526,7 @@ jobs:
           files = list(Path("arena/results/ci").rglob("*.jsonl"))
           assert files
           rows = [json.loads(x) for p in files for x in p.read_text().splitlines() if x.startswith("{")]
-          assert len(rows) == 57, len(rows)
+          assert len(rows) == 63, len(rows)
           for row in rows:
               jsonschema.Draft202012Validator(schema).validate(row)
           matrix = {(r["algorithm"]["id"], r["algorithm"]["parameter_set"], r["operation"]) for r in rows}

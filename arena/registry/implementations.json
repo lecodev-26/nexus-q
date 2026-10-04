@@ -86,7 +86,12 @@
       "language": "C",
       "role": "high-assurance-native-ecosystem",
       "status": "ACTIVE",
-      "source": "https://github.com/pq-code-package/"
+      "version": "mlkem-native-v2.0.0 + mldsa-native-v1.0.0-beta2",
+      "source": "https://github.com/pq-code-package/",
+      "source_refs": [
+        "mlkem-native@v2.0.0",
+        "mldsa-native@v1.0.0-beta2"
+      ]
     }
   ]
 }
