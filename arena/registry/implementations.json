@@ -63,7 +63,9 @@
       "language": "C++",
       "role": "general-purpose",
       "status": "ACTIVE",
-      "source": "https://botan.randombit.net/"
+      "source": "https://botan.randombit.net/",
+      "version": "3.13.0",
+      "source_ref": "3.13.0"
     },
     {
       "id": "rustcrypto-kems",

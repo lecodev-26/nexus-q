@@ -124,15 +124,17 @@
       "implementation": "botan",
       "algorithm": "ml-kem-768",
       "tier": "primitive",
-      "status": "PLANNED",
-      "adapter": "arena/adapters/botan"
+      "status": "CI_READY",
+      "adapter": "arena/adapters/botan",
+      "ci": true
     },
     {
       "implementation": "botan",
       "algorithm": "ml-dsa-65",
       "tier": "primitive",
-      "status": "PLANNED",
-      "adapter": "arena/adapters/botan"
+      "status": "CI_READY",
+      "adapter": "arena/adapters/botan",
+      "ci": true
     },
     {
       "implementation": "rustcrypto-kems",
