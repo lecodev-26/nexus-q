@@ -57,10 +57,10 @@ impl MlDsa65KeyPair {
 
     /// Reconstruct from the 32-byte FIPS signing seed.
     pub fn from_secret_key(bytes: &[u8]) -> Result<Self, PqSignError> {
-        let seed: [u8; ML_DSA_65_SECRET_KEY_LEN] =
-            bytes.try_into().map_err(|_| PqSignError::InvalidKey)?;
+        let seed: Zeroizing<[u8; ML_DSA_65_SECRET_KEY_LEN]> =
+            Zeroizing::new(bytes.try_into().map_err(|_| PqSignError::InvalidKey)?);
         Ok(Self {
-            signing: ml_dsa::SigningKey::<MlDsa65>::new(&seed.into()),
+            signing: ml_dsa::SigningKey::<MlDsa65>::new(&(*seed).into()),
         })
     }
 
@@ -112,8 +112,8 @@ impl SlhDsaShake128fKeyPair {
     /// Generate a new key pair.
     #[must_use]
     pub fn generate() -> Self {
-        let mut seed = [0u8; 48];
-        getrandom::fill(&mut seed).expect("OS RNG failed");
+        let mut seed = Zeroizing::new([0u8; 48]);
+        getrandom::fill(seed.as_mut()).expect("OS RNG failed");
         Self {
             signing: SlhSigningKey::<Shake128f>::slh_keygen_internal(
                 &seed[..16],
@@ -125,8 +125,9 @@ impl SlhDsaShake128fKeyPair {
 
     /// Reconstruct from the serialized FIPS private key.
     pub fn from_secret_key(bytes: &[u8]) -> Result<Self, PqSignError> {
-        let signing =
-            SlhSigningKey::<Shake128f>::try_from(bytes).map_err(|_| PqSignError::InvalidKey)?;
+        let secret = Zeroizing::new(bytes.to_vec());
+        let signing = SlhSigningKey::<Shake128f>::try_from(secret.as_slice())
+            .map_err(|_| PqSignError::InvalidKey)?;
         Ok(Self { signing })
     }
 

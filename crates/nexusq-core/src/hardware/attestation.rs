@@ -7,6 +7,8 @@
 //!
 //! See `docs/ARCHITECTURE.md` §6.4.
 
+use subtle::ConstantTimeEq as _;
+
 use super::HardwareError;
 
 /// Cryptographic digest of a measured component.
@@ -180,7 +182,7 @@ pub fn verify_report_against_policy(
 
     if let Some(expected) = &policy.expected_nonce {
         match &report.nonce {
-            Some(got) if got == expected => {}
+            Some(got) if got.len() == expected.len() && bool::from(got.ct_eq(expected)) => {}
             _ => return Err(AttestationError::NonceMismatch),
         }
     }

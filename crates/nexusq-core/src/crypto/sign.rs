@@ -94,8 +94,8 @@ impl SigningKey {
     ///
     /// Returns [`SignError::InvalidSigningKey`] if the length is wrong.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, SignError> {
-        let arr: [u8; SIGNING_KEY_LEN] =
-            bytes.try_into().map_err(|_| SignError::InvalidSigningKey)?;
+        let arr: Zeroizing<[u8; SIGNING_KEY_LEN]> =
+            Zeroizing::new(bytes.try_into().map_err(|_| SignError::InvalidSigningKey)?);
         Ok(Self(DalekSigningKey::from_bytes(&arr)))
     }
 
