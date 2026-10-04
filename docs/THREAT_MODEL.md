@@ -460,3 +460,10 @@ process as code changes.
 ---
 
 *End of document.*
+
+
+## Threat model v2 hardening status
+
+The current implementation now tracks explicit security invariants as executable tests: malformed vault/envelope input must be rejected, wrong passwords must not unlock, inactive/revoked keys must not perform protected operations, and session sealing must deny writes. Fuzz targets cover vault and envelope parsing. These controls reduce implementation risk but do not constitute an independent cryptographic audit.
+
+The supported PQ primitives are ML-KEM-768/1024 hybridized with X25519 for key establishment, ML-DSA-65 for signatures, and SLH-DSA-SHAKE-128f as a hash-based signature alternative. Algorithm agility is preserved through explicit versioned identifiers.

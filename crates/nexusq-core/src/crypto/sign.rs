@@ -1,8 +1,8 @@
 //! Digital signatures.
 //!
-//! Ed25519 (RFC 8032) is the only algorithm exposed here. It is mature,
-//! widely deployed and audited. Post-quantum signatures (ML-DSA) are
-//! deferred until the RustCrypto crate stabilizes; see ADR 0001.
+//! Ed25519 (RFC 8032) is the classical signature primitive.
+//! Post-quantum signatures are exposed separately in `crypto::pq_sign` so
+//! the stable Ed25519 API remains unchanged.
 //!
 //! Two types are used:
 //!

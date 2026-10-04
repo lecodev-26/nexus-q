@@ -1758,6 +1758,20 @@ fn generate_material<S: RandomSource>(
             let public = pair.public_key_bytes();
             (secret, Some(public))
         }
+        Algorithm::MlKem1024 => {
+            let pair = crate::crypto::kem_1024::generate();
+            let secret = pair.secret_key_bytes();
+            let public = pair.public_key_bytes();
+            (secret, Some(public))
+        }
+        Algorithm::MlDsa65 => {
+            let pair = crate::crypto::pq_sign::MlDsa65KeyPair::generate();
+            (pair.secret_key(), Some(pair.public_key()))
+        }
+        Algorithm::SlhDsaShake128f => {
+            let pair = crate::crypto::pq_sign::SlhDsaShake128fKeyPair::generate();
+            (pair.secret_key(), Some(pair.public_key()))
+        }
         Algorithm::Aes256Gcm | Algorithm::ChaCha20Poly1305 => {
             let mut buf = Zeroizing::new(vec![0u8; 32]);
             source.fill_bytes(buf.as_mut())?;

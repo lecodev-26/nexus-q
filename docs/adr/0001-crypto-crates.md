@@ -38,9 +38,9 @@ Concretely:
 | AEAD              | `aes-gcm`, `chacha20poly1305`              | Mature        |
 | KEM (PQC)         | `ml-kem` 0.3.x + `x25519-dalek`            | Acceptable    |
 | Signatures        | `ed25519-dalek`                            | Mature        |
-| Signatures (PQC)  | `ml-dsa` — **deferred**                    | Too early     |
+| Signatures (PQC)  | `ml-dsa` — **implemented**                 | FIPS 204 final |
 
-The PQC signature crate (`ml-dsa`) is deferred to the end of Fase 2.
+The PQC signature crate (`ml-dsa`) is now integrated for ML-DSA-65 after FIPS 204 reached final status.
 We do not block the rest of the crypto core on it. Once `ml-dsa` reaches
 0.2.x or a viable alternative (`pqcrypto-mldsa`, `libcrux-ml-dsa`)
 proves stable, we add it as a follow-up.
@@ -104,7 +104,7 @@ Findings:
 - Downstream projects that depend on `ml-dsa` pin exact versions
   (`=0.1.1`) because the API is documented as "still evolving".
 
-**Decision stands: keep ML-DSA deferred.**
+**Decision updated: ML-DSA-65 is integrated; SLH-DSA-SHAKE-128f is integrated as the hash-based alternative.**
 
 Revisit conditions:
 

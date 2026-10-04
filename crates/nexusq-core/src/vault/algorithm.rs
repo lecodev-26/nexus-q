@@ -34,8 +34,14 @@ pub enum Category {
 pub enum Algorithm {
     /// ML-KEM-768 (FIPS 203). Post-quantum key encapsulation.
     MlKem768,
+    /// ML-KEM-1024 (FIPS 203). Post-quantum key encapsulation.
+    MlKem1024,
     /// Ed25519 (RFC 8032). Digital signatures.
     Ed25519,
+    /// ML-DSA-65 (FIPS 204). Post-quantum digital signatures.
+    MlDsa65,
+    /// SLH-DSA-SHAKE-128f (FIPS 205). Hash-based post-quantum signatures.
+    SlhDsaShake128f,
     /// AES-256-GCM (NIST SP 800-38D). Authenticated encryption.
     Aes256Gcm,
     /// ChaCha20-Poly1305 (RFC 8439). Authenticated encryption.
@@ -52,7 +58,10 @@ impl Algorithm {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::MlKem768 => "mlkem768",
+            Self::MlKem1024 => "mlkem1024",
             Self::Ed25519 => "ed25519",
+            Self::MlDsa65 => "mldsa65",
+            Self::SlhDsaShake128f => "slhdsa-shake128f",
             Self::Aes256Gcm => "aes256gcm",
             Self::ChaCha20Poly1305 => "chacha20poly1305",
         }
@@ -62,8 +71,8 @@ impl Algorithm {
     #[must_use]
     pub const fn category(self) -> Category {
         match self {
-            Self::MlKem768 => Category::Kem,
-            Self::Ed25519 => Category::Signature,
+            Self::MlKem768 | Self::MlKem1024 => Category::Kem,
+            Self::Ed25519 | Self::MlDsa65 | Self::SlhDsaShake128f => Category::Signature,
             Self::Aes256Gcm | Self::ChaCha20Poly1305 => Category::Aead,
         }
     }
@@ -73,8 +82,13 @@ impl Algorithm {
     #[must_use]
     pub const fn public_key_len(self) -> Option<usize> {
         match self {
-            Self::MlKem768 => Some(1184),
+            Self::MlKem768 => Some(1184 + 32),
+            Self::MlKem1024 => Some(1568 + 32),
             Self::Ed25519 => Some(32),
+            Self::MlDsa65 => Some(crate::crypto::pq_sign::ML_DSA_65_PUBLIC_KEY_LEN),
+            Self::SlhDsaShake128f => {
+                Some(crate::crypto::pq_sign::SLH_DSA_SHAKE_128F_PUBLIC_KEY_LEN)
+            }
             Self::Aes256Gcm | Self::ChaCha20Poly1305 => None,
         }
     }
@@ -83,8 +97,12 @@ impl Algorithm {
     #[must_use]
     pub const fn secret_key_len(self) -> Option<usize> {
         match self {
-            Self::MlKem768 => Some(2400),
+            Self::MlKem768 | Self::MlKem1024 => Some(96),
             Self::Ed25519 => Some(32),
+            Self::MlDsa65 => Some(crate::crypto::pq_sign::ML_DSA_65_SECRET_KEY_LEN),
+            Self::SlhDsaShake128f => {
+                Some(crate::crypto::pq_sign::SLH_DSA_SHAKE_128F_SECRET_KEY_LEN)
+            }
             Self::Aes256Gcm | Self::ChaCha20Poly1305 => Some(32),
         }
     }
@@ -97,8 +115,8 @@ impl Algorithm {
     #[must_use]
     pub const fn allowed_purposes(self) -> &'static [Purpose] {
         match self {
-            Self::MlKem768 => &[Purpose::KeyAgreement],
-            Self::Ed25519 => &[Purpose::Sign],
+            Self::MlKem768 | Self::MlKem1024 => &[Purpose::KeyAgreement],
+            Self::Ed25519 | Self::MlDsa65 | Self::SlhDsaShake128f => &[Purpose::Sign],
             Self::Aes256Gcm => &[Purpose::Encrypt, Purpose::Decrypt, Purpose::Wrap],
             Self::ChaCha20Poly1305 => &[Purpose::Encrypt, Purpose::Decrypt],
         }
@@ -109,7 +127,10 @@ impl Algorithm {
     pub const fn all() -> &'static [Algorithm] {
         &[
             Algorithm::MlKem768,
+            Algorithm::MlKem1024,
             Algorithm::Ed25519,
+            Algorithm::MlDsa65,
+            Algorithm::SlhDsaShake128f,
             Algorithm::Aes256Gcm,
             Algorithm::ChaCha20Poly1305,
         ]
@@ -180,7 +201,10 @@ mod tests {
 
     #[test]
     fn public_key_lengths_match_specs() {
-        assert_eq!(Algorithm::MlKem768.public_key_len(), Some(1184));
+        assert_eq!(Algorithm::MlKem768.public_key_len(), Some(1216));
+        assert_eq!(Algorithm::MlKem1024.public_key_len(), Some(1600));
+        assert_eq!(Algorithm::MlDsa65.public_key_len(), Some(1952));
+        assert_eq!(Algorithm::SlhDsaShake128f.public_key_len(), Some(32));
         assert_eq!(Algorithm::Ed25519.public_key_len(), Some(32));
         assert_eq!(Algorithm::Aes256Gcm.public_key_len(), None);
         assert_eq!(Algorithm::ChaCha20Poly1305.public_key_len(), None);
@@ -188,7 +212,10 @@ mod tests {
 
     #[test]
     fn secret_key_lengths_match_specs() {
-        assert_eq!(Algorithm::MlKem768.secret_key_len(), Some(2400));
+        assert_eq!(Algorithm::MlKem768.secret_key_len(), Some(96));
+        assert_eq!(Algorithm::MlKem1024.secret_key_len(), Some(96));
+        assert_eq!(Algorithm::MlDsa65.secret_key_len(), Some(32));
+        assert_eq!(Algorithm::SlhDsaShake128f.secret_key_len(), Some(64));
         assert_eq!(Algorithm::Ed25519.secret_key_len(), Some(32));
         assert_eq!(Algorithm::Aes256Gcm.secret_key_len(), Some(32));
         assert_eq!(Algorithm::ChaCha20Poly1305.secret_key_len(), Some(32));
@@ -199,6 +226,9 @@ mod tests {
         // These strings appear in KeyId and in serialized metadata.
         // Changing any of them is a breaking change.
         assert_eq!(Algorithm::MlKem768.as_str(), "mlkem768");
+        assert_eq!(Algorithm::MlKem1024.as_str(), "mlkem1024");
+        assert_eq!(Algorithm::MlDsa65.as_str(), "mldsa65");
+        assert_eq!(Algorithm::SlhDsaShake128f.as_str(), "slhdsa-shake128f");
         assert_eq!(Algorithm::Ed25519.as_str(), "ed25519");
         assert_eq!(Algorithm::Aes256Gcm.as_str(), "aes256gcm");
         assert_eq!(Algorithm::ChaCha20Poly1305.as_str(), "chacha20poly1305");
@@ -215,6 +245,7 @@ mod tests {
     #[test]
     fn parse_rejects_case_variants() {
         assert!("MLKEM768".parse::<Algorithm>().is_err());
+        assert!("mldsa65".parse::<Algorithm>().is_ok());
         assert!("Ed25519".parse::<Algorithm>().is_err());
     }
 
@@ -238,8 +269,11 @@ mod tests {
     #[test]
     fn purpose_matches_algorithm_consistently() {
         assert!(Purpose::Sign.is_allowed_for(Algorithm::Ed25519));
+        assert!(Purpose::Sign.is_allowed_for(Algorithm::MlDsa65));
+        assert!(Purpose::Sign.is_allowed_for(Algorithm::SlhDsaShake128f));
         assert!(!Purpose::Sign.is_allowed_for(Algorithm::MlKem768));
         assert!(Purpose::KeyAgreement.is_allowed_for(Algorithm::MlKem768));
+        assert!(Purpose::KeyAgreement.is_allowed_for(Algorithm::MlKem1024));
         assert!(!Purpose::KeyAgreement.is_allowed_for(Algorithm::Ed25519));
         assert!(Purpose::Wrap.is_allowed_for(Algorithm::Aes256Gcm));
         assert!(!Purpose::Wrap.is_allowed_for(Algorithm::ChaCha20Poly1305));

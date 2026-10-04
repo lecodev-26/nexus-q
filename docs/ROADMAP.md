@@ -162,7 +162,7 @@ workspace.
 - KDF wrappers (Argon2id, HKDF)
 - AEAD wrappers (AES-256-GCM, ChaCha20-Poly1305)
 - KEM wrappers (ML-KEM-768, ML-KEM-1024, hybrid with X25519)
-- Signature wrappers (Ed25519 currently implemented; ML-DSA/SLH-DSA planned)
+- Signature wrappers (Ed25519, ML-DSA-65, SLH-DSA-SHAKE-128f implemented)
 - Key serialization / deserialization
 - Zeroization on drop for all secret types
 - Unit tests per primitive
@@ -698,7 +698,7 @@ channels.
 
 **Definition of v1.0:** all of the following must be true:
 
-- ✓ Crypto core is implemented and tested; v1.0 additionally requires the planned PQ signature implementations (ML-DSA/SLH-DSA) to be completed
+- ✓ Crypto core is implemented and tested, including ML-KEM-1024, ML-DSA-65 and SLH-DSA-SHAKE-128f
 - ✓ Key management (lifecycle, rotation, revocation, destruction)
 - ✓ Secure vault (format F-01, atomic writes, crash-safe)
 - ✓ Envelope encryption (format F-02)

@@ -54,7 +54,7 @@ allowed in the core.
 | KDF            | Deriving keys from passwords / key material | Argon2id, HKDF     |
 | AEAD           | Symmetric authenticated encryption          | AES-256-GCM, ChaCha20-Poly1305 |
 | KEM            | Post-quantum key encapsulation              | ML-KEM (Kyber)      |
-| Signatures     | Digital signatures                          | Ed25519 (implemented); ML-DSA and SLH-DSA (planned) |
+| Signatures     | Digital signatures                          | Ed25519, ML-DSA-65, SLH-DSA-SHAKE-128f (implemented) |
 
 Anything outside these families (e.g., raw RSA, ECDSA on arbitrary curves,
 custom MACs) is forbidden.
@@ -227,7 +227,7 @@ SP 800-38D), ECB in any form, any custom mode.
 - Formerly known as CRYSTALS-Kyber.
 - Security level currently implemented:
   - ML-KEM-768 (NIST level 3) — default
-  - ML-KEM-1024 is specified for future support but is not currently exposed
+  - ML-KEM-1024 is implemented as a hybrid ML-KEM-1024 + X25519 construction
 - Used for: establishing session keys, wrapping data keys, any
   public-key-based key agreement.
 - Public key size: 1184 bytes (ML-KEM-768), 1568 bytes (ML-KEM-1024)
@@ -253,7 +253,7 @@ SP 800-38D), ECB in any form, any custom mode.
 
 ### 4.6 Digital signatures
 
-**Planned primary (PQC):** ML-DSA (FIPS 204)
+**Implemented primary (PQC):** ML-DSA-65 (FIPS 204)
 
 - Formerly CRYSTALS-Dilithium.
 - Security levels:
@@ -263,7 +263,7 @@ SP 800-38D), ECB in any form, any custom mode.
 - Public key: 1952 bytes (ML-DSA-65), 2592 bytes (ML-DSA-87)
 - Signature: 3309 bytes (ML-DSA-65), 4627 bytes (ML-DSA-87)
 
-**Planned secondary (PQC, stateless hash-based):** SLH-DSA (FIPS 205)
+**Implemented secondary (PQC, stateless hash-based):** SLH-DSA-SHAKE-128f (FIPS 205)
 
 - Formerly SPHINCS+.
 - Variants: SLH-DSA-SHA2-128s, SLH-DSA-SHA2-128f, and larger.
@@ -320,9 +320,9 @@ As of Phase 13, the code actually exposes:
 | ML-KEM-768 | Implemented |
 | ML-KEM-768 + X25519 hybrid | Implemented |
 | Ed25519 | Implemented |
-| ML-DSA | Planned |
-| SLH-DSA | Planned |
-| ML-KEM-1024 | Planned |
+| ML-DSA-65 | Implemented |
+| SLH-DSA-SHAKE-128f | Implemented |
+| ML-KEM-1024 + X25519 | Implemented |
 | BLAKE2 | Not exposed by the current public crypto module |
 
 This matrix prevents the design specification from being mistaken for a
@@ -407,7 +407,7 @@ Examples:
 | Argon2id iterations| 3                      | |
 | HKDF output        | 32 bytes               | Per derived key |
 | KEM (default)      | ML-KEM-768 + X25519    | Hybrid |
-| Signature default  | Ed25519 (current)      | ML-DSA-65 is planned |
+| Signature default  | Ed25519 (current)      | ML-DSA-65 is implemented |
 | Random salt        | 128–256 bits           | Unique per use |
 
 ---

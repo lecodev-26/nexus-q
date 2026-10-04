@@ -9,6 +9,8 @@ pub mod aead;
 pub mod hash;
 pub mod kdf;
 pub mod kem;
+pub mod kem_1024;
+pub mod pq_sign;
 pub mod random;
 pub mod sign;
 

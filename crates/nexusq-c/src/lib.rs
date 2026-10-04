@@ -20,6 +20,7 @@ use nexusq_core::prelude::*;
 /// freed by the caller.
 #[unsafe(no_mangle)]
 pub extern "C" fn nexusq_version() -> *const c_char {
+    clear_last_error();
     // A static CStr built once at compile time.
     const VERSION: &str = concat!(env!("CARGO_PKG_VERSION"), "\0");
     VERSION.as_ptr().cast()
@@ -49,6 +50,10 @@ pub unsafe extern "C" fn nexusq_string_free(s: *mut c_char) {
 thread_local! {
     static LAST_ERROR: std::cell::RefCell<Option<CString>> =
         const { std::cell::RefCell::new(None) };
+}
+
+fn clear_last_error() {
+    LAST_ERROR.with(|slot| *slot.borrow_mut() = None);
 }
 
 fn set_last_error(message: String) {
@@ -105,6 +110,7 @@ pub unsafe extern "C" fn nexusq_vault_create(
     password: *const c_char,
     label: *const c_char,
 ) -> i32 {
+    clear_last_error();
     let Some(path) = (unsafe { cstr_to_str(path) }) else {
         set_last_error("path is null or not valid UTF-8".into());
         return -1;
@@ -142,6 +148,7 @@ pub unsafe extern "C" fn nexusq_vault_create(
 /// `path` must be a valid NUL-terminated C string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nexusq_vault_format_version(path: *const c_char) -> i32 {
+    clear_last_error();
     let Some(path) = (unsafe { cstr_to_str(path) }) else {
         set_last_error("path is null or not valid UTF-8".into());
         return -1;
@@ -198,5 +205,28 @@ mod tests {
     #[test]
     fn cstr_to_str_handles_null() {
         assert_eq!(unsafe { cstr_to_str(std::ptr::null()) }, None);
+    }
+
+    #[test]
+    fn cstr_to_str_rejects_invalid_utf8() {
+        let bytes = [0xffu8, 0x00];
+        assert_eq!(unsafe { cstr_to_str(bytes.as_ptr().cast()) }, None);
+    }
+
+    #[test]
+    fn null_vault_create_is_rejected_without_panicking() {
+        let rc =
+            unsafe { nexusq_vault_create(std::ptr::null(), std::ptr::null(), std::ptr::null()) };
+        assert_eq!(rc, -1);
+        assert!(!nexusq_last_error_message().is_null());
+    }
+
+    #[test]
+    fn successful_call_clears_previous_error() {
+        let _ =
+            unsafe { nexusq_vault_create(std::ptr::null(), std::ptr::null(), std::ptr::null()) };
+        assert!(!nexusq_last_error_message().is_null());
+        assert!(!nexusq_version().is_null());
+        assert!(nexusq_last_error_message().is_null());
     }
 }

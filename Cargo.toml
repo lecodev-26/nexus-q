@@ -37,9 +37,12 @@ hkdf = "0.13.0-rc.5"
 aes-gcm = "0.11.0-rc.5"
 chacha20poly1305 = "0.11.0-rc.5"
 ml-kem = { version = "0.3", features = ["getrandom", "zeroize"] }
+ml-dsa = "0.1.1"
+slh-dsa = "0.2.0-rc.5"
 x25519-dalek = { version = "3", features = ["getrandom", "static_secrets", "zeroize"] }
 ed25519-dalek = { version = "3", features = ["rand_core", "zeroize"] }
 rand_core = { version = "0.9", features = ["os_rng"] }
+hybrid-array = "0.4"
 
 getrandom = "0.3"
 clap = { version = "4", features = ["derive", "env", "wrap_help"] }
