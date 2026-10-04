@@ -103,15 +103,17 @@
       "implementation": "circl",
       "algorithm": "ml-kem-768",
       "tier": "primitive",
-      "status": "PLANNED",
-      "adapter": "arena/adapters/circl"
+      "status": "CI_READY",
+      "adapter": "arena/adapters/circl",
+      "ci": true
     },
     {
       "implementation": "circl",
       "algorithm": "ml-dsa-65",
       "tier": "primitive",
-      "status": "PLANNED",
-      "adapter": "arena/adapters/circl"
+      "status": "CI_READY",
+      "adapter": "arena/adapters/circl",
+      "ci": true
     },
     {
       "implementation": "botan",

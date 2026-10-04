@@ -25,7 +25,9 @@
       "language": "Go",
       "role": "general-purpose",
       "status": "ACTIVE",
-      "source": "https://github.com/cloudflare/circl"
+      "source": "https://github.com/cloudflare/circl",
+      "version": "1.6.4",
+      "commit": "901199c"
     },
     {
       "id": "openssl",
