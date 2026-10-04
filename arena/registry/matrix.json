@@ -68,22 +68,25 @@
       "implementation": "openssl",
       "algorithm": "ml-kem-768",
       "tier": "primitive",
-      "status": "PLANNED",
-      "adapter": "arena/adapters/openssl"
+      "status": "CI_READY",
+      "adapter": "arena/adapters/openssl",
+      "ci": true
     },
     {
       "implementation": "openssl",
       "algorithm": "ml-dsa-65",
       "tier": "primitive",
-      "status": "PLANNED",
-      "adapter": "arena/adapters/openssl"
+      "status": "CI_READY",
+      "adapter": "arena/adapters/openssl",
+      "ci": true
     },
     {
       "implementation": "openssl",
       "algorithm": "slh-dsa",
       "tier": "primitive",
-      "status": "PLANNED",
-      "adapter": "arena/adapters/openssl"
+      "status": "CI_READY",
+      "adapter": "arena/adapters/openssl",
+      "ci": true
     },
     {
       "implementation": "aws-lc",

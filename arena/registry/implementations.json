@@ -35,7 +35,9 @@
       "language": "C",
       "role": "general-purpose-and-protocol",
       "status": "ACTIVE",
-      "source": "https://openssl-library.org/"
+      "source": "https://openssl-library.org/",
+      "version": "3.5.9",
+      "source_ref": "openssl-3.5.9"
     },
     {
       "id": "aws-lc",

@@ -46,7 +46,8 @@ jobs:
           }
           assert {(x["implementation"], x["algorithm"]) for x in ci_ready} == {
               ("liboqs", "ml-kem-768"), ("liboqs", "ml-kem-1024"), ("liboqs", "ml-dsa-65"),
-              ("circl", "ml-kem-768"), ("circl", "ml-dsa-65")
+              ("circl", "ml-kem-768"), ("circl", "ml-dsa-65"),
+              ("openssl", "ml-kem-768"), ("openssl", "ml-dsa-65"), ("openssl", "slh-dsa")
           }
           implementations = {x["id"] for x in json.loads(Path("arena/registry/implementations.json").read_text())["implementations"]}
           assert implementations == {
@@ -198,10 +199,66 @@ jobs:
           name: pqc-arena-circl-1.6.4
           path: arena/results/ci/circl-1.6.4.jsonl
 
+  openssl-reference:
+    name: OpenSSL 3.5.9 reference adapter
+    runs-on: ubuntu-latest
+    needs: validate-registry
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install OpenSSL build dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential perl
+      - name: Fetch pinned OpenSSL release
+        run: |
+          git clone --depth 1 --branch openssl-3.5.9 https://github.com/openssl/openssl.git .arena-openssl
+          test "$(git -C .arena-openssl describe --tags --exact-match HEAD)" = "openssl-3.5.9"
+      - name: Build OpenSSL
+        run: |
+          cd .arena-openssl
+          ./Configure --prefix="$GITHUB_WORKSPACE/.arena-openssl-install" --openssldir="$GITHUB_WORKSPACE/.arena-openssl-install/ssl"
+          make -j2
+          make install_sw
+      - name: Build Arena adapter
+        run: |
+          OPENSSL_LIBDIR="$(find "$GITHUB_WORKSPACE/.arena-openssl-install" -type f -name 'libcrypto.so*' -print -quit | xargs -r dirname)"
+          test -n "$OPENSSL_LIBDIR"
+          cc -std=c11 -O3 -Wall -Wextra -Werror \
+            -I"$GITHUB_WORKSPACE/.arena-openssl-install/include" \
+            arena/adapters/openssl/runner.c \
+            -L"$OPENSSL_LIBDIR" -Wl,-rpath,"$OPENSSL_LIBDIR" -lcrypto -o arena-openssl-runner
+      - name: Run adapter and validate JSONL
+        env:
+          ARENA_OPT: release
+          ARENA_TARGET: x86_64-linux-gnu
+          ARENA_OS: Ubuntu
+          ARENA_CPU: github-actions
+        run: |
+          mkdir -p arena/results/ci
+          ./arena-openssl-runner | tee arena/results/ci/openssl-3.5.9.jsonl
+          python3 -m pip install --disable-pip-version-check --no-input 'jsonschema==4.26.0'
+          python3 - <<'PY2'
+          import json
+          from pathlib import Path
+          import jsonschema
+          schema=json.loads(Path("arena/schemas/benchmark-result.schema.json").read_text())
+          rows=[json.loads(x) for x in Path("arena/results/ci/openssl-3.5.9.jsonl").read_text().splitlines() if x.startswith("{")]
+          assert len(rows)==9
+          for row in rows: jsonschema.Draft202012Validator(schema).validate(row)
+          assert {r["implementation"]["id"] for r in rows}=={"openssl"}
+          assert {(r["algorithm"]["id"],r["algorithm"]["parameter_set"],r["operation"]) for r in rows} == {
+              ("ml-kem","768","keygen"),("ml-kem","768","encaps"),("ml-kem","768","decaps"),
+              ("ml-dsa","65","keygen"),("ml-dsa","65","sign"),("ml-dsa","65","verify"),
+              ("slh-dsa","SHAKE-128f","keygen"),("slh-dsa","SHAKE-128f","sign"),("slh-dsa","SHAKE-128f","verify")
+          }
+          PY2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pqc-arena-openssl-3.5.9
+          path: arena/results/ci/openssl-3.5.9.jsonl
+
   compare-schema:
     name: Validate normalized adapter output
     runs-on: ubuntu-latest
-    needs: [nexusq-reference, liboqs-reference, circl-reference]
+    needs: [nexusq-reference, liboqs-reference, circl-reference, openssl-reference]
     steps:
       - uses: actions/checkout@v4
       - name: Download NEXUS-Q artifact
@@ -219,6 +276,11 @@ jobs:
         with:
           name: pqc-arena-circl-1.6.4
           path: arena/results/ci/circl
+      - name: Download OpenSSL artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pqc-arena-openssl-3.5.9
+          path: arena/results/ci/openssl
       - name: Validate normalized JSONL against schema
         run: |
           python3 -m pip install --disable-pip-version-check --no-input 'jsonschema==4.26.0'
@@ -230,7 +292,7 @@ jobs:
           files = list(Path("arena/results/ci").rglob("*.jsonl"))
           assert files
           rows = [json.loads(x) for p in files for x in p.read_text().splitlines() if x.startswith("{")]
-          assert len(rows) == 24, len(rows)
+          assert len(rows) == 33, len(rows)
           for row in rows:
               jsonschema.Draft202012Validator(schema).validate(row)
           matrix = {(r["algorithm"]["id"], r["algorithm"]["parameter_set"], r["operation"]) for r in rows}
@@ -240,6 +302,6 @@ jobs:
               ("ml-dsa", "65", "keygen"), ("ml-dsa", "65", "sign"), ("ml-dsa", "65", "verify"),
           }
           assert matrix == expected, matrix
-          assert {r["implementation"]["id"] for r in rows} == {"nexusq", "liboqs", "circl"}
+          assert {r["implementation"]["id"] for r in rows} == {"nexusq", "liboqs", "circl", "openssl"}
           print("normalized Arena schema/matrix: OK", len(rows))
           PY
