@@ -16,7 +16,8 @@
       "role": "general-purpose",
       "status": "ACTIVE",
       "version": "0.16.0",
-      "source": "https://openquantumsafe.org/liboqs/"
+      "source": "https://openquantumsafe.org/liboqs/",
+      "commit": "5a1a854"
     },
     {
       "id": "circl",
@@ -68,11 +69,11 @@
     },
     {
       "id": "pq-code-package",
-      "name": "PQ Code Package native implementations",
+      "name": "PQ Code Package (native implementations)",
       "language": "C",
-      "role": "optimized-native",
+      "role": "high-assurance-native-ecosystem",
       "status": "ACTIVE",
-      "source": "https://github.com/aws/aws-lc"
+      "source": "https://github.com/pq-code-package/"
     }
   ]
 }

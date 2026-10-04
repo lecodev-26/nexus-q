@@ -31,7 +31,7 @@ Initial implementation registry:
 - RustCrypto KEMs
 - PQ Code Package native implementations
 
-The registry is intentionally living. An entry is not considered benchmark-eligible merely because it exists in the registry; eligibility is determined by the protocol and security status.
+The registry is intentionally living. An entry is not considered benchmark-active merely because it exists in the registry; the active benchmark matrix contains only implementations with a validated adapter and a semantically equivalent workload.
 
 ## Data flow
 
@@ -50,4 +50,4 @@ The JSON schema in arena/schemas/benchmark-result.schema.json is the source cont
 
 ## First real comparison
 
-The first adapter pair is NEXUS-Q vs liboqs 0.16.0 for plain ML-KEM-768, ML-KEM-1024 and ML-DSA-65. NEXUS-Q hybrid KEM measurements remain separate; the Arena adapter intentionally uses plain ML-KEM for semantic equivalence.
+The first active adapter pair is NEXUS-Q vs liboqs 0.16.0 (pinned to upstream commit 5a1a854) for plain ML-KEM-768, ML-KEM-1024 and ML-DSA-65. NEXUS-Q hybrid KEM measurements remain separate; the Arena adapter intentionally uses plain ML-KEM for semantic equivalence. SLH-DSA and other registry algorithms remain future adapter candidates until an equivalent adapter is implemented and validated.

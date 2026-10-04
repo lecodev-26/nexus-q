@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "notes": "Eligibility is intentionally conservative. A listed pair may require a future adapter or may be CI-only.",
+  "notes": "The active benchmark matrix contains only adapters implemented and contract-validated for the current Arena release. Registry entries without an active pair remain future CI/adapter candidates.",
   "pairs": [
     {
       "implementation": "nexusq",
@@ -21,12 +21,6 @@
       "local": true
     },
     {
-      "implementation": "nexusq",
-      "algorithm": "slh-dsa",
-      "tier": "primitive",
-      "local": true
-    },
-    {
       "implementation": "liboqs",
       "algorithm": "ml-kem-768",
       "tier": "primitive",
@@ -41,78 +35,6 @@
     {
       "implementation": "liboqs",
       "algorithm": "ml-dsa-65",
-      "tier": "primitive",
-      "ci": true
-    },
-    {
-      "implementation": "liboqs",
-      "algorithm": "slh-dsa",
-      "tier": "primitive",
-      "ci": true
-    },
-    {
-      "implementation": "openssl",
-      "algorithm": "ml-kem-768",
-      "tier": "primitive",
-      "ci": true
-    },
-    {
-      "implementation": "openssl",
-      "algorithm": "ml-dsa-65",
-      "tier": "primitive",
-      "ci": true
-    },
-    {
-      "implementation": "openssl",
-      "algorithm": "slh-dsa",
-      "tier": "primitive",
-      "ci": true
-    },
-    {
-      "implementation": "aws-lc",
-      "algorithm": "ml-kem-768",
-      "tier": "primitive",
-      "ci": true
-    },
-    {
-      "implementation": "aws-lc",
-      "algorithm": "ml-dsa-65",
-      "tier": "primitive",
-      "ci": true
-    },
-    {
-      "implementation": "circl",
-      "algorithm": "ml-kem-768",
-      "tier": "primitive",
-      "ci": true
-    },
-    {
-      "implementation": "circl",
-      "algorithm": "ml-dsa-65",
-      "tier": "primitive",
-      "ci": true
-    },
-    {
-      "implementation": "botan",
-      "algorithm": "ml-kem-768",
-      "tier": "primitive",
-      "ci": true
-    },
-    {
-      "implementation": "botan",
-      "algorithm": "ml-dsa-65",
-      "tier": "primitive",
-      "ci": true
-    },
-    {
-      "implementation": "rustcrypto-kems",
-      "algorithm": "ml-kem-768",
-      "tier": "primitive",
-      "ci": true
-    },
-    {
-      "implementation": "rustcrypto-kems",
-      "algorithm": "hqc",
       "tier": "primitive",
       "ci": true
     }

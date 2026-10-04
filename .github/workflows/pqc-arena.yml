@@ -34,7 +34,13 @@ jobs:
           ]
           for path in required:
               assert Path(path).is_file(), path
-          print("Arena registry structure: OK")
+          matrix = json.loads(Path("arena/registry/matrix.json").read_text())["pairs"]
+          expected_pairs = {
+              ("nexusq", "ml-kem-768"), ("nexusq", "ml-kem-1024"), ("nexusq", "ml-dsa-65"),
+              ("liboqs", "ml-kem-768"), ("liboqs", "ml-kem-1024"), ("liboqs", "ml-dsa-65"),
+          }
+          assert {(x["implementation"], x["algorithm"]) for x in matrix} == expected_pairs
+          print("Arena registry structure/matrix: OK")
           PY
 
   nexusq-reference:
