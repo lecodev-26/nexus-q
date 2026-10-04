@@ -7,6 +7,7 @@
 #include <sys/utsname.h>
 
 #define ITERATIONS 20
+#define WARMUPS 3
 #define LIBOQS_VERSION "0.16.0"
 #ifndef LIBOQS_COMMIT
 #define LIBOQS_COMMIT "unknown"
@@ -51,6 +52,11 @@ static void emit(const char *alg, const char *param, const char *op,
     environment(target, sizeof(target), os, sizeof(os), cpu, sizeof(cpu));
     const char *features = env_or("ARENA_CPU_FEATURES", "");
     const char *optimization = env_or("ARENA_OPT", "unknown");
+    struct timespec timestamp;
+    clock_gettime(CLOCK_REALTIME, &timestamp);
+    unsigned long long timestamp_ns =
+        (unsigned long long)timestamp.tv_sec * 1000000000ULL +
+        (unsigned long long)timestamp.tv_nsec;
     char ct_json[32], sig_json[32];
     snprintf(ct_json, sizeof(ct_json), has_ct ? "%zu" : "null", ct);
     snprintf(sig_json, sizeof(sig_json), has_sig ? "%zu" : "null", sig);
@@ -62,14 +68,14 @@ static void emit(const char *alg, const char *param, const char *op,
         "\"environment\":{\"target\":\"%s\",\"os\":\"%s\",\"cpu\":\"%s\","
         "\"cpu_features\":[%s],\"compiler\":\"cc\",\"compiler_version\":\"%s\","
         "\"optimization\":\"%s\",\"harness_version\":\"arena-v1\"},"
-        "\"measurement\":{\"iterations\":%d,\"warmups\":0,\"latency_ns\":%.3f,"
+        "\"measurement\":{\"iterations\":%d,\"warmups\":%d,\"measurement_timestamp_unix_ns\":%llu,\"latency_ns\":%.3f,"
         "\"throughput_ops_s\":%.6f,\"memory_bytes\":null,"
         "\"measurement_method\":\"clock_gettime(CLOCK_MONOTONIC) mean wall-clock latency\"},"
         "\"sizes\":{\"public_key_bytes\":%zu,\"secret_key_bytes\":%zu,"
         "\"ciphertext_bytes\":%s,\"signature_bytes\":%s}}\n",
         alg, param, op, LIBOQS_VERSION, LIBOQS_COMMIT,
         alg, param, op, target, os, cpu, features, __VERSION__, optimization,
-        ITERATIONS, latency_ns, 1e9 / latency_ns, pk, sk,
+        ITERATIONS, WARMUPS, timestamp_ns, latency_ns, 1e9 / latency_ns, pk, sk,
         ct_json, sig_json);
 }
 
@@ -86,6 +92,9 @@ static int kem(const char *name, const char *param) {
     }
 
     struct timespec a, b;
+    for (int i = 0; i < WARMUPS; i++) {
+        if (OQS_KEM_keypair(k, pk, sk) != OQS_SUCCESS) return 3;
+    }
     clock_gettime(CLOCK_MONOTONIC, &a);
     for (int i = 0; i < ITERATIONS; i++) {
         if (OQS_KEM_keypair(k, pk, sk) != OQS_SUCCESS) return 3;
@@ -95,6 +104,9 @@ static int kem(const char *name, const char *param) {
          k->length_public_key, k->length_secret_key, k->length_ciphertext, 0, 1, 0);
 
     if (OQS_KEM_keypair(k, pk, sk) != OQS_SUCCESS) return 4;
+    for (int i = 0; i < WARMUPS; i++) {
+        if (OQS_KEM_encaps(k, ct, ss, pk) != OQS_SUCCESS) return 5;
+    }
     clock_gettime(CLOCK_MONOTONIC, &a);
     for (int i = 0; i < ITERATIONS; i++) {
         if (OQS_KEM_encaps(k, ct, ss, pk) != OQS_SUCCESS) return 5;
@@ -104,6 +116,9 @@ static int kem(const char *name, const char *param) {
          k->length_public_key, k->length_secret_key, k->length_ciphertext, 0, 1, 0);
 
     if (OQS_KEM_encaps(k, ct, ss, pk) != OQS_SUCCESS) return 6;
+    for (int i = 0; i < WARMUPS; i++) {
+        if (OQS_KEM_decaps(k, ss, ct, sk) != OQS_SUCCESS) return 7;
+    }
     clock_gettime(CLOCK_MONOTONIC, &a);
     for (int i = 0; i < ITERATIONS; i++) {
         if (OQS_KEM_decaps(k, ss, ct, sk) != OQS_SUCCESS) return 7;
@@ -131,6 +146,9 @@ static int sig(const char *name, const char *param) {
     size_t sl = 0;
     struct timespec a, b;
 
+    for (int i = 0; i < WARMUPS; i++) {
+        if (OQS_SIG_keypair(s, pk, sk) != OQS_SUCCESS) return 3;
+    }
     clock_gettime(CLOCK_MONOTONIC, &a);
     for (int i = 0; i < ITERATIONS; i++) {
         if (OQS_SIG_keypair(s, pk, sk) != OQS_SUCCESS) return 3;
@@ -140,6 +158,9 @@ static int sig(const char *name, const char *param) {
          s->length_public_key, s->length_secret_key, 0, s->length_signature, 0, 1);
 
     if (OQS_SIG_keypair(s, pk, sk) != OQS_SUCCESS) return 4;
+    for (int i = 0; i < WARMUPS; i++) {
+        if (OQS_SIG_sign(s, buf, &sl, msg, sizeof(msg) - 1, sk) != OQS_SUCCESS) return 5;
+    }
     clock_gettime(CLOCK_MONOTONIC, &a);
     for (int i = 0; i < ITERATIONS; i++) {
         if (OQS_SIG_sign(s, buf, &sl, msg, sizeof(msg) - 1, sk) != OQS_SUCCESS) return 5;
@@ -149,6 +170,9 @@ static int sig(const char *name, const char *param) {
          s->length_public_key, s->length_secret_key, 0, sl, 0, 1);
 
     if (OQS_SIG_sign(s, buf, &sl, msg, sizeof(msg) - 1, sk) != OQS_SUCCESS) return 6;
+    for (int i = 0; i < WARMUPS; i++) {
+        if (OQS_SIG_verify(s, msg, sizeof(msg) - 1, buf, sl, pk) != OQS_SUCCESS) return 7;
+    }
     clock_gettime(CLOCK_MONOTONIC, &a);
     for (int i = 0; i < ITERATIONS; i++) {
         if (OQS_SIG_verify(s, msg, sizeof(msg) - 1, buf, sl, pk) != OQS_SUCCESS) return 7;

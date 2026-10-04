@@ -37,7 +37,7 @@ Every measured result must identify:
 - benchmark harness version
 - iteration count
 - warmup policy
-- measurement timestamp
+- measurement timestamp (Unix epoch nanoseconds)
 
 ## 3. Two performance views
 

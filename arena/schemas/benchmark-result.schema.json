@@ -113,7 +113,9 @@
       "type": "object",
       "required": [
         "iterations",
-        "latency_ns"
+        "warmups",
+        "latency_ns",
+        "measurement_timestamp_unix_ns"
       ],
       "properties": {
         "iterations": {
@@ -123,6 +125,10 @@
         "warmups": {
           "type": "integer",
           "minimum": 0
+        },
+        "measurement_timestamp_unix_ns": {
+          "type": "integer",
+          "minimum": 1
         },
         "latency_ns": {
           "type": "number",
