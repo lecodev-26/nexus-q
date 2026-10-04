@@ -1,0 +1,76 @@
+name: Security and Release Gates
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  rust-security:
+    name: Rust security gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install security tooling
+        run: |
+          cargo install cargo-audit --locked
+          cargo install cargo-deny --locked
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Workspace tests
+        run: cargo test --workspace
+      - name: Cargo audit
+        run: cargo audit
+      - name: Cargo deny
+        run: cargo deny check
+      - name: Metadata / SBOM input
+        run: cargo metadata --format-version 1 --locked > cargo-metadata.json
+      - name: Upload dependency metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-metadata
+          path: cargo-metadata.json
+
+  fuzz-build:
+    name: Fuzz harness build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Build fuzz targets
+        run: cargo fuzz build --manifest-path fuzz/Cargo.toml
+
+  secret-scan:
+    name: Secret scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan repository
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  fuzz-soak:
+    name: Extended fuzz soak (release gate)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 1500
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Fuzz vault parser
+        run: cargo fuzz run vault_parse --manifest-path fuzz/Cargo.toml -- -max_total_time=43200
+      - name: Fuzz envelope parser
+        run: cargo fuzz run envelope_parse --manifest-path fuzz/Cargo.toml -- -max_total_time=43200

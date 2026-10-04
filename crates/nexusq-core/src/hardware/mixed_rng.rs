@@ -147,14 +147,27 @@ impl RandomSource for MixedRandomSource {
         // that by refusing to serve more than 32 bytes at a time and
         // letting callers loop.
         if dest.len() > mixed.len() {
-            // Fill in 32-byte chunks, each with a fresh HKDF.
+            // HKDF-SHA256 returns one 32-byte block in this wrapper.
+            // Preserve the same TRNG+OS mixing policy for every chunk.
             let mut offset = 0;
             while offset < dest.len() {
-                let mut os_chunk = Zeroizing::new(vec![0u8; 32]);
+                let chunk_len = (dest.len() - offset).min(32);
+                let mut os_chunk = Zeroizing::new(vec![0u8; chunk_len]);
                 self.os.fill_bytes(os_chunk.as_mut())?;
-                let chunk =
-                    hkdf_sha256(&os_chunk, None, MIX_INFO).map_err(|_| RandomError::Unavailable)?;
-                let n = (dest.len() - offset).min(chunk.len());
+                let mut combined_chunk = Zeroizing::new(Vec::with_capacity(2 * chunk_len));
+                if self.has_usable_trng() {
+                    let trng = self.trng.as_ref().expect("checked above");
+                    let mut trng_chunk = Zeroizing::new(vec![0u8; chunk_len]);
+                    if trng.read(trng_chunk.as_mut()).is_ok() {
+                        combined_chunk.extend_from_slice(trng_chunk.as_ref());
+                    } else {
+                        self.trng_failed.store(true, Ordering::Relaxed);
+                    }
+                }
+                combined_chunk.extend_from_slice(os_chunk.as_ref());
+                let chunk = hkdf_sha256(&combined_chunk, None, MIX_INFO)
+                    .map_err(|_| RandomError::Unavailable)?;
+                let n = chunk_len.min(chunk.len());
                 dest[offset..offset + n].copy_from_slice(&chunk[..n]);
                 offset += n;
             }

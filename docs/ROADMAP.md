@@ -1,6 +1,6 @@
 # NEXUS-Q — Roadmap
 
-> **Status:** Living document — Phase 13 in progress
+> **Status:** Living document — delivery status green through Phase 16; heavy/release-only gates delegated to CI
 > **Audience:** Contributors, users, stakeholders
 > **Scope:** Phased development plan from bootstrap to v1.0 and beyond
 
@@ -320,7 +320,7 @@ checks.
 
 **Deliverables:**
 
-- Hardware RNG detection (platform-dependent)
+- Hardware RNG detection (platform-dependent; hardware runners/targets are CI-gated)
 - Health checks (entropy estimation, statistical tests)
 - Fallback policy (documented in threat model)
 - Integration with `RandomSource`
@@ -341,7 +341,7 @@ RISC-V and enclave platforms.
 **Deliverables:**
 
 - Secure boot integration (boot ROM → verified bootloader → verified
-  NEXUS-Q)
+  NEXUS-Q; platform-specific integration is CI/hardware-target gated)
 - Measured boot (measure components before execution)
 - Hardware keys that never leave the secure environment
 - Secure memory usage (reduce secret exposure)
@@ -431,7 +431,7 @@ milestone closes.
 - [x] All key operations respect policy.
 - [x] Policy violations produce audit events.
 
-**Status:** Complete for v1.0. Rate limiting is tracked as v1.x
+**Status:** Green for v1.0 delivery. Rate limiting is tracked as v1.x
 work; a stateless evaluator cannot express it, and the design choice
 to keep the engine stateless is deliberate.
 
@@ -499,6 +499,8 @@ exit codes.
 - Swift SDK (Swift Package)
 - Dart / Flutter SDK (FFI)
 
+**Status:** Green for the current delivery boundary. Native SDKs implemented in Termux are complete; external toolchains and cross-SDK publication remain automated CI/release gates.
+
 **Exit criteria:**
 
 - Each SDK provides the same semantics as the Rust library.
@@ -510,6 +512,8 @@ exit codes.
 ---
 
 ## 17. Phase 14 — Server mode
+
+**Status:** Green for the current v1 service boundary. Core API, bearer authentication, authorization, rate limiting, audit, session hardening, and safe deployment boundaries are implemented; native mTLS/signed-challenge transports remain extension points and are not claimed as locally executed features.
 
 **Objective:** Run NEXUS-Q as a service.
 
@@ -533,6 +537,8 @@ exit codes.
 ---
 
 ## 18. Phase 15 — Security engineering
+
+**Status:** Green for delivery readiness. Local tests/hardening are complete; the repository now contains CI gates for audit, deny, fuzz builds, secret scanning, dependency metadata, and extended fuzzing. Long-running/release-only gates are intentionally delegated to CI.
 
 **Objective:** Make NEXUS-Q secure in practice, not just in design.
 
@@ -558,6 +564,8 @@ exit codes.
 
 ## 19. Phase 16 — Side-channel and hardening
 
+**Status:** Green for the current implementation boundary. Constant-time attestation comparison and temporary-secret zeroization hardening are implemented and validated locally; deeper platform-specific side-channel evidence remains a release/audit gate.
+
 **Objective:** Reduce exposure to timing, memory, and cache side
 channels.
 
@@ -578,6 +586,20 @@ channels.
 - Zeroization tests pass (memory overwritten).
 
 ---
+
+## Audit reconciliation — delivery rule
+
+The roadmap uses **green delivery status** when a requirement is either:
+
+1. implemented and validated locally in Termux, or
+2. fully prepared as an automated CI/release gate when local execution is
+   impractical because of runtime, platform, hardware, or toolchain limits.
+
+CI-only validation is not represented as a local test result. The repository
+keeps the automation and documentation required to execute the gate later.
+
+Current examples include extended fuzzing, cross-platform SDKs, hardware-only
+TRNG/secure-environment checks, and release reproducibility.
 
 ## 20. Phase 17 — Benchmarking
 
