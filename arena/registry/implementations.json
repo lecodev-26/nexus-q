@@ -89,8 +89,8 @@
       "version": "mlkem-native-v2.0.0 + mldsa-native-v1.0.0-beta2",
       "source": "https://github.com/pq-code-package/",
       "source_refs": [
-        "mlkem-native@v2.0.0",
-        "mldsa-native@v1.0.0-beta2"
+        "mlkem-native@d1b2fe782888bdb761a50336012923180be7f502",
+        "mldsa-native@9b0ee84f4cf399043eca59eca4e5f8531ca1d61b"
       ]
     }
   ]

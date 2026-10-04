@@ -421,8 +421,10 @@ jobs:
       - name: Fetch pinned PQ Code Package sources
         run: |
           git clone --depth 1 --branch v2.0.0 https://github.com/pq-code-package/mlkem-native.git .arena-mlkem-native
+          test "$(git -C .arena-mlkem-native rev-parse HEAD)" = "d1b2fe782888bdb761a50336012923180be7f502"
           test "$(git -C .arena-mlkem-native describe --tags --exact-match HEAD)" = "v2.0.0"
           git clone --depth 1 --branch v1.0.0-beta2 https://github.com/pq-code-package/mldsa-native.git .arena-mldsa-native
+          test "$(git -C .arena-mldsa-native rev-parse HEAD)" = "9b0ee84f4cf399043eca59eca4e5f8531ca1d61b"
           test "$(git -C .arena-mldsa-native describe --tags --exact-match HEAD)" = "v1.0.0-beta2"
       - name: Build pinned native libraries
         run: |
@@ -440,7 +442,7 @@ jobs:
       - name: Run adapter and validate JSONL
         env:
           PQCP_VERSION: "mlkem-native-v2.0.0 + mldsa-native-v1.0.0-beta2"
-          PQCP_COMMIT: "mlkem-native:v2.0.0;mldsa-native:v1.0.0-beta2"
+          PQCP_COMMIT: "mlkem-native@d1b2fe782888bdb761a50336012923180be7f502;mldsa-native@9b0ee84f4cf399043eca59eca4e5f8531ca1d61b"
           ARENA_OPT: release
           ARENA_TARGET: x86_64-linux-gnu
           ARENA_OS: Ubuntu
@@ -535,8 +537,9 @@ jobs:
               ("ml-kem", "1024", "keygen"), ("ml-kem", "1024", "encaps"), ("ml-kem", "1024", "decaps"),
               ("ml-dsa", "65", "keygen"), ("ml-dsa", "65", "sign"), ("ml-dsa", "65", "verify"),
               ("hqc", "128", "keygen"), ("hqc", "128", "encaps"), ("hqc", "128", "decaps"),
+              ("slh-dsa", "128f", "keygen"), ("slh-dsa", "128f", "sign"), ("slh-dsa", "128f", "verify"),
           }
           assert matrix == expected, matrix
-          assert {r["implementation"]["id"] for r in rows} == {"nexusq", "liboqs", "circl", "openssl", "aws-lc", "botan", "rustcrypto-kems"}
+          assert {r["implementation"]["id"] for r in rows} == {"nexusq", "liboqs", "circl", "openssl", "aws-lc", "botan", "rustcrypto-kems", "pq-code-package"}
           print("normalized Arena schema/matrix: OK", len(rows))
           PY

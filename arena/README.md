@@ -48,6 +48,8 @@ The JSON schema in arena/schemas/benchmark-result.schema.json is the source cont
 5. Deprecated/broken algorithms may be recorded historically but do not enter the secure ranking.
 6. A result is reproducible only when its environment and source revision are recorded.
 
-## First real comparison
+## Executable comparison set
 
-The first executable adapter pair is NEXUS-Q vs liboqs 0.16.0 (pinned to upstream commit 5a1a854) for plain ML-KEM-768, ML-KEM-1024 and ML-DSA-65. NEXUS-Q hybrid KEM measurements remain separate; the Arena adapter intentionally uses plain ML-KEM for semantic equivalence. SLH-DSA, OpenSSL, AWS-LC, CIRCL, Botan, RustCrypto KEMs and HQC remain explicitly represented in the Arena matrix with their adapter readiness state; they are not reported as benchmarked until their adapters execute successfully in CI.
+The Arena currently has executable adapter contracts for NEXUS-Q plus external implementations including liboqs, CIRCL, OpenSSL, AWS-LC, Botan, RustCrypto KEMs and PQ Code Package. These external adapters are CI-ready, not benchmarked locally, and no result is claimed until CI executes them successfully.
+
+NEXUS-Q hybrid KEM measurements remain separate; the Arena uses plain ML-KEM for semantic equivalence. OpenSSL additionally covers SLH-DSA-SHAKE-128f. RustCrypto KEMs additionally cover HQC-128. BoringSSL remains PLANNED because its relevant APIs are internal/unstable for a reproducible public adapter.

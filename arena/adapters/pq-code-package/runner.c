@@ -1,10 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
-#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <sys/random.h>
 #include <time.h>
 
 #include <mlkem_native.h>
@@ -14,17 +11,6 @@
 #define WARMUPS 3
 #define MSG "nexusq-arena"
 #define MSG_LEN (sizeof(MSG) - 1)
-
-static int randombytes(uint8_t *out, size_t len) {
-    size_t off = 0;
-    while (off < len) {
-        ssize_t n = getrandom(out + off, len - off, 0);
-        if (n > 0) { off += (size_t)n; continue; }
-        if (errno == EINTR) continue;
-        return -1;
-    }
-    return 0;
-}
 
 static uint64_t now_ns(clockid_t id) {
     struct timespec ts;
@@ -102,7 +88,7 @@ int main(void) {
     const char *ver = getenv("PQCP_VERSION");
     const char *commit = getenv("PQCP_COMMIT");
     if (!ver) ver = "mlkem-native-v2.0.0 + mldsa-native-v1.0.0-beta2";
-    if (!commit) commit = "mlkem-native:v2.0.0;mldsa-native:v1.0.0-beta2";
+    if (!commit) commit = "mlkem-native@d1b2fe782888bdb761a50336012923180be7f502;mldsa-native@9b0ee84f4cf399043eca59eca4e5f8531ca1d61b";
 
     emit("pqcp-mlkem-768-keygen", ver, commit, "ml-kem", "768", "keygen",
          bench(kem_keygen, &k), MLKEM768_PUBLICKEYBYTES, MLKEM768_SECRETKEYBYTES, MLKEM768_CIPHERTEXTBYTES, -1);

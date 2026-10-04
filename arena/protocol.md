@@ -101,19 +101,21 @@ x86_64 and ARM64 are first-class CI targets.
 
 RISC-V and embedded targets require real execution on dedicated hardware/runners. Cross compilation alone never produces an execution result.
 
-## 10. First external adapter: liboqs
+## 10. External adapter set
 
-The first external Arena adapter is Open Quantum Safe liboqs 0.16.0, pinned to upstream commit 5a1a854.
+The Arena external adapter set currently includes liboqs, CIRCL, OpenSSL, AWS-LC, Botan, RustCrypto KEMs and PQ Code Package. Each adapter records its source revision, target, OS, CPU metadata, compiler, optimization profile and serialized sizes in the normalized schema.
 
-The initial comparison matrix is intentionally limited to standardized plain primitives:
+The executable primitive matrix currently covers:
 
 - ML-KEM-768: keygen, encaps, decaps
-- ML-KEM-1024: keygen, encaps, decaps
+- ML-KEM-1024: keygen, encaps, decaps where the adapter provides it
 - ML-DSA-65: keygen, sign, verify
+- SLH-DSA-SHAKE-128f: keygen, sign, verify where provided
+- HQC-128: keygen, encaps, decaps for the RustCrypto KEM adapter
 
-NEXUS-Q's ML-KEM+X25519 hybrid constructions are not compared against plain liboqs ML-KEM results. The two measurements must use semantically equivalent plain constructions.
+NEXUS-Q's ML-KEM+X25519 hybrid constructions are never compared against plain external ML-KEM results. The compared measurements must use semantically equivalent plain primitives.
 
-The liboqs adapter is CI-only when the local environment does not provide liboqs. It records the liboqs version/commit, target, OS, CPU metadata, compiler, optimization profile and implementation-reported serialized sizes.
+External adapters may be CI_READY without having produced a benchmark result. CI execution is the gate that turns a prepared adapter into measured evidence.
 
 ## 11. Reproducibility
 
