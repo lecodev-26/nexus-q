@@ -38,3 +38,9 @@ API latency and storage-specific endurance benchmarks remain release-gate extens
 Phase 17 now includes the PQC Benchmark Arena, a reproducible ecosystem benchmark registry. The design and initial registry live under arena/. The Arena separates standardized algorithms, candidates, alternatives and deprecated/broken schemes; records implementation/version/commit/toolchain/CPU metadata; and uses normalized JSON results before generating reports.
 
 The Arena does not publish a single composite winner in v1. It reports performance, size, memory, portability, security evidence, maturity and protocol performance separately. External implementations are introduced through pinned CI adapters; no unexecuted platform result is claimed. See arena/README.md and arena/protocol.md.
+
+### First external adapter: liboqs
+
+The first adapter targets Open Quantum Safe liboqs 0.16.0 at upstream commit 5a1a854. It measures plain ML-KEM-768, plain ML-KEM-1024 and ML-DSA-65 using the same nine-operation matrix as the NEXUS-Q reference runner. liboqs is not installed in the Android/Termux environment used for the local NEXUS-Q reference, so the liboqs execution remains CI-only and is not represented as a local measurement.
+
+The adapter and CI workflow record implementation revision, compiler/environment metadata, implementation-reported sizes and normalized JSONL output. CI performs formal Draft 2020-12 schema validation before the two implementations can enter the comparison set.

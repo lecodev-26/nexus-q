@@ -71,16 +71,43 @@ jobs:
       - name: Install liboqs build dependencies
         run: sudo apt-get update && sudo apt-get install -y cmake ninja-build gcc
       - name: Fetch pinned liboqs
-        run: git clone --depth 1 --branch 0.16.0 https://github.com/open-quantum-safe/liboqs.git .arena-liboqs
+        run: |
+          git clone --depth 1 --branch 0.16.0 https://github.com/open-quantum-safe/liboqs.git .arena-liboqs
+          test "$(git -C .arena-liboqs rev-parse --short=7 HEAD)" = "5a1a854"
       - name: Build liboqs
         run: cmake -S .arena-liboqs -B .arena-liboqs/build -G Ninja -DOQS_BUILD_ONLY_LIB=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release
       - name: Compile Arena adapter
-        run: gcc -O3 -std=c11 -I.arena-liboqs/build/include -I.arena-liboqs/src arena/adapters/liboqs/runner.c .arena-liboqs/build/lib/liboqs.a -lcrypto -ldl -lpthread -lm -o arena-liboqs-runner
+        env:
+          LIBOQS_COMMIT: 5a1a854
+        run: |
+          gcc -O3 -std=c11 -DLIBOQS_COMMIT="\\\"$LIBOQS_COMMIT\\\"" \
+            -I.arena-liboqs/build/include -I.arena-liboqs/src \
+            arena/adapters/liboqs/runner.c .arena-liboqs/build/lib/liboqs.a \
+            -lcrypto -ldl -lpthread -lm -o arena-liboqs-runner
       - name: Run adapter and validate JSONL
+        env:
+          ARENA_OPT: release
+          LIBOQS_COMMIT: 5a1a854
         run: |
           mkdir -p arena/results/ci
+          ARENA_TARGET="$(uname -m)-$(uname -s | tr '[:upper:]' '[:lower:]')" \
+          ARENA_OS="$(uname -s)" \
+          ARENA_CPU="$(awk -F': ' '/model name|Hardware|Processor/{print $2; exit}' /proc/cpuinfo || true)" \
+          ARENA_CPU_FEATURES="$(python3 -c 'import json; s=set(); [s.update(x.split()) for x in open("/proc/cpuinfo", errors="ignore") if x.startswith(("flags", "Features")) and ":" in x for x in [x.split(":",1)[1]]]; print(",".join(json.dumps(x) for x in sorted(s)))')" \
           ./arena-liboqs-runner | tee arena/results/ci/liboqs-0.16.0.jsonl
-          python3 -c 'import json; from pathlib import Path; rows=[json.loads(x) for x in Path("arena/results/ci/liboqs-0.16.0.jsonl").read_text().splitlines() if x.startswith("{")]; assert len(rows)==9; assert all(r["implementation"]["id"]=="liboqs" for r in rows); print("liboqs Arena records:",len(rows))'
+          python3 -m pip install --disable-pip-version-check --no-input 'jsonschema==4.26.0'
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          import jsonschema
+          schema = json.loads(Path("arena/schemas/benchmark-result.schema.json").read_text())
+          rows = [json.loads(x) for x in Path("arena/results/ci/liboqs-0.16.0.jsonl").read_text().splitlines() if x.startswith("{")]
+          assert len(rows) == 9
+          for row in rows:
+              jsonschema.Draft202012Validator(schema).validate(row)
+          assert all(r["implementation"]["id"] == "liboqs" for r in rows)
+          print("liboqs Arena records/schema: OK", len(rows))
+          PY
       - uses: actions/upload-artifact@v4
         with:
           name: pqc-arena-liboqs-0.16.0
@@ -102,5 +129,27 @@ jobs:
         with:
           name: pqc-arena-liboqs-0.16.0
           path: arena/results/ci/liboqs
-      - name: Validate normalized JSONL
-        run: python3 -c 'import json; from pathlib import Path; files=list(Path("arena/results/ci").rglob("*.jsonl")); assert files; [json.loads(x) for p in files for x in p.read_text().splitlines() if x.startswith("{")]; print("normalized Arena output: OK")'
+      - name: Validate normalized JSONL against schema
+        run: |
+          python3 -m pip install --disable-pip-version-check --no-input 'jsonschema==4.26.0'
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          import jsonschema
+          schema = json.loads(Path("arena/schemas/benchmark-result.schema.json").read_text())
+          files = list(Path("arena/results/ci").rglob("*.jsonl"))
+          assert files
+          rows = [json.loads(x) for p in files for x in p.read_text().splitlines() if x.startswith("{")]
+          assert len(rows) == 18, len(rows)
+          for row in rows:
+              jsonschema.Draft202012Validator(schema).validate(row)
+          matrix = {(r["algorithm"]["id"], r["algorithm"]["parameter_set"], r["operation"]) for r in rows}
+          expected = {
+              ("ml-kem", "768", "keygen"), ("ml-kem", "768", "encaps"), ("ml-kem", "768", "decaps"),
+              ("ml-kem", "1024", "keygen"), ("ml-kem", "1024", "encaps"), ("ml-kem", "1024", "decaps"),
+              ("ml-dsa", "65", "keygen"), ("ml-dsa", "65", "sign"), ("ml-dsa", "65", "verify"),
+          }
+          assert matrix == expected, matrix
+          assert {r["implementation"]["id"] for r in rows} == {"nexusq", "liboqs"}
+          print("normalized Arena schema/matrix: OK", len(rows))
+          PY

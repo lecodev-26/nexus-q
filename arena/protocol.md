@@ -91,7 +91,21 @@ x86_64 and ARM64 are first-class CI targets.
 
 RISC-V and embedded targets require real execution on dedicated hardware/runners. Cross compilation alone never produces an execution result.
 
-## 9. Reproducibility
+## 9. First external adapter: liboqs
+
+The first external Arena adapter is Open Quantum Safe liboqs 0.16.0, pinned to upstream commit 5a1a854.
+
+The initial comparison matrix is intentionally limited to standardized plain primitives:
+
+- ML-KEM-768: keygen, encaps, decaps
+- ML-KEM-1024: keygen, encaps, decaps
+- ML-DSA-65: keygen, sign, verify
+
+NEXUS-Q's ML-KEM+X25519 hybrid constructions are not compared against plain liboqs ML-KEM results. The two measurements must use semantically equivalent plain constructions.
+
+The liboqs adapter is CI-only when the local environment does not provide liboqs. It records the liboqs version/commit, target, OS, CPU metadata, compiler, optimization profile and implementation-reported serialized sizes.
+
+## 10. Reproducibility
 
 A future Arena release must pin:
 
