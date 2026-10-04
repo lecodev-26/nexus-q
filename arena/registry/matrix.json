@@ -92,15 +92,17 @@
       "implementation": "aws-lc",
       "algorithm": "ml-kem-768",
       "tier": "primitive",
-      "status": "PLANNED",
-      "adapter": "arena/adapters/aws-lc"
+      "status": "CI_READY",
+      "adapter": "arena/adapters/aws-lc",
+      "ci": true
     },
     {
       "implementation": "aws-lc",
       "algorithm": "ml-dsa-65",
       "tier": "primitive",
-      "status": "PLANNED",
-      "adapter": "arena/adapters/aws-lc"
+      "status": "CI_READY",
+      "adapter": "arena/adapters/aws-lc",
+      "ci": true
     },
     {
       "implementation": "circl",

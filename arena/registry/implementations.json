@@ -45,7 +45,8 @@
       "language": "C",
       "role": "general-purpose-and-protocol",
       "status": "ACTIVE",
-      "source": "https://github.com/aws/aws-lc"
+      "source": "https://github.com/aws/aws-lc",
+      "source_ref": "ec05f25"
     },
     {
       "id": "boringssl",

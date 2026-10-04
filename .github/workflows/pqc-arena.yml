@@ -47,7 +47,8 @@ jobs:
           assert {(x["implementation"], x["algorithm"]) for x in ci_ready} == {
               ("liboqs", "ml-kem-768"), ("liboqs", "ml-kem-1024"), ("liboqs", "ml-dsa-65"),
               ("circl", "ml-kem-768"), ("circl", "ml-dsa-65"),
-              ("openssl", "ml-kem-768"), ("openssl", "ml-dsa-65"), ("openssl", "slh-dsa")
+              ("openssl", "ml-kem-768"), ("openssl", "ml-dsa-65"), ("openssl", "slh-dsa"),
+              ("aws-lc", "ml-kem-768"), ("aws-lc", "ml-dsa-65")
           }
           implementations = {x["id"] for x in json.loads(Path("arena/registry/implementations.json").read_text())["implementations"]}
           assert implementations == {
@@ -255,10 +256,63 @@ jobs:
           name: pqc-arena-openssl-3.5.9
           path: arena/results/ci/openssl-3.5.9.jsonl
 
+  aws-lc-reference:
+    name: AWS-LC mainline reference adapter
+    runs-on: ubuntu-latest
+    needs: validate-registry
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned AWS-LC source
+        run: |
+          git clone --depth 1 https://github.com/aws/aws-lc.git .arena-aws-lc
+          test "$(git -C .arena-aws-lc rev-parse HEAD)" = "ec05f25ef5bcb1bf03d2e2f44ba57973a878e0ba"
+      - name: Build AWS-LC
+        run: |
+          cmake -S .arena-aws-lc -B .arena-aws-lc-build -GNinja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+          cmake --build .arena-aws-lc-build --parallel 2
+      - name: Build Arena adapter
+        run: |
+          cc -std=c11 -O3 -Wall -Wextra -Werror \
+            -I"$GITHUB_WORKSPACE/.arena-aws-lc/include" \
+            arena/adapters/aws-lc/runner.c \
+            -L"$GITHUB_WORKSPACE/.arena-aws-lc-build/crypto" \
+            -Wl,-rpath,"$GITHUB_WORKSPACE/.arena-aws-lc-build/crypto" \
+            -lcrypto -o arena-aws-lc-runner
+      - name: Capture AWS-LC version and run adapter
+        env:
+          ARENA_OPT: release
+          ARENA_TARGET: x86_64-linux-gnu
+          ARENA_OS: Ubuntu
+          ARENA_CPU: github-actions
+        run: |
+          mkdir -p arena/results/ci
+          export AWSLC_VERSION="$(.arena-aws-lc-build/crypto/awslc_tool version 2>/dev/null | head -1 || true)"
+          if [ -z "$AWSLC_VERSION" ]; then AWSLC_VERSION="runtime"; fi
+          ./arena-aws-lc-runner | tee arena/results/ci/aws-lc-ec05f25.jsonl
+          python3 -m pip install --disable-pip-version-check --no-input 'jsonschema==4.26.0'
+          python3 - <<'PY2'
+          import json
+          from pathlib import Path
+          import jsonschema
+          schema=json.loads(Path("arena/schemas/benchmark-result.schema.json").read_text())
+          rows=[json.loads(x) for x in Path("arena/results/ci/aws-lc-ec05f25.jsonl").read_text().splitlines() if x.startswith("{")]
+          assert len(rows)==6
+          for row in rows: jsonschema.Draft202012Validator(schema).validate(row)
+          assert {r["implementation"]["id"] for r in rows}=={"aws-lc"}
+          assert {(r["algorithm"]["id"],r["algorithm"]["parameter_set"],r["operation"]) for r in rows} == {
+              ("ml-kem","768","keygen"),("ml-kem","768","encaps"),("ml-kem","768","decaps"),
+              ("ml-dsa","65","keygen"),("ml-dsa","65","sign"),("ml-dsa","65","verify")
+          }
+          PY2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pqc-arena-aws-lc-ec05f25
+          path: arena/results/ci/aws-lc-ec05f25.jsonl
+
   compare-schema:
     name: Validate normalized adapter output
     runs-on: ubuntu-latest
-    needs: [nexusq-reference, liboqs-reference, circl-reference, openssl-reference]
+    needs: [nexusq-reference, liboqs-reference, circl-reference, openssl-reference, aws-lc-reference]
     steps:
       - uses: actions/checkout@v4
       - name: Download NEXUS-Q artifact
@@ -281,6 +335,11 @@ jobs:
         with:
           name: pqc-arena-openssl-3.5.9
           path: arena/results/ci/openssl
+      - name: Download AWS-LC artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pqc-arena-aws-lc-ec05f25
+          path: arena/results/ci/aws-lc
       - name: Validate normalized JSONL against schema
         run: |
           python3 -m pip install --disable-pip-version-check --no-input 'jsonschema==4.26.0'
@@ -292,7 +351,7 @@ jobs:
           files = list(Path("arena/results/ci").rglob("*.jsonl"))
           assert files
           rows = [json.loads(x) for p in files for x in p.read_text().splitlines() if x.startswith("{")]
-          assert len(rows) == 33, len(rows)
+          assert len(rows) == 39, len(rows)
           for row in rows:
               jsonschema.Draft202012Validator(schema).validate(row)
           matrix = {(r["algorithm"]["id"], r["algorithm"]["parameter_set"], r["operation"]) for r in rows}
@@ -302,6 +361,6 @@ jobs:
               ("ml-dsa", "65", "keygen"), ("ml-dsa", "65", "sign"), ("ml-dsa", "65", "verify"),
           }
           assert matrix == expected, matrix
-          assert {r["implementation"]["id"] for r in rows} == {"nexusq", "liboqs", "circl", "openssl"}
+          assert {r["implementation"]["id"] for r in rows} == {"nexusq", "liboqs", "circl", "openssl", "aws-lc"}
           print("normalized Arena schema/matrix: OK", len(rows))
           PY
