@@ -31,7 +31,7 @@ Initial implementation registry:
 - RustCrypto KEMs
 - PQ Code Package native implementations
 
-The registry is intentionally living. An entry is not considered benchmark-active merely because it exists in the registry; the active benchmark matrix contains only implementations with a validated adapter and a semantically equivalent workload.
+The registry is intentionally living. The Arena matrix is deliberately broader than the currently executable adapters: each pair records whether its adapter is IMPLEMENTED, CI_READY, or PLANNED. Registry membership never implies that a benchmark has run. The current registry includes NEXUS-Q, liboqs, CIRCL, OpenSSL, AWS-LC, BoringSSL, Botan, RustCrypto KEMs and PQ Code Package native implementations.
 
 ## Data flow
 
@@ -50,4 +50,4 @@ The JSON schema in arena/schemas/benchmark-result.schema.json is the source cont
 
 ## First real comparison
 
-The first active adapter pair is NEXUS-Q vs liboqs 0.16.0 (pinned to upstream commit 5a1a854) for plain ML-KEM-768, ML-KEM-1024 and ML-DSA-65. NEXUS-Q hybrid KEM measurements remain separate; the Arena adapter intentionally uses plain ML-KEM for semantic equivalence. SLH-DSA and other registry algorithms remain future adapter candidates until an equivalent adapter is implemented and validated.
+The first executable adapter pair is NEXUS-Q vs liboqs 0.16.0 (pinned to upstream commit 5a1a854) for plain ML-KEM-768, ML-KEM-1024 and ML-DSA-65. NEXUS-Q hybrid KEM measurements remain separate; the Arena adapter intentionally uses plain ML-KEM for semantic equivalence. SLH-DSA, OpenSSL, AWS-LC, CIRCL, Botan, RustCrypto KEMs and HQC remain explicitly represented in the Arena matrix with their adapter readiness state; they are not reported as benchmarked until their adapters execute successfully in CI.

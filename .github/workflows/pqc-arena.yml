@@ -35,12 +35,26 @@ jobs:
           for path in required:
               assert Path(path).is_file(), path
           matrix = json.loads(Path("arena/registry/matrix.json").read_text())["pairs"]
-          expected_pairs = {
-              ("nexusq", "ml-kem-768"), ("nexusq", "ml-kem-1024"), ("nexusq", "ml-dsa-65"),
-              ("liboqs", "ml-kem-768"), ("liboqs", "ml-kem-1024"), ("liboqs", "ml-dsa-65"),
+          assert matrix
+          allowed = {"IMPLEMENTED", "CI_READY", "PLANNED"}
+          assert all(x["status"] in allowed for x in matrix)
+          assert all(not (x["status"] == "IMPLEMENTED" and not x.get("adapter")) for x in matrix)
+          implemented = [x for x in matrix if x["status"] == "IMPLEMENTED"]
+          ci_ready = [x for x in matrix if x["status"] == "CI_READY"]
+          assert {(x["implementation"], x["algorithm"]) for x in implemented} == {
+              ("nexusq", "ml-kem-768"), ("nexusq", "ml-kem-1024"), ("nexusq", "ml-dsa-65")
           }
-          assert {(x["implementation"], x["algorithm"]) for x in matrix} == expected_pairs
-          print("Arena registry structure/matrix: OK")
+          assert {(x["implementation"], x["algorithm"]) for x in ci_ready} == {
+              ("liboqs", "ml-kem-768"), ("liboqs", "ml-kem-1024"), ("liboqs", "ml-dsa-65")
+          }
+          implementations = {x["id"] for x in json.loads(Path("arena/registry/implementations.json").read_text())["implementations"]}
+          assert implementations == {
+              "nexusq", "liboqs", "circl", "openssl", "aws-lc", "boringssl",
+              "botan", "rustcrypto-kems", "pq-code-package"
+          }
+          assert {x["implementation"] for x in matrix} == implementations
+          assert len(matrix) == 23
+          print("Arena registry/matrix/state/coverage contract: OK", len(matrix), "pairs")
           PY
 
   nexusq-reference:

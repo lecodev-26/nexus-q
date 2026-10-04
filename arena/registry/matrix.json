@@ -1,42 +1,173 @@
 {
-  "schema_version": 1,
-  "notes": "The active benchmark matrix contains only adapters implemented and contract-validated for the current Arena release. Registry entries without an active pair remain future CI/adapter candidates.",
+  "schema_version": 2,
+  "notes": "The Arena registry is broader than the currently executable adapter set. IMPLEMENTED entries have a validated adapter in-repo; CI_READY entries have a defined target and external source contract but require CI execution; PLANNED entries require a future adapter before benchmark execution. No result is implied by registry membership.",
   "pairs": [
     {
       "implementation": "nexusq",
       "algorithm": "ml-kem-768",
       "tier": "primitive",
-      "local": true
+      "status": "IMPLEMENTED",
+      "local": true,
+      "adapter": "arena/runners/nexusq"
     },
     {
       "implementation": "nexusq",
       "algorithm": "ml-kem-1024",
       "tier": "primitive",
-      "local": true
+      "status": "IMPLEMENTED",
+      "local": true,
+      "adapter": "arena/runners/nexusq"
     },
     {
       "implementation": "nexusq",
       "algorithm": "ml-dsa-65",
       "tier": "primitive",
-      "local": true
+      "status": "IMPLEMENTED",
+      "local": true,
+      "adapter": "arena/runners/nexusq"
+    },
+    {
+      "implementation": "nexusq",
+      "algorithm": "slh-dsa",
+      "tier": "primitive",
+      "status": "PLANNED",
+      "adapter": "arena/runners/nexusq"
     },
     {
       "implementation": "liboqs",
       "algorithm": "ml-kem-768",
       "tier": "primitive",
-      "ci": true
+      "status": "CI_READY",
+      "ci": true,
+      "adapter": "arena/adapters/liboqs"
     },
     {
       "implementation": "liboqs",
       "algorithm": "ml-kem-1024",
       "tier": "primitive",
-      "ci": true
+      "status": "CI_READY",
+      "ci": true,
+      "adapter": "arena/adapters/liboqs"
     },
     {
       "implementation": "liboqs",
       "algorithm": "ml-dsa-65",
       "tier": "primitive",
-      "ci": true
+      "status": "CI_READY",
+      "ci": true,
+      "adapter": "arena/adapters/liboqs"
+    },
+    {
+      "implementation": "liboqs",
+      "algorithm": "slh-dsa",
+      "tier": "primitive",
+      "status": "PLANNED",
+      "adapter": "arena/adapters/liboqs"
+    },
+    {
+      "implementation": "openssl",
+      "algorithm": "ml-kem-768",
+      "tier": "primitive",
+      "status": "PLANNED",
+      "adapter": "arena/adapters/openssl"
+    },
+    {
+      "implementation": "openssl",
+      "algorithm": "ml-dsa-65",
+      "tier": "primitive",
+      "status": "PLANNED",
+      "adapter": "arena/adapters/openssl"
+    },
+    {
+      "implementation": "openssl",
+      "algorithm": "slh-dsa",
+      "tier": "primitive",
+      "status": "PLANNED",
+      "adapter": "arena/adapters/openssl"
+    },
+    {
+      "implementation": "aws-lc",
+      "algorithm": "ml-kem-768",
+      "tier": "primitive",
+      "status": "PLANNED",
+      "adapter": "arena/adapters/aws-lc"
+    },
+    {
+      "implementation": "aws-lc",
+      "algorithm": "ml-dsa-65",
+      "tier": "primitive",
+      "status": "PLANNED",
+      "adapter": "arena/adapters/aws-lc"
+    },
+    {
+      "implementation": "circl",
+      "algorithm": "ml-kem-768",
+      "tier": "primitive",
+      "status": "PLANNED",
+      "adapter": "arena/adapters/circl"
+    },
+    {
+      "implementation": "circl",
+      "algorithm": "ml-dsa-65",
+      "tier": "primitive",
+      "status": "PLANNED",
+      "adapter": "arena/adapters/circl"
+    },
+    {
+      "implementation": "botan",
+      "algorithm": "ml-kem-768",
+      "tier": "primitive",
+      "status": "PLANNED",
+      "adapter": "arena/adapters/botan"
+    },
+    {
+      "implementation": "botan",
+      "algorithm": "ml-dsa-65",
+      "tier": "primitive",
+      "status": "PLANNED",
+      "adapter": "arena/adapters/botan"
+    },
+    {
+      "implementation": "rustcrypto-kems",
+      "algorithm": "ml-kem-768",
+      "tier": "primitive",
+      "status": "PLANNED",
+      "adapter": "arena/adapters/rustcrypto-kems"
+    },
+    {
+      "implementation": "rustcrypto-kems",
+      "algorithm": "hqc",
+      "tier": "primitive",
+      "status": "PLANNED",
+      "adapter": "arena/adapters/rustcrypto-kems"
+    },
+    {
+      "implementation": "boringssl",
+      "algorithm": "ml-kem-768",
+      "tier": "primitive",
+      "status": "PLANNED",
+      "adapter": "arena/adapters/boringssl"
+    },
+    {
+      "implementation": "boringssl",
+      "algorithm": "ml-dsa-65",
+      "tier": "primitive",
+      "status": "PLANNED",
+      "adapter": "arena/adapters/boringssl"
+    },
+    {
+      "implementation": "pq-code-package",
+      "algorithm": "ml-kem-768",
+      "tier": "primitive",
+      "status": "PLANNED",
+      "adapter": "arena/adapters/pq-code-package"
+    },
+    {
+      "implementation": "pq-code-package",
+      "algorithm": "ml-dsa-65",
+      "tier": "primitive",
+      "status": "PLANNED",
+      "adapter": "arena/adapters/pq-code-package"
     }
   ]
 }

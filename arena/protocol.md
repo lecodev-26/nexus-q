@@ -85,13 +85,23 @@ An implementation is benchmark-eligible only when:
 
 Experimental implementations remain clearly labeled. Deprecated or cryptographically broken algorithms are historical-only.
 
-## 8. Platform policy
+## 8. Adapter readiness states
+
+The Arena registry and benchmark matrix intentionally cover more implementations than are executable in the current repository state. Each matrix pair has an explicit readiness state:
+
+- `IMPLEMENTED`: an in-repository adapter exists and has passed local structural/compile validation; this does not imply that CI has executed it.
+- `CI_READY`: the adapter and pinned source/build contract are prepared for CI execution; no benchmark result is claimed until CI runs it.
+- `PLANNED`: the comparison target is part of the Arena scope, but its semantically equivalent adapter is not yet implemented.
+
+A readiness state is never a performance result. The Arena must not synthesize, extrapolate or label a target as benchmarked merely because it is present in the registry or matrix.
+
+## 9. Platform policy
 
 x86_64 and ARM64 are first-class CI targets.
 
 RISC-V and embedded targets require real execution on dedicated hardware/runners. Cross compilation alone never produces an execution result.
 
-## 9. First external adapter: liboqs
+## 10. First external adapter: liboqs
 
 The first external Arena adapter is Open Quantum Safe liboqs 0.16.0, pinned to upstream commit 5a1a854.
 
@@ -105,7 +115,7 @@ NEXUS-Q's ML-KEM+X25519 hybrid constructions are not compared against plain libo
 
 The liboqs adapter is CI-only when the local environment does not provide liboqs. It records the liboqs version/commit, target, OS, CPU metadata, compiler, optimization profile and implementation-reported serialized sizes.
 
-## 10. Reproducibility
+## 11. Reproducibility
 
 A future Arena release must pin:
 
