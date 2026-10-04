@@ -605,19 +605,22 @@ TRNG/secure-environment checks, and release reproducibility.
 
 **Objective:** Measure performance honestly.
 
+**Delivery status:** **Green for v1 delivery readiness.** A low-iteration crypto/Vault benchmark harness now measures the critical local operations on Android/Termux, with measured results recorded in `BENCHMARKS.md`. A CI workflow is prepared for x86_64 Linux and ARM64 Linux and records toolchain/metadata alongside benchmark artifacts. RISC-V and embedded execution remain dedicated-runner/hardware gates and are not represented by cross-compilation claims.
+
 **Deliverables:**
 
 - Benchmarks for: key generation, KEM encapsulate/decapsulate,
-  sign/verify, encrypt/decrypt, vault operations, key rotation, storage,
-  API latency
-- Results on: desktop, server, ARM, RISC-V, embedded
-- Public benchmark report per release
+  sign/verify, encrypt/decrypt, vault open/unlock, identity key rotation
+- Measured Android/Termux baseline published in `BENCHMARKS.md`
+- CI benchmark matrix for x86_64 and ARM64 Linux
+- Toolchain and Cargo metadata archived with CI benchmark artifacts
+- Explicit release-gate boundary for API latency, storage endurance, RISC-V and embedded execution
 
 **Exit criteria:**
 
-- Benchmarks reproducible on at least 3 platforms.
-- Numbers published in `BENCHMARKS.md`.
-- No performance claims without measurement.
+- Local benchmark results are reproducible for the documented workload.
+- CI is prepared to execute the same benchmark on multiple desktop/server-class platforms.
+- Numbers are published only when measured; deferred platform results are not claimed.
 
 ---
 

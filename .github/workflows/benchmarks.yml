@@ -1,0 +1,53 @@
+name: Benchmarks
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  native-benchmarks:
+    name: Benchmark / ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
+          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run core benchmark
+        run: cargo bench -p nexusq-core --bench crypto_baseline
+      - name: Archive benchmark output
+        run: |
+          mkdir -p benchmark-results
+          cargo bench -p nexusq-core --bench crypto_baseline > benchmark-results/${{ matrix.target }}.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-${{ matrix.target }}
+          path: benchmark-results/
+
+  reproducibility-metadata:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Record toolchain and metadata
+        run: |
+          mkdir -p benchmark-results
+          rustc -Vv > benchmark-results/rustc.txt
+          cargo -V > benchmark-results/cargo.txt
+          cargo metadata --format-version 1 --locked > benchmark-results/cargo-metadata.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-metadata
+          path: benchmark-results/
+
+# RISC-V and embedded runs are intentionally release-gated: use dedicated
+# hardware/self-hosted runners when available rather than pretending that
+# cross compilation is equivalent to an execution benchmark.
