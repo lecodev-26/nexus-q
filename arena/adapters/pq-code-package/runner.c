@@ -56,6 +56,7 @@ static void emit(const char *run_id, const char *impl_ver, const char *commit,
                  double latency, int pk, int sk, int ct, int sig) {
     char target[128], os[128], cpu[256], compiler[128], compver[256], opt[64];
     char jpk[32], jsk[32], jct[32], jsig[32];
+    uint64_t timestamp_ns = now_ns(CLOCK_REALTIME);
     env_string("ARENA_TARGET", "x86_64-linux-gnu", target, sizeof(target));
     env_string("ARENA_OS", "unknown", os, sizeof(os));
     env_string("ARENA_CPU", "unknown", cpu, sizeof(cpu));
@@ -68,11 +69,11 @@ static void emit(const char *run_id, const char *impl_ver, const char *commit,
            "\"algorithm\":{\"id\":\"%s\",\"parameter_set\":\"%s\"},\"operation\":\"%s\","
            "\"environment\":{\"target\":\"%s\",\"os\":\"%s\",\"cpu\":\"%s\",\"cpu_features\":[],"
            "\"compiler\":\"%s\",\"compiler_version\":\"%s\",\"optimization\":\"%s\",\"harness_version\":\"arena-v1\"},"
-           "\"measurement\":{\"iterations\":%d,\"warmups\":%d,\"latency_ns\":%.3f,\"throughput_ops_s\":%.6f,"
+           "\"measurement\":{\"iterations\":%d,\"warmups\":%d,\"measurement_timestamp_unix_ns\":%llu,\"latency_ns\":%.3f,\"throughput_ops_s\":%.6f,"
            "\"memory_bytes\":null,\"measurement_method\":\"monotonic-clock-average\"},"
            "\"sizes\":{\"public_key_bytes\":%s,\"secret_key_bytes\":%s,\"ciphertext_bytes\":%s,\"signature_bytes\":%s}}\n",
            run_id, impl_ver, commit, alg, param, op, target, os, cpu, compiler, compver, opt,
-           ITERATIONS, WARMUPS, latency, 1e9 / latency, jpk, jsk, jct, jsig);
+           ITERATIONS, WARMUPS, (unsigned long long)timestamp_ns, latency, 1e9 / latency, jpk, jsk, jct, jsig);
 }
 
 typedef struct { uint8_t *pk, *sk, *ct, *ss; } kem_ctx;

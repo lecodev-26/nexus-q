@@ -101,7 +101,9 @@ jobs:
           git clone --depth 1 --branch 0.16.0 https://github.com/open-quantum-safe/liboqs.git .arena-liboqs
           test "$(git -C .arena-liboqs rev-parse --short=7 HEAD)" = "5a1a854"
       - name: Build liboqs
-        run: cmake -S .arena-liboqs -B .arena-liboqs/build -G Ninja -DOQS_BUILD_ONLY_LIB=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release
+        run: |
+          cmake -S .arena-liboqs -B .arena-liboqs/build -G Ninja -DOQS_BUILD_ONLY_LIB=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release
+          cmake --build .arena-liboqs/build --parallel 2
       - name: Compile Arena adapter
         env:
           LIBOQS_COMMIT: 5a1a854
@@ -329,9 +331,10 @@ jobs:
           echo "BOTAN_COMMIT=$(git -C .arena-botan rev-parse HEAD)" >> "$GITHUB_ENV"
       - name: Build Botan
         run: |
-          python3 .arena-botan/configure.py --prefix="$GITHUB_WORKSPACE/.arena-botan-install" --without-documentation --disable-shared
-          make -C .arena-botan/build -j2
-          make -C .arena-botan/build install
+          cd .arena-botan
+          ./configure.py --prefix="$GITHUB_WORKSPACE/.arena-botan-install" --without-documentation --disable-shared
+          make -C build -j2
+          make -C build install
       - name: Build Arena adapter
         env:
           CXXFLAGS: -std=c++20 -O3 -Wall -Wextra -Werror

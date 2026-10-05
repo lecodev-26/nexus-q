@@ -25,7 +25,7 @@ static void env_meta(char *target,size_t tl,char *os,size_t ol,char *cpu,size_t 
     snprintf(target,tl,"unknown");snprintf(os,ol,"unknown");snprintf(cpu,cl,"unknown");
 }
 static void emit(const char *alg,const char *param,const char *op,double latency,size_t pk,size_t sk,size_t ct,size_t sig,int hasct,int hassig){
-    char target[128],os[64],cpu[128],ct_json[32],sig_json[32]; struct timespec ts;
+    char target[256],os[128],cpu[256],ct_json[32],sig_json[32]; struct timespec ts;
     env_meta(target,sizeof(target),os,sizeof(os),cpu,sizeof(cpu)); clock_gettime(CLOCK_REALTIME,&ts);
     snprintf(ct_json,sizeof(ct_json),hasct ? "%zu" : "null",ct);
     snprintf(sig_json,sizeof(sig_json),hassig ? "%zu" : "null",sig);
