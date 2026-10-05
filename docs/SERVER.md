@@ -64,3 +64,9 @@ plaintext payloads or key material.
 
 All cryptographic and policy decisions remain in nexusq-core. The server is
 an authenticated transport/orchestration layer only.
+
+## Shutdown
+
+The server uses graceful shutdown through Tokio. On Unix deployments, both SIGTERM and SIGINT initiate the same shutdown path; on non-Unix targets, SIGINT is used.
+
+The process does not log or expose the bearer token during startup or shutdown. Once the HTTP server exits, the application state is dropped, releasing the vault/session resources owned by the process.

@@ -833,7 +833,39 @@ impl IntoResponse for ApiError {
 }
 
 async fn shutdown_signal() {
-    let _ = tokio::signal::ctrl_c().await;
+    #[cfg(unix)]
+    {
+        let mut terminate =
+            match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+                Ok(signal) => signal,
+                Err(error) => {
+                    tracing::warn!(%error, "failed to install SIGTERM handler; waiting for SIGINT");
+                    let _ = tokio::signal::ctrl_c().await;
+                    tracing::info!("shutdown signal received");
+                    return;
+                }
+            };
+
+        tokio::select! {
+            result = tokio::signal::ctrl_c() => {
+                if let Err(error) = result {
+                    tracing::warn!(%error, "failed to receive SIGINT");
+                }
+            }
+            _ = terminate.recv() => {
+                tracing::info!("SIGTERM received");
+            }
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        if let Err(error) = tokio::signal::ctrl_c().await {
+            tracing::warn!(%error, "failed to receive shutdown signal");
+        }
+    }
+
+    tracing::info!("graceful shutdown initiated");
 }
 
 #[cfg(test)]
