@@ -31,7 +31,7 @@ static void emit(const char* algorithm, const char* parameter, const char* op,
    const auto now = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
    std::cout << "{\"schema_version\":1,\"run_id\":\"botan-" << algorithm << "-"
              << parameter << "-" << op << "\",\"implementation\":{\"id\":\"botan\",\"version\":\""
-             << env_or("BOTAN_VERSION", Botan::version_string()) << "\",\"commit\":\""
+             << (std::getenv("BOTAN_VERSION") && *std::getenv("BOTAN_VERSION") ? std::string(std::getenv("BOTAN_VERSION")) : Botan::version_string()) << "\",\"commit\":\""
              << env_or("BOTAN_COMMIT", "runtime") << "\"},\"algorithm\":{\"id\":\""
              << algorithm << "\",\"parameter_set\":\"" << parameter << "\"},\"operation\":\""
              << op << "\",\"environment\":{\"target\":\"" << env_or("ARENA_TARGET", "runtime")
