@@ -51,3 +51,6 @@ Thumbs.db
 
 # Nested Rust build output
 **/target/
+
+# Local release packaging output
+dist/
