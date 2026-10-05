@@ -1,0 +1,70 @@
+name: NEXUS-Q v2 Hotspot Profiles
+
+on:
+  push:
+    branches: ["v2/v2-02-profile-hotspots"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  profile:
+    name: V2-02 / CPU and allocation profiles
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build profiling harness
+        run: cargo build --release --manifest-path arena/runners/nexusq/Cargo.toml --bin profile_hotspots
+
+      - name: Run allocation and latency profiles
+        run: |
+          mkdir -p artifacts/v2/v2-02
+          : > artifacts/v2/v2-02/profile.tsv
+          for w in \
+            ml-kem-768-keygen ml-kem-768-encaps ml-kem-768-decaps \
+            ml-kem-1024-keygen ml-kem-1024-encaps ml-kem-1024-decaps \
+            ml-dsa-65-keygen ml-dsa-65-sign ml-dsa-65-verify; do
+            ./arena/runners/nexusq/target/release/profile_hotspots "$w" | tee -a artifacts/v2/v2-02/profile.tsv
+          done
+
+      - name: Enable user perf events when permitted
+        run: sudo sysctl -w kernel.perf_event_paranoid=1 || true
+
+      - name: Capture CPU callgraph profiles
+        shell: bash
+        run: |
+          set +e
+          mkdir -p artifacts/v2/v2-02/perf
+          ok=0
+          for w in \
+            ml-kem-768-keygen ml-kem-768-encaps ml-kem-768-decaps \
+            ml-kem-1024-keygen ml-kem-1024-encaps ml-kem-1024-decaps \
+            ml-dsa-65-keygen ml-dsa-65-sign ml-dsa-65-verify; do
+            perf record -e cpu-clock -F 999 -g -o "artifacts/v2/v2-02/perf/${w}.data" -- \
+              ./arena/runners/nexusq/target/release/profile_hotspots "$w" \
+              > "artifacts/v2/v2-02/perf/${w}.run.txt" 2>&1
+            rc=$?
+            echo "$w perf_record_exit=$rc" | tee -a artifacts/v2/v2-02/perf/status.txt
+            if [ "$rc" -eq 0 ]; then
+              ok=1
+              perf report --stdio -i "artifacts/v2/v2-02/perf/${w}.data" --percent-limit 1 \
+                > "artifacts/v2/v2-02/perf/${w}.report.txt" 2>&1
+              perf script -i "artifacts/v2/v2-02/perf/${w}.data" \
+                > "artifacts/v2/v2-02/perf/${w}.script.txt" 2>&1
+            fi
+          done
+          test "$ok" -eq 1
+
+      - name: Validate profile matrix
+        run: |
+          test "$(wc -l < artifacts/v2/v2-02/profile.tsv)" -eq 9
+          test -s artifacts/v2/v2-02/perf/status.txt
+
+      - name: Upload V2-02 profile evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2-02-hotspot-profiles-${{ github.sha }}
+          path: artifacts/v2/v2-02/
