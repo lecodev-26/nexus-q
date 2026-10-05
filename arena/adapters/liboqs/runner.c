@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 #include <oqs/oqs.h>
 #include <stdio.h>
 #include <stdlib.h>

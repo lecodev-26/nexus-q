@@ -106,7 +106,7 @@ jobs:
         env:
           LIBOQS_COMMIT: 5a1a854
         run: |
-          gcc -O3 -std=c11 -DLIBOQS_COMMIT="\\\"$LIBOQS_COMMIT\\\"" \
+          gcc -O3 -std=c11 -DLIBOQS_COMMIT=\"$LIBOQS_COMMIT\" \
             -I.arena-liboqs/build/include -I.arena-liboqs/src \
             arena/adapters/liboqs/runner.c .arena-liboqs/build/lib/liboqs.a \
             -lcrypto -ldl -lpthread -lm -o arena-liboqs-runner
@@ -170,6 +170,7 @@ jobs:
           mv .arena-circl/arena_runner.go .arena-circl/arena-runner/main.go
           mv .arena-circl/arena_runner.mod .arena-circl/arena-runner/go.mod
           (cd .arena-circl/arena-runner && go mod edit -replace github.com/cloudflare/circl=..)
+          (cd .arena-circl/arena-runner && go mod tidy)
           (cd .arena-circl/arena-runner && go build -trimpath -o runner .)
       - name: Run adapter and validate JSONL
         env:
@@ -267,7 +268,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Fetch pinned AWS-LC source
         run: |
-          git clone --depth 1 https://github.com/aws/aws-lc.git .arena-aws-lc
+          git init .arena-aws-lc
+          git -C .arena-aws-lc remote add origin https://github.com/aws/aws-lc.git
+          git -C .arena-aws-lc fetch --depth 1 origin ec05f25ef5bcb1bf03d2e2f44ba57973a878e0ba
+          git -C .arena-aws-lc checkout --detach ec05f25ef5bcb1bf03d2e2f44ba57973a878e0ba
           test "$(git -C .arena-aws-lc rev-parse HEAD)" = "ec05f25ef5bcb1bf03d2e2f44ba57973a878e0ba"
       - name: Build AWS-LC
         run: |
@@ -326,8 +330,8 @@ jobs:
       - name: Build Botan
         run: |
           python3 .arena-botan/configure.py --prefix="$GITHUB_WORKSPACE/.arena-botan-install" --without-documentation --disable-shared
-          make -C .arena-botan -j2
-          make -C .arena-botan install
+          make -C .arena-botan/build -j2
+          make -C .arena-botan/build install
       - name: Build Arena adapter
         env:
           CXXFLAGS: -std=c++20 -O3 -Wall -Wextra -Werror

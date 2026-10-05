@@ -2,7 +2,7 @@ use std::hint::black_box;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use hqc_kem::{Hqc128, HqcKem};
-use kem::{Decapsulate, Encapsulate, Generate};
+use kem::{Decapsulate, Encapsulate, Kem};
 use ml_kem::MlKem768;
 
 const ITERATIONS: usize = 20;

@@ -1,6 +1,6 @@
+#define _POSIX_C_SOURCE 200809L
 #include <openssl/evp.h>
 #include <openssl/core_names.h>
-#include <openssl/signature.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>

@@ -3,6 +3,29 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/random.h>
+
+int randombytes(uint8_t *out, size_t outlen) {
+    size_t off = 0;
+    while (off < outlen) {
+        ssize_t n = getrandom(out + off, outlen - off, 0);
+        if (n > 0) {
+            off += (size_t)n;
+            continue;
+        }
+        int fd = open("/dev/urandom", O_RDONLY);
+        if (fd < 0) return -1;
+        while (off < outlen) {
+            ssize_t m = read(fd, out + off, outlen - off);
+            if (m <= 0) { close(fd); return -1; }
+            off += (size_t)m;
+        }
+        close(fd);
+    }
+    return 0;
+}
 
 #include <mlkem_native.h>
 #include <mldsa_native.h>
