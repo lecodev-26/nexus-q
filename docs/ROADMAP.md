@@ -626,21 +626,30 @@ TRNG/secure-environment checks, and release reproducibility.
 
 ## 21. Phase 18 — Observability
 
+**Status:** Green / complete for v1.0 delivery readiness. Aggregate metrics,
+structured safe logging, request correlation, health/readiness, and CLI
+diagnostics are implemented and validated locally. The server exposes
+Prometheus-compatible text metrics without secret-bearing labels.
+
 **Objective:** Make NEXUS-Q operable in production.
 
 **Deliverables:**
 
-- Metrics: operations/sec, latency, errors, key usage, vault
-  operations, hardware status
-- Logging (no secrets)
-- Health endpoint (`nexusq health`)
-- Diagnostics command (`nexusq diagnostics`)
+- [x] Metrics: operations/sec derivation, latency, errors, key usage, vault
+      operations, hardware status
+- [x] Structured logging with no secrets
+- [x] Request correlation via `X-Request-Id`
+- [x] Health/liveness and readiness endpoints
+- [x] `nexusq health`
+- [x] `nexusq diagnostics`
+- [x] Operational documentation in `docs/OBSERVABILITY.md`
 
 **Exit criteria:**
 
-- Metrics exposed in a standard format (Prometheus or equivalent).
-- Logs are structured and safe (no secrets).
-- Health and diagnostics work end-to-end.
+- [x] Metrics exposed in Prometheus-compatible text format.
+- [x] Logs are structured and safe (no secrets).
+- [x] Health and diagnostics work end-to-end.
+- [x] Local fmt/check/clippy and focused observability tests are green.
 
 ---
 
@@ -808,7 +817,7 @@ infrastructure.
 | 15    | Security Engineering          | Green       |
 | 16    | Side Channel / Hardening      | Green       |
 | 17    | Benchmarking                  | Green       |
-| 18    | Observability                 | Pending     |
+| 18    | Observability                 | Green       |
 | 19    | Deployment                    | Pending     |
 | 20    | User Documentation            | Pending     |
 | 21    | Audit                         | Pending     |

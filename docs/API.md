@@ -364,14 +364,19 @@ GET    /v1/audit
 POST   /v1/audit/verify
 
 GET    /v1/health
+GET    /v1/ready
 GET    /v1/version
+GET    /metrics
+GET    /readyz
 
 ```
 
 ### 7.2 Authentication
 
-The server requires authentication for every endpoint except `/health`
-and `/version`. Supported methods (Fase 14):
+The server requires authentication for protected vault/crypto endpoints.
+The liveness, readiness, version, and aggregate metrics endpoints are public:
+`/health`, `/v1/health`, `/readyz`, `/v1/ready`, `/v1/version`, and `/metrics`.
+Supported authentication for protected endpoints (Fase 14):
 
 - **Bearer token** (short-lived, issued by the server after login).
 - **mTLS** (client certificate bound to an identity).

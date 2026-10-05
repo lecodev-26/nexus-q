@@ -22,11 +22,13 @@ pub mod crypto;
 pub mod error;
 pub mod hardware;
 pub mod identity;
+pub mod observability;
 pub mod policy;
 pub mod storage;
 pub mod vault;
 
 pub use error::{Error, Result};
+pub use observability::{Metrics, OBSERVABILITY_SCHEMA_VERSION};
 
 /// Common imports.
 ///

@@ -37,6 +37,8 @@ fn run(cli: Cli) -> Result<(), CliError> {
     let global = GlobalOptions { output, quiet };
 
     match command {
+        Command::Health(args) => commands::diagnostics::health(args, &global),
+        Command::Diagnostics(args) => commands::diagnostics::diagnostics(args, &global),
         Command::Vault(cmd) => commands::vault::run(cmd, &global),
         Command::Key(cmd) => commands::key::run(cmd, &global),
         Command::Data(cmd) => commands::data::run(cmd, &global),

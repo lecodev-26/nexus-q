@@ -32,6 +32,17 @@ pub struct Cli {
     pub command: Command,
 }
 
+/// Arguments for `nexusq health` and `nexusq diagnostics`.
+#[derive(Debug, Args)]
+pub struct HealthArgs {
+    /// Optional vault path to include in the health check.
+    #[arg(long)]
+    pub vault: Option<PathBuf>,
+}
+
+/// Arguments for diagnostics. This is intentionally read-only.
+pub type DiagnosticsArgs = HealthArgs;
+
 /// Output format for command results.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum OutputFormat {
@@ -44,6 +55,12 @@ pub enum OutputFormat {
 /// Top-level subcommands.
 #[derive(Debug, Subcommand)]
 pub enum Command {
+    /// Check local NEXUS-Q health.
+    Health(HealthArgs),
+
+    /// Show local NEXUS-Q diagnostics.
+    Diagnostics(DiagnosticsArgs),
+
     /// Manage vaults.
     #[command(subcommand)]
     Vault(VaultCommand),

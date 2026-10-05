@@ -13,6 +13,7 @@
 pub mod audit;
 pub mod credential;
 pub mod data;
+pub mod diagnostics;
 pub mod identity;
 pub mod key;
 pub mod sign;

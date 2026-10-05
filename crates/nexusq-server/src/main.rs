@@ -18,6 +18,7 @@ use axum::{
     routing::{get, post},
 };
 use nexusq_core::{
+    Metrics,
     crypto::sign::Signature,
     prelude::*,
     vault::{DestructionConfirmation, RevokeReason},
@@ -36,6 +37,7 @@ struct AppState {
     vault: Arc<Mutex<ServerVault>>,
     auth: Arc<AuthConfig>,
     limiter: Arc<RateLimiter>,
+    metrics: Metrics,
 }
 
 struct ServerVault {
@@ -68,6 +70,12 @@ struct VersionResponse {
 #[derive(Serialize)]
 struct HealthResponse {
     status: &'static str,
+}
+
+#[derive(Serialize)]
+struct ReadinessResponse {
+    status: &'static str,
+    vault: &'static str,
 }
 
 #[derive(serde::Deserialize)]
@@ -162,6 +170,7 @@ async fn main() -> StdResult<(), Box<dyn std::error::Error>> {
             DEFAULT_RATE_LIMIT,
             Duration::from_secs(60),
         )),
+        metrics: Metrics::default(),
     };
 
     let app = build_app(state);
@@ -186,7 +195,10 @@ async fn main() -> StdResult<(), Box<dyn std::error::Error>> {
 fn build_app(state: AppState) -> Router {
     let public = Router::new()
         .route("/health", get(health))
+        .route("/readyz", get(ready))
+        .route("/metrics", get(metrics))
         .route("/v1/health", get(health))
+        .route("/v1/ready", get(ready))
         .route("/v1/version", get(version));
 
     let protected = Router::new()
@@ -219,6 +231,10 @@ fn build_app(state: AppState) -> Router {
             state.clone(),
             rate_limit_middleware,
         )))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            observability_middleware,
+        ))
         .with_state(state)
 }
 
@@ -244,6 +260,59 @@ impl RateLimiter {
         }
         entry.1 += 1;
         true
+    }
+}
+
+async fn observability_middleware(
+    State(state): State<AppState>,
+    mut request: Request<axum::body::Body>,
+    next: Next,
+) -> Response {
+    let request_id = state.metrics.request_id();
+    let operation = operation_name(request.uri().path());
+    request.extensions_mut().insert(request_id.clone());
+    let started = Instant::now();
+    tracing::info!(request_id = %request_id, operation, "request started");
+
+    let mut response = next.run(request).await;
+    let elapsed = started.elapsed();
+    let success = response.status().is_success();
+    state.metrics.record_request(elapsed, success);
+    state.metrics.record_operation(operation, elapsed, success);
+    response.headers_mut().insert(
+        axum::http::header::HeaderName::from_static("x-request-id"),
+        axum::http::HeaderValue::from_str(&request_id).expect("request id is valid ASCII"),
+    );
+    tracing::info!(
+        request_id = %request_id,
+        operation,
+        status = response.status().as_u16(),
+        duration_ms = elapsed.as_secs_f64() * 1000.0,
+        "request finished"
+    );
+    response
+}
+
+fn operation_name(path: &str) -> &'static str {
+    match path {
+        "/health" | "/v1/health" => "health.check",
+        "/readyz" | "/v1/ready" => "health.ready",
+        "/metrics" => "observability.metrics",
+        "/v1/version" => "server.version",
+        "/v1/vault/unlock" => "vault.unlock",
+        "/v1/vault/lock" => "vault.lock",
+        "/v1/vault/status" => "vault.status",
+        "/v1/keys" => "key.list_or_create",
+        "/v1/encrypt" => "crypto.encrypt",
+        "/v1/decrypt" => "crypto.decrypt",
+        "/v1/sign" => "identity.sign",
+        "/v1/verify" => "identity.verify",
+        "/v1/audit" => "vault.audit",
+        "/v1/audit/verify" => "vault.audit_verify",
+        path if path.contains("/rotate") => "key.rotate",
+        path if path.contains("/revoke") => "key.revoke",
+        path if path.contains("/destroy") => "key.destroy",
+        _ => "http.other",
     }
 }
 
@@ -340,6 +409,35 @@ fn is_bearer_authorized(value: &str, expected: &str) -> bool {
 
 async fn health() -> Json<HealthResponse> {
     Json(HealthResponse { status: "ok" })
+}
+
+async fn ready(State(state): State<AppState>) -> (StatusCode, Json<ReadinessResponse>) {
+    let vault = state.vault.lock().await;
+    let ready = vault.vault.path().exists();
+    let response = ReadinessResponse {
+        status: if ready { "ready" } else { "not_ready" },
+        vault: if ready { "open" } else { "unavailable" },
+    };
+    (
+        if ready {
+            StatusCode::OK
+        } else {
+            StatusCode::SERVICE_UNAVAILABLE
+        },
+        Json(response),
+    )
+}
+
+async fn metrics(State(state): State<AppState>) -> Response {
+    (
+        StatusCode::OK,
+        [(
+            axum::http::header::CONTENT_TYPE,
+            "text/plain; version=0.0.4; charset=utf-8",
+        )],
+        state.metrics.prometheus(),
+    )
+        .into_response()
 }
 
 async fn version() -> Json<VersionResponse> {
@@ -678,7 +776,60 @@ mod tests {
                 bearer_token: "test-token-with-at-least-32-bytes-long".to_owned(),
             }),
             limiter: Arc::new(RateLimiter::new(60, Duration::from_secs(60))),
+            metrics: Metrics::default(),
         }
+    }
+
+    #[tokio::test]
+    async fn observability_endpoints_expose_safe_metrics_and_request_id() {
+        let dir = std::env::temp_dir().join(format!(
+            "nexusq-server-observability-test-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let vault_path = dir.join("vault.nqx");
+        Vault::create(&vault_path, b"test-password", Some("server-test".into())).unwrap();
+
+        let app = build_app(test_state(vault_path));
+        use axum::body::{Body, to_bytes};
+        use axum::http::{Request, StatusCode};
+        use tower::ServiceExt;
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(response.headers().contains_key("x-request-id"));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/metrics")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get("content-type").unwrap(),
+            "text/plain; version=0.0.4; charset=utf-8"
+        );
+        let body = to_bytes(response.into_body(), 64 * 1024).await.unwrap();
+        let text = String::from_utf8(body.to_vec()).unwrap();
+        assert!(text.contains("# TYPE nexusq_requests_total counter"));
+        assert!(text.contains("nexusq_hardware_status 1"));
+        assert!(!text.contains("test-password"));
+
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[tokio::test]
