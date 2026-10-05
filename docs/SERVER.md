@@ -19,7 +19,7 @@ The server provides:
 - Envelope encryption and decryption.
 - Audit inspection and full audit-chain verification.
 - Core policy enforcement through nexusq-core.
-- Graceful shutdown on SIGINT.
+- Graceful shutdown on SIGTERM/SIGINT (Unix) or SIGINT (non-Unix).
 - Loopback-only TCP by default.
 
 Protected operations are serialized through the in-process vault session so
