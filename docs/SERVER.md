@@ -35,12 +35,14 @@ Required:
 Optional:
 
 - NEXUSQ_SERVER_ADDR — TCP bind address, default 127.0.0.1:8443.
+- NEXUSQ_SERVER_RATE_LIMIT — maximum requests per client per 60-second window, default 60. Must be greater than zero.
+- NEXUSQ_SERVER_MAX_BODY_BYTES — maximum HTTP request body size, default 1048576 (1 MiB). Must be greater than zero.
 - NEXUSQ_TRUSTED_TLS_TERMINATION=1 — required before binding a non-loopback
   address. This explicitly declares that TLS/mTLS termination is performed by
   a trusted deployment boundary.
 - RUST_LOG — tracing filter.
 
-The server refuses to expose plaintext TCP remotely by accident.
+The server refuses to expose plaintext TCP remotely by accident. Invalid numeric deployment settings are rejected at startup rather than silently falling back.
 
 ## Transport security
 

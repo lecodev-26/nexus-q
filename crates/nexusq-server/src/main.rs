@@ -31,12 +31,14 @@ const DEFAULT_ADDR: &str = "127.0.0.1:8443";
 const DEFAULT_RATE_LIMIT: u32 = 60;
 const SESSION_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 const MAX_REQUEST_BODY_BYTES: usize = 1024 * 1024;
+const MIN_SERVER_TOKEN_BYTES: usize = 32;
 
 #[derive(Clone)]
 struct AppState {
     vault: Arc<Mutex<ServerVault>>,
     auth: Arc<AuthConfig>,
     limiter: Arc<RateLimiter>,
+    max_request_body_bytes: usize,
     metrics: Metrics,
 }
 
@@ -48,6 +50,111 @@ struct ServerVault {
 
 struct AuthConfig {
     bearer_token: String,
+}
+
+struct ServerConfig {
+    vault_path: PathBuf,
+    server_token: String,
+    addr: SocketAddr,
+    rate_limit: u32,
+    max_request_body_bytes: usize,
+    trusted_tls_termination: bool,
+}
+
+impl ServerConfig {
+    fn from_env() -> StdResult<Self, Box<dyn std::error::Error>> {
+        let vault_path = env::var_os("NEXUSQ_VAULT_PATH")
+            .map(PathBuf::from)
+            .ok_or_else(|| std::io::Error::other("NEXUSQ_VAULT_PATH is required"))?;
+
+        let server_token = env::var("NEXUSQ_SERVER_TOKEN").map_err(|_| {
+            std::io::Error::other(
+                "NEXUSQ_SERVER_TOKEN is required; server refuses unauthenticated startup",
+            )
+        })?;
+        if server_token.len() < MIN_SERVER_TOKEN_BYTES {
+            return Err(
+                std::io::Error::other("NEXUSQ_SERVER_TOKEN must be at least 32 bytes").into(),
+            );
+        }
+
+        let addr = env::var("NEXUSQ_SERVER_ADDR")
+            .unwrap_or_else(|_| DEFAULT_ADDR.into())
+            .parse::<SocketAddr>()
+            .map_err(|_| {
+                std::io::Error::other("NEXUSQ_SERVER_ADDR must be a valid socket address")
+            })?;
+
+        let rate_limit = parse_positive_u32("NEXUSQ_SERVER_RATE_LIMIT", DEFAULT_RATE_LIMIT)?;
+        let max_request_body_bytes =
+            parse_positive_usize("NEXUSQ_SERVER_MAX_BODY_BYTES", MAX_REQUEST_BODY_BYTES)?;
+        let trusted_tls_termination = env::var("NEXUSQ_TRUSTED_TLS_TERMINATION")
+            .map(|value| value == "1")
+            .unwrap_or(false);
+
+        if !addr.ip().is_loopback() && !trusted_tls_termination {
+            return Err(std::io::Error::other(
+                "non-loopback TCP requires NEXUSQ_TRUSTED_TLS_TERMINATION=1; plaintext remote exposure is refused",
+            )
+            .into());
+        }
+
+        Ok(Self {
+            vault_path,
+            server_token,
+            addr,
+            rate_limit,
+            max_request_body_bytes,
+            trusted_tls_termination,
+        })
+    }
+}
+
+fn parse_positive_u32_value(value: &str) -> StdResult<u32, Box<dyn std::error::Error>> {
+    let parsed = value
+        .parse::<u32>()
+        .map_err(|_| std::io::Error::other("value must be a positive integer"))?;
+    if parsed == 0 {
+        return Err(std::io::Error::other("value must be greater than zero").into());
+    }
+    Ok(parsed)
+}
+
+fn parse_positive_u32(name: &str, default: u32) -> StdResult<u32, Box<dyn std::error::Error>> {
+    match env::var(name) {
+        Ok(value) => parse_positive_u32_value(&value).map_err(|_| {
+            std::io::Error::other(format!("{name} must be a positive integer")).into()
+        }),
+        Err(env::VarError::NotPresent) => Ok(default),
+        Err(env::VarError::NotUnicode(_)) => {
+            Err(std::io::Error::other(format!("{name} must be valid UTF-8")).into())
+        }
+    }
+}
+
+fn parse_positive_usize_value(value: &str) -> StdResult<usize, Box<dyn std::error::Error>> {
+    let parsed = value
+        .parse::<usize>()
+        .map_err(|_| std::io::Error::other("value must be a positive integer"))?;
+    if parsed == 0 {
+        return Err(std::io::Error::other("value must be greater than zero").into());
+    }
+    Ok(parsed)
+}
+
+fn parse_positive_usize(
+    name: &str,
+    default: usize,
+) -> StdResult<usize, Box<dyn std::error::Error>> {
+    match env::var(name) {
+        Ok(value) => parse_positive_usize_value(&value).map_err(|_| {
+            std::io::Error::other(format!("{name} must be a positive integer")).into()
+        }),
+        Err(env::VarError::NotPresent) => Ok(default),
+        Err(env::VarError::NotUnicode(_)) => {
+            Err(std::io::Error::other(format!("{name} must be valid UTF-8")).into())
+        }
+    }
 }
 
 struct RateLimiter {
@@ -144,18 +251,8 @@ async fn main() -> StdResult<(), Box<dyn std::error::Error>> {
         .with_env_filter(env::var("RUST_LOG").unwrap_or_else(|_| "nexusq_server=info".into()))
         .init();
 
-    let vault_path = env::var_os("NEXUSQ_VAULT_PATH")
-        .map(PathBuf::from)
-        .ok_or_else(|| std::io::Error::other("NEXUSQ_VAULT_PATH is required"))?;
-    let vault = Vault::open(&vault_path)?;
-    let token = env::var("NEXUSQ_SERVER_TOKEN").map_err(|_| {
-        std::io::Error::other(
-            "NEXUSQ_SERVER_TOKEN is required; server refuses unauthenticated startup",
-        )
-    })?;
-    if token.len() < 32 {
-        return Err(std::io::Error::other("NEXUSQ_SERVER_TOKEN must be at least 32 bytes").into());
-    }
+    let config = ServerConfig::from_env()?;
+    let vault = Vault::open(&config.vault_path)?;
 
     let state = AppState {
         vault: Arc::new(Mutex::new(ServerVault {
@@ -164,28 +261,23 @@ async fn main() -> StdResult<(), Box<dyn std::error::Error>> {
             last_activity: None,
         })),
         auth: Arc::new(AuthConfig {
-            bearer_token: token,
+            bearer_token: config.server_token,
         }),
-        limiter: Arc::new(RateLimiter::new(
-            DEFAULT_RATE_LIMIT,
-            Duration::from_secs(60),
-        )),
+        limiter: Arc::new(RateLimiter::new(config.rate_limit, Duration::from_secs(60))),
+        max_request_body_bytes: config.max_request_body_bytes,
         metrics: Metrics::default(),
     };
 
     let app = build_app(state);
 
-    let addr: SocketAddr = env::var("NEXUSQ_SERVER_ADDR")
-        .unwrap_or_else(|_| DEFAULT_ADDR.into())
-        .parse()?;
-    if !addr.ip().is_loopback() && env::var("NEXUSQ_TRUSTED_TLS_TERMINATION").as_deref() != Ok("1")
-    {
-        return Err(std::io::Error::other(
-            "non-loopback TCP requires NEXUSQ_TRUSTED_TLS_TERMINATION=1; plaintext remote exposure is refused",
-        ).into());
-    }
-    tracing::info!(%addr, "nexusq-server listening");
-    let listener = tokio::net::TcpListener::bind(addr).await?;
+    tracing::info!(
+        addr = %config.addr,
+        rate_limit = config.rate_limit,
+        max_request_body_bytes = config.max_request_body_bytes,
+        trusted_tls_termination = config.trusted_tls_termination,
+        "nexusq-server listening"
+    );
+    let listener = tokio::net::TcpListener::bind(config.addr).await?;
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await?;
@@ -226,7 +318,7 @@ fn build_app(state: AppState) -> Router {
 
     public
         .merge(protected)
-        .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
+        .layer(DefaultBodyLimit::max(state.max_request_body_bytes))
         .layer(ServiceBuilder::new().layer(middleware::from_fn_with_state(
             state.clone(),
             rate_limit_middleware,
@@ -749,6 +841,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn positive_integer_parsers_have_safe_defaults_and_reject_invalid_values() {
+        assert_eq!(parse_positive_u32("NEXUSQ_TEST_MISSING", 60).unwrap(), 60);
+        assert!(parse_positive_u32_value("0").is_err());
+        assert!(parse_positive_u32_value("not-a-number").is_err());
+        assert_eq!(parse_positive_u32_value("7").unwrap(), 7);
+
+        assert_eq!(parse_positive_usize_value("1024").unwrap(), 1024);
+        assert!(parse_positive_usize_value("0").is_err());
+        assert!(parse_positive_usize_value("not-a-number").is_err());
+    }
+
+    #[test]
+    fn server_token_minimum_is_explicit() {
+        assert_eq!(MIN_SERVER_TOKEN_BYTES, 32);
+    }
+
+    #[test]
     fn bearer_auth_is_exact_and_constant_time() {
         assert!(is_bearer_authorized("Bearer abc123", "abc123"));
         assert!(!is_bearer_authorized("Bearer abc124", "abc123"));
@@ -776,6 +885,7 @@ mod tests {
                 bearer_token: "test-token-with-at-least-32-bytes-long".to_owned(),
             }),
             limiter: Arc::new(RateLimiter::new(60, Duration::from_secs(60))),
+            max_request_body_bytes: MAX_REQUEST_BODY_BYTES,
             metrics: Metrics::default(),
         }
     }
