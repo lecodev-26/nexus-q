@@ -1,0 +1,89 @@
+name: NEXUS-Q v2 CI
+
+on:
+  pull_request:
+    branches: ["nexusqv2"]
+  push:
+    branches: ["nexusqv2"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v2-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fast:
+    name: v2 / fast validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Check workspace
+        run: cargo check --workspace --locked
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Workspace tests
+        run: cargo test --workspace --locked
+
+      - name: Validate benchmark and Arena data
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          for path in Path("arena").rglob("*.json"):
+              json.loads(path.read_text())
+
+          required = [
+              Path("arena/registry/algorithms.json"),
+              Path("arena/registry/implementations.json"),
+              Path("arena/registry/matrix.json"),
+              Path("arena/schemas/benchmark-result.schema.json"),
+          ]
+          assert all(p.is_file() for p in required)
+          print("v2 benchmark/Arena metadata: OK")
+          PY
+
+  crypto-regression:
+    name: v2 / crypto regression
+    runs-on: ubuntu-latest
+    needs: fast
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Run core crypto tests
+        run: cargo test -p nexusq-core --locked
+
+      - name: Run workspace tests again on release profile
+        run: cargo test --workspace --locked --release
+
+  benchmark-smoke:
+    name: v2 / benchmark smoke
+    runs-on: ubuntu-latest
+    needs: fast
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build benchmark target
+        run: cargo bench -p nexusq-core --bench crypto_baseline --no-run
+
+      - name: Run benchmark smoke
+        run: cargo bench -p nexusq-core --bench crypto_baseline -- --warm-up-time 0.1 --measurement-time 0.5
+
+  # Heavy fuzz soaking, full external Arena runs and release gates are
+  # deliberately not part of every v2 PR. They are dispatched explicitly
+  # by the corresponding v2 phase/release gate.
