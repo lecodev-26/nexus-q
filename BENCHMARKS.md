@@ -25,6 +25,39 @@ Environment: the project's Android/Termux development device; results are inform
 
 The Vault unlock number includes the configured password KDF and is therefore expected to dominate the operation cost.
 
+
+## v1.0 PQC Benchmark Arena result
+
+The final Arena CI run completed successfully on 2026-10-05. It validated 57 normalized measurements from eight implementations on the same x86_64 Linux CI environment, using 20 measurement iterations and 3 warmups. Results are retained by GitHub Actions as per-implementation JSONL artifacts.
+
+The direct NEXUS-Q comparison is intentionally reported without a composite score. Lower latency is better.
+
+| Operation | NEXUS-Q | Best measured comparator | NEXUS-Q / best |
+| --- | ---: | ---: | ---: |
+| ML-KEM-768 keygen | 33.94 µs | AWS-LC — 11.44 µs | 2.97× |
+| ML-KEM-768 encaps | 27.97 µs | AWS-LC — 12.11 µs | 2.31× |
+| ML-KEM-768 decaps | 34.62 µs | AWS-LC — 15.07 µs | 2.30× |
+| ML-KEM-1024 keygen | 53.89 µs | liboqs — 22.60 µs | 2.38× |
+| ML-KEM-1024 encaps | 46.05 µs | liboqs — 22.71 µs | 2.03× |
+| ML-KEM-1024 decaps | 52.14 µs | liboqs — 25.61 µs | 2.04× |
+| ML-DSA-65 keygen | 168.69 µs | AWS-LC — 44.21 µs | 3.82× |
+| ML-DSA-65 sign | 600.73 µs | AWS-LC — 134.75 µs | 4.46× |
+| ML-DSA-65 verify | 101.20 µs | CIRCL — 22.92 µs | 4.42× |
+
+These numbers are the **v1 optimization baseline**, not a claim of superiority. They identify the exact workloads v2 must improve. Arena records implementation revisions, toolchain/environment metadata and normalized JSONL output; it does not claim that implementations supporting different algorithm sets are interchangeable.
+
+### v1 external implementations
+
+- AWS-LC — pinned commit `ec05f25`
+- Botan — `3.13.0`
+- CIRCL — `1.6.4`
+- liboqs — `0.16.0`, commit `5a1a854`
+- OpenSSL — `3.5.9`
+- PQ Code Package — `mlkem-native-v2.0.0 + mldsa-native-v1.0.0-beta2`
+- RustCrypto KEMs — `0.3.2`, commit `4407682`
+
+The full raw measurements remain available as CI artifacts from the final Arena run.
+
 ## CI matrix
 
 `.github/workflows/benchmarks.yml` runs the same benchmark on x86_64 Linux and ARM64 Linux and archives toolchain/metadata. RISC-V and embedded execution require dedicated runners or hardware; those are release/audit gates, not simulated by cross compilation.

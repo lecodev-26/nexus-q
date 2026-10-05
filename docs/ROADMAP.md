@@ -1,6 +1,6 @@
 # NEXUS-Q — Roadmap
 
-> **Status:** Living document — delivery status green through Phase 16; heavy/release-only gates delegated to CI
+> **Status:** Living document — **v1.0 engineering baseline frozen; v2 performance program pending detailed design.**
 > **Audience:** Contributors, users, stakeholders
 > **Scope:** Phased development plan from bootstrap to v1.0 and beyond
 
@@ -730,9 +730,11 @@ Prometheus-compatible text metrics without secret-bearing labels.
 
 ---
 
-## 25. Phase 22 — NEXUS-Q v1.0
+## 25. Phase 22 — NEXUS-Q v1.0 baseline
 
-**Objective:** Release the first stable version.
+**Objective:** Freeze the first complete engineering baseline.
+
+For this project checkpoint, v1.0 is treated as a completed reference baseline rather than a public registry/package release. Distribution is deferred until v2 performance and security objectives are met.
 
 **Definition of v1.0:** all of the following must be true:
 
@@ -750,39 +752,47 @@ Prometheus-compatible text metrics without secret-bearing labels.
 - ✓ Hardware abstraction (traits + software backend)
 - ✓ TRNG support (with health checks)
 - ✓ Extensive testing (unit, integration, property, negative)
-- ✓ Fuzzing (24h+ no crashes)
+- ✓ Fuzzing campaign infrastructure and extended CI soak (release evidence remains tied to the final CI run)
 - ✓ Security hardening (side channels documented)
 - ✓ Documentation (user + developer)
 - ✓ Benchmarks (published)
-- ✓ Reproducible releases (signed, checksummed)
-- ✓ Independent audit completed
+- ✓ Deterministic packaging and release metadata; public package publication deferred
+- ⏸ Independent external audit not performed; this is explicitly disclosed rather than fabricated
 
 **Exit criteria:**
 
-- All checkboxes above are checked.
-- v1.0.0 tag created and signed.
-- Release notes published.
+- The engineering baseline is frozen and documented.
+- Final CI/Arena evidence is retained.
+- Performance gaps are recorded as v2 work rather than hidden.
+- Public registry publication is deferred until v2 gates are met.
 
 ---
 
-## 26. After v1.0
+## 26. After v1.0 — NEXUS-Q v2 performance program
 
-### v1.1 — Ecosystem expansion
+The next milestone is **NEXUS-Q v2**, focused first on making the cryptographic hot paths competitive with the fastest maintained implementations measured by Arena. The detailed phase plan will be designed before implementation begins.
 
-- Expanded SDKs beyond the Phase 13 baseline
-- TypeScript SDK
-- Better hardware support (TPM 2.0 mature, first HSM integration)
-- Remote vault (access vault over network)
-- Improved audit system
+### v2 priorities
 
-### v1.2 — Distribution and enterprise
+1. **Benchmark-first:** lock the Arena workloads and establish per-operation performance targets.
+2. **Profile:** identify CPU, allocation, serialization, RNG and abstraction overhead in ML-KEM and ML-DSA.
+3. **Optimize safely:** SIMD/vectorization, batching, memory layout, allocation reduction, parallelism and backend selection where compatible with constant-time/security requirements.
+4. **Backend strategy:** evaluate optimized primitives/backends without weakening the security model or portability.
+5. **Regression protection:** every optimization must have correctness, interoperability, security and benchmark evidence.
+6. **Arena target:** approach or exceed the fastest relevant comparator on the explicitly selected workloads, rather than optimizing synthetic microbenchmarks that do not represent the Arena.
+7. **Release gate:** v2 is not complete until the new benchmark results, fuzzing, security gates and documentation are green together.
 
-- Distributed vault (multi-node architecture)
-- Enterprise policy engine (richer rules, RBAC)
-- HSM integrations (PKCS#11, vendor-specific)
-- Cloud integrations (AWS KMS, GCP KMS, Azure Key Vault as backends)
+The detailed v2 phases, acceptance thresholds and optimization work packages will be authored on the `nexusqv2` branch.
 
-### v2.0 — Platform
+### v2 platform expansion (later)
+
+- Expanded SDK ecosystem and registry publication
+- Better hardware support and acceleration
+- Remote/distributed vault capabilities
+- Richer policy/RBAC capabilities
+- HSM and cloud KMS integrations
+
+### Long-term platform
 
 NEXUS-Q becomes the cryptographic core of a broader platform. The
 platform has three pillars:
@@ -822,10 +832,10 @@ infrastructure.
 | 16    | Side Channel / Hardening      | Green       |
 | 17    | Benchmarking                  | Green       |
 | 18    | Observability                 | Green       |
-| 19    | Deployment                    | 19A-19E Green; 19F CI gate pending |
-| 20    | User Documentation            | In progress |
-| 21    | Audit                         | Pending     |
-| 22    | v1.0                          | Pending     |
+| 19    | Deployment                    | Complete for v1 baseline; CI evidence retained |
+| 20    | User Documentation            | Complete |
+| 21    | Audit                         | Closed as v1 baseline review; independent external audit not performed |
+| 22    | v1.0 baseline                 | Complete / frozen |
 
 ---
 

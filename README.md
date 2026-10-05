@@ -1,8 +1,10 @@
 # NEXUS-Q
 
+[![Security and Release Gates](https://github.com/lecodev-26/nexus-q/actions/workflows/security-ci.yml/badge.svg?branch=main)](https://github.com/lecodev-26/nexus-q/actions/workflows/security-ci.yml) [![SDK CI](https://github.com/lecodev-26/nexus-q/actions/workflows/sdk-ci.yml/badge.svg?branch=main)](https://github.com/lecodev-26/nexus-q/actions/workflows/sdk-ci.yml) [![Benchmarks](https://github.com/lecodev-26/nexus-q/actions/workflows/benchmarks.yml/badge.svg?branch=main)](https://github.com/lecodev-26/nexus-q/actions/workflows/benchmarks.yml) [![PQC Benchmark Arena](https://github.com/lecodev-26/nexus-q/actions/workflows/pqc-arena.yml/badge.svg?branch=main)](https://github.com/lecodev-26/nexus-q/actions/workflows/pqc-arena.yml) [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](https://opensource.org/license/mit)
+
 > Post-quantum cryptographic security engine for protecting data, keys, and identities.
 
-**Status**: Phase 20 user documentation is complete. v1.0 publication remains gated by Phase 21 audit evidence, the final GitHub CI/release process, and Phase 22 release approval.
+**Status**: **NEXUS-Q v1.0 baseline complete and frozen.** The v1 line is documented, tested, benchmarked, and ready to serve as the reference baseline for v2 optimization. v1 is intentionally **not being published as a stable package release** (crates.io, PyPI, npm, RubyGems, Packagist, NuGet, Maven, pub.dev, etc.) because the project prioritizes a stronger performance target before public distribution.
 
 ---
 
@@ -76,13 +78,15 @@ Completed:
 - CLI covering vault, key, data, sign, identity, credential and audit
   commands.
 
-Current release gates:
+## v1.0 baseline status
 
-- Phase 19F validation is deferred to the final real GitHub CI run.
-- Phase 20 user documentation is complete.
-- Independent audit and v1.0 release gates remain.
+The v1.0 engineering baseline is complete and intentionally frozen. The final CI/Arena evidence established a reproducible reference point for correctness, security gates, deployment, documentation and PQC performance.
 
-See `docs/ROADMAP.md` for the full plan.
+The **PQC Benchmark Arena** compared NEXUS-Q against pinned external implementations on the same CI workload. The result is useful precisely because it is honest: NEXUS-Q is currently slower than the fastest mature implementations on the measured ML-KEM and ML-DSA operations. That is now the primary engineering target for **v2**.
+
+The v1 baseline is therefore **not presented as a performance leader**, and no unsupported production-certification or independent-audit claim is made. External registry/package publication is intentionally deferred until v2 meets its performance and security gates.
+
+See [`BENCHMARKS.md`](BENCHMARKS.md) for the measured baseline and [`docs/ROADMAP.md`](docs/ROADMAP.md) for the phase history.
 
 For server installation and operations, see `docs/DEPLOYMENT.md` and `docs/SERVER.md`.
 
@@ -164,4 +168,4 @@ Tokio and Serde).
 
 Warning
 
-NEXUS-Q is pre-v1.0 and has not completed the independent audit or final GitHub CI/release gates. Do not treat it as production-certified.
+NEXUS-Q v1.0 is a frozen engineering baseline, not a public package release or independent security certification. The benchmark evidence is intentionally transparent: performance optimization is the principal v2 objective. Do not treat the v1 baseline as production-certified.
