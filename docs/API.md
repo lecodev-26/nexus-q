@@ -230,65 +230,50 @@ nexusq <command> <subcommand> [options] [arguments]
 
 ### 6.2 Commands
 
+The current CLI is:
+
 **Vault:**
 ```
-
-nexusq vault create <path>
-nexusq vault open   <path>
-nexusq vault lock
-nexusq vault status
-nexusq vault seal
-nexusq vault unseal
-
+nexusq vault create <path> [--label <label>] [--password-file <path>]
+nexusq vault status <path>
+nexusq vault attach-audit <vault> <audit-dir> [--password-file <path>]
 ```
 
 **Keys:**
 ```
-
-nexusq key generate --algorithm <alg> --purpose <purpose>
-nexusq key list
-nexusq key info <key-id>
-nexusq key rotate <key-id>
-nexusq key revoke <key-id> --reason <reason>
-nexusq key destroy <key-id> --confirm <key-id>
-nexusq key export-public <key-id> --out <file>
-nexusq key export-wrapped <key-id> --out <file>
-
+nexusq key generate <vault> --algorithm <alg> --purpose <purpose>
+nexusq key list <vault> [--password-file <path>]
+nexusq key info <vault> <key-id> [--password-file <path>]
 ```
 
 **Data:**
 ```
-
-nexusq encrypt <file>
-nexusq decrypt <file>.nqx
-nexusq encrypt --to-public-key <pubkey> <file>
-
+nexusq data encrypt <vault> --key-id <key-id> [--metadata <text>] <input>
+nexusq data decrypt <vault> <input.nqx> <output>
 ```
 
 **Signatures:**
 ```
-
-nexusq sign <file> --key <key-id>
-nexusq verify <file> --signature <sig-file> --key <key-id>
-
+nexusq sign sign <vault> --identity <identity-id> <input>
+nexusq sign verify <vault> --identity <identity-id> <input> <signature>
 ```
 
 **Identity:**
 ```
+nexusq identity create <vault> [--label <label>]
+nexusq identity list <vault>
+```
 
-nexusq identity create
-nexusq identity show <identity-id>
-nexusq identity rotate <identity-id>
-nexusq identity revoke <identity-id>
-
+**Credentials:**
+```
+nexusq credential issue <vault> --issuer <id> --subject <id> --claims <json> <output>
+nexusq credential verify <vault> <input>
 ```
 
 **Audit:**
 ```
-
-nexusq audit verify [--from <segment>]
-nexusq audit show [--last N]
-
+nexusq audit verify <audit-dir>
+nexusq audit show <audit-dir> [--last <n>]
 ```
 
 **Diagnostics:**
@@ -315,10 +300,10 @@ nexusq version
 
 ### 6.4 Output formats
 
-- **Human-readable** by default (tables, colors when TTY).
-- `--json` for machine-readable output (stable schema per version).
-- `--quiet` to suppress non-error output.
-- **Never** print secrets to stdout/stderr.
+- **Human-readable** by default.
+- `--output json` for machine-readable output.
+- `--quiet` to suppress successful non-error output.
+- **Never** intentionally print secrets to stdout/stderr.
 
 ### 6.5 Interactive prompts
 
@@ -333,14 +318,15 @@ script-safe.
 
 ## 7. Server API (L-C)
 
-The server (`nexusq-server`) exposes the library over HTTP (and
-optionally IPC). It is designed for:
+The server (`nexusq-server`) exposes the library over HTTP. It is designed for:
 
 - Multi-client deployments.
 - Integration with applications that cannot link the library directly.
 - Remote vault access (with appropriate network security).
 
-### 7.1 Endpoints (conceptual)
+### 7.1 Endpoints
+
+The following routes are implemented by the current server:
 
 ```
 
@@ -376,21 +362,26 @@ GET    /readyz
 The server requires authentication for protected vault/crypto endpoints.
 The liveness, readiness, version, and aggregate metrics endpoints are public:
 `/health`, `/v1/health`, `/readyz`, `/v1/ready`, `/v1/version`, and `/metrics`.
-Supported authentication for protected endpoints (Fase 14):
 
-- **Bearer token** (short-lived, issued by the server after login).
-- **mTLS** (client certificate bound to an identity).
-- **Signed challenges** (using an identity key).
+The current implementation uses one configured bearer token. It is supplied as:
+
+```text
+Authorization: Bearer <server-token>
+```
+
+The token is loaded from `NEXUSQ_SERVER_TOKEN` and must be at least 32 bytes. It is compared in constant time. There is no login endpoint and the server does not currently issue short-lived tokens.
+
+mTLS and signed-challenge authentication are architectural extension points, not implemented server transports in the current delivery boundary.
 
 ### 7.3 Authorization
 
-Every request is authorized by the policy engine. Default: deny.
+Protected HTTP requests pass the current server authentication boundary. The core policy engine is available to vault/session operations, but caller identity and hardware-attestation context are not currently populated by the server. Do not describe the current HTTP layer as full identity-aware RBAC.
 
 ### 7.4 Transport
 
-- **HTTPS only** for remote access (TLS 1.3 minimum).
-- **Unix socket** for local IPC (mode 0600).
-- **No plaintext HTTP** over the network, ever.
+The current server speaks HTTP and does not terminate TLS itself. The safe default is loopback (`127.0.0.1`). Remote exposure requires a trusted TLS termination boundary and `NEXUSQ_TRUSTED_TLS_TERMINATION=1`.
+
+Unix-socket transport is not part of the current server implementation.
 
 ### 7.5 Versioning
 
@@ -422,16 +413,13 @@ SDKs wrap the library for other languages and ecosystems.
 
 ### 8.3 Python SDK
 
-- Built via PyO3, published on PyPI.
-- Synchronous API mirroring the Rust core.
-- Async API available via `asyncio` wrappers.
-- Intended for AI, backend, and data pipelines.
+- Built via PyO3 over `nexusq-core`.
+- Current repository surface exposes version information and vault creation/metadata.
+- Publication to PyPI is a release gate, not a completed publication claim.
 
-### 8.4 TypeScript SDK
+### 8.4 Additional SDKs
 
-- Built via WASM for browser and Node.js.
-- Async-first API.
-- Intended for web apps and Node.js services.
+C++, Go, Ruby and PHP bindings are present in the repository and use the C ABI family where applicable. TypeScript/Java/Kotlin/C#/Swift/Dart remain CI/release-scope work and are not presented as published SDKs.
 
 ### 8.5 SDK design rules
 

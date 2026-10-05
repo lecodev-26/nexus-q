@@ -2,7 +2,7 @@
 
 > Post-quantum cryptographic security engine for protecting data, keys, and identities.
 
-**Status**: Deployment-ready service boundary through Phase 19; v1.0 publication remains gated by Phases 20-22 and the final CI/release process.
+**Status**: User documentation is being completed in Phase 20; v1.0 publication remains gated by Phases 19F-22 and the final CI/release process.
 
 ---
 
@@ -44,7 +44,7 @@ It is meant to be used by:
 
 ## Repository layout
 
-The project is a Cargo workspace with five Rust crates, plus language bindings:
+The project is a Cargo workspace with multiple Rust crates, plus language bindings:
 
 - `crates/nexusq-core` — the library. All cryptography, vault, key
   management, identity, policy, storage and hardware abstraction
@@ -76,10 +76,11 @@ Completed:
 - CLI covering vault, key, data, sign, identity, credential and audit
   commands.
 
-In progress:
+Current release gates:
 
-- Deployment profiles and operational packaging (Phase 19).
-- User documentation, independent audit, and v1.0 release gates remain.
+- Phase 19F validation is deferred to the final real GitHub CI run.
+- Phase 20 user documentation is being completed.
+- Independent audit and v1.0 release gates remain.
 
 See `docs/ROADMAP.md` for the full plan.
 
@@ -132,7 +133,7 @@ To build for RISC-V, see docs/CROSS_COMPILE.md.
 
 Documentation
 
-All technical documentation lives in docs/:
+User-facing documentation starts at `docs/user/README.md`. Technical/reference documentation lives in `docs/:`
 
 · ARCHITECTURE.md — system design.
 · THREAT_MODEL.md — what we protect against.
@@ -163,4 +164,4 @@ Tokio and Serde).
 
 Warning
 
-This project is in early development. Do not use it in production yet.
+NEXUS-Q is pre-v1.0 and has not completed the independent audit or final GitHub CI/release gates. Do not treat it as production-certified.

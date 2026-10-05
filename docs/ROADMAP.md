@@ -521,11 +521,12 @@ exit codes.
 
 - `nexusq-server` binary
 - HTTP API (`/v1/` endpoints per `API.md` §7)
-- Authentication (bearer, mTLS, signed challenges)
-- Authorization via policy engine
-- Rate limiting
-- HTTPS-only for remote, Unix socket for local
+- Configured bearer-token authentication for protected endpoints
+- Safe loopback default and explicit trusted TLS-termination boundary for remote exposure
+- Request rate limiting and request correlation
 - Audit log integration
+
+mTLS, signed challenges, native TLS termination, and Unix-socket transport remain extension points rather than implemented server transports.
 
 **Exit criteria:**
 
@@ -692,12 +693,14 @@ Prometheus-compatible text metrics without secret-bearing labels.
   - Security Guide
   - Deployment Guide
   - Troubleshooting
-- `examples/`: encrypt file, sign document, server, identity, hardware
+- Reconcile README/API/reference documentation with the implemented surface.
+- Keep CI-only, hardware-only, and future features explicitly marked.
 
 **Exit criteria:**
 
 - A new user can complete a first workflow following only the docs.
-- All examples run without modification on supported platforms.
+- User documentation matches the implemented CLI, API, SDK and deployment surfaces.
+- Unsupported, CI-only and future capabilities are explicitly distinguished.
 
 ---
 
@@ -819,8 +822,8 @@ infrastructure.
 | 16    | Side Channel / Hardening      | Green       |
 | 17    | Benchmarking                  | Green       |
 | 18    | Observability                 | Green       |
-| 19    | Deployment                    | Pending     |
-| 20    | User Documentation            | Pending     |
+| 19    | Deployment                    | 19A-19E Green; 19F CI gate pending |
+| 20    | User Documentation            | In progress |
 | 21    | Audit                         | Pending     |
 | 22    | v1.0                          | Pending     |
 
