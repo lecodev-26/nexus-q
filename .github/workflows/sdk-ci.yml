@@ -59,7 +59,7 @@ jobs:
       - name: Install Kotlin compiler
         run: sudo apt-get update && sudo apt-get install -y kotlin
       - name: Install UniFFI generator
-        run: cargo install uniffi_bindgen --locked
+        run: cargo install uniffi --locked --features cli
       - name: Verify JVM and UniFFI toolchain
         run: |
           java -version
