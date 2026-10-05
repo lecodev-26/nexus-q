@@ -3,7 +3,7 @@ name: PQC Benchmark Arena
 on:
   workflow_dispatch:
   push:
-    tags: ["v*"]
+    branches: ["ci/benchmark-arena"]
 
 permissions:
   contents: read
