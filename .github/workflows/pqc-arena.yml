@@ -49,6 +49,8 @@ jobs:
               ("circl", "ml-kem-768"), ("circl", "ml-dsa-65"),
               ("openssl", "ml-kem-768"), ("openssl", "ml-dsa-65"), ("openssl", "slh-dsa"),
               ("aws-lc", "ml-kem-768"), ("aws-lc", "ml-dsa-65"),
+              ("botan", "ml-kem-768"), ("botan", "ml-dsa-65"),
+              ("rustcrypto-kems", "ml-kem-768"), ("rustcrypto-kems", "hqc"),
               ("pq-code-package", "ml-kem-768"), ("pq-code-package", "ml-dsa-65")
           }
           implementations = {x["id"] for x in json.loads(Path("arena/registry/implementations.json").read_text())["implementations"]}
