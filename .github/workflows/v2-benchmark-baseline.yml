@@ -1,0 +1,81 @@
+name: NEXUS-Q v2 Benchmark Baseline
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Baseline run reason"
+        required: false
+        default: "V2-01 baseline"
+
+permissions:
+  contents: read
+
+jobs:
+  nexusq-reference:
+    name: V2-01 / NEXUS-Q reference
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Capture environment
+        run: |
+          mkdir -p artifacts
+          rustc -Vv > artifacts/rustc.txt
+          cargo -V > artifacts/cargo.txt
+          uname -a > artifacts/uname.txt
+          lscpu > artifacts/lscpu.txt
+          git rev-parse HEAD > artifacts/commit.txt
+
+      - name: Build exact Arena reference runner
+        run: cargo build --release --manifest-path arena/runners/nexusq/Cargo.toml
+
+      - name: Run locked V2-01 workload
+        env:
+          NEXUSQ_COMMIT: ${{ github.sha }}
+          NEXUSQ_OPT: release
+        run: |
+          ./arena/runners/nexusq/target/release/nexusq-arena-runner > artifacts/nexusq-reference.jsonl
+
+      - name: Validate locked baseline matrix
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          p = Path("artifacts/nexusq-reference.jsonl")
+          rows = [json.loads(x) for x in p.read_text().splitlines() if x.startswith("{")]
+          expected = {
+              ("ml-kem", "768", "keygen"),
+              ("ml-kem", "768", "encaps"),
+              ("ml-kem", "768", "decaps"),
+              ("ml-kem", "1024", "keygen"),
+              ("ml-kem", "1024", "encaps"),
+              ("ml-kem", "1024", "decaps"),
+              ("ml-dsa", "65", "keygen"),
+              ("ml-dsa", "65", "sign"),
+              ("ml-dsa", "65", "verify"),
+          }
+          actual = {
+              (r["algorithm"]["id"], r["algorithm"]["parameter_set"], r["operation"])
+              for r in rows
+          }
+          assert len(rows) == 9, len(rows)
+          assert actual == expected, actual
+          assert all(r["implementation"]["id"] == "nexusq" for r in rows)
+          assert all(r["measurement"]["iterations"] == 20 for r in rows)
+          assert all(r["measurement"]["warmups"] == 3 for r in rows)
+          assert all(r["measurement"]["measurement_method"] == "std::time::Instant mean wall-clock latency" for r in rows)
+          print("V2-01 locked baseline matrix: OK")
+          for r in rows:
+              print(r["algorithm"]["id"], r["algorithm"]["parameter_set"], r["operation"],
+                    f'{r["measurement"]["latency_ns"]:.2f} ns')
+          PY
+
+      - name: Archive baseline evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2-01-nexusq-baseline-${{ github.sha }}
+          path: artifacts/
