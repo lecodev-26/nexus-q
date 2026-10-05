@@ -24,3 +24,5 @@ path = "fuzz_targets/envelope_parse.rs"
 test = false
 doc = false
 bench = false
+
+[workspace]
