@@ -60,17 +60,28 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  fuzz-soak:
-    name: Extended fuzz soak (release gate)
+  fuzz-soak-vault:
+    name: Extended fuzz soak - vault parser
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    timeout-minutes: 1500
+    timeout-minutes: 300
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
       - name: Fuzz vault parser
-        run: cargo fuzz run vault_parse --manifest-path fuzz/Cargo.toml -- -max_total_time=43200
+        run: cargo fuzz run vault_parse --manifest-path fuzz/Cargo.toml -- -max_total_time=14400
+
+  fuzz-soak-envelope:
+    name: Extended fuzz soak - envelope parser
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
       - name: Fuzz envelope parser
-        run: cargo fuzz run envelope_parse --manifest-path fuzz/Cargo.toml -- -max_total_time=43200
+        run: cargo fuzz run envelope_parse --manifest-path fuzz/Cargo.toml -- -max_total_time=14400

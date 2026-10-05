@@ -2,7 +2,7 @@
 
 > Post-quantum cryptographic security engine for protecting data, keys, and identities.
 
-**Status**: User documentation is being completed in Phase 20; v1.0 publication remains gated by Phases 19F-22 and the final CI/release process.
+**Status**: Phase 20 user documentation is complete. v1.0 publication remains gated by Phase 21 audit evidence, the final GitHub CI/release process, and Phase 22 release approval.
 
 ---
 
@@ -79,7 +79,7 @@ Completed:
 Current release gates:
 
 - Phase 19F validation is deferred to the final real GitHub CI run.
-- Phase 20 user documentation is being completed.
+- Phase 20 user documentation is complete.
 - Independent audit and v1.0 release gates remain.
 
 See `docs/ROADMAP.md` for the full plan.
