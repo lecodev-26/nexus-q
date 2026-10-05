@@ -333,8 +333,8 @@ jobs:
         run: |
           cd .arena-botan
           ./configure.py --prefix="$GITHUB_WORKSPACE/.arena-botan-install" --without-documentation --disable-shared
-          make -C build -j2
-          make -C build install
+          make -j2
+          make install
       - name: Build Arena adapter
         env:
           CXXFLAGS: -std=c++20 -O3 -Wall -Wextra -Werror
