@@ -655,21 +655,22 @@ Prometheus-compatible text metrics without secret-bearing labels.
 
 ## 22. Phase 19 — Deployment
 
-**Objective:** Ship NEXUS-Q to real users on real platforms.
+**Objective:** Prepare a portable, operationally documented deployment boundary; external publication remains a later release gate.
 
 **Deliverables:**
 
-- Packages: `.deb`, `.rpm`, `.tar.gz`, containers (Docker / OCI)
-- Platforms: Linux (x86_64, aarch64), Termux (aarch64), macOS, Windows
-- CI/CD: build → test → fuzz → security → benchmark → release
-- Signed releases with checksums
+- Operational packaging: versioned `.tar.gz` with SHA-256 manifests.
+- Release binaries: `nexusq` and `nexusq-server`, with non-secret deployment configuration and docs.
+- Portable installation/run procedure; Docker and systemd are not mandatory.
+- Health, readiness, metrics, logs, graceful shutdown, backup/recovery and TLS boundary documented.
+- CI/CD, platform expansion, signing and registry publication remain later release gates.
 
 **Exit criteria:**
 
-- Package installs cleanly on supported platforms.
-- Container runs with documented entrypoint.
-- CI/CD automates the release process.
-- Releases are signed and verifiable.
+- Operational archive builds and verifies cleanly on the development platform.
+- Installation, configuration and lifecycle procedures are documented.
+- Health/readiness/metrics and shutdown behavior are documented and locally validated.
+- Cross-platform packaging, external CI/CD, signing and publication remain explicit release gates.
 
 ---
 

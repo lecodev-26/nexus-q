@@ -70,3 +70,40 @@ an authenticated transport/orchestration layer only.
 The server uses graceful shutdown through Tokio. On Unix deployments, both SIGTERM and SIGINT initiate the same shutdown path; on non-Unix targets, SIGINT is used.
 
 The process does not log or expose the bearer token during startup or shutdown. Once the HTTP server exits, the application state is dropped, releasing the vault/session resources owned by the process.
+
+## Operational interface
+
+For deployment and process supervision, use:
+
+- `/health` and `/v1/health` for liveness;
+- `/readyz` and `/v1/ready` for readiness;
+- `/metrics` for aggregate Prometheus-style metrics;
+- `X-Request-Id` on HTTP responses for request correlation.
+
+Health/readiness and metrics responses do not require bearer authentication,
+but the endpoints should remain within the intended deployment/monitoring
+trust boundary. Do not expose `/metrics` to untrusted networks.
+
+## Logs and secrets
+
+`RUST_LOG` controls tracing filters. The server may log operation names,
+request IDs, status and latency, but must not log bearer tokens, passwords,
+plaintext payloads, vault contents, private keys, or other secret material.
+
+Do not pass `NEXUSQ_SERVER_TOKEN` as a process argument. Load it through the
+platform's environment/secret mechanism.
+
+## Deployment lifecycle
+
+Build a release with:
+
+    cargo build --workspace --release
+
+Then use `deploy/package-release.sh` to assemble a package-neutral deployment
+artifact. Keep binaries, configuration/secrets, mutable vault state, and logs
+in separate filesystem areas.
+
+A deployment should verify liveness/readiness after startup, keep metrics
+inside the monitoring boundary, and use SIGTERM/SIGINT for graceful Unix
+shutdown. For recovery, restore a trusted vault backup with restrictive
+permissions and verify the probes before returning the service to traffic.

@@ -2,7 +2,7 @@
 
 > Post-quantum cryptographic security engine for protecting data, keys, and identities.
 
-**Status**: In active development. Phase 13 of 23 (SDK / API).
+**Status**: Deployment-ready service boundary through Phase 19; v1.0 publication remains gated by Phases 20-22 and the final CI/release process.
 
 ---
 
@@ -51,8 +51,7 @@ The project is a Cargo workspace with five Rust crates, plus language bindings:
   live here.
 - `crates/nexusq-cli` — the `nexusq` binary. A thin wrapper over the
   library; no cryptography.
-- `crates/nexusq-server` — the `nexusq-server` binary. Server foundation;
-  network API work is scheduled for Phase 14.
+- `crates/nexusq-server` — the `nexusq-server` binary and authenticated HTTP service.
 
 ---
 
@@ -79,9 +78,23 @@ Completed:
 
 In progress:
 
-- SDK / API (Phase 13).
+- Deployment profiles and operational packaging (Phase 19).
+- User documentation, independent audit, and v1.0 release gates remain.
 
 See `docs/ROADMAP.md` for the full plan.
+
+For server installation and operations, see `docs/DEPLOYMENT.md` and `docs/SERVER.md`.
+
+### Release deployment
+
+```bash
+cargo build --workspace --release
+./deploy/package-release.sh
+```
+
+The generated archive contains the CLI, server, non-secret configuration
+example, deployment documentation, and SHA-256 manifests. It does not contain
+production tokens, vaults, private keys, or logs.
 
 ---
 

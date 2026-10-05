@@ -100,3 +100,101 @@ Do not expose /metrics or administrative endpoints beyond the intended monitorin
 ## Artifact boundary
 
 Phase 19 prepares deployment artifacts and procedures only. It does not publish GitHub repositories, crates, PyPI packages, SDK packages, or a NEXUS-Q v1.0 release. Publication remains a later release-stage gate.
+
+## Operational commands
+
+### Build
+
+Development:
+
+    cargo build --workspace
+
+Release:
+
+    cargo build --workspace --release
+
+Package the release artifacts locally:
+
+    ./deploy/package-release.sh
+
+The package script writes a versioned `.tar.gz` and an adjacent SHA-256 file
+under `dist/`. It never publishes the artifact.
+
+### Install
+
+Unpack the archive into the platform's application directory and keep the
+following outside the application tree:
+
+- the populated server environment file;
+- the vault and other mutable state;
+- service logs.
+
+Provision `NEXUSQ_VAULT_PATH` and `NEXUSQ_SERVER_TOKEN` through the platform's
+secret/configuration mechanism. The token must be at least 32 bytes.
+
+### Run
+
+A minimal release invocation is:
+
+    RUST_LOG=nexusq_server=info ./nexusq-server
+
+For production-like deployment, load the populated environment file through
+the platform's process manager instead of placing secrets on the command line.
+
+The server defaults to `127.0.0.1:8443`. A non-loopback bind is rejected unless
+`NEXUSQ_TRUSTED_TLS_TERMINATION=1` explicitly declares a trusted TLS/mTLS
+termination boundary.
+
+## Operational probes
+
+Use the following unauthenticated endpoints for process supervision and load
+balancer/monitoring checks:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `/health` | Liveness: the HTTP service is responding. |
+| `/v1/health` | Versioned liveness endpoint. |
+| `/readyz` | Readiness: the service is ready to accept requests. |
+| `/v1/ready` | Versioned readiness endpoint. |
+| `/metrics` | Prometheus-style aggregate operational metrics. |
+
+`/metrics` should be reachable only from the intended monitoring boundary.
+Do not expose health or metrics endpoints directly to an untrusted network.
+
+## Logs
+
+Logging is controlled through `RUST_LOG`; the documented default for the
+server is `nexusq_server=info`. Logs may include request IDs, operation names,
+latency and aggregate operational information, but must not contain bearer
+tokens, passwords, plaintext payloads, vault contents, or private key material.
+
+## Backup and recovery
+
+The vault is mutable application state and must be backed up using the
+NEXUS-Q backup/storage procedures appropriate to the deployment. Backups must
+be encrypted/protected according to the deployment's security policy and must
+not be stored in the release artifact directory.
+
+Recovery should use a trusted vault backup, restore it with restrictive file
+permissions, point `NEXUSQ_VAULT_PATH` to the restored vault, provision a fresh
+valid server token when required by the deployment policy, and verify
+`/health` and `/readyz` before accepting traffic.
+
+Do not treat a server binary, environment file, log, or package checksum as a
+substitute for a vault backup.
+
+## Service supervisor example
+
+NEXUS-Q does not require Docker, systemd, or another specific supervisor.
+A supervisor should provide the equivalent lifecycle properties:
+
+1. start `nexusq-server` with the populated environment;
+2. keep the vault and configuration outside the binary directory;
+3. monitor `/health` and `/readyz`;
+4. collect logs without exposing secrets;
+5. send SIGTERM for normal Unix shutdown;
+6. allow the graceful shutdown interval before escalation;
+7. restart only after configuration and vault availability are verified.
+
+This is intentionally a portable operational contract rather than a mandatory
+service-unit format.
