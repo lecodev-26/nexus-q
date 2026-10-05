@@ -46,7 +46,8 @@ jobs:
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
       - name: Build fuzz targets
-        run: cargo fuzz build --manifest-path fuzz/Cargo.toml
+        run: cargo fuzz build
+        working-directory: fuzz
 
   secret-scan:
     name: Secret scanning
@@ -71,7 +72,8 @@ jobs:
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
       - name: Fuzz vault parser
-        run: cargo fuzz run vault_parse --manifest-path fuzz/Cargo.toml -- -max_total_time=14400
+        run: cargo fuzz run vault_parse -- -max_total_time=14400
+        working-directory: fuzz
 
   fuzz-soak-envelope:
     name: Extended fuzz soak - envelope parser
@@ -84,4 +86,5 @@ jobs:
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
       - name: Fuzz envelope parser
-        run: cargo fuzz run envelope_parse --manifest-path fuzz/Cargo.toml -- -max_total_time=14400
+        run: cargo fuzz run envelope_parse -- -max_total_time=14400
+        working-directory: fuzz

@@ -56,9 +56,8 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
-      - uses: fwcd/setup-kotlin@v1
-        with:
-          version: '2.1.20'
+      - name: Install Kotlin compiler
+        run: sudo apt-get update && sudo apt-get install -y kotlin
       - name: Install UniFFI generator
         run: cargo install uniffi_bindgen --locked
       - name: Verify JVM and UniFFI toolchain
