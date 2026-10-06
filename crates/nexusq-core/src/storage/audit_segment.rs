@@ -437,7 +437,6 @@ fn temp_path(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::crypto::sha256;
 
     use crate::storage::audit_event::{EventOutcome, EventType};
     use tempfile::TempDir;
