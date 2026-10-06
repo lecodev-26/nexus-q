@@ -519,7 +519,7 @@ mod tests {
     #[test]
     fn empty_segment_hash_matches_formula() {
         let seg = AuditSegment::new(None).unwrap();
-        let expected = sha256(&GENESIS_HASH);
+        let expected = authenticate_segment(&[0u8; HASH_LEN], &GENESIS_HASH);
         assert_eq!(seg.segment_hash().unwrap(), expected);
     }
 

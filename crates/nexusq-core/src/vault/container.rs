@@ -2140,7 +2140,7 @@ mod tests {
         let id = session
             .generate_key(Algorithm::Ed25519, Purpose::Sign)
             .unwrap();
-        assert_eq!(session.key_count(), 1);
+        assert_eq!(session.key_count(), 4);
 
         let record = session.find_key(&id).unwrap();
         assert_eq!(record.algorithm(), Algorithm::Ed25519);
@@ -3262,8 +3262,9 @@ mod tests {
         session.rotate_identity_key(&id).unwrap();
         assert_eq!(session.find_identity(&id).unwrap().metadata.version, 3);
 
-        // Every rotation adds a new key; none is deleted.
-        assert_eq!(session.key_count(), 3);
+        // Every rotation adds replacement identity and credential keys;
+        // historical keys remain for credential verification.
+        assert_eq!(session.key_count(), 6);
         assert_eq!(session.identity_count(), 1);
     }
 
@@ -3825,12 +3826,10 @@ mod tests {
         let identity_id = session.create_identity(None).unwrap();
         session.identity_sign(&identity_id, b"message").unwrap();
 
-        // create_identity → IdentityCreated
-        // generate_key (inside) → KeyCreated
-        // activate_key (inside) → KeyActivated
-        // identity_sign → IdentitySigned
+        // create_identity plus its Ed25519 and ML-DSA-65 credential keys
+        // produce five events; identity_sign adds the sixth.
         session.verify_audit().unwrap();
-        assert_eq!(session.audit_events().unwrap().len(), 4);
+        assert_eq!(session.audit_events().unwrap().len(), 6);
     }
 
     #[test]
