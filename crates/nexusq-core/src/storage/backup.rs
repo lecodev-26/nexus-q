@@ -405,7 +405,7 @@ fn parse_backup_file(bytes: &[u8]) -> Result<(BackupHeader, &[u8]), BackupError>
 fn create_unique_temp_file(path: &Path) -> Result<(PathBuf, fs::File), BackupError> {
     for _ in 0..16 {
         let mut suffix = [0u8; 16];
-        getrandom::fill(&mut suffix).map_err(|e| BackupError::Io(std::io::Error::other(e)))?;
+        getrandom::fill(&mut suffix).map_err(|e| BackupError::Io(std::io::Error::other(e.to_string())))?;
         let name = format!(
             "{}.tmp-{}",
             path.file_name()

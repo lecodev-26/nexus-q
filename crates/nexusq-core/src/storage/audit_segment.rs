@@ -435,7 +435,7 @@ fn authenticate_segment(key: &[u8; HASH_LEN], data: &[u8]) -> [u8; HASH_LEN] {
 fn create_unique_temp_file(path: &Path) -> Result<(PathBuf, fs::File), DbError> {
     for _ in 0..16 {
         let mut suffix = [0u8; 16];
-        getrandom::fill(&mut suffix).map_err(|e| DbError::Io(std::io::Error::other(e)))?;
+        getrandom::fill(&mut suffix).map_err(|e| DbError::Io(std::io::Error::other(e.to_string())))?;
         let name = format!(
             "{}.tmp-{}",
             path.file_name().and_then(|n| n.to_str()).unwrap_or("audit"),
