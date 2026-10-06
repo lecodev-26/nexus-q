@@ -1875,6 +1875,21 @@ fn resolve_audit_path(vault_path: &Path, audit_dir: &Path) -> PathBuf {
     parent.join(audit_dir)
 }
 
+
+#[cfg(unix)]
+fn restrict_file_permissions(path: &Path) -> Result<(), VaultError> {
+    use std::os::unix::fs::PermissionsExt;
+    let mut permissions = fs::metadata(path)?.permissions();
+    permissions.set_mode(0o600);
+    fs::set_permissions(path, permissions)?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn restrict_file_permissions(_path: &Path) -> Result<(), VaultError> {
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3824,18 +3839,4 @@ mod tests {
         let session = vault.unlock(b"pw").unwrap();
         assert_eq!(session.body().metadata.label.as_deref(), Some("run-2"));
     }
-}
-
-#[cfg(unix)]
-fn restrict_file_permissions(path: &Path) -> Result<(), VaultError> {
-    use std::os::unix::fs::PermissionsExt;
-    let mut permissions = fs::metadata(path)?.permissions();
-    permissions.set_mode(0o600);
-    fs::set_permissions(path, permissions)?;
-    Ok(())
-}
-
-#[cfg(not(unix))]
-fn restrict_file_permissions(_path: &Path) -> Result<(), VaultError> {
-    Ok(())
 }
