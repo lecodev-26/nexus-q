@@ -12,14 +12,16 @@
 use std::fs;
 
 use nexusq_core::crypto::sign::Signature;
-use nexusq_core::storage::{AuditLog, EventType};
+use nexusq_core::storage::EventType;
 use nexusq_core::vault::lifecycle::RevokeReason;
 use nexusq_core::vault::{Algorithm, Purpose, Vault};
 use tempfile::TempDir;
 
 /// Runs a series of vault operations with auditing enabled and
 /// returns the audit log so the caller can inspect it.
-fn run_audited_session(dir: &TempDir) -> (std::path::PathBuf, AuditLog) {
+fn run_audited_session(
+    dir: &TempDir,
+) -> (std::path::PathBuf, Vec<nexusq_core::storage::AuditEvent>) {
     let vault_path = dir.path().join("vault.nqv");
     let audit_dir = dir.path().join("audit");
     fs::create_dir(&audit_dir).unwrap();
@@ -58,24 +60,21 @@ fn run_audited_session(dir: &TempDir) -> (std::path::PathBuf, AuditLog) {
         .revoke_key(&key_b, RevokeReason::Superseded)
         .unwrap();
 
+    session.verify_audit().unwrap();
+    let events = session.audit_events().unwrap();
     session.lock().unwrap();
-
-    let log = AuditLog::open(&audit_dir).unwrap();
-    (vault_path, log)
+    (vault_path, events)
 }
 
 #[test]
 fn full_lifecycle_produces_the_expected_audit_chain() {
     let dir = TempDir::new().unwrap();
-    let (_vault_path, log) = run_audited_session(&dir);
-
-    // Verify the hash chain before inspecting content.
-    log.verify_all().unwrap();
+    let (_vault_path, events) = run_audited_session(&dir);
 
     // Count events by type.
     let mut counts: std::collections::HashMap<&'static str, usize> =
         std::collections::HashMap::new();
-    for event in log_segment_events(&log) {
+    for event in &events {
         let key = match event.event_type {
             EventType::KeyCreated => "key_created",
             EventType::KeyActivated => "key_activated",
@@ -106,18 +105,6 @@ fn full_lifecycle_produces_the_expected_audit_chain() {
     assert!(!counts.contains_key("other"));
 }
 
-/// Returns the events of the current segment, cloned.
-///
-/// `AuditLog` does not expose its events directly because a real
-/// deployment reads them from disk. For the test we reopen the
-/// directory, read the segment, and clone the events so the helper
-/// owns them.
-fn log_segment_events(log: &AuditLog) -> Vec<nexusq_core::storage::AuditEvent> {
-    let path = log.current_path();
-    let segment = nexusq_core::storage::AuditSegment::open(path).unwrap();
-    segment.events().to_vec()
-}
-
 #[test]
 fn tampering_with_the_audit_chain_is_detected() {
     let dir = TempDir::new().unwrap();
@@ -132,15 +119,18 @@ fn tampering_with_the_audit_chain_is_detected() {
     bytes[mid] ^= 0x01;
     fs::write(&segment_path, &bytes).unwrap();
 
-    // Reopening the log must fail.
-    let result = AuditLog::open(&audit_dir);
+    // Unlocking must fail closed because the audit log is authenticated.
+    let vault_path = dir.path().join("vault.nqv");
+    let result = nexusq_core::vault::Vault::open(&vault_path)
+        .unwrap()
+        .unlock(b"vault-pass");
     assert!(result.is_err(), "corrupted segment should be rejected");
 }
 
 #[test]
 fn backup_and_restore_preserves_the_vault_content() {
     let dir = TempDir::new().unwrap();
-    let (vault_path, _log) = run_audited_session(&dir);
+    let (vault_path, _events) = run_audited_session(&dir);
     let backup_path = dir.path().join("backup.nqb");
     let restored_path = dir.path().join("restored.nqv");
 
@@ -179,7 +169,7 @@ fn backup_and_restore_preserves_the_vault_content() {
 #[test]
 fn backup_uses_a_separate_passphrase() {
     let dir = TempDir::new().unwrap();
-    let (vault_path, _log) = run_audited_session(&dir);
+    let (vault_path, _events) = run_audited_session(&dir);
     let backup_path = dir.path().join("backup.nqb");
     let restored_path = dir.path().join("restored.nqv");
 

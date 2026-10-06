@@ -43,3 +43,7 @@ nexusq credential verify ./example.nqv credential.json
 ```
 
 Keep private identity material inside the vault. Export only public material or explicitly wrapped forms where the API permits it.
+
+## Credential key rotation
+
+Each credential records the exact issuer signing-key identifier used to sign it. Issuer key rotation therefore does not invalidate previously issued credentials merely because the identity now has a newer signing key. The verifier requires that the recorded key belongs to the issuer's signing-key history.

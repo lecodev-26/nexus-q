@@ -15,6 +15,8 @@ zeroize = { workspace = true }
 subtle = { workspace = true }
 sha2 = { workspace = true }
 sha3 = { workspace = true }
+aes = { workspace = true }
+poly1305 = { workspace = true }
 argon2 = { workspace = true }
 hkdf = { workspace = true }
 aes-gcm = { workspace = true }

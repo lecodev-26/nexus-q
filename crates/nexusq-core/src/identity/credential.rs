@@ -29,12 +29,12 @@
 use serde::{Deserialize, Serialize};
 
 use crate::crypto::sign::{SignError, Signature, SigningKey, VerifyingKey};
-use crate::vault::Timestamp;
+use crate::vault::{KeyId, Timestamp};
 
 use super::id::IdentityId;
 
 /// Current credential schema version.
-pub const CURRENT_VERSION: u8 = 1;
+pub const CURRENT_VERSION: u8 = 2;
 
 /// A statement signed by an issuer about a subject.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -47,6 +47,10 @@ pub struct Credential {
 
     /// The identity that issued the credential.
     pub issuer: IdentityId,
+
+    /// The exact signing key used by the issuer. This survives key rotation
+    /// so historical credentials remain independently verifiable.
+    pub issuer_key_id: KeyId,
 
     /// Opaque payload. NEXUS-Q signs these bytes without interpreting
     /// them; the format (JSON, CBOR, plain text) is the caller's
@@ -78,6 +82,7 @@ struct SignedPayload {
     version: u8,
     subject: IdentityId,
     issuer: IdentityId,
+    issuer_key_id: KeyId,
     #[serde(with = "serde_bytes")]
     claims: Vec<u8>,
     issued_at: Timestamp,
@@ -117,6 +122,7 @@ impl Credential {
     pub fn issue(
         signing_key: &SigningKey,
         issuer: IdentityId,
+        issuer_key_id: KeyId,
         subject: IdentityId,
         claims: Vec<u8>,
         issued_at: Timestamp,
@@ -126,6 +132,7 @@ impl Credential {
             version: CURRENT_VERSION,
             subject,
             issuer,
+            issuer_key_id,
             claims,
             issued_at,
             expires_at,
@@ -138,6 +145,7 @@ impl Credential {
             version: payload.version,
             subject: payload.subject,
             issuer: payload.issuer,
+            issuer_key_id: payload.issuer_key_id,
             claims: payload.claims,
             issued_at: payload.issued_at,
             expires_at: payload.expires_at,
@@ -175,6 +183,7 @@ impl Credential {
             version: credential.version,
             subject: credential.subject.clone(),
             issuer: credential.issuer.clone(),
+            issuer_key_id: credential.issuer_key_id.clone(),
             claims: credential.claims.clone(),
             issued_at: credential.issued_at,
             expires_at: credential.expires_at,
@@ -216,6 +225,10 @@ mod tests {
     use crate::crypto::random::OsRandomSource;
     use crate::crypto::sign;
 
+    fn sample_key_id() -> KeyId {
+        KeyId::generate(&crate::crypto::random::OsRandomSource::new(), "ed25519").unwrap()
+    }
+
     fn sample_id() -> IdentityId {
         let rng = OsRandomSource::new();
         IdentityId::generate(&rng).unwrap()
@@ -232,6 +245,7 @@ mod tests {
         let bytes = Credential::issue(
             &pair.signing,
             issuer,
+            sample_key_id(),
             subject,
             claims,
             issued_at,
@@ -323,6 +337,7 @@ mod tests {
         let bytes = Credential::issue(
             &pair.signing,
             issuer,
+            sample_key_id(),
             subject,
             b"permanent".to_vec(),
             Timestamp::from_secs(1_700_000_000),

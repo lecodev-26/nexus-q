@@ -4,13 +4,12 @@ on:
   pull_request:
     branches:
       - "nexusqv2"
-      - "v2/security-hardening-kamal-findings"
-      - "v2/p2-audit-hardening"
   push:
     branches:
       - "nexusqv2"
       - "v2/security-hardening-kamal-findings"
       - "v2/p2-audit-hardening"
+      - "v2/security-closure-kamal-findings"
   workflow_dispatch:
 
 permissions:

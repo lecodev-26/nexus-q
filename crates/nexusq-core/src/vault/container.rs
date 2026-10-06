@@ -310,7 +310,17 @@ impl Vault {
             .verify_kek(kek.as_ref())
             .map_err(|_| VaultError::WrongPassword)?;
 
-        let body = self.read_body(&kek)?;
+        let mut body = self.read_body(&kek)?;
+
+        // Backfill signing-key history for identities created before
+        // credential key-id binding was introduced.
+        for identity in &mut body.identities {
+            if identity.signing_key_history.is_empty() {
+                identity
+                    .signing_key_history
+                    .push(identity.signing_key.clone());
+            }
+        }
 
         // If the vault is configured with an audit log, open it now.
         // A failure to open is a failure to unlock: the vault promises
@@ -319,7 +329,8 @@ impl Vault {
         let audit = match &body.audit_dir {
             Some(dir) => {
                 let resolved = resolve_audit_path(&self.path, Path::new(dir));
-                let log = AuditLog::open_with(&resolved, AuditLogConfig::default())?;
+                let audit_auth = audit_key(kek.as_ref());
+                let log = AuditLog::open_with(&resolved, AuditLogConfig::default(), &*audit_auth)?;
                 RefCell::new(Some(log))
             }
             None => RefCell::new(None),
@@ -682,7 +693,8 @@ impl Session {
 
         let identity = Identity {
             id: identity_id.clone(),
-            signing_key,
+            signing_key: signing_key.clone(),
+            signing_key_history: vec![signing_key],
             encryption_key: None,
             key_agreement_key: None,
             metadata,
@@ -888,6 +900,7 @@ impl Session {
         {
             let identity = self.body.find_identity_mut(id).expect("checked above");
             identity.signing_key = new_signing_key.clone();
+            identity.signing_key_history.push(new_signing_key.clone());
             identity.metadata.version = current_version + 1;
         }
 
@@ -1017,6 +1030,7 @@ impl Session {
         let credential_bytes = Credential::issue(
             &signing_key,
             issuer.clone(),
+            identity.signing_key.clone(),
             subject,
             claims,
             now,
@@ -1028,9 +1042,10 @@ impl Session {
 
     /// Verifies a credential using the issuer's public signing key.
     ///
-    /// Does not check expiry: callers that need expiry enforcement
-    /// should inspect [`Credential::is_expired_at`].
+    /// Enforces credential expiry and resolves the exact historical issuer signing key.
     ///
+    /// Credentials remain verifiable after issuer key rotation while their
+    /// signing key remains in the issuer signing-key history.
     /// # Errors
     ///
     /// Returns [`VaultError::Credential`] if the bytes are malformed or
@@ -1055,15 +1070,24 @@ impl Session {
         if credential.is_expired_at(Timestamp::now().unwrap_or(Timestamp::from_secs(0))) {
             return Err(VaultError::Credential(CredentialError::Expired));
         }
+        if !identity
+            .signing_key_history
+            .iter()
+            .any(|key_id| key_id == &credential.issuer_key_id)
+        {
+            return Err(VaultError::Credential(CredentialError::Signature(
+                SignError::VerificationFailed,
+            )));
+        }
 
         let record = self
             .body
-            .find_key(&identity.signing_key)
-            .ok_or_else(|| LifecycleError::KeyNotFound(identity.signing_key.clone()))?;
+            .find_key(&credential.issuer_key_id)
+            .ok_or_else(|| LifecycleError::KeyNotFound(credential.issuer_key_id.clone()))?;
 
         let pk_bytes = record
             .public_key_bytes()
-            .ok_or_else(|| VaultError::MissingPublicKey(identity.signing_key.clone()))?;
+            .ok_or_else(|| VaultError::MissingPublicKey(credential.issuer_key_id.clone()))?;
 
         let verifying_key = sign::VerifyingKey::from_bytes(pk_bytes)?;
         let verified = Credential::verify_with_key(bytes, &verifying_key)?;
@@ -1515,7 +1539,8 @@ impl Session {
         // Open the log first so a bad path fails before we touch the
         // body.
         let resolved = resolve_audit_path(&self.vault.path, audit_dir);
-        let log = AuditLog::open_with(&resolved, AuditLogConfig::default())?;
+        let audit_auth = audit_key(kek.as_ref());
+        let log = AuditLog::open_with(&resolved, AuditLogConfig::default(), &*audit_auth)?;
 
         *self.audit.borrow_mut() = Some(log);
         self.body.audit_dir = Some(audit_dir.to_string_lossy().into_owned());
@@ -1565,7 +1590,8 @@ impl Session {
         audit_dir: impl AsRef<std::path::Path>,
     ) -> Result<(), VaultError> {
         self.require_writes_allowed()?;
-        let log = AuditLog::open_with(audit_dir.as_ref(), AuditLogConfig::default())?;
+        let audit_auth = audit_key(self.kek.as_ref());
+        let log = AuditLog::open_with(audit_dir.as_ref(), AuditLogConfig::default(), &*audit_auth)?;
         *self.audit.borrow_mut() = Some(log);
         Ok(())
     }
@@ -1867,6 +1893,10 @@ fn generate_material<S: RandomSource>(
 /// are returned unchanged. A vault with no parent (a bare filename)
 /// resolves relative to the current working directory, matching how
 /// the vault file itself is opened.
+fn audit_key(kek: &[u8]) -> Zeroizing<[u8; 32]> {
+    kdf::hkdf_sha256(kek, None, b"nexusq-audit-log-v2").expect("fixed audit HKDF info must fit")
+}
+
 fn resolve_audit_path(vault_path: &Path, audit_dir: &Path) -> PathBuf {
     if audit_dir.is_absolute() {
         return audit_dir.to_path_buf();
@@ -3495,11 +3525,8 @@ mod tests {
             .issue_credential(&issuer, subject, b"claims".to_vec(), None)
             .unwrap();
 
-        // Rotate the issuer's signing key. The credential was signed
-        // by the old key. Since the identity now points to the new key,
-        // verifying through the session would fail (correctly, the
-        // credential is no longer signed by the current key). We assert
-        // that by using verify_with_key with the old public key.
+        // Rotate the issuer's signing key. The credential remains bound to
+        // the historical key that actually signed it.
         let old_signing_key = session.find_identity(&issuer).unwrap().signing_key.clone();
         let old_pk = session
             .find_key(&old_signing_key)
@@ -3515,10 +3542,10 @@ mod tests {
         let cred = Credential::verify_with_key(&cred_bytes, &vk).unwrap();
         assert_eq!(cred.issuer, issuer);
 
-        // But the session's verification now fails, because the
-        // identity's current key is the new one.
-        let err = session.verify_credential(&cred_bytes).unwrap_err();
-        assert!(matches!(err, VaultError::Credential(_)));
+        // Session verification resolves the historical issuer key and
+        // therefore still succeeds after rotation.
+        let verified = session.verify_credential(&cred_bytes).unwrap();
+        assert_eq!(verified.issuer, issuer);
     }
 
     #[test]
@@ -3645,10 +3672,8 @@ mod tests {
             .revoke_key(&key_id, crate::vault::lifecycle::RevokeReason::Compromised)
             .unwrap();
 
-        // Reopen the audit log and verify.
-        let log = crate::storage::AuditLog::open(&audit_dir).unwrap();
-        assert_eq!(log.current_len(), 3);
-        log.verify_all().unwrap();
+        session.verify_audit().unwrap();
+        assert_eq!(session.audit_events().unwrap().len(), 3);
     }
 
     #[test]
@@ -3670,9 +3695,8 @@ mod tests {
         // generate_key (inside) → KeyCreated
         // activate_key (inside) → KeyActivated
         // identity_sign → IdentitySigned
-        let log = crate::storage::AuditLog::open(&audit_dir).unwrap();
-        assert_eq!(log.current_len(), 4);
-        log.verify_all().unwrap();
+        session.verify_audit().unwrap();
+        assert_eq!(session.audit_events().unwrap().len(), 4);
     }
 
     #[test]
@@ -3811,8 +3835,8 @@ mod tests {
         let set = crate::policy::PolicySet::new();
         session.set_policies(set).unwrap();
 
-        let log = crate::storage::AuditLog::open(&audit_dir).unwrap();
-        assert_eq!(log.current_len(), 1);
+        session.verify_audit().unwrap();
+        assert_eq!(session.audit_events().unwrap().len(), 1);
     }
 
     #[test]

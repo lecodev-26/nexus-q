@@ -132,7 +132,7 @@ TRNG without mixing, falling back to a weaker source on failure.
 
 **Primary:** SHA-256 (FIPS 180-4)
 
-- Used for: general-purpose digests, HKDF (via HMAC-SHA-256), audit chain.
+- Used for: general-purpose digests, HKDF (via HMAC-SHA-256), authenticated audit records.
 - 256-bit output, 128-bit collision resistance.
 
 **Secondary:** SHA-512 (FIPS 180-4)
@@ -233,15 +233,11 @@ SP 800-38D), ECB in any form, any custom mode.
 - Public key size: 1184 bytes (ML-KEM-768), 1568 bytes (ML-KEM-1024)
 - Ciphertext size: 1088 bytes (ML-KEM-768), 1568 bytes (ML-KEM-1024)
 
-**Hybrid mode (recommended for v1.0):**
+**Hybrid mode (v2):**
 
-- Combine ML-KEM-768 with X25519 via HKDF to derive the final key.
-- Rationale: if ML-KEM is broken (unlikely but possible), X25519 still
-  protects; if X25519 is broken (by a quantum computer), ML-KEM still
-  protects. Hybrid = belt and suspenders.
-- Standard: follow the draft "Hybrid KEM" from IETF (draft-irtf-cfrg-hybrid-kems)
-  when finalized; until then, use the well-understood
-  `HKDF(X25519_shared || MLKEM_shared, info="hybrid-kem")`.
+- ML-KEM-768 + X25519 uses the X-Wing construction and its domain-separated SHA3-256 combiner.
+- The combiner binds the X25519 ciphertext and recipient public component.
+- The implementation follows the current active X-Wing Internet-Draft; it is not presented as a finalized IETF standard.
 
 **Forbidden:**
 
@@ -249,7 +245,7 @@ SP 800-38D), ECB in any form, any custom mode.
 - ECDH on P-256, P-384, P-521 for new keys (legacy import only).
 - Non-hybrid ML-KEM alone for **long-term** keys where the threat model
   includes a quantum adversary with a long horizon — hybrid is required.
-- Any custom KEM construction not published in a peer-reviewed venue.
+- Any custom KEM composition without domain separation, transcript binding, or documented security review.
 
 ### 4.6 Digital signatures
 
@@ -361,7 +357,7 @@ Given `(X25519_ss, ML-KEM_ss)`, derive the combined secret as:
 ```
 
 IKM = X25519_ss || MLKEM_ss
-combined = HKDF-SHA256(IKM, info = "nexusq-hybrid-kem-v1", L = 32)
+combined = HKDF-SHA256(IKM, info = "nexusq-xwing-kem-v2", L = 32)
 
 ```
 
@@ -375,7 +371,7 @@ with distinct `info` strings:
 
 - `"nexusq-vault-kek-v1"` — vault key encryption key
 - `"nexusq-envelope-dk-v1"` — envelope data key
-- `"nexusq-audit-chain-v1"` — audit chain key
+- `"nexusq-audit-log-v2"` — audit chain key
 - `"nexusq-signing-v1"` — signing key
 - `"nexusq-kem-v1"` — KEM key
 
@@ -485,7 +481,7 @@ algorithm we do not trust, we refuse the operation; we do not fall back.
 
 ## 10. Open questions
 
-- [ ] Final hybrid KEM construction (pending IETF draft finalization)
+- [x] ML-KEM-768 + X25519 uses the X-Wing construction and transcript-bound SHA3-256 combiner
 - [ ] Whether to support SLH-DSA in v1.0 or defer to v1.1
 - [ ] Concrete Argon2id parameters per platform (mobile vs desktop)
 - [ ] Nonce management strategy for high-throughput servers

@@ -472,6 +472,14 @@ pub enum AuditCommand {
 pub struct AuditVerifyArgs {
     /// Directory containing audit segments.
     pub audit_dir: PathBuf,
+
+    /// Vault whose password-derived audit key authenticates the log.
+    #[arg(long)]
+    pub vault: PathBuf,
+
+    /// Read the vault password from a file instead of prompting.
+    #[arg(long, value_name = "PATH")]
+    pub password_file: Option<PathBuf>,
 }
 
 /// Arguments for `audit show`.

@@ -187,7 +187,7 @@ struct ReadinessResponse {
 
 #[derive(serde::Deserialize)]
 struct UnlockRequest {
-    password: String,
+    password: Zeroizing<String>,
 }
 
 #[derive(serde::Deserialize)]
@@ -344,7 +344,13 @@ impl RateLimiter {
         let mut entries = self.entries.lock().expect("rate limiter mutex poisoned");
         entries.retain(|_, entry| now.duration_since(entry.0) < self.window);
         if entries.len() >= 4096 && !entries.contains_key(client) {
-            return false;
+            if let Some(oldest) = entries
+                .iter()
+                .min_by_key(|(_, entry)| entry.0)
+                .map(|(key, _)| key.clone())
+            {
+                entries.remove(&oldest);
+            }
         }
         let entry = entries.entry(client.to_owned()).or_insert((now, 0));
         if now.duration_since(entry.0) >= self.window {
@@ -417,23 +423,30 @@ async fn rate_limit_middleware(
     request: Request<axum::body::Body>,
     next: Next,
 ) -> Response {
-    let client = if env::var("NEXUSQ_TRUSTED_TLS_TERMINATION").as_deref() == Ok("1") {
+    let client = client_identity(
+        &request,
+        env::var("NEXUSQ_TRUSTED_TLS_TERMINATION").as_deref() == Ok("1"),
+    );
+    if !state.limiter.allow(&client) {
+        return (StatusCode::TOO_MANY_REQUESTS, "rate limit exceeded").into_response();
+    }
+    next.run(request).await
+}
+
+fn client_identity(request: &Request<axum::body::Body>, trusted_proxy: bool) -> String {
+    if trusted_proxy {
         request
             .headers()
             .get("x-forwarded-for")
             .and_then(|v| v.to_str().ok())
+            .and_then(|value| value.split(',').next_back())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
             .unwrap_or("proxy")
-            .split(',')
-            .next()
-            .unwrap_or("proxy")
-            .trim()
+            .to_owned()
     } else {
-        "local"
-    };
-    if !state.limiter.allow(client) {
-        return (StatusCode::TOO_MANY_REQUESTS, "rate limit exceeded").into_response();
+        "local".to_owned()
     }
-    next.run(request).await
 }
 
 async fn auth_middleware(
@@ -908,6 +921,24 @@ mod tests {
         assert!(limiter.allow("client"));
         assert!(!limiter.allow("client"));
         assert!(limiter.allow("other-client"));
+    }
+
+    #[test]
+    fn rate_limiter_evicts_oldest_client_at_capacity() {
+        let limiter = RateLimiter::new(1, Duration::from_secs(60));
+        for i in 0..4096 {
+            assert!(limiter.allow(&format!("client-{i}")));
+        }
+        assert!(limiter.allow("new-client"));
+    }
+
+    #[test]
+    fn trusted_proxy_uses_rightmost_forwarded_address() {
+        let request = Request::builder()
+            .header("x-forwarded-for", "spoofed, real-client")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        assert_eq!(client_identity(&request, true), "real-client");
     }
 
     fn test_state(path: std::path::PathBuf) -> AppState {

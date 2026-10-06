@@ -272,7 +272,7 @@ nexusq credential verify <vault> <input>
 
 **Audit:**
 ```
-nexusq audit verify <audit-dir>
+nexusq audit verify <audit-dir> --vault <vault> [--password-file <path>] --vault <vault> [--password-file <path>]
 nexusq audit show <audit-dir> [--last <n>]
 ```
 

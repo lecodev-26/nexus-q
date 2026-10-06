@@ -72,9 +72,8 @@ fn full_workflow_through_the_public_api() {
     assert!(session.policies().is_some());
     assert!(session.audit_dir().is_some());
 
-    // Verify the audit chain.
-    let log = AuditLog::open(&audit_dir).unwrap();
-    log.verify_all().unwrap();
+    // Verify the authenticated audit chain.
+    session.verify_audit().unwrap();
 }
 
 #[test]

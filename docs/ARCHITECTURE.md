@@ -230,7 +230,7 @@ how to store bytes safely.
 
 The tamper-evident audit log is implemented inside `storage` (`audit_event`,
 `audit_segment`, `audit_log`). Audit records never contain secret material
-and are protected by hash chaining.
+and are protected by a vault-derived HMAC-SHA256 chain.
 
 ---
 
@@ -445,3 +445,7 @@ Items deferred to later phases; each will be resolved in its own document.
 ---
 
 End of document.
+
+### Authenticated audit log
+
+The audit log uses a vault-derived HMAC-SHA256 key. The key is held only by an unlocked session and is never stored with the audit files. Event hashes and segment trailers are therefore authenticated, not merely chained with an unkeyed digest.

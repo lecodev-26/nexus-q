@@ -29,17 +29,19 @@ serde = { version = "1", features = ["derive"] }
 serde_bytes = "0.11"
 ciborium = "0.2"
 
-zeroize = { version = "1", features = ["derive"] }
+zeroize = { version = "1", features = ["derive", "serde"] }
 subtle = "2"
-sha2 = "0.11.0-rc.5"
-sha3 = "0.11.0-rc.5"
-argon2 = "0.6.0-rc.1"
+sha2 = { version = "0.11.0-rc.5", features = ["zeroize"] }
+sha3 = { version = "0.11.0-rc.5", features = ["zeroize"] }
+aes = { version = "0.9", features = ["zeroize"] }
+poly1305 = { version = "0.9", features = ["zeroize"] }
+argon2 = { version = "0.6.0-rc.1", features = ["zeroize"] }
 hkdf = "0.13.0-rc.5"
-aes-gcm = "0.11.0-rc.5"
-chacha20poly1305 = "0.11.0-rc.5"
+aes-gcm = { version = "0.11.0-rc.5", features = ["zeroize"] }
+chacha20poly1305 = { version = "0.11.0-rc.5", features = ["zeroize"] }
 ml-kem = { version = "0.3", features = ["getrandom", "zeroize"] }
 ml-dsa = { version = "0.1.1", features = ["zeroize"] }
-slh-dsa = "0.2.0-rc.5"
+slh-dsa = { version = "0.2.0-rc.5", features = ["zeroize"] }
 x25519-dalek = { version = "3", features = ["getrandom", "static_secrets", "zeroize"] }
 ed25519-dalek = { version = "3", features = ["rand_core", "zeroize"] }
 rand_core = { version = "0.9", features = ["os_rng"] }
