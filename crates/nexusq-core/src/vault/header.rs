@@ -174,7 +174,7 @@ impl VaultHeader {
 fn compute_kek_verifier(kek: &[u8]) -> Result<[u8; KEK_VERIFIER_LEN], HeaderError> {
     let mut verifier = [0u8; KEK_VERIFIER_LEN];
     let derived = hkdf_sha256(kek, None, KEK_VERIFIER_INFO).map_err(HeaderError::Kdf)?;
-    verifier.copy_from_slice(&derived);
+    verifier.copy_from_slice(&*derived);
     Ok(verifier)
 }
 

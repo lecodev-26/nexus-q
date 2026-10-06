@@ -10,7 +10,7 @@
 //! ## Wire format
 //!
 //! ```text
-//! [magic \"NQB1\"][version 1][header_cbor_len u32 BE]
+//! [magic \"NQB1\"][version 2][header_cbor_len u32 BE]
 //! [header_cbor: N bytes]
 //! [body_nonce: 12 bytes]
 //! [body_ciphertext_and_tag: M bytes]
@@ -59,7 +59,7 @@ use crate::vault::{Session, Vault, VaultError};
 pub const MAGIC: [u8; 4] = *b"NQB1";
 
 /// Current format version.
-pub const FORMAT_VERSION: u8 = 1;
+pub const FORMAT_VERSION: u8 = 2;
 
 /// Length in bytes of the backup salt.
 pub const SALT_LEN: usize = 32;
@@ -195,8 +195,11 @@ pub fn export(
     let backup_kek = derive_backup_kek(backup_passphrase, &salt, &params)?;
     let header = build_header(params, salt.to_vec(), backup_kek.as_ref())?;
 
-    // Serialize the vault body and the header.
-    let body_bytes = serde_helpers::to_vec(session.body())?;
+    // Re-wrap key records under the backup KEK before serializing. This
+    // makes the backup self-contained: import can safely re-wrap them
+    // again under the newly created vault KEK.
+    let backup_body = session.clone_body_rewrapped(backup_kek.as_ref())?;
+    let body_bytes = serde_helpers::to_vec(&backup_body)?;
     let header_bytes = serde_helpers::to_vec(&header)?;
 
     // Encrypt with the header as AAD.
@@ -257,13 +260,14 @@ pub fn import(
     )
     .map_err(|_| BackupError::WrongPassphrase)?;
 
-    let body: VaultBody = serde_helpers::from_slice(&plaintext)?;
+    let mut body: VaultBody = serde_helpers::from_slice(&plaintext)?;
 
     // Create a fresh vault and replace its body with the imported one.
     Vault::create(new_vault_path, new_vault_password, None)?;
     let vault = Vault::open(new_vault_path)?;
     let mut session = vault.unlock(new_vault_password)?;
-    *session.body_mut() = body;
+    session.rewrap_body_from(&mut body, backup_kek.as_ref())?;
+    *session.body_mut()? = body;
     let vault = session.lock()?;
 
     Ok(vault)
@@ -301,7 +305,7 @@ fn compute_kek_verifier(kek: &[u8]) -> Result<[u8; KEK_VERIFIER_LEN], BackupErro
     let mut verifier = [0u8; KEK_VERIFIER_LEN];
     let derived =
         kdf::hkdf_sha256(kek, None, BACKUP_KEK_VERIFIER_INFO).map_err(BackupError::Kdf)?;
-    verifier.copy_from_slice(&derived);
+    verifier.copy_from_slice(&*derived);
     Ok(verifier)
 }
 
@@ -312,8 +316,7 @@ fn derive_backup_kek(
 ) -> Result<Zeroizing<[u8; kdf::DERIVED_KEY_LEN]>, BackupError> {
     // Only Argon2id is supported in v1; the params field is present
     // for future algorithm agility, the same way it is in the vault.
-    let kek = kdf::argon2id(passphrase, salt)?;
-    Ok(Zeroizing::new(kek))
+    Ok(kdf::argon2id(passphrase, salt)?)
 }
 
 // =============================================================================

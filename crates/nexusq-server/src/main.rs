@@ -309,11 +309,11 @@ fn build_app(state: AppState) -> Router {
         .route("/v1/audit/verify", post(verify_audit))
         .layer(middleware::from_fn_with_state(
             state.clone(),
-            auth_middleware,
+            session_timeout_middleware,
         ))
         .layer(middleware::from_fn_with_state(
             state.clone(),
-            session_timeout_middleware,
+            auth_middleware,
         ));
 
     public
@@ -342,6 +342,10 @@ impl RateLimiter {
     fn allow(&self, client: &str) -> bool {
         let now = Instant::now();
         let mut entries = self.entries.lock().expect("rate limiter mutex poisoned");
+        entries.retain(|_, entry| now.duration_since(entry.0) < self.window);
+        if entries.len() >= 4096 && !entries.contains_key(client) {
+            return false;
+        }
         let entry = entries.entry(client.to_owned()).or_insert((now, 0));
         if now.duration_since(entry.0) >= self.window {
             *entry = (now, 1);

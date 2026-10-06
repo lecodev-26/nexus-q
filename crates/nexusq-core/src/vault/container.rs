@@ -33,7 +33,7 @@ use super::serde_helpers::{self, CborError};
 use super::state::{StateTransitionError, VaultState};
 use super::status::KeyStatus;
 use super::timestamp::Timestamp;
-use super::wrapping::{WrappingError, wrap};
+use super::wrapping::{self, WrappingError, wrap};
 use crate::crypto::sign::{self, SignError, Signature};
 use crate::identity::{
     Credential, CredentialError, Identity, IdentityId, IdentityMetadata, IdentityStatus,
@@ -201,7 +201,6 @@ pub struct Vault {
 /// Holds the derived KEK and the decrypted body in memory. Dropping the
 /// session zeroizes the KEK. Passing it back to [`Vault::lock`] persists
 /// any changes and returns ownership of the [`Vault`].
-#[derive(Debug)]
 pub struct Session {
     vault: Vault,
     kek: Zeroizing<[u8; kdf::DERIVED_KEY_LEN]>,
@@ -212,6 +211,18 @@ pub struct Session {
     /// `&self` methods; a session is not shared across threads, so
     /// interior mutability is safe here.
     audit: RefCell<Option<AuditLog>>,
+}
+
+impl std::fmt::Debug for Session {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Session")
+            .field("vault", &self.vault)
+            .field("kek", &"[REDACTED]")
+            .field("body", &self.body)
+            .field("state", &self.state)
+            .field("audit", &"[REDACTED]")
+            .finish()
+    }
 }
 
 impl Vault {
@@ -230,13 +241,13 @@ impl Vault {
     ) -> Result<Self, VaultError> {
         let path = path.as_ref().to_path_buf();
 
-        // Fail fast if the file already exists.
-        if path.exists() {
-            return Err(VaultError::Io(std::io::Error::new(
-                std::io::ErrorKind::AlreadyExists,
-                "vault file already exists",
-            )));
-        }
+        // Reserve the destination atomically. A plain exists()+rename()
+        // check is vulnerable to two creators racing on the same path.
+        let reservation = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)?;
+        drop(reservation);
 
         let rng = OsRandomSource::new();
 
@@ -418,8 +429,45 @@ impl Session {
     ///
     /// Mutations are only persisted when the session is passed back to
     /// [`Vault::lock`].
-    pub fn body_mut(&mut self) -> &mut VaultBody {
-        &mut self.body
+    pub fn body_mut(&mut self) -> Result<&mut VaultBody, VaultError> {
+        self.require_writes_allowed()?;
+        Ok(&mut self.body)
+    }
+
+    pub(crate) fn clone_body_rewrapped(&self, to_kek: &[u8]) -> Result<VaultBody, VaultError> {
+        let mut body = self.body.clone();
+        Self::rewrap_body_keys(&mut body, self.kek.as_ref(), to_kek)?;
+        Ok(body)
+    }
+
+    pub(crate) fn rewrap_body_from(
+        &self,
+        body: &mut VaultBody,
+        from_kek: &[u8],
+    ) -> Result<(), VaultError> {
+        Self::rewrap_body_keys(body, from_kek, self.kek.as_ref())
+    }
+
+    fn rewrap_body_keys(
+        body: &mut VaultBody,
+        from_kek: &[u8],
+        to_kek: &[u8],
+    ) -> Result<(), VaultError> {
+        for record in &mut body.keys {
+            let is_hardware = matches!(&record.material, WrappedKeyMaterial::HardwareHandle(_));
+            if is_hardware {
+                continue;
+            }
+            let is_symmetric = matches!(&record.material, WrappedKeyMaterial::Symmetric(_));
+            let material = wrapping::unwrap(record.material.bytes(), from_kek, record.key_id())?;
+            let wrapped = wrap(&material, to_kek, record.key_id())?;
+            record.material = if is_symmetric {
+                WrappedKeyMaterial::Symmetric(wrapped)
+            } else {
+                WrappedKeyMaterial::Asymmetric(wrapped)
+            };
+        }
+        Ok(())
     }
 
     /// Generates a new key of the given algorithm and purpose.
@@ -689,6 +737,7 @@ impl Session {
     /// Active, [`VaultError::Lifecycle`] if the signing key is not
     /// Active, or another error if unwrapping or signing fails.
     pub fn identity_sign(&self, id: &IdentityId, message: &[u8]) -> Result<Signature, VaultError> {
+        self.require_writes_allowed()?;
         self.check_policy(PolicyOperation::IdentitySign, id.as_str(), None, Some(id))?;
 
         let identity = self
@@ -996,6 +1045,16 @@ impl Session {
             .body
             .find_identity(&credential.issuer)
             .ok_or_else(|| VaultError::IdentityNotFound(credential.issuer.clone()))?;
+
+        if identity.metadata.status != IdentityStatus::Active {
+            return Err(VaultError::IdentityNotUsable {
+                id: credential.issuer.clone(),
+                status: identity.metadata.status,
+            });
+        }
+        if credential.is_expired_at(Timestamp::now().unwrap_or(Timestamp::from_secs(0))) {
+            return Err(VaultError::Credential(CredentialError::Expired));
+        }
 
         let record = self
             .body
@@ -1732,8 +1791,7 @@ fn derive_kek(
     // Only Argon2id is supported in v1; unknown values will be rejected
     // at header parse time once more algorithms are added.
     let _ = params.algorithm;
-    let kek = kdf::argon2id(password, salt)?;
-    Ok(Zeroizing::new(kek))
+    kdf::argon2id(password, salt).map_err(VaultError::Kdf)
 }
 
 fn generate_vault_id<S: RandomSource>(source: &S) -> Result<String, VaultError> {
@@ -1880,7 +1938,7 @@ mod tests {
         {
             let vault = Vault::open(&path).unwrap();
             let mut session = vault.unlock(b"pw").unwrap();
-            session.body_mut().metadata.label = Some("renamed".to_string());
+            session.body_mut().unwrap().metadata.label = Some("renamed".to_string());
             session.lock().unwrap();
         }
 
@@ -3467,12 +3525,8 @@ mod tests {
             .revoke_identity(&issuer, RevokeReason::Superseded)
             .unwrap();
 
-        // The signing key is untouched by revocation, so verification
-        // still succeeds. Whether a real deployment should refuse
-        // credentials from revoked issuers is a policy decision
-        // (Phase 11).
-        let cred = session.verify_credential(&cred_bytes).unwrap();
-        assert_eq!(cred.issuer, issuer);
+        let err = session.verify_credential(&cred_bytes).unwrap_err();
+        assert!(matches!(err, VaultError::IdentityNotUsable { .. }));
     }
 
     #[test]
@@ -3756,7 +3810,7 @@ mod tests {
         for i in 0..3 {
             let vault = Vault::open(&path).unwrap();
             let mut session = vault.unlock(b"pw").unwrap();
-            session.body_mut().metadata.label = Some(format!("run-{i}"));
+            session.body_mut().unwrap().metadata.label = Some(format!("run-{i}"));
             session.lock().unwrap();
         }
 

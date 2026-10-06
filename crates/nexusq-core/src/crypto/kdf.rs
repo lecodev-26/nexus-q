@@ -13,6 +13,7 @@
 use argon2::{Algorithm, Argon2, Params, Version};
 use hkdf::Hkdf;
 use sha2::Sha256;
+use zeroize::Zeroizing;
 
 /// Output length in bytes for derived keys.
 pub const DERIVED_KEY_LEN: usize = 32;
@@ -68,10 +69,10 @@ pub fn hkdf_sha256(
     ikm: &[u8],
     salt: Option<&[u8]>,
     info: &[u8],
-) -> Result<[u8; DERIVED_KEY_LEN], KdfError> {
+) -> Result<Zeroizing<[u8; DERIVED_KEY_LEN]>, KdfError> {
     let hk = Hkdf::<Sha256>::new(salt, ikm);
-    let mut okm = [0u8; DERIVED_KEY_LEN];
-    hk.expand(info, &mut okm)
+    let mut okm = Zeroizing::new([0u8; DERIVED_KEY_LEN]);
+    hk.expand(info, okm.as_mut())
         .map_err(|_| KdfError::HkdfExpand)?;
     Ok(okm)
 }
@@ -88,7 +89,10 @@ pub fn hkdf_sha256(
 /// Returns [`KdfError::InvalidSalt`] if `salt` is shorter than
 /// [`ARGON2_SALT_LEN`], and [`KdfError::Argon2Failure`] if Argon2 rejects
 /// the parameters or fails internally.
-pub fn argon2id(password: &[u8], salt: &[u8]) -> Result<[u8; DERIVED_KEY_LEN], KdfError> {
+pub fn argon2id(
+    password: &[u8],
+    salt: &[u8],
+) -> Result<Zeroizing<[u8; DERIVED_KEY_LEN]>, KdfError> {
     if salt.len() < ARGON2_SALT_LEN {
         return Err(KdfError::InvalidSalt);
     }
@@ -103,9 +107,9 @@ pub fn argon2id(password: &[u8], salt: &[u8]) -> Result<[u8; DERIVED_KEY_LEN], K
 
     let argon = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
 
-    let mut out = [0u8; DERIVED_KEY_LEN];
+    let mut out = Zeroizing::new([0u8; DERIVED_KEY_LEN]);
     argon
-        .hash_password_into(password, salt, &mut out)
+        .hash_password_into(password, salt, out.as_mut())
         .map_err(|_| KdfError::Argon2Failure)?;
     Ok(out)
 }
