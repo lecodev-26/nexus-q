@@ -42,6 +42,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use zeroize::Zeroizing;
+
 use crate::vault::Timestamp;
 
 use super::audit_event::{AuditEvent, AuditEventSpec};
@@ -67,13 +69,13 @@ impl Default for AuditLogConfig {
 }
 
 /// A directory of segments plus the current one.
-#[derive(Debug)]
 pub struct AuditLog {
     dir: PathBuf,
     current: AuditSegment,
     current_path: PathBuf,
     current_number: u32,
     config: AuditLogConfig,
+    auth_key: Zeroizing<[u8; 32]>,
 }
 
 impl AuditLog {
@@ -90,8 +92,8 @@ impl AuditLog {
     /// written, [`DbError::NotFound`] is not applicable here (we
     /// never look up by name), and any parse error from the segment
     /// being opened.
-    pub fn open(dir: impl AsRef<Path>) -> Result<Self, DbError> {
-        Self::open_with(dir, AuditLogConfig::default())
+    pub fn open(dir: impl AsRef<Path>, auth_key: &[u8; 32]) -> Result<Self, DbError> {
+        Self::open_with(dir, AuditLogConfig::default(), auth_key)
     }
 
     /// Same as [`AuditLog::open`], with an explicit configuration.
@@ -99,7 +101,11 @@ impl AuditLog {
     /// # Errors
     ///
     /// Same as [`AuditLog::open`].
-    pub fn open_with(dir: impl AsRef<Path>, config: AuditLogConfig) -> Result<Self, DbError> {
+    pub fn open_with(
+        dir: impl AsRef<Path>,
+        config: AuditLogConfig,
+        auth_key: &[u8; 32],
+    ) -> Result<Self, DbError> {
         let dir = dir.as_ref().to_path_buf();
         if !dir.is_dir() {
             return Err(DbError::Io(std::io::Error::new(
@@ -115,22 +121,26 @@ impl AuditLog {
         };
 
         let current = if current_path.exists() {
-            let seg = AuditSegment::open(&current_path)?;
+            let mut seg = AuditSegment::open(&current_path)?;
+            seg.set_auth_key(auth_key);
             seg.verify()?;
             seg
         } else {
-            let seg = AuditSegment::new(None)?;
+            let seg = AuditSegment::new_with_key(None, auth_key)?;
             seg.save(&current_path)?;
             seg
         };
 
-        Ok(Self {
+        let log = Self {
             dir,
             current,
             current_path,
             current_number,
             config,
-        })
+            auth_key: Zeroizing::new(*auth_key),
+        };
+        log.verify_all()?;
+        Ok(log)
     }
 
     /// Returns the directory the log lives in.
@@ -217,7 +227,7 @@ impl AuditLog {
         let next_number = self.current_number + 1;
         let next_path = segment_path(&self.dir, next_number);
 
-        let next = AuditSegment::new(Some(prev_hash))?;
+        let next = AuditSegment::new_with_key(Some(prev_hash), &self.auth_key)?;
         next.save(&next_path)?;
 
         self.current = next;
@@ -239,7 +249,8 @@ impl AuditLog {
         let mut expected_prev: [u8; 32] = super::audit_event::GENESIS_HASH;
 
         for (_num, path) in &segments {
-            let seg = AuditSegment::open(path)?;
+            let mut seg = AuditSegment::open(path)?;
+            seg.set_auth_key(&self.auth_key);
             seg.verify()?;
 
             // The first segment must have prev = genesis; later ones
@@ -295,6 +306,8 @@ fn parse_segment_number(path: &Path) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const TEST_KEY: [u8; 32] = [0x42; 32];
     use crate::storage::audit_event::EventType;
     use tempfile::TempDir;
 
@@ -316,7 +329,7 @@ mod tests {
     #[test]
     fn open_on_empty_dir_creates_first_segment() {
         let (_tmp, audit) = init_dir();
-        let log = AuditLog::open(&audit).unwrap();
+        let log = AuditLog::open(&audit, &TEST_KEY).unwrap();
         assert_eq!(log.current_len(), 0);
         assert_eq!(log.segment_count().unwrap(), 1);
         assert!(audit.join("audit-00001.nqa").exists());
@@ -326,19 +339,22 @@ mod tests {
     fn open_on_missing_dir_fails() {
         let dir = TempDir::new().unwrap();
         let missing = dir.path().join("nope");
-        assert!(matches!(AuditLog::open(&missing), Err(DbError::Io(_))));
+        assert!(matches!(
+            AuditLog::open(&missing, &TEST_KEY),
+            Err(DbError::Io(_))
+        ));
     }
 
     #[test]
     fn append_persists_and_is_readable() {
         let (_tmp, audit) = init_dir();
-        let mut log = AuditLog::open(&audit).unwrap();
+        let mut log = AuditLog::open(&audit, &TEST_KEY).unwrap();
         log.append(ts(1), spec(EventType::KeyCreated)).unwrap();
         log.append(ts(2), spec(EventType::KeyActivated)).unwrap();
         assert_eq!(log.current_len(), 2);
 
         // Reopen and check.
-        let log2 = AuditLog::open(&audit).unwrap();
+        let log2 = AuditLog::open(&audit, &TEST_KEY).unwrap();
         assert_eq!(log2.current_len(), 2);
     }
 
@@ -346,21 +362,21 @@ mod tests {
     fn append_persists_across_reopen() {
         let (_tmp, audit) = init_dir();
         {
-            let mut log = AuditLog::open(&audit).unwrap();
+            let mut log = AuditLog::open(&audit, &TEST_KEY).unwrap();
             log.append(ts(1), spec(EventType::VaultCreated)).unwrap();
         }
         {
-            let mut log = AuditLog::open(&audit).unwrap();
+            let mut log = AuditLog::open(&audit, &TEST_KEY).unwrap();
             log.append(ts(2), spec(EventType::VaultUnlocked)).unwrap();
         }
-        let log = AuditLog::open(&audit).unwrap();
+        let log = AuditLog::open(&audit, &TEST_KEY).unwrap();
         assert_eq!(log.current_len(), 2);
     }
 
     #[test]
     fn rotate_creates_a_second_segment() {
         let (_tmp, audit) = init_dir();
-        let mut log = AuditLog::open(&audit).unwrap();
+        let mut log = AuditLog::open(&audit, &TEST_KEY).unwrap();
         log.append(ts(1), spec(EventType::KeyCreated)).unwrap();
 
         log.rotate().unwrap();
@@ -369,7 +385,7 @@ mod tests {
         assert!(audit.join("audit-00002.nqa").exists());
 
         // The new segment's prev_segment is the old hash.
-        let log2 = AuditLog::open(&audit).unwrap();
+        let log2 = AuditLog::open(&audit, &TEST_KEY).unwrap();
         assert_eq!(log2.current_len(), 0);
     }
 
@@ -377,7 +393,7 @@ mod tests {
     fn auto_rotation_respects_max_events() {
         let (_tmp, audit) = init_dir();
         let config = AuditLogConfig { max_events: 3 };
-        let mut log = AuditLog::open_with(&audit, config).unwrap();
+        let mut log = AuditLog::open_with(&audit, config, &TEST_KEY).unwrap();
 
         for i in 1..=3 {
             log.append(ts(i), spec(EventType::KeyUsed)).unwrap();
@@ -394,7 +410,7 @@ mod tests {
     #[test]
     fn verify_all_accepts_a_fresh_chain() {
         let (_tmp, audit) = init_dir();
-        let mut log = AuditLog::open(&audit).unwrap();
+        let mut log = AuditLog::open(&audit, &TEST_KEY).unwrap();
         for i in 1..=3 {
             log.append(ts(i), spec(EventType::KeyCreated)).unwrap();
         }
@@ -408,7 +424,7 @@ mod tests {
     #[test]
     fn verify_all_detects_a_break() {
         let (_tmp, audit) = init_dir();
-        let mut log = AuditLog::open(&audit).unwrap();
+        let mut log = AuditLog::open(&audit, &TEST_KEY).unwrap();
         log.append(ts(1), spec(EventType::KeyCreated)).unwrap();
         log.rotate().unwrap();
         log.append(ts(2), spec(EventType::KeyUsed)).unwrap();
@@ -447,7 +463,7 @@ mod tests {
         fs::write(audit.join("notes.txt"), b"hi").unwrap();
         fs::write(audit.join("audit-abc.nqa"), b"junk").unwrap();
 
-        let log = AuditLog::open(&audit).unwrap();
+        let log = AuditLog::open(&audit, &TEST_KEY).unwrap();
         assert_eq!(log.segment_count().unwrap(), 1);
     }
 }

@@ -2,7 +2,7 @@
 
 use std::{
     env,
-    net::SocketAddr,
+    net::{IpAddr, SocketAddr},
     path::PathBuf,
     result::Result as StdResult,
     sync::Arc,
@@ -11,7 +11,7 @@ use std::{
 
 use axum::{
     Json, Router,
-    extract::{DefaultBodyLimit, State},
+    extract::{ConnectInfo, DefaultBodyLimit, State},
     http::{Request, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
@@ -26,6 +26,7 @@ use nexusq_core::{
 use serde::Serialize;
 use tokio::sync::Mutex;
 use tower::ServiceBuilder;
+use zeroize::Zeroizing;
 
 const DEFAULT_ADDR: &str = "127.0.0.1:8443";
 const DEFAULT_RATE_LIMIT: u32 = 60;
@@ -40,6 +41,7 @@ struct AppState {
     limiter: Arc<RateLimiter>,
     max_request_body_bytes: usize,
     metrics: Metrics,
+    trusted_proxy_ips: Arc<std::collections::HashSet<IpAddr>>,
 }
 
 struct ServerVault {
@@ -59,6 +61,7 @@ struct ServerConfig {
     rate_limit: u32,
     max_request_body_bytes: usize,
     trusted_tls_termination: bool,
+    trusted_proxy_ips: std::collections::HashSet<IpAddr>,
 }
 
 impl ServerConfig {
@@ -91,10 +94,18 @@ impl ServerConfig {
         let trusted_tls_termination = env::var("NEXUSQ_TRUSTED_TLS_TERMINATION")
             .map(|value| value == "1")
             .unwrap_or(false);
+        let trusted_proxy_ips = parse_trusted_proxy_ips()?;
 
         if !addr.ip().is_loopback() && !trusted_tls_termination {
             return Err(std::io::Error::other(
                 "non-loopback TCP requires NEXUSQ_TRUSTED_TLS_TERMINATION=1; plaintext remote exposure is refused",
+            )
+            .into());
+        }
+
+        if trusted_tls_termination && !addr.ip().is_loopback() && trusted_proxy_ips.is_empty() {
+            return Err(std::io::Error::other(
+                "non-loopback trusted proxy mode requires NEXUSQ_TRUSTED_PROXY_IPS",
             )
             .into());
         }
@@ -106,6 +117,7 @@ impl ServerConfig {
             rate_limit,
             max_request_body_bytes,
             trusted_tls_termination,
+            trusted_proxy_ips,
         })
     }
 }
@@ -157,6 +169,28 @@ fn parse_positive_usize(
     }
 }
 
+fn parse_trusted_proxy_ips()
+-> StdResult<std::collections::HashSet<IpAddr>, Box<dyn std::error::Error>> {
+    let mut ips = std::collections::HashSet::new();
+    match env::var("NEXUSQ_TRUSTED_PROXY_IPS") {
+        Ok(value) => {
+            for raw in value.split(',').map(str::trim).filter(|v| !v.is_empty()) {
+                let ip = raw.parse::<IpAddr>().map_err(|_| {
+                    std::io::Error::other(format!("invalid trusted proxy IP: {raw}"))
+                })?;
+                ips.insert(ip);
+            }
+        }
+        Err(env::VarError::NotPresent) => {}
+        Err(env::VarError::NotUnicode(_)) => {
+            return Err(
+                std::io::Error::other("NEXUSQ_TRUSTED_PROXY_IPS must be valid UTF-8").into(),
+            );
+        }
+    }
+    Ok(ips)
+}
+
 struct RateLimiter {
     window: Duration,
     max_requests: u32,
@@ -187,13 +221,13 @@ struct ReadinessResponse {
 
 #[derive(serde::Deserialize)]
 struct UnlockRequest {
-    password: String,
+    password: Zeroizing<String>,
 }
 
 #[derive(serde::Deserialize)]
 struct EncryptRequest {
     key_id: String,
-    plaintext: String,
+    plaintext: Zeroizing<String>,
     metadata: Option<String>,
 }
 
@@ -205,13 +239,13 @@ struct DecryptRequest {
 #[derive(serde::Deserialize)]
 struct SignRequest {
     identity_id: String,
-    message: String,
+    message: Zeroizing<String>,
 }
 
 #[derive(serde::Deserialize)]
 struct VerifyRequest {
     identity_id: String,
-    message: String,
+    message: Zeroizing<String>,
     signature: String,
 }
 
@@ -266,6 +300,7 @@ async fn main() -> StdResult<(), Box<dyn std::error::Error>> {
         limiter: Arc::new(RateLimiter::new(config.rate_limit, Duration::from_secs(60))),
         max_request_body_bytes: config.max_request_body_bytes,
         metrics: Metrics::default(),
+        trusted_proxy_ips: Arc::new(config.trusted_proxy_ips.clone()),
     };
 
     let app = build_app(state);
@@ -278,9 +313,12 @@ async fn main() -> StdResult<(), Box<dyn std::error::Error>> {
         "nexusq-server listening"
     );
     let listener = tokio::net::TcpListener::bind(config.addr).await?;
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await?;
     Ok(())
 }
 
@@ -344,7 +382,13 @@ impl RateLimiter {
         let mut entries = self.entries.lock().expect("rate limiter mutex poisoned");
         entries.retain(|_, entry| now.duration_since(entry.0) < self.window);
         if entries.len() >= 4096 && !entries.contains_key(client) {
-            return false;
+            if let Some(oldest) = entries
+                .iter()
+                .min_by_key(|(_, entry)| entry.0)
+                .map(|(key, _)| key.clone())
+            {
+                entries.remove(&oldest);
+            }
         }
         let entry = entries.entry(client.to_owned()).or_insert((now, 0));
         if now.duration_since(entry.0) >= self.window {
@@ -417,23 +461,48 @@ async fn rate_limit_middleware(
     request: Request<axum::body::Body>,
     next: Next,
 ) -> Response {
-    let client = if env::var("NEXUSQ_TRUSTED_TLS_TERMINATION").as_deref() == Ok("1") {
-        request
-            .headers()
-            .get("x-forwarded-for")
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("proxy")
-            .split(',')
-            .next()
-            .unwrap_or("proxy")
-            .trim()
-    } else {
-        "local"
-    };
-    if !state.limiter.allow(client) {
+    let client = client_identity(&request, &state.trusted_proxy_ips);
+    if !state.limiter.allow(&client) {
         return (StatusCode::TOO_MANY_REQUESTS, "rate limit exceeded").into_response();
     }
     next.run(request).await
+}
+
+fn client_identity(
+    request: &Request<axum::body::Body>,
+    trusted_proxy_ips: &std::collections::HashSet<IpAddr>,
+) -> String {
+    let peer = request
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|info| info.0.ip());
+
+    if let Some(peer_ip) = peer {
+        if peer_ip.is_loopback() || trusted_proxy_ips.contains(&peer_ip) {
+            let forwarded: Vec<IpAddr> = request
+                .headers()
+                .get_all("x-forwarded-for")
+                .iter()
+                .filter_map(|value| value.to_str().ok())
+                .flat_map(|value| value.split(','))
+                .filter_map(|part| part.trim().parse::<IpAddr>().ok())
+                .collect();
+            // Walk from the right, skipping trusted proxy hops. The first
+            // non-trusted address is the only XFF value used for security.
+            if let Some(client) = forwarded
+                .into_iter()
+                .rev()
+                .find(|ip| !trusted_proxy_ips.contains(ip))
+            {
+                return client.to_string();
+            }
+        }
+        return peer_ip.to_string();
+    }
+
+    // Tests and non-network invocations have no ConnectInfo. Never trust XFF
+    // without a verified proxy peer.
+    "unknown".to_owned()
 }
 
 async fn auth_middleware(
@@ -484,10 +553,16 @@ async fn session_timeout_middleware(
         }
     }
 
+    let authenticated = request
+        .headers()
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .map(|value| is_bearer_authorized(value, &state.auth.bearer_token))
+        .unwrap_or(false);
     let response = next.run(request).await;
 
     let mut server_vault = state.vault.lock().await;
-    if server_vault.session.is_some() {
+    if authenticated && response.status().is_success() && server_vault.session.is_some() {
         server_vault.last_activity = Some(Instant::now());
     }
     response
@@ -709,7 +784,7 @@ async fn encrypt(
         .key_id
         .parse()
         .map_err(|_| ApiError::BadRequest("invalid key_id"))?;
-    let plaintext = input.plaintext.into_bytes();
+    let plaintext = Zeroizing::new(input.plaintext.as_bytes().to_vec());
     let metadata = input.metadata.unwrap_or_default().into_bytes();
     let envelope = session
         .encrypt(&key_id, &plaintext, metadata)
@@ -910,6 +985,39 @@ mod tests {
         assert!(limiter.allow("other-client"));
     }
 
+    #[test]
+    fn rate_limiter_evicts_oldest_client_at_capacity() {
+        let limiter = RateLimiter::new(1, Duration::from_secs(60));
+        for i in 0..4096 {
+            assert!(limiter.allow(&format!("client-{i}")));
+        }
+        assert!(limiter.allow("new-client"));
+    }
+
+    #[test]
+    fn unverified_peer_never_uses_forwarded_for() {
+        let request = Request::builder()
+            .header("x-forwarded-for", "198.51.100.10")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let trusted = std::collections::HashSet::new();
+        assert_eq!(client_identity(&request, &trusted), "unknown");
+    }
+
+    #[test]
+    fn trusted_proxy_uses_rightmost_forwarded_address() {
+        let mut request = Request::builder()
+            .header("x-forwarded-for", "198.51.100.10, 127.0.0.1")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let mut trusted = std::collections::HashSet::new();
+        trusted.insert("127.0.0.1".parse::<IpAddr>().unwrap());
+        request
+            .extensions_mut()
+            .insert(ConnectInfo(SocketAddr::from(([127, 0, 0, 1], 8443))));
+        assert_eq!(client_identity(&request, &trusted), "198.51.100.10");
+    }
+
     fn test_state(path: std::path::PathBuf) -> AppState {
         AppState {
             vault: Arc::new(Mutex::new(ServerVault {
@@ -923,7 +1031,53 @@ mod tests {
             limiter: Arc::new(RateLimiter::new(60, Duration::from_secs(60))),
             max_request_body_bytes: MAX_REQUEST_BODY_BYTES,
             metrics: Metrics::default(),
+            trusted_proxy_ips: Arc::new(std::collections::HashSet::new()),
         }
+    }
+
+    #[tokio::test]
+    async fn unauthorized_request_does_not_refresh_session_timeout() {
+        let dir = std::env::temp_dir().join(format!(
+            "nexusq-server-timeout-test-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let vault_path = dir.join("vault.nqx");
+        Vault::create(&vault_path, b"test-password", Some("server-test".into())).unwrap();
+
+        let unlocked = Vault::open(&vault_path)
+            .unwrap()
+            .unlock(b"test-password")
+            .unwrap();
+        let state = test_state(vault_path);
+        {
+            let mut server_vault = state.vault.lock().await;
+            server_vault.session = Some(unlocked);
+            server_vault.last_activity =
+                Some(Instant::now() - SESSION_TIMEOUT + Duration::from_secs(30));
+        }
+
+        let app = build_app(state.clone());
+        use axum::body::Body;
+        use axum::http::Request;
+        use tower::ServiceExt;
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/vault/status")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        let server_vault = state.vault.lock().await;
+        assert!(server_vault.session.is_some());
+        assert!(server_vault.last_activity.unwrap().elapsed() > Duration::from_secs(5));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[tokio::test]
@@ -980,8 +1134,11 @@ mod tests {
 
     #[tokio::test]
     async fn expired_session_is_locked_before_protected_request() {
-        let dir =
-            std::env::temp_dir().join(format!("nexusq-server-timeout-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "nexusq-server-timeout-test-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let vault_path = dir.join("vault.nqx");

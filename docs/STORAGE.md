@@ -405,7 +405,7 @@ The audit log stores the chained events described in `SECURITY_MODEL.md`
 
 +---------------------------------------------------------+
 
-| Magic           | "NQA1" (4 bytes)                       |
+| Magic           | "NQA2" (4 bytes)                       |
 +---------------------------------------------------------+
 
 | Version         | 0x01 (1 byte)                          |
@@ -508,7 +508,7 @@ Verification. To verify the log independently, open it again and
 call verify_all:
 
 ```rust
-let log = AuditLog::open("audit/")?;
+session.verify_audit()?;
 log.verify_all()?;
 ```
 
@@ -840,7 +840,7 @@ This document implements defenses for the following threats from
   anti-rollback at the storage DB level.
 - **T-06 (vault theft)**: vault encrypted under Argon2id-derived KEK.
 - **T-07 (malicious vault file)**: strict parsing, fuzzing (Fase 15).
-- **T-09 (audit log tampering)**: chained hashes across segments.
+- **T-09 (audit log tampering)**: vault-derived HMAC-SHA256 authentication across events and segments.
 - **T-10 (silent downgrade)**: version byte, no fallback for unknown
   versions.
 - **T-12 (cross-version format confusion)**: magic + version per format.

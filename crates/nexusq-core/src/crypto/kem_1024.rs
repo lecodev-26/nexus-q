@@ -1,8 +1,7 @@
 //! ML-KEM-1024 + X25519 hybrid key encapsulation.
-use hkdf::Hkdf;
 use ml_kem::kem::{Decapsulate, Encapsulate, Kem};
 use ml_kem::{DecapsulationKey1024, EncapsulationKey1024, KeyExport, MlKem1024};
-use sha2::Sha256;
+use sha3::{Digest, Sha3_256};
 use x25519_dalek::{EphemeralSecret, PublicKey as X25519Public, StaticSecret};
 use zeroize::Zeroizing;
 
@@ -14,9 +13,10 @@ pub const PUBLIC_KEY_LEN: usize = 1600;
 pub const CIPHERTEXT_LEN: usize = 1600;
 /// Serialized secret key length (64-byte ML-KEM seed + 32-byte X25519 secret).
 pub const SECRET_KEY_LEN: usize = 96;
-const INFO: &[u8] = b"nexusq-hybrid-kem-1024-v1";
+const INFO: &[u8] = b"nexusq-hybrid-kem-1024-v2";
 
-/// A hybrid ML-KEM-1024/X25519 key pair.
+/// A versioned NEXUS-Q-specific ML-KEM-1024/X25519 hybrid key pair.
+/// This is not the X-Wing construction.
 pub struct KeyPair {
     /// ML-KEM secret key.
     pub ml_kem_secret: DecapsulationKey1024,
@@ -40,14 +40,15 @@ impl KeyPair {
     /// Serialize the secret half.
     #[must_use]
     pub fn secret_key_bytes(&self) -> Zeroizing<Vec<u8>> {
-        let seed = self
-            .ml_kem_secret
-            .to_seed()
-            .expect("generated ML-KEM key has a seed");
-        let x_bytes = self.x25519_secret.to_bytes();
+        let seed = Zeroizing::new(
+            self.ml_kem_secret
+                .to_seed()
+                .expect("generated ML-KEM key has a seed"),
+        );
+        let x_bytes = Zeroizing::new(self.x25519_secret.to_bytes());
         let mut out = Zeroizing::new(Vec::with_capacity(SECRET_KEY_LEN));
         out.extend_from_slice(seed.as_slice());
-        out.extend_from_slice(&x_bytes);
+        out.extend_from_slice(x_bytes.as_ref());
         out
     }
 }
@@ -79,15 +80,17 @@ pub fn encapsulate(
     let eph = EphemeralSecret::random();
     let eph_pub = X25519Public::from(&eph);
     let x_ss = eph.diffie_hellman(&X25519Public::from(x_arr));
-    let mut ikm = Zeroizing::new(Vec::with_capacity(64));
-    ikm.extend_from_slice(ml_ss.as_slice());
-    ikm.extend_from_slice(x_ss.as_bytes());
-    let hk = Hkdf::<Sha256>::new(None, &ikm);
+    let mut input = Zeroizing::new(Vec::with_capacity(64 + 32 + 32 + INFO.len()));
+    input.extend_from_slice(ml_ss.as_slice());
+    input.extend_from_slice(x_ss.as_bytes());
+    input.extend_from_slice(eph_pub.as_bytes());
+    input.extend_from_slice(x_pk);
+    input.extend_from_slice(INFO);
+    let digest = Sha3_256::digest(&input);
     let mut out = Zeroizing::new([0u8; SHARED_SECRET_LEN]);
-    hk.expand(INFO, out.as_mut())
-        .map_err(|_| KemError::HybridCombine)?;
-    // Recompute the ephemeral public key: the secret was consumed above, so use a fresh construction.
-    // The public key must correspond to the shared secret; generate both together instead.
+    out.copy_from_slice(&digest);
+    // The ciphertext carries the same X25519 ephemeral public key that was
+    // authenticated by the combiner above.
     let mut out_ct = Vec::with_capacity(CIPHERTEXT_LEN);
     out_ct.extend_from_slice(ct.as_slice());
     out_ct.extend_from_slice(eph_pub.as_bytes());
@@ -110,13 +113,16 @@ pub fn decapsulate(
     let x_ss = pair
         .x25519_secret
         .diffie_hellman(&X25519Public::from(x_arr));
-    let mut ikm = Zeroizing::new(Vec::with_capacity(64));
-    ikm.extend_from_slice(ml_ss.as_slice());
-    ikm.extend_from_slice(x_ss.as_bytes());
-    let hk = Hkdf::<Sha256>::new(None, &ikm);
+    let mut input = Zeroizing::new(Vec::with_capacity(64 + 32 + 32 + INFO.len()));
+    input.extend_from_slice(ml_ss.as_slice());
+    input.extend_from_slice(x_ss.as_bytes());
+    input.extend_from_slice(x_pub);
+    let recipient_pk_x = X25519Public::from(&pair.x25519_secret);
+    input.extend_from_slice(recipient_pk_x.as_bytes());
+    input.extend_from_slice(INFO);
+    let digest = Sha3_256::digest(&input);
     let mut out = Zeroizing::new([0u8; SHARED_SECRET_LEN]);
-    hk.expand(INFO, out.as_mut())
-        .map_err(|_| KemError::HybridCombine)?;
+    out.copy_from_slice(&digest);
     Ok(out)
 }
 

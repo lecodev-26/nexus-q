@@ -139,7 +139,7 @@ Sessions carry:
 
 Sessions do **not** carry:
 
-- Raw password material (zeroized after KEK derivation).
+- Raw password material is held in zeroizing buffers by the CLI and HTTP adapters and borrowed by the core only for KEK derivation.
 - DEKs (loaded on demand, zeroized after use).
 - Long-lived tokens.
 
@@ -259,7 +259,7 @@ subject:      KeyId, VaultId, etc.,
 outcome:      success | failure | denied,
 context:      minimal, non-secret details,
 prev_hash:    H(event_{n-1}),
-hash:         H(canonical_serialize(event_n without hash) || prev_hash)
+hash:         HMAC-SHA256(audit_key, canonical_serialize(event_n without hash) || prev_hash)
 }
 
 ```
@@ -408,7 +408,7 @@ This document implements defenses for the following threats from
 - **T-01 (ciphertext tampering)**: fail-closed AEAD.
 - **T-04 (forged signatures)**: verification with strict algorithm binding.
 - **T-08 (key misuse)**: policy engine + purposes.
-- **T-09 (audit log tampering)**: chained hashes.
+- **T-09 (audit log tampering)**: vault-derived HMAC-SHA256 authentication.
 - **T-10 (silent downgrade)**: explicit algorithm binding, no negotiation.
 
 Threats that the security model **cannot** mitigate in v1.0:

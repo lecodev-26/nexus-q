@@ -272,7 +272,7 @@ nexusq credential verify <vault> <input>
 
 **Audit:**
 ```
-nexusq audit verify <audit-dir>
+nexusq audit verify <audit-dir> --vault <vault> [--password-file <path>] --vault <vault> [--password-file <path>]
 nexusq audit show <audit-dir> [--last <n>]
 ```
 
@@ -512,3 +512,8 @@ Resolved in Fase 12 (CLI), Fase 13 (SDK), Fase 14 (Server).
 ---
 
 *End of document.*
+
+
+### Trusted proxy configuration
+
+When remote trusted TLS termination is enabled, also set `NEXUSQ_TRUSTED_PROXY_IPS` to the comma-separated IP addresses of the reverse proxies that may connect directly to NEXUS-Q. X-Forwarded-For is ignored for security decisions unless the peer socket is loopback or matches this allowlist; the address is selected by walking the chain from the right and skipping trusted proxy hops. This prevents direct clients from spoofing X-Forwarded-For to evade the rate limiter.

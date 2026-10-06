@@ -15,6 +15,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::error::CliError;
+use zeroize::Zeroizing;
 
 /// Reads a password from a file.
 ///
@@ -25,14 +26,14 @@ use crate::error::CliError;
 /// # Errors
 ///
 /// Returns [`CliError::Io`] if the file cannot be read.
-pub fn from_file(path: &Path) -> Result<Vec<u8>, CliError> {
+pub fn from_file(path: &Path) -> Result<Zeroizing<Vec<u8>>, CliError> {
     let bytes = fs::read(path).map_err(|e| {
         CliError::Io(format!(
             "failed to read password file {}: {e}",
             path.display()
         ))
     })?;
-    Ok(strip_trailing_newline(bytes))
+    Ok(Zeroizing::new(strip_trailing_newline(bytes)))
 }
 
 /// Reads a password interactively with a prompt.
@@ -45,12 +46,12 @@ pub fn from_file(path: &Path) -> Result<Vec<u8>, CliError> {
 ///
 /// Returns [`CliError::Usage`] if the inputs do not match, or
 /// [`CliError::Io`] if reading from the terminal fails.
-pub fn from_prompt(prompt: &str, confirm: bool) -> Result<Vec<u8>, CliError> {
+pub fn from_prompt(prompt: &str, confirm: bool) -> Result<Zeroizing<Vec<u8>>, CliError> {
     let first = rpassword::prompt_password(prompt)
         .map_err(|e| CliError::Io(format!("failed to read password: {e}")))?;
 
     if !confirm {
-        return Ok(first.into_bytes());
+        return Ok(Zeroizing::new(first.into_bytes()));
     }
 
     let second = rpassword::prompt_password("Confirm password: ")
@@ -60,7 +61,7 @@ pub fn from_prompt(prompt: &str, confirm: bool) -> Result<Vec<u8>, CliError> {
         return Err(CliError::Usage("passwords do not match".into()));
     }
 
-    Ok(first.into_bytes())
+    Ok(Zeroizing::new(first.into_bytes()))
 }
 
 /// Reads a password for an existing resource.
@@ -70,7 +71,7 @@ pub fn from_prompt(prompt: &str, confirm: bool) -> Result<Vec<u8>, CliError> {
 /// # Errors
 ///
 /// Propagates errors from [`from_file`] and [`from_prompt`].
-pub fn read(password_file: Option<&Path>, prompt: &str) -> Result<Vec<u8>, CliError> {
+pub fn read(password_file: Option<&Path>, prompt: &str) -> Result<Zeroizing<Vec<u8>>, CliError> {
     match password_file {
         Some(path) => from_file(path),
         None => from_prompt(prompt, false),
@@ -84,7 +85,10 @@ pub fn read(password_file: Option<&Path>, prompt: &str) -> Result<Vec<u8>, CliEr
 /// # Errors
 ///
 /// Propagates errors from [`from_file`] and [`from_prompt`].
-pub fn read_new(password_file: Option<&Path>, prompt: &str) -> Result<Vec<u8>, CliError> {
+pub fn read_new(
+    password_file: Option<&Path>,
+    prompt: &str,
+) -> Result<Zeroizing<Vec<u8>>, CliError> {
     match password_file {
         Some(path) => from_file(path),
         None => from_prompt(prompt, true),
@@ -139,7 +143,7 @@ mod tests {
             let mut f = fs::File::create(&path).unwrap();
             writeln!(f, "hunter2").unwrap();
         }
-        assert_eq!(from_file(&path).unwrap(), b"hunter2");
+        assert_eq!(from_file(&path).unwrap().as_slice(), b"hunter2");
     }
 
     #[test]
