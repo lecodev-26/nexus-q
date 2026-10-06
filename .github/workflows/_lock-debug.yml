@@ -14,6 +14,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Regenerate lock offline and print diff
         run: |
-          cargo generate-lockfile --offline
+          cargo generate-lockfile
           git diff -- Cargo.lock
           git diff --exit-code -- Cargo.lock
