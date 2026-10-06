@@ -268,7 +268,9 @@ mod tests {
                 hardware_backed: false,
                 attestation: None,
             },
-            WrappedKeyMaterial::Symmetric(vec![0u8; 60]),
+            WrappedKeyMaterial::Symmetric(
+                crate::vault::wrapping::wrap(&[0u8; 32], &kek, &key_id).unwrap(),
+            ),
         );
 
         let encrypted_path =

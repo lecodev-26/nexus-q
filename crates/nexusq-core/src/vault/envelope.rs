@@ -689,7 +689,9 @@ mod tests {
                 hardware_backed: false,
                 attestation: None,
             },
-            WrappedKeyMaterial::Symmetric(vec![0u8; 60]),
+            WrappedKeyMaterial::Symmetric(
+                super::wrapping::wrap(&[0u8; 32], &KEK, &key_id).unwrap(),
+            ),
         )
     }
 

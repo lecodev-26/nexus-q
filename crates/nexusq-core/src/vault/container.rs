@@ -3525,12 +3525,8 @@ mod tests {
             .revoke_identity(&issuer, RevokeReason::Superseded)
             .unwrap();
 
-        // The signing key is untouched by revocation, so verification
-        // still succeeds. Whether a real deployment should refuse
-        // credentials from revoked issuers is a policy decision
-        // (Phase 11).
-        let cred = session.verify_credential(&cred_bytes).unwrap();
-        assert_eq!(cred.issuer, issuer);
+        let err = session.verify_credential(&cred_bytes).unwrap_err();
+        assert!(matches!(err, VaultError::IdentityNotUsable { .. }));
     }
 
     #[test]
