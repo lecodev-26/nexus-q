@@ -138,7 +138,7 @@ impl AuditSegment {
     ) -> Result<Self, DbError> {
         let prev_segment = prev_segment.unwrap_or(GENESIS_HASH);
         let auth_key = Zeroizing::new(*auth_key);
-        let stored_hash = authenticate_segment(&*auth_key, &prev_segment);
+        let stored_hash = authenticate_segment(&auth_key, &prev_segment);
         Ok(Self {
             id: SegmentId::generate()?,
             prev_segment,
@@ -199,7 +199,7 @@ impl AuditSegment {
             .last()
             .map_or_else(|| GENESIS_HASH.to_vec(), |e| e.hash.clone());
 
-        let event = AuditEvent::new(index, timestamp, spec, &prev_hash, &*self.auth_key)?;
+        let event = AuditEvent::new(index, timestamp, spec, &prev_hash, &self.auth_key)?;
         self.events.push(event);
         self.stored_hash = self.segment_hash()?;
         Ok(self.events.last().expect("just pushed"))
@@ -218,7 +218,7 @@ impl AuditSegment {
         if let Some(last) = self.events.last() {
             buf.extend_from_slice(&last.hash);
         }
-        Ok(authenticate_segment(&*self.auth_key, &buf))
+        Ok(authenticate_segment(&self.auth_key, &buf))
     }
 
     /// Verifies the whole chain:
@@ -241,7 +241,7 @@ impl AuditSegment {
             if event.prev_hash != expected_prev {
                 return Err(DbError::RecordCrcMismatch);
             }
-            if !event.is_intact(&*self.auth_key)? {
+            if !event.is_intact(&self.auth_key)? {
                 return Err(DbError::RecordCrcMismatch);
             }
             expected_prev.clone_from(&event.hash);
@@ -437,6 +437,7 @@ fn temp_path(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::crypto::sha256;
 
     const TEST_KEY: [u8; HASH_LEN] = [0x42; HASH_LEN];
     use crate::storage::audit_event::{EventOutcome, EventType};

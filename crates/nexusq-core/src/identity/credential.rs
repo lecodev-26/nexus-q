@@ -20,18 +20,13 @@ pub const CURRENT_VERSION: u8 = 3;
 /// Legacy credential schema version.
 pub const LEGACY_VERSION: u8 = 2;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum CredentialSignatureAlgorithm {
+    #[default]
     Ed25519,
     #[serde(rename = "ml-dsa-65")]
     MlDsa65,
-}
-
-impl Default for CredentialSignatureAlgorithm {
-    fn default() -> Self {
-        Self::Ed25519
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -94,6 +89,7 @@ pub enum CredentialError {
 }
 
 impl Credential {
+    #[allow(clippy::too_many_arguments)]
     fn issue_v3(
         algorithm: CredentialSignatureAlgorithm,
         issuer_key_id: KeyId,

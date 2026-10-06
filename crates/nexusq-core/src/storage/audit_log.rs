@@ -227,7 +227,7 @@ impl AuditLog {
         let next_number = self.current_number + 1;
         let next_path = segment_path(&self.dir, next_number);
 
-        let next = AuditSegment::new_with_key(Some(prev_hash), &*self.auth_key)?;
+        let next = AuditSegment::new_with_key(Some(prev_hash), &self.auth_key)?;
         next.save(&next_path)?;
 
         self.current = next;
@@ -250,7 +250,7 @@ impl AuditLog {
 
         for (_num, path) in &segments {
             let mut seg = AuditSegment::open(path)?;
-            seg.set_auth_key(&*self.auth_key);
+            seg.set_auth_key(&self.auth_key);
             seg.verify()?;
 
             // The first segment must have prev = genesis; later ones
