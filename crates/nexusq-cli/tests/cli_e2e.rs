@@ -448,11 +448,36 @@ fn credential_issue_and_verify() {
 }
 
 #[test]
-fn audit_verify_on_fresh_dir_succeeds() {
+fn audit_verify_on_fresh_attached_dir_succeeds() {
     let dir = TempDir::new().unwrap();
+    let pw = setup_vault(&dir);
     fs::create_dir(dir.path().join("audit")).unwrap();
 
-    let out = run_in(dir.path(), &["audit", "verify", "audit"]);
+    let attach = run_in(
+        dir.path(),
+        &[
+            "vault",
+            "attach-audit",
+            "test.nqv",
+            "audit",
+            "--password-file",
+            pw.to_str().unwrap(),
+        ],
+    );
+    assert_eq!(code_of(&attach), 0);
+
+    let out = run_in(
+        dir.path(),
+        &[
+            "audit",
+            "verify",
+            "audit",
+            "--vault",
+            "test.nqv",
+            "--password-file",
+            pw.to_str().unwrap(),
+        ],
+    );
     assert_eq!(code_of(&out), 0);
     assert!(stdout_of(&out).contains("valid"));
 }
