@@ -671,7 +671,7 @@ mod tests {
         let key_id = KeyId::generate(&rng, algorithm.as_str()).unwrap();
         KeyRecord::new(
             KeyMetadata {
-                key_id,
+                key_id: key_id.clone(),
                 algorithm,
                 purpose: match algorithm {
                     Algorithm::Aes256Gcm | Algorithm::ChaCha20Poly1305 => Purpose::Encrypt,

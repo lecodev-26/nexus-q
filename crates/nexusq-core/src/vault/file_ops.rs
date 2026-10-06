@@ -253,7 +253,7 @@ mod tests {
         let key_id = KeyId::generate(&rng, "aes256gcm").unwrap();
         let record = KeyRecord::new(
             KeyMetadata {
-                key_id,
+                key_id: key_id.clone(),
                 algorithm: Algorithm::Aes256Gcm,
                 purpose: Purpose::Encrypt,
                 created_at: Timestamp::from_secs(1_700_000_000),
