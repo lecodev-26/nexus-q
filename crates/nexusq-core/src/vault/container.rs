@@ -33,7 +33,7 @@ use super::serde_helpers::{self, CborError};
 use super::state::{StateTransitionError, VaultState};
 use super::status::KeyStatus;
 use super::timestamp::Timestamp;
-use super::wrapping::{WrappingError, wrap};
+use super::wrapping::{self, WrappingError, wrap};
 use crate::crypto::sign::{self, SignError, Signature};
 use crate::identity::{
     Credential, CredentialError, Identity, IdentityId, IdentityMetadata, IdentityStatus,
@@ -459,7 +459,7 @@ impl Session {
                 continue;
             }
             let is_symmetric = matches!(&record.material, WrappedKeyMaterial::Symmetric(_));
-            let material = wrap::unwrap(record.material.bytes(), from_kek, record.key_id())?;
+            let material = wrapping::unwrap(record.material.bytes(), from_kek, record.key_id())?;
             let wrapped = wrap(&material, to_kek, record.key_id())?;
             record.material = if is_symmetric {
                 WrappedKeyMaterial::Symmetric(wrapped)

@@ -260,7 +260,7 @@ pub fn import(
     )
     .map_err(|_| BackupError::WrongPassphrase)?;
 
-    let body: VaultBody = serde_helpers::from_slice(&plaintext)?;
+    let mut body: VaultBody = serde_helpers::from_slice(&plaintext)?;
 
     // Create a fresh vault and replace its body with the imported one.
     Vault::create(new_vault_path, new_vault_password, None)?;
@@ -305,7 +305,7 @@ fn compute_kek_verifier(kek: &[u8]) -> Result<[u8; KEK_VERIFIER_LEN], BackupErro
     let mut verifier = [0u8; KEK_VERIFIER_LEN];
     let derived =
         kdf::hkdf_sha256(kek, None, BACKUP_KEK_VERIFIER_INFO).map_err(BackupError::Kdf)?;
-    verifier.copy_from_slice(&derived);
+    verifier.copy_from_slice(&*derived);
     Ok(verifier)
 }
 
