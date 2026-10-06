@@ -227,7 +227,7 @@ SP 800-38D), ECB in any form, any custom mode.
 - Formerly known as CRYSTALS-Kyber.
 - Security level currently implemented:
   - ML-KEM-768 (NIST level 3) — default
-  - ML-KEM-1024 is implemented as a hybrid ML-KEM-1024 + X25519 construction
+  - ML-KEM-1024 is implemented as a NEXUS-Q-specific ML-KEM-1024 + X25519 hybrid; it is not claimed to be X-Wing.
 - Used for: establishing session keys, wrapping data keys, any
   public-key-based key agreement.
 - Public key size: 1184 bytes (ML-KEM-768), 1568 bytes (ML-KEM-1024)
@@ -245,7 +245,8 @@ SP 800-38D), ECB in any form, any custom mode.
 - ECDH on P-256, P-384, P-521 for new keys (legacy import only).
 - Non-hybrid ML-KEM alone for **long-term** keys where the threat model
   includes a quantum adversary with a long horizon — hybrid is required.
-- Any custom KEM composition without domain separation, transcript binding, or documented security review.
+- The ML-KEM-1024 + X25519 variant is explicitly versioned and domain-separated;
+  it must not be represented as X-Wing or as a finalized IETF construction.
 
 ### 4.6 Digital signatures
 
@@ -269,13 +270,12 @@ SP 800-38D), ECB in any form, any custom mode.
   security.
 - Not the default; selected per-use-case.
 
-**Currently implemented signature:** Ed25519 (RFC 8032)
+**Legacy/classical signature:** Ed25519 (RFC 8032)
 
-- Used for: verifying signatures made by legacy systems; importing
-  existing Ed25519 keys for transition.
-- Current NEXUS-Q identity operations use Ed25519. Migration to a PQC signature
-  scheme is a planned crypto milestone; until then Ed25519 is a classical signature
-  and must not be described as post-quantum protection.
+- Existing identity document/message signing remains Ed25519 for API compatibility.
+- New credentials use ML-DSA-65 and record the exact issuer key ID and signature
+  algorithm in the signed payload. Legacy Ed25519 credentials remain verifiable.
+- Ed25519 must not be described as post-quantum protection.
 
 **Forbidden:**
 
@@ -403,7 +403,7 @@ Examples:
 | Argon2id iterations| 3                      | |
 | HKDF output        | 32 bytes               | Per derived key |
 | KEM (default)      | ML-KEM-768 + X25519    | Hybrid |
-| Signature default  | Ed25519 (current)      | ML-DSA-65 is implemented |
+| Signature default  | ML-DSA-65 for credentials | Ed25519 remains for legacy identity API operations |
 | Random salt        | 128–256 bits           | Unique per use |
 
 ---

@@ -21,7 +21,7 @@ use zeroize::Zeroizing;
 /// Length in bytes of a shared secret produced by either KEM.
 pub const SHARED_SECRET_LEN: usize = 32;
 
-/// HKDF `info` string used to combine the hybrid shared secrets.
+/// X-Wing domain-separation label used by the SHA3-256 combiner.
 const XWING_LABEL: &[u8; 6] = &[0x5c, 0x2e, 0x2f, 0x2f, 0x5e, 0x5c];
 
 /// Errors returned by the KEM module.

@@ -83,15 +83,17 @@ All identity operations are methods on `Session`, so they have access
 to the vault's KEK:
 
 - `create_identity(algorithm) -> IdentityId`
-  * Generates an Ed25519 key inside the vault, activates it, and
-    records an identity that references it.
+  * Generates the legacy Ed25519 identity-signing key plus a dedicated
+    ML-DSA-65 credential-signing key, activates both, and records the
+    identity references.
 - `identity_sign(&IdentityId, message) -> Signature`
   * Unwraps the signing key material, signs the message, zeroizes
     the material.
 - `identity_verify(&IdentityId, message, &Signature) -> Result<()>`
   * Uses the public half of the signing key. Does not need the KEK.
 - `rotate_identity_key(&IdentityId) -> KeyId`
-  * Generates a new signing key, retires the old one, bumps
+  * Generates replacement identity and credential signing keys, retires
+    both previous active keys, preserves their history, and bumps
     `identity.metadata.version`.
 - `revoke_identity(&IdentityId, RevokeReason)`
   * Marks the identity revoked. The keys remain in the vault so past
@@ -122,8 +124,8 @@ Two helpers land in the crypto module to support this:
 - Identity names are stable across key rotation.
 - Past signatures remain verifiable after revocation, because the
   public half of retired keys stays accessible through the identity.
-- The shape leaves room for credentials (a later sub-phase) without
-  restructuring.
+- Credentials have a dedicated PQ signing-key slot and history, so new
+  credentials use ML-DSA-65 without breaking legacy Ed25519 credentials.
 
 **Negative:**
 

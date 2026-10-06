@@ -46,4 +46,4 @@ Keep private identity material inside the vault. Export only public material or 
 
 ## Credential key rotation
 
-Each credential records the exact issuer signing-key identifier used to sign it. Issuer key rotation therefore does not invalidate previously issued credentials merely because the identity now has a newer signing key. The verifier requires that the recorded key belongs to the issuer's signing-key history.
+Each credential records the exact issuer signing-key identifier and signature algorithm used to sign it. New credentials use ML-DSA-65. Issuer key rotation therefore does not invalidate previously issued credentials merely because the identity now has a newer signing key. The verifier resolves the historical key and rejects revoked/destroyed issuer keys and expired credentials.

@@ -107,3 +107,8 @@ A deployment should verify liveness/readiness after startup, keep metrics
 inside the monitoring boundary, and use SIGTERM/SIGINT for graceful Unix
 shutdown. For recovery, restore a trusted vault backup with restrictive
 permissions and verify the probes before returning the service to traffic.
+
+
+### Trusted proxy configuration
+
+When remote trusted TLS termination is enabled, also set `NEXUSQ_TRUSTED_PROXY_IPS` to the comma-separated IP addresses of the reverse proxies that may connect directly to NEXUS-Q. X-Forwarded-For is ignored for security decisions unless the peer socket is loopback or matches this allowlist; the address is selected by walking the chain from the right and skipping trusted proxy hops. This prevents direct clients from spoofing X-Forwarded-For to evade the rate limiter.

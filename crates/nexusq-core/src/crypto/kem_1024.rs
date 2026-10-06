@@ -15,7 +15,8 @@ pub const CIPHERTEXT_LEN: usize = 1600;
 pub const SECRET_KEY_LEN: usize = 96;
 const INFO: &[u8] = b"nexusq-hybrid-kem-1024-v2";
 
-/// A hybrid ML-KEM-1024/X25519 key pair.
+/// A versioned NEXUS-Q-specific ML-KEM-1024/X25519 hybrid key pair.
+/// This is not the X-Wing construction.
 pub struct KeyPair {
     /// ML-KEM secret key.
     pub ml_kem_secret: DecapsulationKey1024,
@@ -88,8 +89,8 @@ pub fn encapsulate(
     let digest = Sha3_256::digest(&input);
     let mut out = Zeroizing::new([0u8; SHARED_SECRET_LEN]);
     out.copy_from_slice(&digest);
-    // Recompute the ephemeral public key: the secret was consumed above, so use a fresh construction.
-    // The public key must correspond to the shared secret; generate both together instead.
+    // The ciphertext carries the same X25519 ephemeral public key that was
+    // authenticated by the combiner above.
     let mut out_ct = Vec::with_capacity(CIPHERTEXT_LEN);
     out_ct.extend_from_slice(ct.as_slice());
     out_ct.extend_from_slice(eph_pub.as_bytes());
