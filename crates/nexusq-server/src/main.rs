@@ -1038,7 +1038,7 @@ mod tests {
     #[tokio::test]
     async fn unauthorized_request_does_not_refresh_session_timeout() {
         let dir =
-            std::env::temp_dir().join(format!("nexusq-server-timeout-test-{}", std::process::id()));
+            std::env::temp_dir().join(format!("nexusq-server-timeout-test-{}-{:?}", std::process::id(), std::thread::current().id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let vault_path = dir.join("vault.nqx");
@@ -1132,7 +1132,7 @@ mod tests {
     #[tokio::test]
     async fn expired_session_is_locked_before_protected_request() {
         let dir =
-            std::env::temp_dir().join(format!("nexusq-server-timeout-test-{}", std::process::id()));
+            std::env::temp_dir().join(format!("nexusq-server-timeout-test-{}-{:?}", std::process::id(), std::thread::current().id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let vault_path = dir.join("vault.nqx");
