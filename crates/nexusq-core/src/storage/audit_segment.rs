@@ -439,7 +439,6 @@ mod tests {
     use super::*;
     use crate::crypto::sha256;
 
-    const TEST_KEY: [u8; HASH_LEN] = [0x42; HASH_LEN];
     use crate::storage::audit_event::{EventOutcome, EventType};
     use tempfile::TempDir;
 

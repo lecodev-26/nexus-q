@@ -143,7 +143,7 @@ mod tests {
             let mut f = fs::File::create(&path).unwrap();
             writeln!(f, "hunter2").unwrap();
         }
-        assert_eq!(from_file(&path).unwrap(), b"hunter2");
+        assert_eq!(from_file(&path).unwrap().as_slice(), b"hunter2");
     }
 
     #[test]
