@@ -1875,7 +1875,6 @@ fn resolve_audit_path(vault_path: &Path, audit_dir: &Path) -> PathBuf {
     parent.join(audit_dir)
 }
 
-
 #[cfg(unix)]
 fn restrict_file_permissions(path: &Path) -> Result<(), VaultError> {
     use std::os::unix::fs::PermissionsExt;
