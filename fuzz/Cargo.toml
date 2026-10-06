@@ -25,4 +25,18 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "vault_body_decode"
+path = "fuzz_targets/vault_body_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "audit_event_decode"
+path = "fuzz_targets/audit_event_decode.rs"
+test = false
+doc = false
+bench = false
+
 [workspace]

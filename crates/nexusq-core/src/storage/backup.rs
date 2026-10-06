@@ -347,6 +347,21 @@ fn write_backup_file(
         let _ = fs::remove_file(&tmp);
         return Err(BackupError::Io(e));
     }
+    restrict_file_permissions(path)?;
+    Ok(())
+}
+
+#[cfg(unix)]
+fn restrict_file_permissions(path: &Path) -> Result<(), BackupError> {
+    use std::os::unix::fs::PermissionsExt;
+    let mut permissions = fs::metadata(path)?.permissions();
+    permissions.set_mode(0o600);
+    fs::set_permissions(path, permissions)?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn restrict_file_permissions(_path: &Path) -> Result<(), BackupError> {
     Ok(())
 }
 
