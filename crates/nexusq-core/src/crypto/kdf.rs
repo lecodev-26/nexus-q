@@ -89,7 +89,10 @@ pub fn hkdf_sha256(
 /// Returns [`KdfError::InvalidSalt`] if `salt` is shorter than
 /// [`ARGON2_SALT_LEN`], and [`KdfError::Argon2Failure`] if Argon2 rejects
 /// the parameters or fails internally.
-pub fn argon2id(password: &[u8], salt: &[u8]) -> Result<Zeroizing<[u8; DERIVED_KEY_LEN]>, KdfError> {
+pub fn argon2id(
+    password: &[u8],
+    salt: &[u8],
+) -> Result<Zeroizing<[u8; DERIVED_KEY_LEN]>, KdfError> {
     if salt.len() < ARGON2_SALT_LEN {
         return Err(KdfError::InvalidSalt);
     }

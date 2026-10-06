@@ -387,11 +387,7 @@ where
     // Unwrap the per-key secret under the vault KEK, then use that key
     // to unwrap the envelope DEK. Destroying/revoking the key therefore
     // has the intended cryptographic effect.
-    let key_material = wrapping::unwrap(
-        key_record.material.bytes(),
-        kek,
-        key_id,
-    )?;
+    let key_material = wrapping::unwrap(key_record.material.bytes(), kek, key_id)?;
     let dek = wrapping::unwrap(&envelope.wrapped_dek, key_material.as_ref(), key_id)?;
 
     // AAD for the payload is the CBOR encoding of the header as parsed.

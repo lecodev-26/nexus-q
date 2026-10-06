@@ -440,11 +440,19 @@ impl Session {
         Ok(body)
     }
 
-    pub(crate) fn rewrap_body_from(&self, body: &mut VaultBody, from_kek: &[u8]) -> Result<(), VaultError> {
+    pub(crate) fn rewrap_body_from(
+        &self,
+        body: &mut VaultBody,
+        from_kek: &[u8],
+    ) -> Result<(), VaultError> {
         Self::rewrap_body_keys(body, from_kek, self.kek.as_ref())
     }
 
-    fn rewrap_body_keys(body: &mut VaultBody, from_kek: &[u8], to_kek: &[u8]) -> Result<(), VaultError> {
+    fn rewrap_body_keys(
+        body: &mut VaultBody,
+        from_kek: &[u8],
+        to_kek: &[u8],
+    ) -> Result<(), VaultError> {
         for record in &mut body.keys {
             let is_hardware = matches!(&record.material, WrappedKeyMaterial::HardwareHandle(_));
             if is_hardware {
