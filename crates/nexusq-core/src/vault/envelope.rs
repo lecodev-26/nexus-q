@@ -506,7 +506,7 @@ pub fn open_envelope_with_kem(
 
 fn check_can_decrypt(record: &KeyRecord) -> Result<(), EnvelopeError> {
     match record.status() {
-        KeyStatus::Active | KeyStatus::Rotating | KeyStatus::Retired | KeyStatus::Revoked => Ok(()),
+        KeyStatus::Active | KeyStatus::Rotating | KeyStatus::Retired => Ok(()),
         status => Err(EnvelopeError::KeyNotUsable {
             key_id: record.key_id().clone(),
             status,

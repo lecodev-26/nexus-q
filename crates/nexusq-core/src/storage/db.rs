@@ -139,6 +139,10 @@ pub enum DbError {
     #[error("trailer CRC mismatch")]
     TrailerCrcMismatch,
 
+    /// The encrypted vault-side audit anchor was not found in the authenticated log.
+    #[error("audit anchor mismatch")]
+    AuditAnchorMismatch,
+
     /// A record kind byte was not recognized.
     #[error("unknown record kind: {0}")]
     UnknownKind(u8),

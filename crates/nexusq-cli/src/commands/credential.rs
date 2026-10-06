@@ -7,7 +7,9 @@ use nexusq_core::vault::Timestamp;
 use serde_json::json;
 
 use crate::GlobalOptions;
-use crate::cli::{CredentialCommand, CredentialIssueArgs, CredentialVerifyArgs};
+use crate::cli::{
+    CredentialCommand, CredentialIssueArgs, CredentialRevokeArgs, CredentialVerifyArgs,
+};
 use crate::error::CliError;
 use crate::output::Output;
 
@@ -18,6 +20,7 @@ pub fn run(command: CredentialCommand, global: &GlobalOptions) -> Result<(), Cli
     match command {
         CredentialCommand::Issue(args) => issue(args, global),
         CredentialCommand::Verify(args) => verify(args, global),
+        CredentialCommand::Revoke(args) => revoke(args, global),
     }
 }
 
@@ -117,6 +120,18 @@ fn verify(args: CredentialVerifyArgs, global: &GlobalOptions) -> Result<(), CliE
 
     if !global.quiet {
         println!("{}", Output::new(human, json).render(global.output));
+    }
+    Ok(())
+}
+
+fn revoke(args: CredentialRevokeArgs, global: &GlobalOptions) -> Result<(), CliError> {
+    let mut session = unlock_session(&args.vault, args.password_file.as_deref())?;
+    let bytes = std::fs::read(&args.input)
+        .map_err(|e| CliError::Io(format!("failed to read {}: {e}", args.input.display())))?;
+    session.revoke_credential(&bytes).map_err(CliError::from)?;
+    session.lock().map_err(CliError::from)?;
+    if !global.quiet {
+        println!("Credential revoked");
     }
     Ok(())
 }

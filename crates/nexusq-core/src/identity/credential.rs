@@ -5,6 +5,7 @@
 //! algorithm are authenticated by the signed payload.
 
 use serde::{Deserialize, Serialize};
+use sha3::{Digest, Sha3_256};
 
 use crate::crypto::{
     pq_sign::{self, PqSignError},
@@ -84,6 +85,8 @@ pub enum CredentialError {
     UnsupportedVersion(u8),
     #[error("credential expired")]
     Expired,
+    #[error("credential revoked")]
+    Revoked,
     #[error("credential signature algorithm does not match supplied key")]
     AlgorithmMismatch,
 }
@@ -275,6 +278,14 @@ impl Credential {
     #[must_use]
     pub fn signature_bytes(&self) -> &[u8] {
         &self.signature
+    }
+
+    /// Returns the stable identifier used for individual credential revocation.
+    /// The identifier is SHA3-256 over the canonical credential encoding,
+    /// including its signature.
+    pub fn revocation_id(&self) -> Result<[u8; 32], CredentialError> {
+        let canonical = crate::vault::to_vec(self)?;
+        Ok(Sha3_256::digest(&canonical).into())
     }
 }
 

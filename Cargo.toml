@@ -33,10 +33,9 @@ zeroize = { version = "1", features = ["derive", "serde"] }
 subtle = "2"
 sha2 = { version = "0.11.0-rc.5", features = ["zeroize"] }
 sha3 = { version = "0.11.0-rc.5", features = ["zeroize"] }
-aes = { version = "0.9", features = ["zeroize"] }
-poly1305 = { version = "0.9", features = ["zeroize"] }
 argon2 = { version = "0.6.0-rc.1", features = ["zeroize"] }
 hkdf = "0.13.0-rc.5"
+hmac = { version = "0.13", features = ["zeroize"] }
 aes-gcm = { version = "0.11.0-rc.5", features = ["zeroize"] }
 chacha20poly1305 = { version = "0.11.0-rc.5", features = ["zeroize"] }
 ml-kem = { version = "0.3", features = ["getrandom", "zeroize"] }

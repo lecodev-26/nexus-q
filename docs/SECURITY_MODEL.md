@@ -150,8 +150,8 @@ On session end:
 1. All DEKs in memory are zeroized.
 2. All temporary buffers are zeroized.
 3. The KEKs are removed from memory (zeroized).
-4. The session token is invalidated.
-5. An audit event `SESSION_ENDED` is emitted.
+4. The in-memory session object is dropped and no session token is retained by the core.
+5. Audit coverage records the operations that were actually performed; there is no separate SESSION_ENDED event.
 
 ---
 
@@ -273,22 +273,25 @@ explicit types, no whitespace).
 To verify the chain:
 
 1. Read events in order.
-2. For each event, recompute `hash` and compare.
-3. Verify `prev_hash` matches the previous event's `hash`.
+2. Recompute each HMAC with the vault-derived audit key and compare.
+3. Verify `prev_hash` matches the previous event's authenticated hash.
 4. Verify `index` is strictly increasing.
+5. Verify the encrypted vault-side anchor is still present in the log.
 
-Any mismatch = tampering detected. The verification is **independent**: it
-can be run by any party with read access to the chain.
+Any mismatch = tampering or rollback detected. Verification is fail-closed
+and requires the vault-derived audit key.
 
 ### 7.3 Append-only
 
-The audit log is **append-only** at the application level:
+The audit log is append-only at the application level:
 
-- No API to modify or delete events.
-- Storage layer writes at the end only.
-- If truncation is required (retention policy), it is done by
-  **snapshotting** (start a new chain with a link to the old chain's
-  head), never by deleting from the middle.
+- No API modifies or deletes individual events.
+- Segment files are rewritten atomically as logical append-only records.
+- The log is HMAC-authenticated with a vault-derived key.
+- The encrypted vault body stores an audit-event anchor at the last
+  successful vault persistence; unlock rejects a log that no longer
+  contains that anchor.
+- There is currently no retention/snapshot API.
 
 ### 7.4 What is never logged
 
@@ -297,12 +300,17 @@ The audit log is **append-only** at the application level:
 - Passwords or password-derived material.
 - Full ciphertexts (only hashes or KeyIds).
 
-### 7.5 What is always logged
+### 7.5 Current audit event coverage
 
-Per `KEY_MANAGEMENT.md` §13: `KEY_CREATED`, `KEY_USED`, `KEY_ROTATED`,
-`KEY_REVOKED`, `KEY_DESTROYED`, `KEY_EXPORTED`, `KEY_ACCESS_DENIED`,
-`VAULT_UNLOCKED`, `VAULT_LOCKED`, `VAULT_SEALED`, `SESSION_ENDED`,
-`POLICY_CHANGED`, and any operation that changes security-relevant state.
+When auditing is enabled, the current implementation records key lifecycle
+events (key_created, key_activated, key_rotated, key_revoked, key_destroyed,
+key_access_denied), identity lifecycle/signature events, credential
+issue/verify/revoke events, envelope seal/open events, and policy changes.
+
+The implementation does not emit every historical event name from older
+design documents. In particular, there is no generic key_used event and no
+independent session_ended or vault_locked event claim. This document describes
+only behavior that the code actually emits.
 
 ### 7.6 Failure to log = failure to operate
 

@@ -76,6 +76,8 @@ pub enum EventType {
     CredentialIssued,
     /// A credential was verified.
     CredentialVerified,
+    /// A single credential was revoked.
+    CredentialRevoked,
 
     // --- Envelope ---
     /// An envelope was sealed (data encrypted).
@@ -140,6 +142,7 @@ impl EventType {
             // Credentials
             Self::CredentialIssued => "credential_issued",
             Self::CredentialVerified => "credential_verified",
+            Self::CredentialRevoked => "credential_revoked",
 
             // Envelope
             Self::EnvelopeSealed => "envelope_sealed",

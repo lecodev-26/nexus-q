@@ -17,9 +17,6 @@ NEXUS-Q Core (Rust)
    nexusq-c ABI
         |
         +--> C
-        +--> C++ header-only wrapper
-        +--> Go cgo binding
-        +--> Ruby FFI binding
 ```
 
 No cryptography or independent security policy is implemented in the C

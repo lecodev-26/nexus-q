@@ -25,13 +25,13 @@ this document.
 
 ### 2.1 Do not invent cryptography
 
-NEXUS-Q only uses standardized, peer-reviewed algorithms and maintained,
-audited libraries. No custom ciphers, no homemade key schedules, no
-"clever" variants.
+NEXUS-Q uses standardized algorithms and maintained cryptographic
+libraries. NEXUS-Q does not implement custom ciphers or homemade key
+schedules. Dependency audit status is documented separately from algorithm
+standardization.
 
-If a primitive we need does not yet have a mature Rust implementation, we
-wait, we integrate an audited C library, or we do not ship that primitive
-in v1.0.
+If a required primitive does not have an acceptable implementation, we do
+not silently substitute a custom construction.
 
 ### 2.2 Library-first, binaries second
 
@@ -40,7 +40,7 @@ is a consumer of that library:
 
 - The CLI (`nexusq`) is a thin wrapper
 - The server (`nexusq-server`) is another wrapper
-- The SDKs (Rust, C, C++, Python, Go, Ruby, with additional SDKs planned for CI) bind to the library API
+- The currently shipped bindings are the Rust library, C FFI, and a limited Python binding; other language SDKs are not claimed as shipped
 - The hardware backends plug in through traits
 
 No business logic lives outside the library.
@@ -75,9 +75,11 @@ guarantee per platform.
 
 ### 2.6 Auditability
 
-Every security-relevant operation (key creation, key use, vault unlock,
-identity rotation, policy change) emits an audit event. Audit events never
-contain secret material. They are append-only and tamper-evident.
+Auditable security state changes and cryptographic actions emit audit events
+when auditing is enabled. Events never contain secret material. The external
+log is HMAC-authenticated with a vault-derived audit key, and the encrypted
+vault body stores an anchor for the last persisted vault state to detect
+rollback or truncation before that point.
 
 ### 2.7 Versioned formats on disk
 

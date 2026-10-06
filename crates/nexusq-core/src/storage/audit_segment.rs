@@ -39,6 +39,7 @@
 //! See `docs/STORAGE.md` §7 and `docs/SECURITY_MODEL.md` §7.
 
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -395,12 +396,15 @@ impl AuditSegment {
     pub fn save(&self, path: impl AsRef<Path>) -> Result<(), DbError> {
         let path = path.as_ref();
         let bytes = self.to_bytes()?;
-        let tmp = temp_path(path);
-        fs::write(&tmp, &bytes)?;
+        let (tmp, mut file) = create_unique_temp_file(path)?;
+        file.write_all(&bytes)?;
+        file.sync_all()?;
+        drop(file);
         if let Err(e) = fs::rename(&tmp, path) {
             let _ = fs::remove_file(&tmp);
             return Err(DbError::Io(e));
         }
+        sync_parent_dir(path)?;
         Ok(())
     }
 }
@@ -428,10 +432,43 @@ fn authenticate_segment(key: &[u8; HASH_LEN], data: &[u8]) -> [u8; HASH_LEN] {
     outer.finalize().into()
 }
 
-fn temp_path(path: &Path) -> PathBuf {
-    let mut name = path.file_name().unwrap_or_default().to_os_string();
-    name.push(".tmp");
-    path.with_file_name(name)
+fn create_unique_temp_file(path: &Path) -> Result<(PathBuf, fs::File), DbError> {
+    for _ in 0..16 {
+        let mut suffix = [0u8; 16];
+        getrandom::fill(&mut suffix).map_err(|e| DbError::Io(std::io::Error::other(e)))?;
+        let name = format!(
+            "{}.tmp-{}",
+            path.file_name().and_then(|n| n.to_str()).unwrap_or("audit"),
+            hex::encode(suffix)
+        );
+        let tmp = path.with_file_name(name);
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        match options.open(&tmp) {
+            Ok(file) => return Ok((tmp, file)),
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(err) => return Err(DbError::Io(err)),
+        }
+    }
+    Err(DbError::Io(std::io::Error::new(
+        std::io::ErrorKind::AlreadyExists,
+        "could not allocate unique audit temp file",
+    )))
+}
+
+fn sync_parent_dir(path: &Path) -> Result<(), DbError> {
+    #[cfg(unix)]
+    {
+        if let Some(parent) = path.parent() {
+            fs::File::open(parent)?.sync_all()?;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

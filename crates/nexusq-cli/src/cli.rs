@@ -407,6 +407,8 @@ pub enum CredentialCommand {
     Issue(CredentialIssueArgs),
     /// Verify a credential.
     Verify(CredentialVerifyArgs),
+    /// Revoke one credential without revoking its issuer key.
+    Revoke(CredentialRevokeArgs),
 }
 
 /// Arguments for `credential issue`.
@@ -440,7 +442,21 @@ pub struct CredentialIssueArgs {
     pub output_path: PathBuf,
 }
 
-/// Arguments for `credential verify`.
+/// Arguments for credential revoke.
+#[derive(Debug, Args)]
+pub struct CredentialRevokeArgs {
+    /// Path of the vault file.
+    pub vault: PathBuf,
+
+    /// Read the vault password from a file instead of prompting.
+    #[arg(long, value_name = "PATH")]
+    pub password_file: Option<PathBuf>,
+
+    /// Credential file to revoke.
+    pub input: PathBuf,
+}
+
+/// Arguments for credential verify.
 #[derive(Debug, Args)]
 pub struct CredentialVerifyArgs {
     /// Path of the vault file.

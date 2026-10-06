@@ -401,6 +401,19 @@ mod tests {
     }
 
     #[test]
+    fn hybrid_binds_x25519_recipient_public_component() {
+        let pair = hybrid::generate();
+        let mut pk = pair.public_key_bytes();
+        let x_offset = hybrid::PUBLIC_KEY_LEN - 32;
+        pk[x_offset] ^= 0x01;
+
+        let (ct, ss_tampered) = hybrid::encapsulate(&pk).unwrap();
+        let ss_original = hybrid::decapsulate(&pair, &ct).unwrap();
+
+        assert_ne!(ss_tampered.as_ref(), ss_original.as_ref());
+    }
+
+    #[test]
     fn hybrid_wrong_key_produces_different_secret() {
         let alice = hybrid::generate();
         let bob = hybrid::generate();

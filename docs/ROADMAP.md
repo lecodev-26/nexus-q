@@ -499,7 +499,7 @@ exit codes.
 - Swift SDK (Swift Package)
 - Dart / Flutter SDK (FFI)
 
-**Status:** Green for the current delivery boundary. Native SDKs implemented in Termux are complete; external toolchains and cross-SDK publication remain automated CI/release gates.
+**Status:** Green for the current delivery boundary. The shipped binding surface is the C ABI plus limited Python support; additional language SDKs and external publication remain release gates.
 
 **Exit criteria:**
 

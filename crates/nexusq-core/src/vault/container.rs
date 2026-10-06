@@ -20,7 +20,7 @@ use crate::crypto::random::{OsRandomSource, RandomError, RandomSource};
 
 use super::algorithm::Algorithm;
 use super::body::{CURRENT_SCHEMA_VERSION, VaultBody, VaultMetadata};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 use super::envelope::{self, EnvelopeError};
 use super::header::{HeaderError, KdfParams, MAGIC, SALT_LEN, VaultHeader};
@@ -181,6 +181,10 @@ pub enum VaultError {
     #[error("audit error: {0}")]
     Audit(#[from] crate::storage::DbError),
 
+    /// An earlier audit write failed, so this session cannot persist its in-memory mutations.
+    #[error("session cannot persist after an audit write failure")]
+    AuditWriteFailed,
+
     /// The policy engine refused the operation.
     #[error("operation denied by policy")]
     PolicyDenied(PolicyDecision),
@@ -211,6 +215,8 @@ pub struct Session {
     /// `&self` methods; a session is not shared across threads, so
     /// interior mutability is safe here.
     audit: RefCell<Option<AuditLog>>,
+    /// Once an audit write fails, the in-memory mutation must never be persisted.
+    audit_failed: Cell<bool>,
 }
 
 impl std::fmt::Debug for Session {
@@ -343,6 +349,11 @@ impl Vault {
                 let audit_auth = audit_key(kek.as_ref());
                 let log = AuditLog::open_with(&resolved, AuditLogConfig::default(), &audit_auth)?;
                 log.verify_all()?;
+                if let Some(anchor) = body.audit_anchor.as_deref() {
+                    if !log.contains_event_hash(anchor) {
+                        return Err(crate::storage::DbError::AuditAnchorMismatch.into());
+                    }
+                }
                 RefCell::new(Some(log))
             }
             None => RefCell::new(None),
@@ -354,6 +365,7 @@ impl Vault {
             body,
             state: VaultState::Unlocked,
             audit,
+            audit_failed: Cell::new(false),
         })
     }
 
@@ -1115,6 +1127,32 @@ impl Session {
         Ok(credential_bytes)
     }
 
+    /// Revokes one credential without revoking the issuer key.
+    ///
+    /// The credential is identified by SHA3-256 over its canonical encoding.
+    /// The revocation is persisted with the vault and enforced by credential verification.
+    pub fn revoke_credential(&mut self, bytes: &[u8]) -> Result<(), VaultError> {
+        self.require_writes_allowed()?;
+        let credential: Credential = crate::vault::from_slice(bytes)?;
+        self.check_policy(
+            PolicyOperation::CredentialRevoke,
+            credential.issuer.as_str(),
+            None,
+            Some(&credential.issuer),
+        )?;
+        let id = credential.revocation_id()?;
+        if !self
+            .body
+            .revoked_credentials
+            .iter()
+            .any(|existing| existing.as_slice() == id.as_slice())
+        {
+            self.body.revoked_credentials.push(id.to_vec());
+        }
+        self.log_event(credential.issuer.as_str(), EventType::CredentialRevoked)?;
+        Ok(())
+    }
+
     /// Verifies a credential using the issuer's public signing key.
     ///
     /// Enforces credential expiry and resolves the exact historical issuer signing key.
@@ -1131,6 +1169,13 @@ impl Session {
         // Parse once to learn who the issuer is.
         let credential: Credential = crate::vault::from_slice(bytes)?;
 
+        self.check_policy(
+            PolicyOperation::CredentialVerify,
+            credential.issuer.as_str(),
+            None,
+            Some(&credential.issuer),
+        )?;
+
         let identity = self
             .body
             .find_identity(&credential.issuer)
@@ -1144,6 +1189,15 @@ impl Session {
         }
         if credential.is_expired_at(Timestamp::now().unwrap_or(Timestamp::from_secs(0))) {
             return Err(VaultError::Credential(CredentialError::Expired));
+        }
+        let revocation_id = credential.revocation_id()?;
+        if self
+            .body
+            .revoked_credentials
+            .iter()
+            .any(|existing| existing.as_slice() == revocation_id.as_slice())
+        {
+            return Err(VaultError::Credential(CredentialError::Revoked));
         }
         let in_history = identity
             .credential_signing_key_history
@@ -1541,6 +1595,9 @@ impl Session {
 
     /// Internal helper: rejects operations when writes are not allowed.
     fn require_writes_allowed(&self) -> Result<(), VaultError> {
+        if self.audit_failed.get() {
+            return Err(VaultError::AuditWriteFailed);
+        }
         if self.state.allows_writes() {
             Ok(())
         } else {
@@ -1620,6 +1677,7 @@ impl Session {
         let audit_auth = audit_key(self.kek.as_ref());
         let log = AuditLog::open_with(&resolved, AuditLogConfig::default(), &audit_auth)?;
 
+        self.body.audit_anchor = log.head_event_hash().map(ToOwned::to_owned);
         *self.audit.borrow_mut() = Some(log);
         self.body.audit_dir = Some(audit_dir.to_string_lossy().into_owned());
         self.log_event("vault", EventType::AuditConfigured)?;
@@ -1638,6 +1696,7 @@ impl Session {
     pub fn remove_audit_dir(&mut self) -> Result<(), VaultError> {
         self.require_writes_allowed()?;
         self.body.audit_dir = None;
+        self.body.audit_anchor = None;
         *self.audit.borrow_mut() = None;
         Ok(())
     }
@@ -1670,6 +1729,7 @@ impl Session {
         self.require_writes_allowed()?;
         let audit_auth = audit_key(self.kek.as_ref());
         let log = AuditLog::open_with(audit_dir.as_ref(), AuditLogConfig::default(), &audit_auth)?;
+        self.body.audit_anchor = log.head_event_hash().map(ToOwned::to_owned);
         *self.audit.borrow_mut() = Some(log);
         self.body.audit_dir = Some(audit_dir.as_ref().to_string_lossy().into_owned());
         Ok(())
@@ -1704,7 +1764,10 @@ impl Session {
                 .with_subject(subject)
                 .with_outcome(outcome);
             let now = Timestamp::now().unwrap_or(Timestamp::from_secs(0));
-            log.append(now, spec)?;
+            if let Err(err) = log.append(now, spec) {
+                self.audit_failed.set(true);
+                return Err(err.into());
+            }
         }
         Ok(())
     }
@@ -1760,7 +1823,13 @@ impl Session {
     ///
     /// Returns an error if the body cannot be re-encrypted or the file
     /// cannot be written.
-    pub fn lock(self) -> Result<Vault, VaultError> {
+    pub fn lock(mut self) -> Result<Vault, VaultError> {
+        if self.audit_failed.get() {
+            return Err(VaultError::AuditWriteFailed);
+        }
+        if let Some(log) = self.audit.borrow().as_ref() {
+            self.body.audit_anchor = log.head_event_hash().map(ToOwned::to_owned);
+        }
         self.vault.write_body(&self.body, &self.kek)?;
         Ok(self.vault)
     }
@@ -3500,6 +3569,68 @@ mod tests {
     }
 
     #[test]
+    fn revoked_envelope_key_cannot_decrypt() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let key_id = session
+            .generate_key(Algorithm::Aes256Gcm, Purpose::Encrypt)
+            .unwrap();
+        session.activate_key(&key_id).unwrap();
+
+        let envelope = session.encrypt(&key_id, b"secret", Vec::new()).unwrap();
+        session
+            .revoke_key(&key_id, RevokeReason::Compromised)
+            .unwrap();
+
+        let err = session.decrypt(&envelope).unwrap_err();
+        assert!(matches!(
+            err,
+            VaultError::Envelope(EnvelopeError::KeyNotUsable { .. })
+        ));
+    }
+
+    #[test]
+    fn revoke_credential_rejects_only_the_selected_credential() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let issuer = session.create_identity(None).unwrap();
+        let subject = session.create_identity(None).unwrap();
+
+        let revoked = session
+            .issue_credential(&issuer, subject.clone(), b"revoked".to_vec(), None)
+            .unwrap();
+        let live = session
+            .issue_credential(&issuer, subject, b"live".to_vec(), None)
+            .unwrap();
+
+        session.revoke_credential(&revoked).unwrap();
+
+        let err = session.verify_credential(&revoked).unwrap_err();
+        assert!(matches!(
+            err,
+            VaultError::Credential(CredentialError::Revoked)
+        ));
+        assert!(session.verify_credential(&live).is_ok());
+
+        let vault = session.lock().unwrap();
+        let reopened = vault.unlock(b"pw").unwrap();
+        let err = reopened.verify_credential(&revoked).unwrap_err();
+        assert!(matches!(
+            err,
+            VaultError::Credential(CredentialError::Revoked)
+        ));
+        assert!(reopened.verify_credential(&live).is_ok());
+    }
+
+    #[test]
     fn verify_credential_rejects_tampered_claims() {
         let dir = TempDir::new().unwrap();
         let path = temp_path(&dir, "test.nqv");
@@ -3864,6 +3995,10 @@ mod tests {
             let mut perms = std::fs::metadata(&audit_dir).unwrap().permissions();
             perms.set_mode(0o700);
             std::fs::set_permissions(&audit_dir, perms).unwrap();
+
+            // The failed audit write permanently blocks persistence of the
+            // in-memory mutation. The vault on disk must remain unchanged.
+            assert!(session.lock().is_err());
         }
     }
 
