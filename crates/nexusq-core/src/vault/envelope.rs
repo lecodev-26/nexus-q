@@ -328,11 +328,7 @@ pub fn build_envelope(
     // Wrap the DEK under the actual per-key secret, not the vault-wide KEK.
     // The vault KEK only protects the key record itself; key lifecycle
     // operations therefore have real cryptographic effect on envelopes.
-    let key_material = wrapping::unwrap(
-        key_record.material.bytes(),
-        kek,
-        &key_id,
-    )?;
+    let key_material = wrapping::unwrap(key_record.material.bytes(), kek, &key_id)?;
     let wrapped_dek = wrapping::wrap(dek.as_ref(), key_material.as_ref(), &key_id)?;
 
     let envelope = Envelope {
