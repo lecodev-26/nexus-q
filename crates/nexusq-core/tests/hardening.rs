@@ -105,7 +105,7 @@ fn security_invariants_lock_and_key_lifecycle() {
     session
         .revoke_key(&key, nexusq_core::vault::RevokeReason::Compromised)
         .unwrap();
-    assert!(session.decrypt(&envelope).is_ok());
+    assert!(session.decrypt(&envelope).is_err());
     assert!(
         session
             .encrypt(&key, b"blocked after revoke", Vec::new())
