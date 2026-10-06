@@ -1746,6 +1746,7 @@ fn write_vault_file(
         let _ = fs::remove_file(&tmp_path);
         return Err(VaultError::Io(e));
     }
+    restrict_file_permissions(path)?;
 
     // fsync the directory so the rename is durable. Best-effort on
     // platforms that do not support directory fsync.
@@ -3823,4 +3824,18 @@ mod tests {
         let session = vault.unlock(b"pw").unwrap();
         assert_eq!(session.body().metadata.label.as_deref(), Some("run-2"));
     }
+}
+
+#[cfg(unix)]
+fn restrict_file_permissions(path: &Path) -> Result<(), VaultError> {
+    use std::os::unix::fs::PermissionsExt;
+    let mut permissions = fs::metadata(path)?.permissions();
+    permissions.set_mode(0o600);
+    fs::set_permissions(path, permissions)?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn restrict_file_permissions(_path: &Path) -> Result<(), VaultError> {
+    Ok(())
 }
