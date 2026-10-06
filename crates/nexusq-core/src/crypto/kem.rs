@@ -175,8 +175,10 @@ pub mod hybrid {
         let mut reader = Shake256::default().chain(seed).finalize_xof();
         reader.read(expanded.as_mut());
 
-        let ml_seed = Zeroizing::new(expanded[..64].try_into().expect("64-byte slice"));
-        let x_seed = Zeroizing::new(expanded[64..].try_into().expect("32-byte slice"));
+        let ml_seed: Zeroizing<[u8; 64]> =
+            Zeroizing::new(expanded[..64].try_into().expect("64-byte slice"));
+        let x_seed: Zeroizing<[u8; 32]> =
+            Zeroizing::new(expanded[64..].try_into().expect("32-byte slice"));
         let (ml_kem_secret, ml_kem_public) = MlKem768::from_seed(&(*ml_seed).into());
         let x25519_secret = StaticSecret::from(*x_seed);
 

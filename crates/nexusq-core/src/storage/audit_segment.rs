@@ -138,7 +138,7 @@ impl AuditSegment {
     ) -> Result<Self, DbError> {
         let prev_segment = prev_segment.unwrap_or(GENESIS_HASH);
         let auth_key = Zeroizing::new(*auth_key);
-        let stored_hash = authenticate_segment(auth_key.as_ref(), &prev_segment);
+        let stored_hash = authenticate_segment(&*auth_key, &prev_segment);
         Ok(Self {
             id: SegmentId::generate()?,
             prev_segment,

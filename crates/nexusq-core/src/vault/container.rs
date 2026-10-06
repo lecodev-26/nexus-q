@@ -340,7 +340,7 @@ impl Vault {
         let audit = match &body.audit_dir {
             Some(dir) => {
                 let resolved = resolve_audit_path(&self.path, Path::new(dir));
-                let audit_auth = audit_key(kek.as_ref());
+                let audit_auth = audit_key(self.kek.as_ref());
                 let log = AuditLog::open_with(&resolved, AuditLogConfig::default(), &*audit_auth)?;
                 RefCell::new(Some(log))
             }
@@ -1616,7 +1616,7 @@ impl Session {
         // Open the log first so a bad path fails before we touch the
         // body.
         let resolved = resolve_audit_path(&self.vault.path, audit_dir);
-        let audit_auth = audit_key(kek.as_ref());
+        let audit_auth = audit_key(self.kek.as_ref());
         let log = AuditLog::open_with(&resolved, AuditLogConfig::default(), &*audit_auth)?;
 
         *self.audit.borrow_mut() = Some(log);
