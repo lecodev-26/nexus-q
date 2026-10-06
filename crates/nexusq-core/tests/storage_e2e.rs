@@ -110,17 +110,14 @@ fn tampering_with_the_audit_chain_is_detected() {
     let dir = TempDir::new().unwrap();
     let (_vault_path, _log) = run_audited_session(&dir);
 
-    // Corrupt a byte inside the segment file.
+    // Corrupt the authenticated segment trailer deterministically.
+    // The final 32 bytes are the segment HMAC, so changing any byte
+    // must make verification fail closed.
     let audit_dir = dir.path().join("audit");
     let segment_path = audit_dir.join("audit-00001.nqa");
     let mut bytes = fs::read(&segment_path).unwrap();
-    // Flip a byte inside the first serialized event. The segment header
-    // is metadata; the event itself is protected by its HMAC.
-    const HEADER_LEN: usize = 4 + 1 + 16 + 32 + 4;
-    let event_len =
-        u32::from_be_bytes(bytes[HEADER_LEN..HEADER_LEN + 4].try_into().unwrap()) as usize;
-    let event_start = HEADER_LEN + 4;
-    bytes[event_start + event_len / 2] ^= 0x01;
+    let trailer_offset = bytes.len() - 32;
+    bytes[trailer_offset] ^= 0x01;
     fs::write(&segment_path, &bytes).unwrap();
 
     // Unlocking must fail closed because the audit log is authenticated.
