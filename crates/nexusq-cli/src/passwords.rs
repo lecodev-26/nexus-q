@@ -101,7 +101,7 @@ pub fn read_new(
 }
 
 /// Strips a single trailing `\n` or `\r\n` from the input.
-fn strip_trailing_newline(bytes: &mut Zeroizing<Vec<u8>>) {
+fn strip_trailing_newline(bytes: &mut Vec<u8>) {
     if bytes.last() == Some(&b'\n') {
         bytes.pop();
         if bytes.last() == Some(&b'\r') {
