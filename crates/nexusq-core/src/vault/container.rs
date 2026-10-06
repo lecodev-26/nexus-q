@@ -342,6 +342,7 @@ impl Vault {
                 let resolved = resolve_audit_path(&self.path, Path::new(dir));
                 let audit_auth = audit_key(kek.as_ref());
                 let log = AuditLog::open_with(&resolved, AuditLogConfig::default(), &audit_auth)?;
+                log.verify_all()?;
                 RefCell::new(Some(log))
             }
             None => RefCell::new(None),

@@ -90,10 +90,10 @@ fn full_lifecycle_produces_the_expected_audit_chain() {
     }
 
     // Two keys created directly (key_a, key_c), one by rotation (key_b),
-    // plus one inside create_identity.
-    assert_eq!(counts.get("key_created"), Some(&4));
-    // Activated: key_a, key_b, key_c and the identity signing key.
-    assert_eq!(counts.get("key_activated"), Some(&4));
+    // plus the identity Ed25519 key and its ML-DSA-65 credential key.
+    assert_eq!(counts.get("key_created"), Some(&5));
+    // Every created key is activated in this scenario.
+    assert_eq!(counts.get("key_activated"), Some(&5));
     assert_eq!(counts.get("key_rotated"), Some(&1));
     assert_eq!(counts.get("key_revoked"), Some(&1));
     assert_eq!(counts.get("identity_created"), Some(&1));
