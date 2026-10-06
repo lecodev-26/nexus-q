@@ -118,25 +118,30 @@ mod tests {
 
     #[test]
     fn strips_lf() {
-        assert_eq!(strip_trailing_newline(b"pw\n".to_vec()), b"pw");
+        let mut bytes = Zeroizing::new(b"pw\n".to_vec());
+        strip_trailing_newline(&mut bytes);
+        assert_eq!(bytes.as_slice(), b"pw");
     }
 
     #[test]
     fn strips_crlf() {
-        assert_eq!(strip_trailing_newline(b"pw\r\n".to_vec()), b"pw");
+        let mut bytes = Zeroizing::new(b"pw\r\n".to_vec());
+        strip_trailing_newline(&mut bytes);
+        assert_eq!(bytes.as_slice(), b"pw");
     }
 
     #[test]
     fn keeps_internal_newlines() {
-        assert_eq!(
-            strip_trailing_newline(b"line1\nline2\n".to_vec()),
-            b"line1\nline2"
-        );
+        let mut bytes = Zeroizing::new(b"line1\nline2\n".to_vec());
+        strip_trailing_newline(&mut bytes);
+        assert_eq!(bytes.as_slice(), b"line1\nline2");
     }
 
     #[test]
     fn leaves_no_newline_untouched() {
-        assert_eq!(strip_trailing_newline(b"pw".to_vec()), b"pw");
+        let mut bytes = Zeroizing::new(b"pw".to_vec());
+        strip_trailing_newline(&mut bytes);
+        assert_eq!(bytes.as_slice(), b"pw");
     }
 
     #[test]
