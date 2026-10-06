@@ -262,6 +262,13 @@ pub fn import(
 
     let mut body: VaultBody = serde_helpers::from_slice(&plaintext)?;
 
+    // Audit logs are external to the backup bundle and are authenticated
+    // with the source vault's KEK. A restored vault gets a new KEK, so
+    // carrying the source audit path forward would make unlock fail
+    // against an unrelated log. Require the restored vault to explicitly
+    // attach a new audit log instead.
+    body.audit_dir = None;
+
     // Create a fresh vault and replace its body with the imported one.
     Vault::create(new_vault_path, new_vault_password, None)?;
     let vault = Vault::open(new_vault_path)?;

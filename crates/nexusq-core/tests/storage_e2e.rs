@@ -155,6 +155,7 @@ fn backup_and_restore_preserves_the_vault_content() {
     // The restored vault opens with the NEW password.
     let restored = Vault::open(&restored_path).unwrap();
     let session = restored.unlock(b"new-vault-pass").unwrap();
+    assert!(session.audit_dir().is_none());
 
     // Same number of keys and identities as the original.
     let original = Vault::open(&vault_path).unwrap();
