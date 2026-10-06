@@ -904,7 +904,6 @@ dependencies = [
 name = "nexusq-core"
 version = "0.1.0"
 dependencies = [
- "aes",
  "aes-gcm",
  "argon2",
  "base64",
@@ -915,10 +914,10 @@ dependencies = [
  "getrandom 0.3.4",
  "hex",
  "hkdf",
+ "hmac",
  "hybrid-array",
  "ml-dsa",
  "ml-kem",
- "poly1305",
  "proptest",
  "rand_core 0.9.5",
  "serde",
