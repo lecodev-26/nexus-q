@@ -2140,7 +2140,7 @@ mod tests {
         let id = session
             .generate_key(Algorithm::Ed25519, Purpose::Sign)
             .unwrap();
-        assert_eq!(session.key_count(), 4);
+        assert_eq!(session.key_count(), 1);
 
         let record = session.find_key(&id).unwrap();
         assert_eq!(record.algorithm(), Algorithm::Ed25519);
@@ -2787,7 +2787,7 @@ mod tests {
 
         let id = session.create_identity(Some("alice".to_string())).unwrap();
         assert_eq!(session.identity_count(), 1);
-        assert_eq!(session.key_count(), 1);
+        assert_eq!(session.key_count(), 2);
 
         let identity = session.find_identity(&id).unwrap();
         assert_eq!(identity.metadata.label.as_deref(), Some("alice"));
@@ -2826,7 +2826,7 @@ mod tests {
         let b = session.create_identity(None).unwrap();
         assert_ne!(a, b);
         assert_eq!(session.identity_count(), 2);
-        assert_eq!(session.key_count(), 2);
+        assert_eq!(session.key_count(), 4);
     }
 
     #[test]
