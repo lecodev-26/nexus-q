@@ -26,6 +26,7 @@ use nexusq_core::{
 use serde::Serialize;
 use tokio::sync::Mutex;
 use tower::ServiceBuilder;
+use zeroize::Zeroizing;
 
 const DEFAULT_ADDR: &str = "127.0.0.1:8443";
 const DEFAULT_RATE_LIMIT: u32 = 60;
