@@ -478,7 +478,7 @@ fn client_identity(
         .map(|info| info.0.ip());
 
     if let Some(peer_ip) = peer {
-        if peer_ip.is_loopback() || trusted_proxy_ips.contains(&peer_ip) {
+        if trusted_proxy_ips.contains(&peer_ip) {
             let forwarded: Vec<IpAddr> = request
                 .headers()
                 .get_all("x-forwarded-for")
@@ -1002,6 +1002,19 @@ mod tests {
             .unwrap();
         let trusted = std::collections::HashSet::new();
         assert_eq!(client_identity(&request, &trusted), "unknown");
+    }
+
+    #[test]
+    fn loopback_peer_does_not_trust_forwarded_for_without_explicit_proxy_trust() {
+        let mut request = Request::builder()
+            .header("x-forwarded-for", "198.51.100.10, 198.51.100.11")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        request
+            .extensions_mut()
+            .insert(ConnectInfo(SocketAddr::from(([127, 0, 0, 1], 8443))));
+        let trusted = std::collections::HashSet::new();
+        assert_eq!(client_identity(&request, &trusted), "127.0.0.1");
     }
 
     #[test]

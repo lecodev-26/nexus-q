@@ -39,4 +39,18 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "audit_segment_decode"
+path = "fuzz_targets/audit_segment_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "credential_decode"
+path = "fuzz_targets/credential_decode.rs"
+test = false
+doc = false
+bench = false
+
 [workspace]

@@ -46,7 +46,7 @@ use zeroize::Zeroizing;
 
 use crate::vault::Timestamp;
 
-use super::audit_event::{AuditEvent, AuditEventSpec};
+use super::audit_event::{AuditEvent, AuditEventSpec, HASH_LEN};
 use super::audit_segment::{AuditSegment, SegmentId};
 use super::db::DbError;
 
@@ -171,6 +171,33 @@ impl AuditLog {
     #[must_use]
     pub fn current_events(&self) -> &[AuditEvent] {
         self.current.events()
+    }
+
+    /// Returns the hash of the latest authenticated event, if any.
+    #[must_use]
+    pub fn head_event_hash(&self) -> Option<&[u8]> {
+        self.current
+            .events()
+            .last()
+            .map(|event| event.hash.as_slice())
+    }
+
+    /// Returns whether an authenticated event hash exists anywhere in the log.
+    pub fn contains_event_hash(&self, anchor: &[u8]) -> bool {
+        if anchor.len() != HASH_LEN {
+            return false;
+        }
+        find_segments(&self.dir)
+            .ok()
+            .into_iter()
+            .flatten()
+            .filter_map(|(_, path)| AuditSegment::open(path).ok())
+            .any(|segment| {
+                segment
+                    .events()
+                    .iter()
+                    .any(|event| event.hash.as_slice() == anchor)
+            })
     }
 
     /// Returns the number of segments currently on disk.

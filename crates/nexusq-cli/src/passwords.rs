@@ -27,13 +27,14 @@ use zeroize::Zeroizing;
 ///
 /// Returns [`CliError::Io`] if the file cannot be read.
 pub fn from_file(path: &Path) -> Result<Zeroizing<Vec<u8>>, CliError> {
-    let bytes = fs::read(path).map_err(|e| {
+    let mut bytes = Zeroizing::new(fs::read(path).map_err(|e| {
         CliError::Io(format!(
             "failed to read password file {}: {e}",
             path.display()
         ))
-    })?;
-    Ok(Zeroizing::new(strip_trailing_newline(bytes)))
+    })?);
+    strip_trailing_newline(&mut bytes);
+    Ok(bytes)
 }
 
 /// Reads a password interactively with a prompt.
@@ -47,21 +48,25 @@ pub fn from_file(path: &Path) -> Result<Zeroizing<Vec<u8>>, CliError> {
 /// Returns [`CliError::Usage`] if the inputs do not match, or
 /// [`CliError::Io`] if reading from the terminal fails.
 pub fn from_prompt(prompt: &str, confirm: bool) -> Result<Zeroizing<Vec<u8>>, CliError> {
-    let first = rpassword::prompt_password(prompt)
-        .map_err(|e| CliError::Io(format!("failed to read password: {e}")))?;
+    let first = Zeroizing::new(
+        rpassword::prompt_password(prompt)
+            .map_err(|e| CliError::Io(format!("failed to read password: {e}")))?,
+    );
 
     if !confirm {
-        return Ok(Zeroizing::new(first.into_bytes()));
+        return Ok(Zeroizing::new(first.as_bytes().to_vec()));
     }
 
-    let second = rpassword::prompt_password("Confirm password: ")
-        .map_err(|e| CliError::Io(format!("failed to read confirmation: {e}")))?;
+    let second = Zeroizing::new(
+        rpassword::prompt_password("Confirm password: ")
+            .map_err(|e| CliError::Io(format!("failed to read confirmation: {e}")))?,
+    );
 
-    if first != second {
+    if first.as_str() != second.as_str() {
         return Err(CliError::Usage("passwords do not match".into()));
     }
 
-    Ok(Zeroizing::new(first.into_bytes()))
+    Ok(Zeroizing::new(first.as_bytes().to_vec()))
 }
 
 /// Reads a password for an existing resource.
@@ -96,14 +101,13 @@ pub fn read_new(
 }
 
 /// Strips a single trailing `\n` or `\r\n` from the input.
-fn strip_trailing_newline(mut bytes: Vec<u8>) -> Vec<u8> {
+fn strip_trailing_newline(bytes: &mut Vec<u8>) {
     if bytes.last() == Some(&b'\n') {
         bytes.pop();
         if bytes.last() == Some(&b'\r') {
             bytes.pop();
         }
     }
-    bytes
 }
 
 #[cfg(test)]
@@ -114,25 +118,30 @@ mod tests {
 
     #[test]
     fn strips_lf() {
-        assert_eq!(strip_trailing_newline(b"pw\n".to_vec()), b"pw");
+        let mut bytes = Zeroizing::new(b"pw\n".to_vec());
+        strip_trailing_newline(&mut bytes);
+        assert_eq!(bytes.as_slice(), b"pw");
     }
 
     #[test]
     fn strips_crlf() {
-        assert_eq!(strip_trailing_newline(b"pw\r\n".to_vec()), b"pw");
+        let mut bytes = Zeroizing::new(b"pw\r\n".to_vec());
+        strip_trailing_newline(&mut bytes);
+        assert_eq!(bytes.as_slice(), b"pw");
     }
 
     #[test]
     fn keeps_internal_newlines() {
-        assert_eq!(
-            strip_trailing_newline(b"line1\nline2\n".to_vec()),
-            b"line1\nline2"
-        );
+        let mut bytes = Zeroizing::new(b"line1\nline2\n".to_vec());
+        strip_trailing_newline(&mut bytes);
+        assert_eq!(bytes.as_slice(), b"line1\nline2");
     }
 
     #[test]
     fn leaves_no_newline_untouched() {
-        assert_eq!(strip_trailing_newline(b"pw".to_vec()), b"pw");
+        let mut bytes = Zeroizing::new(b"pw".to_vec());
+        strip_trailing_newline(&mut bytes);
+        assert_eq!(bytes.as_slice(), b"pw");
     }
 
     #[test]

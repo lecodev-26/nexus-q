@@ -506,7 +506,7 @@ pub fn open_envelope_with_kem(
 
 fn check_can_decrypt(record: &KeyRecord) -> Result<(), EnvelopeError> {
     match record.status() {
-        KeyStatus::Active | KeyStatus::Rotating | KeyStatus::Retired | KeyStatus::Revoked => Ok(()),
+        KeyStatus::Active | KeyStatus::Rotating | KeyStatus::Retired => Ok(()),
         status => Err(EnvelopeError::KeyNotUsable {
             key_id: record.key_id().clone(),
             status,
@@ -802,13 +802,13 @@ mod tests {
     }
 
     #[test]
-    fn open_accepts_revoked_key() {
+    fn open_rejects_revoked_key() {
         let mut record = make_active_record(Algorithm::Aes256Gcm);
         let env_bytes = build_envelope(&KEK, &record, b"data", Vec::new()).unwrap();
         record.metadata.status = KeyStatus::Revoked;
 
-        let opened = open_envelope(&KEK, &env_bytes, lookup_ok(record)).unwrap();
-        assert_eq!(opened.as_slice(), b"data");
+        let err = open_envelope(&KEK, &env_bytes, lookup_ok(record)).unwrap_err();
+        assert!(matches!(err, EnvelopeError::KeyNotUsable { .. }));
     }
 
     #[test]

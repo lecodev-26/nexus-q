@@ -30,15 +30,15 @@ It is meant to be used by:
 ## Design principles
 
 1. **We do not invent cryptography.** Only standardized algorithms
-   and audited libraries.
+   and maintained cryptographic libraries; dependency audit status is documented explicitly.
 2. **Library-first.** The core is a Rust library; the CLI, SDKs and
    server are layers on top.
 3. **Hardware-agnostic.** Abstraction from day one, so software, TPM,
    HSM and secure environments are interchangeable.
 4. **Zeroization.** Secrets are wiped from memory when no longer
    needed.
-5. **Auditability.** Every security-relevant operation is recorded in
-   a tamper-evident log.
+5. **Auditability.** Auditable security state changes and cryptographic
+   actions are recorded in a tamper-evident, HMAC-authenticated log.
 6. **Security from the ground up.** Threat model and cryptographic
    rules before code.
 
@@ -73,7 +73,7 @@ Completed:
   and RISC-V.
 - TRNG support with health checks and mixing.
 - Cross-compilation to RISC-V verified.
-- Storage: audit log with hash chaining, backup bundle, storage DB.
+- Storage: HMAC-authenticated audit log with rollback anchoring, backup bundle, storage DB.
 - Policy engine with deny-by-default.
 - CLI covering vault, key, data, sign, identity, credential and audit
   commands.

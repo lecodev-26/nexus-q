@@ -10,6 +10,7 @@ on:
       - "v2/security-hardening-kamal-findings"
       - "v2/p2-audit-hardening"
       - "v2/security-closure-kamal-findings"
+      - "v2/final-security-audit-hardening"
   workflow_dispatch:
 
 permissions:

@@ -129,6 +129,20 @@ fn tampering_with_the_audit_chain_is_detected() {
 }
 
 #[test]
+fn audit_rollback_before_last_persisted_state_is_detected() {
+    let dir = TempDir::new().unwrap();
+    let (vault_path, _events) = run_audited_session(&dir);
+
+    // The final lock persisted an encrypted audit anchor in the vault.
+    // Removing the authenticated log must therefore fail closed on unlock.
+    let segment_path = dir.path().join("audit").join("audit-00001.nqa");
+    fs::remove_file(segment_path).unwrap();
+
+    let result = Vault::open(&vault_path).unwrap().unlock(b"vault-pass");
+    assert!(result.is_err(), "audit rollback must be rejected");
+}
+
+#[test]
 fn backup_and_restore_preserves_the_vault_content() {
     let dir = TempDir::new().unwrap();
     let (vault_path, _events) = run_audited_session(&dir);

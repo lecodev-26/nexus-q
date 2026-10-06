@@ -1,6 +1,6 @@
 # SDK Guide
 
-All SDKs are wrappers around the same Rust core. They do not reimplement cryptography.
+The shipped bindings wrap the same Rust core and do not reimplement cryptography. The current repository ships C and limited Python bindings; other language SDKs are not claimed as available.
 
 ## Current bindings
 
@@ -8,11 +8,7 @@ All SDKs are wrappers around the same Rust core. They do not reimplement cryptog
 |---|---|---|
 | Rust | native crate | full core API |
 | C | C ABI | vault/version surface documented by the C SDK |
-| C++ | C++17 wrapper over C | vault/version surface |
-| Python | PyO3 | vault/version surface |
-| Go | cgo over C | vault/version surface |
-| Ruby | FFI over C | vault/version surface |
-| PHP | FFI over C | vault/version surface |
+| Python | PyO3 | version and limited vault surface |
 
 See each binding's README for its exact current API and toolchain requirements.
 

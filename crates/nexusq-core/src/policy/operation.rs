@@ -53,6 +53,8 @@ pub enum PolicyOperation {
     CredentialIssue,
     /// Verify a credential.
     CredentialVerify,
+    /// Revoke an individual credential.
+    CredentialRevoke,
 
     // --- Envelope ---
     /// Seal an envelope (in-memory or file).
@@ -83,6 +85,7 @@ impl PolicyOperation {
             Self::IdentityRevoke => "identity_revoke",
             Self::CredentialIssue => "credential_issue",
             Self::CredentialVerify => "credential_verify",
+            Self::CredentialRevoke => "credential_revoke",
             Self::EnvelopeSeal => "envelope_seal",
             Self::EnvelopeOpen => "envelope_open",
         }
@@ -121,6 +124,8 @@ impl PolicyOperation {
                 | Self::IdentityRotateKey
                 | Self::IdentityRevoke
                 | Self::CredentialIssue
+                | Self::CredentialVerify
+                | Self::CredentialRevoke
         )
     }
 }
@@ -157,6 +162,10 @@ mod tests {
             PolicyOperation::CredentialVerify.as_str(),
             "credential_verify"
         );
+        assert_eq!(
+            PolicyOperation::CredentialRevoke.as_str(),
+            "credential_revoke"
+        );
         assert_eq!(PolicyOperation::EnvelopeSeal.as_str(), "envelope_seal");
         assert_eq!(PolicyOperation::EnvelopeOpen.as_str(), "envelope_open");
     }
@@ -175,6 +184,8 @@ mod tests {
         assert!(PolicyOperation::IdentitySign.targets_identity());
         assert!(PolicyOperation::IdentityRevoke.targets_identity());
         assert!(PolicyOperation::CredentialIssue.targets_identity());
+        assert!(PolicyOperation::CredentialVerify.targets_identity());
+        assert!(PolicyOperation::CredentialRevoke.targets_identity());
         assert!(!PolicyOperation::Sign.targets_identity());
         assert!(!PolicyOperation::KeyCreate.targets_identity());
     }

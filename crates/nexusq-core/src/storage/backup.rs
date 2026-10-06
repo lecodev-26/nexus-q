@@ -42,6 +42,7 @@
 //! See `docs/STORAGE.md` §8.
 
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -268,6 +269,7 @@ pub fn import(
     // against an unrelated log. Require the restored vault to explicitly
     // attach a new audit log instead.
     body.audit_dir = None;
+    body.audit_anchor = None;
 
     // Create a fresh vault and replace its body with the imported one.
     Vault::create(new_vault_path, new_vault_password, None)?;
@@ -348,13 +350,16 @@ fn write_backup_file(
     out.extend_from_slice(nonce);
     out.extend_from_slice(ciphertext);
 
-    let tmp = temp_path(path);
-    fs::write(&tmp, &out)?;
+    let (tmp, mut file) = create_unique_temp_file(path)?;
+    file.write_all(&out)?;
+    file.sync_all()?;
+    drop(file);
     if let Err(e) = fs::rename(&tmp, path) {
         let _ = fs::remove_file(&tmp);
         return Err(BackupError::Io(e));
     }
     restrict_file_permissions(path)?;
+    sync_parent_dir(path)?;
     Ok(())
 }
 
@@ -397,10 +402,46 @@ fn parse_backup_file(bytes: &[u8]) -> Result<(BackupHeader, &[u8]), BackupError>
     Ok((header, rest))
 }
 
-fn temp_path(path: &Path) -> PathBuf {
-    let mut name = path.file_name().unwrap_or_default().to_os_string();
-    name.push(".tmp");
-    path.with_file_name(name)
+fn create_unique_temp_file(path: &Path) -> Result<(PathBuf, fs::File), BackupError> {
+    for _ in 0..16 {
+        let mut suffix = [0u8; 16];
+        getrandom::fill(&mut suffix)
+            .map_err(|e| BackupError::Io(std::io::Error::other(e.to_string())))?;
+        let name = format!(
+            "{}.tmp-{}",
+            path.file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("backup"),
+            hex::encode(suffix)
+        );
+        let tmp = path.with_file_name(name);
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        match options.open(&tmp) {
+            Ok(file) => return Ok((tmp, file)),
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(err) => return Err(BackupError::Io(err)),
+        }
+    }
+    Err(BackupError::Io(std::io::Error::new(
+        std::io::ErrorKind::AlreadyExists,
+        "could not allocate unique backup temp file",
+    )))
+}
+
+fn sync_parent_dir(path: &Path) -> Result<(), BackupError> {
+    #[cfg(unix)]
+    {
+        if let Some(parent) = path.parent() {
+            fs::File::open(parent)?.sync_all()?;
+        }
+    }
+    Ok(())
 }
 
 // KdfAlgorithm is re-exported by the vault header module and used

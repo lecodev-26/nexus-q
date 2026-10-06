@@ -482,7 +482,7 @@ let mut session = vault.unlock(password)?;
 // 3. Attach an audit log living next to the vault.
 session.enable_audit("audit/")?;
 
-// 4. Perform operations. Every security-relevant call appends an
+// 4. Perform operations. Auditable security operations append an
 //    event and persists the segment before returning.
 let key_id = session.generate_key(algorithm, purpose)?;
 session.activate_key(&key_id)?;
