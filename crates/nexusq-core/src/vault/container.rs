@@ -1671,6 +1671,7 @@ impl Session {
         let audit_auth = audit_key(self.kek.as_ref());
         let log = AuditLog::open_with(audit_dir.as_ref(), AuditLogConfig::default(), &audit_auth)?;
         *self.audit.borrow_mut() = Some(log);
+        self.body.audit_dir = Some(audit_dir.as_ref().to_string_lossy().into_owned());
         Ok(())
     }
 
