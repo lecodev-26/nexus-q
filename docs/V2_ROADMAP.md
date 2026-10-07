@@ -28,7 +28,7 @@ v2 objective: materially improve ML-KEM-768/1024 and ML-DSA-65 performance throu
 ## V2 phases
 
 - [x] **V2-01 — Lock reproducible benchmark baseline** — reproduce and lock v1 ML-KEM/ML-DSA measurements and conditions. Issue #1.
-- [ ] **V2-02 — Profile ML-KEM and ML-DSA hotspots** — produce quantitative hotspot and optimization map. Issue #2.
+- [x] **V2-02 — Profile ML-KEM and ML-DSA hotspots** — produce quantitative hotspot and optimization map. Issue #2.
 - [ ] **V2-03 — Optimize ML-KEM** — improve ML-KEM-768/1024 from measured hotspots. Issue #3.
 - [ ] **V2-04 — Optimize ML-DSA** — improve ML-DSA-65 from measured hotspots. Issue #4.
 - [ ] **V2-05 — Optimize memory and allocations** — remove measurable avoidable memory/copy/allocation costs without weakening zeroization. Issue #5.
