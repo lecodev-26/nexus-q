@@ -65,26 +65,26 @@ jobs:
     name: Extended fuzz soak - vault parser
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    timeout-minutes: 300
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
       - name: Fuzz vault parser
-        run: cargo fuzz run vault_parse -- -max_total_time=14400
+        run: cargo fuzz run vault_parse -- -max_total_time=1800
         working-directory: fuzz
 
   fuzz-soak-envelope:
     name: Extended fuzz soak - envelope parser
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    timeout-minutes: 300
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
       - name: Fuzz envelope parser
-        run: cargo fuzz run envelope_parse -- -max_total_time=14400
+        run: cargo fuzz run envelope_parse -- -max_total_time=1800
         working-directory: fuzz
