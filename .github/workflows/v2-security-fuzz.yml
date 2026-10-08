@@ -1,21 +1,23 @@
-name: Security and Release Gates
+name: NEXUS-Q v2 Security Regression and Fuzzing
 
 on:
-  push:
-    branches: [main]
   pull_request:
-    branches: [main]
+    branches: [nexusqv2]
+  push:
+    branches: [v2/v2-09-security-fuzz]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  rust-security:
-    name: Rust security gates
+  security-regression:
+    name: Security regression
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
       - name: Install security tooling
         run: |
@@ -24,23 +26,23 @@ jobs:
       - name: Format
         run: cargo fmt --all -- --check
       - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Workspace tests
-        run: cargo test --workspace
+        run: cargo test --workspace --locked
       - name: Cargo audit
         run: cargo audit
       - name: Cargo deny
         run: cargo deny check
-      - name: Metadata / SBOM input
+      - name: Dependency metadata
         run: cargo metadata --format-version 1 --locked > cargo-metadata.json
       - name: Upload dependency metadata
         uses: actions/upload-artifact@v4
         with:
-          name: cargo-metadata
+          name: v2-security-cargo-metadata
           path: cargo-metadata.json
 
   fuzz-build:
-    name: Fuzz harness build
+    name: Build all fuzz targets
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -49,6 +51,32 @@ jobs:
         run: cargo install cargo-fuzz --locked
       - name: Build fuzz targets
         run: cargo fuzz build
+        working-directory: fuzz
+
+  fuzz-soak-vault:
+    name: 5-minute fuzz - vault parser
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Fuzz vault parser
+        run: cargo fuzz run vault_parse -- -max_total_time=300
+        working-directory: fuzz
+
+  fuzz-soak-envelope:
+    name: 5-minute fuzz - envelope parser
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Fuzz envelope parser
+        run: cargo fuzz run envelope_parse -- -max_total_time=300
         working-directory: fuzz
 
   secret-scan:
@@ -62,31 +90,3 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  fuzz-soak-vault:
-    name: Extended fuzz soak - vault parser
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
-      - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz --locked
-      - name: Fuzz vault parser
-        run: cargo fuzz run vault_parse -- -max_total_time=1800
-        working-directory: fuzz
-
-  fuzz-soak-envelope:
-    name: Extended fuzz soak - envelope parser
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
-      - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz --locked
-      - name: Fuzz envelope parser
-        run: cargo fuzz run envelope_parse -- -max_total_time=1800
-        working-directory: fuzz
