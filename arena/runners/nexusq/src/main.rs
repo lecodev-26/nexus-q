@@ -5,8 +5,8 @@ use std::env;
 use std::hint::black_box;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-const ITERATIONS: usize = 20;
-const WARMUPS: usize = 3;
+const ITERATIONS: usize = 50;
+const WARMUPS: usize = 10;
 const MESSAGE: &[u8] = b"nexusq-pqc-arena-v1";
 const ML_KEM_768_SECRET_KEY_LEN: usize = 2400;
 const ML_KEM_1024_SECRET_KEY_LEN: usize = 3168;
@@ -21,11 +21,11 @@ fn emit(
 ) {
     let obj = serde_json::json!({
         "schema_version": 1,
-        "run_id": format!("nexusq-local-{}-{}-{}", algorithm, parameter_set, operation),
+        "run_id": format!("{}-{}-{}-{}-{}", env::var("NEXUSQ_RUN_ID").unwrap_or_else(|_| "nexusq-local".into()), algorithm, parameter_set, operation, ITERATIONS),
         "implementation": {"id":"nexusq","version":env!("CARGO_PKG_VERSION"),"commit":option_env!("NEXUSQ_COMMIT")},
         "algorithm": {"id":algorithm,"parameter_set":parameter_set},
         "operation": operation,
-        "environment": {"target":format!("{}-{}",env::consts::ARCH,env::consts::OS),"os":env::consts::OS,"cpu":option_env!("NEXUSQ_CPU").unwrap_or("unknown"),"cpu_features":[],"compiler":"rustc","compiler_version":option_env!("RUSTC_VERSION").unwrap_or("unknown"),"optimization":option_env!("NEXUSQ_OPT").unwrap_or("unknown"),"harness_version":"arena-v1"},
+        "environment": {"target":format!("{}-{}",env::consts::ARCH,env::consts::OS),"os":env::consts::OS,"cpu":env::var("NEXUSQ_CPU").unwrap_or_else(|_| "unknown".into()),"cpu_features":env::var("NEXUSQ_CPU_FEATURES").unwrap_or_default().split(',').filter(|x| !x.is_empty()).collect::<Vec<_>>(),"compiler":"rustc","compiler_version":env::var("RUSTC_VERSION").unwrap_or_else(|_| "unknown".into()),"optimization":env::var("NEXUSQ_OPT").unwrap_or_else(|_| "unknown".into()),"harness_version":"arena-v1"},
         "measurement": {"iterations":ITERATIONS,"warmups":WARMUPS,"measurement_timestamp_unix_ns":SystemTime::now().duration_since(UNIX_EPOCH).expect("system clock before Unix epoch").as_nanos(),"latency_ns":latency_ns,"throughput_ops_s":1_000_000_000.0/latency_ns,"memory_bytes":null,"measurement_method":"std::time::Instant mean wall-clock latency"},
         "sizes":sizes
     });
