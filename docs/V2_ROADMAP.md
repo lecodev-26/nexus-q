@@ -1,6 +1,6 @@
 # NEXUS-Q v2 — Roadmap
 
-Status: **V2 implementation and final freeze complete on `nexusqv2`; V2 is integrated into `main`; public v2.0.0 release remains pending final post-merge CI.**
+Status: **V2 implementation and final freeze complete; V2 is integrated into `main`; public v2.0.0 release is being published from the protected tag path. V3 owns the unresolved performance investigation.**
 
 ## Execution contract
 

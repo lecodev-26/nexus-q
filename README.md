@@ -12,7 +12,23 @@
 
 V2.0.0 is frozen as a historical engineering release. It is integrated into main and retained on nexusqv2 for reproducibility and review.
 
-The final benchmark record does not claim a performance improvement over V1. Corrected Arena runs produced geometric means of 0.885 and 1.0647513576 V2/V1, so performance remains an unresolved investigation item rather than a validated regression or improvement.
+The final benchmark record does not claim a performance improvement over V1. Corrected Arena runs produced geometric means of 0.885 and 1.0647513576 V2/V1, so performance remains an unresolved investigation item rather than a validated regression or improvement. The latest same-runner comparison measured V2 at +0.22% to +52.37% latency versus V1 across the nine NEXUS-Q operations; ML-DSA-65 signing is the dominant outlier at +52.37%.
+
+### V1 vs V2 Arena comparison (latest corrected run)
+
+| Operation | V1 | V2 | V2/V1 | Difference |
+| --- | ---: | ---: | ---: | ---: |
+| ML-KEM-768 keygen | 49.819 us | 51.185 us | 1.0274 | +2.74% |
+| ML-KEM-768 encaps | 45.081 us | 46.063 us | 1.0218 | +2.18% |
+| ML-KEM-768 decaps | 54.537 us | 55.997 us | 1.0268 | +2.68% |
+| ML-KEM-1024 keygen | 81.264 us | 82.191 us | 1.0114 | +1.14% |
+| ML-KEM-1024 encaps | 72.041 us | 73.221 us | 1.0164 | +1.64% |
+| ML-KEM-1024 decaps | 83.992 us | 84.859 us | 1.0103 | +1.03% |
+| ML-DSA-65 keygen | 283.730 us | 284.344 us | 1.0022 | +0.22% |
+| ML-DSA-65 sign | 620.367 us | 945.226 us | 1.5237 | **+52.37%** |
+| ML-DSA-65 verify | 181.798 us | 181.479 us | 0.9982 | -0.18% |
+
+These are same-runner V1/V2 reference measurements from the retained Arena JSONL artifacts. The previous corrected run measured 0.885 V2/V1, demonstrating substantial run-to-run variance; V3 therefore begins with profiling and benchmark-variance investigation rather than assuming a single-run regression.
 
 See docs/V2_PERFORMANCE_RESULTS.md for the complete numbers, methodology, and retained GitHub Actions artifacts.
 

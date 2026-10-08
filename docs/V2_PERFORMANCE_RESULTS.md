@@ -39,15 +39,15 @@ Result: performance criteria failed; benchmark infrastructure passed.
 
 | Operation | V1 | V2 | Ratio V2/V1 |
 | --- | ---: | ---: | ---: |
-| ML-DSA-65 keygen | 283.800 us | 284.188 us | 1.0014 |
-| ML-DSA-65 sign | 617.143 us | 968.428 us | 1.5692 |
-| ML-DSA-65 verify | 181.881 us | 181.330 us | 0.9970 |
-| ML-KEM-1024 decaps | — | — | 1.0149 |
-| ML-KEM-1024 encaps | — | — | 1.0173 |
-| ML-KEM-1024 keygen | — | — | 1.0107 |
-| ML-KEM-768 decaps | — | — | 1.0250 |
-| ML-KEM-768 encaps | — | — | 1.0247 |
-| ML-KEM-768 keygen | — | — | 1.0245 |
+| ML-DSA-65 keygen | 283.730 us | 284.344 us | 1.0022 |
+| ML-DSA-65 sign | 620.367 us | 945.226 us | 1.5237 |
+| ML-DSA-65 verify | 181.798 us | 181.479 us | 0.9982 |
+| ML-KEM-1024 decaps | 83.992 us | 84.859 us | 1.0103 |
+| ML-KEM-1024 encaps | 72.041 us | 73.221 us | 1.0164 |
+| ML-KEM-1024 keygen | 81.264 us | 82.191 us | 1.0114 |
+| ML-KEM-768 decaps | 54.537 us | 55.997 us | 1.0268 |
+| ML-KEM-768 encaps | 45.081 us | 46.063 us | 1.0218 |
+| ML-KEM-768 keygen | 49.819 us | 51.185 us | 1.0274 |
 
 ML-KEM shows a small movement toward slower V2 execution in this run. ML-DSA signing is the dominant outlier.
 
@@ -120,3 +120,7 @@ The following work moves to V3:
 - any optimization backed by fresh evidence.
 
 No V2 implementation changes are required by this document.
+
+## V3 performance investigation boundary
+
+V2 is frozen without a performance claim. V3 starts from the retained V1/V2 evidence and must explain the observed variance before optimization. Initial priorities are ML-DSA-65 signing, benchmark runner variance, CPU/scheduler effects, compiler/toolchain and feature effects, zeroization cost, and dependency/backend differences.

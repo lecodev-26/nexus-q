@@ -6,12 +6,13 @@
 - Git tag: v2.0.0
 - Release branch: nexusqv2
 - Release type: final engineering release
-- Public GitHub release: created only by the protected tag path after all gates pass
+- Public GitHub release: published by the protected `v2.0.0` tag path after final gates pass
 
 The v2.0.0 release is produced from the merged nexusqv2 line after the V2-10
 performance gate and V2-11 release-candidate gate. The final release gate
 re-runs correctness, security-sensitive regression, build and packaging checks
-from the final version.
+from the final version. V2 is intentionally frozen without claiming a performance
+win over V1; the retained Arena comparison is the baseline for V3.
 
 ## Final acceptance contract
 
