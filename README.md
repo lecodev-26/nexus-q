@@ -4,7 +4,7 @@
 
 > Post-quantum cryptographic security engine for protecting data, keys, and identities.
 
-**Status**: **NEXUS-Q v1.0 baseline complete and frozen.** The v1 line is documented, tested, benchmarked, and ready to serve as the reference baseline for v2 optimization. v1 is intentionally **not being published as a stable package release** (crates.io, PyPI, npm, RubyGems, Packagist, NuGet, Maven, pub.dev, etc.) because the project prioritizes a stronger performance target before public distribution.
+**Status**: **NEXUS-Q v2.0.0 engineering line frozen on `nexusqv2`.** V1 remains the frozen compatibility and benchmark baseline. V2 implementation, security/correctness gates, performance gate, release-candidate validation and final release gate are complete; integration into `main` and the public GitHub v2.0.0 release remain the next release-control steps. No external audit, certification, or downstream registry publication is implied.
 
 ---
 
@@ -77,6 +77,15 @@ Completed:
 - CLI covering vault, key, data, sign, identity, credential and audit
   commands.
 
+
+## v2.0.0 status
+
+The v2 engineering line is frozen on `nexusqv2` at version `2.0.0`. V2 preserves the v1 security model while adding the completed performance, correctness/interoperability, security/fuzzing, backend-strategy and release gates. The final integration PR against `main` is the compatibility checkpoint between the frozen v1 baseline and v2.
+
+The public GitHub v2.0.0 release is intentionally performed only after that integration path and its CI gates are green. Crates.io, PyPI and other SDK registries remain separate publication operations.
+
+See [`docs/V2_ROADMAP.md`](docs/V2_ROADMAP.md), [`docs/V2_RELEASE.md`](docs/V2_RELEASE.md) and [`docs/V2_BENCHMARK_BASELINE.md`](docs/V2_BENCHMARK_BASELINE.md).
+
 ## v1.0 baseline status
 
 The v1.0 engineering baseline is complete and intentionally frozen. The final CI/Arena evidence established a reproducible reference point for correctness, security gates, deployment, documentation and PQC performance.
@@ -111,7 +120,7 @@ production tokens, vaults, private keys, or logs.
   - Linux (x86_64, aarch64).
   - Android / Termux (aarch64).
   - RISC-V (riscv64gc-unknown-linux-gnu) — build verified.
-  - macOS and Windows: planned.
+  - macOS and Windows: release builds are validated by the V2 CI/release gate.
 
 ---
 
