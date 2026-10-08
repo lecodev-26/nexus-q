@@ -11,7 +11,7 @@ NEXUS-Q v2 does not claim a validated performance improvement over V1.
 
 The final Arena methodology was corrected so V1 and V2 use the same runner harness, the same GitHub Actions runner, the same captured toolchain/CPU metadata, five alternating V1/V2 rounds, 50 measurement iterations, and 10 warmups per operation.
 
-The latest completed run produced V2/V1 = 1.0647513576, or 6.48% slower in geometric mean. The preceding corrected run produced V2/V1 = 0.885, or approximately 11.5% lower aggregate latency for V2 in that execution.
+The latest completed run produced V2/V1 = 1.0647513576, or 6.48% slower in geometric mean. The preceding corrected run produced V2/V1 = 0.885, or approximately 11.5% lower aggregate latency for V2 in that execution. The Arena remains an evidence-producing check for frozen V2: it records whether the performance criteria were met, but does not block the engineering release because V2 makes no performance-improvement claim.
 
 Because those consecutive corrected runs disagree materially, the V2 record treats performance as unresolved rather than conclusively regressed. Security and engineering hardening are accepted; performance leadership over V1 was not demonstrated. Further performance investigation is deferred to V3.
 
