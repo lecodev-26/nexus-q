@@ -72,6 +72,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Save current Arena runner harness
+        run: cp arena/runners/nexusq/src/main.rs "${{ runner.temp }}/nexusq-arena-runner-main.rs"
+      - uses: actions/checkout@v4
+        with:
           ref: v1.0.0
       - uses: dtolnay/rust-toolchain@stable
       - name: Capture benchmark environment
@@ -93,6 +98,8 @@ jobs:
           assert old in s
           p.write_text(s.replace(old, new, 1))
           PY2
+      - name: Use current Arena runner harness for V1 core
+        run: cp "${{ runner.temp }}/nexusq-arena-runner-main.rs" arena/runners/nexusq/src/main.rs
       - name: Build V1 Arena reference runner
         env:
           CARGO_TARGET_DIR: ${{ runner.temp }}/nexusq-arena-v1
