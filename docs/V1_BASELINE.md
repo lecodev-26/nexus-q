@@ -25,4 +25,4 @@ The exact Arena measurements are recorded in [`BENCHMARKS.md`](../BENCHMARKS.md)
 
 ## v2 hand-off
 
-The `nexusqv2` branch became the completed V2 continuation line. V1 remains the frozen compatibility and benchmark reference; final V2 integration into `main` is the explicit compatibility checkpoint before public V2 release.
+The `nexusqv2` branch became the completed V2 continuation line. V1 remains the frozen compatibility and benchmark reference. PR #37 integrated the frozen V2 line into `main` after the required compatibility CI passed; the post-merge `main` CI is now the final validation checkpoint before public V2 release.

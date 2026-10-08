@@ -17,7 +17,7 @@ A decrypted `Session` is the authenticated administrative boundary. Policy admin
 
 ## Fuzzing
 
-The existing parser targets remain. Coverage was deepened so envelope fuzzing can reach the hybrid KEM opening path, credential fuzzing reaches signature verification dispatch, vault parsing uses collision-safe temporary files, and backup-import fuzzing exercises authenticated backup handling. Extended V2 fuzzing remains five minutes per target; the main/release security workflow remains the separate 45-minute gate.
+The existing parser targets remain. Coverage was deepened so envelope fuzzing can reach the hybrid KEM opening path, credential fuzzing reaches signature verification dispatch, vault parsing uses collision-safe temporary files, and backup-import fuzzing exercises authenticated backup handling. Extended V2 fuzzing remains five minutes per target; the main/release security workflow currently uses the same 5-minute verification gate.
 
 ## Hybrid benchmark
 

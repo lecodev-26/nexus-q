@@ -31,6 +31,6 @@ maturin develop
 
 ## Important boundary
 
-The existence of a binding in the repository does not mean it has already been published to a package registry. Publication is a Phase 22/release process gate.
+The existence of a binding in the repository does not mean it has already been published to a package registry. V2.0.0 GitHub release and downstream Rust/Python/SDK publication are separate release gates; registry publication is not implied by repository presence.
 
 TypeScript/Java/Kotlin/C#/Swift/Dart remain CI/release-scope work rather than claiming local availability.

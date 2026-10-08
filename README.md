@@ -4,7 +4,7 @@
 
 > Post-quantum cryptographic security engine for protecting data, keys, and identities.
 
-**Status**: **NEXUS-Q v2.0.0 engineering line frozen on `nexusqv2`.** V1 remains the frozen compatibility and benchmark baseline. V2 implementation, security/correctness gates, performance gate, release-candidate validation and final release gate are complete; integration into `main` and the public GitHub v2.0.0 release remain the next release-control steps. No external audit, certification, or downstream registry publication is implied.
+**Status**: **NEXUS-Q v2.0.0 engineering line frozen on `nexusqv2` and integrated into `main`.** V1 remains the frozen compatibility and benchmark baseline. V2 implementation, security/correctness gates, performance gate, release-candidate validation and final release gate are complete. PR #37 completed the V2-to-V1 compatibility integration into `main`; the post-merge `main` CI is the final validation checkpoint before the public GitHub v2.0.0 release. No external audit, certification, or downstream registry publication is implied.
 
 ---
 

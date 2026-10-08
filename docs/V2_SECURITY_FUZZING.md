@@ -25,7 +25,7 @@ The retained fuzz policy is **5 minutes per extended target**:
 
 This is intentional. Longer multi-hour soaking is not part of the V2 PR gate.
 
-The existing main-branch security workflow uses the same 45-minute limits so the release/security policy is consistent across V2 and main.
+The existing main-branch security workflow uses the same 5-minute limits so the release/security policy is consistent across V2 and main.
 
 ## Security invariants
 
@@ -41,7 +41,7 @@ The PR/CI run is the authoritative evidence for:
 
 1. security regression checks,
 2. fuzz-target build coverage,
-3. 45-minute parser fuzz runs,
+3. 5-minute parser fuzz runs,
 4. dependency audit/deny results,
 5. secret scanning.
 

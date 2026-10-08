@@ -1,12 +1,12 @@
 # NEXUS-Q v2 — Roadmap
 
-Status: **V2 implementation and final freeze complete on `nexusqv2`; final `main` integration and public release remain.**
+Status: **V2 implementation and final freeze complete on `nexusqv2`; V2 is integrated into `main`; public v2.0.0 release remains pending final post-merge CI.**
 
 ## Execution contract
 
 Each phase is implemented on a working issue branch, validated with tests/benchmarks/security gates, reviewed in a PR, and merged into `nexusqv2`. A roadmap phase is marked complete **only after its issue acceptance criteria are satisfied and the PR is merged**. Evidence is retained in the issue/PR and CI artifacts.
 
-Public package publication is intentionally deferred until final `main` integration and the individual registry/package gates pass.
+Public package publication is intentionally deferred until the post-merge `main` validation is green and the individual registry/package gates pass.
 
 ## Objective
 
@@ -38,7 +38,7 @@ v2 objective: materially improve ML-KEM-768/1024 and ML-DSA-65 performance throu
 - [x] **V2-09 — Security regression and extended fuzzing** — complete security gates and prolonged fuzz campaigns. Issue #9.
 - [x] **V2-10 — PQC Benchmark Arena performance gate** — demonstrate reproducible v2 improvement and pursue the fastest relevant comparator target. Issue #10.
 - [x] **V2-11 — NEXUS-Q v2.0 Release Candidate** — freeze RC and pass complete release validation. Issue #11.
-- [x] **V2-12 — Freeze and release NEXUS-Q v2.0** — final `2.0.0` release gate completed and merged into `nexusqv2`; public GitHub publication follows final `main` integration CI. Issue #12.
+- [x] **V2-12 — Freeze and release NEXUS-Q v2.0** — final `2.0.0` release gate completed and merged into `nexusqv2`; public GitHub publication follows the post-merge `main` CI validation. Issue #12.
 
 ## Execution order
 

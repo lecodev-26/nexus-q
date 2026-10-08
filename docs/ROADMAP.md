@@ -1,6 +1,8 @@
 # NEXUS-Q — Roadmap
 
-> **Status:** Living document — **v1.0 engineering baseline frozen; v2 performance program pending detailed design.**
+> **Status:** Historical V1 roadmap. **V1.0 engineering baseline is frozen; V2 was subsequently implemented and completed on `nexusqv2`, then integrated into `main`.**
+>
+> For the current V2 state, release gates and evidence, see [`docs/V2_ROADMAP.md`](V2_ROADMAP.md).
 > **Audience:** Contributors, users, stakeholders
 > **Scope:** Phased development plan from bootstrap to v1.0 and beyond
 
@@ -730,7 +732,7 @@ Prometheus-compatible text metrics without secret-bearing labels.
 
 ---
 
-## 25. Phase 22 — NEXUS-Q v1.0 baseline
+## 25. Historical V1 baseline — NEXUS-Q v1.0
 
 **Objective:** Freeze the first complete engineering baseline.
 

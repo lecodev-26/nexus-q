@@ -1,6 +1,6 @@
 # NEXUS-Q Deployment
 
-This document defines the supported local/release deployment profile for the NEXUS-Q server. It is independent of GitHub, package registries, or a particular init system.
+This document defines the supported local/release deployment profile for the NEXUS-Q server. It is independent of GitHub, package registries, or a particular init system. The historical V1 deployment/Phase 19 work remains part of the engineering record; current V2.0.0 public deployment follows the release gates documented in `docs/V2_RELEASE.md`.
 
 ## Profiles
 

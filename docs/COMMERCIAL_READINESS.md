@@ -12,7 +12,7 @@ released.**
 The repository contains a substantial engineering baseline, security model,
 cryptographic documentation, CI gates, benchmark evidence and release tooling.
 Several commercial gates necessarily remain open, especially independent
-external security review, final V2 release acceptance, legal/compliance review,
+external security review, final public release acceptance, legal/compliance review,
 commercial terms and customer validation.
 
 ## Evidence already present
@@ -41,8 +41,8 @@ commercial terms and customer validation.
 These are not to be silently marked complete:
 
 1. Independent external security audit.
-2. Final V2 performance/security acceptance and release candidate.
-3. Reproducible signed release artifacts, checksums, SBOM and provenance as a
+2. Final public V2 release acceptance after post-merge CI.
+3. Reproducible release artifacts, checksums, SBOM and provenance as a
    published release package.
 4. Final supported-platform matrix based on tested release artifacts.
 5. Legal/compliance review appropriate to the intended market, including
