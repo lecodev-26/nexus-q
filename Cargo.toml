@@ -10,7 +10,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "2.0.0-rc.1"
 edition = "2024"
 rust-version = "1.85"
 authors = ["lecodev-26 <325287752+lecodev-26@users.noreply.github.com>"]
@@ -22,7 +22,7 @@ ml-kem = { path = "vendor/ml-kem" }
 module-lattice = { path = "vendor/module-lattice" }
 
 [workspace.dependencies]
-nexusq-core = { path = "crates/nexusq-core", version = "0.1.0" }
+nexusq-core = { path = "crates/nexusq-core", version = "2.0.0-rc.1" }
 
 thiserror = "2"
 
