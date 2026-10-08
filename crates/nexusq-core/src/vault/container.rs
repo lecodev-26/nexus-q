@@ -359,14 +359,16 @@ impl Vault {
             None => RefCell::new(None),
         };
 
-        Ok(Session {
+        let session = Session {
             vault: self.clone(),
             kek,
             body,
             state: VaultState::Unlocked,
             audit,
             audit_failed: Cell::new(false),
-        })
+        };
+        session.log_event("vault", EventType::VaultUnlocked)?;
+        Ok(session)
     }
 
     /// Returns the path of the vault file.
@@ -646,6 +648,7 @@ impl Session {
     /// allowed (for example, from a compromised session).
     pub fn seal(&mut self) -> Result<(), VaultError> {
         self.state = self.state.transition_to(VaultState::Sealed)?;
+        self.log_event("vault", EventType::VaultSealed)?;
         Ok(())
     }
 
@@ -1827,6 +1830,8 @@ impl Session {
         if self.audit_failed.get() {
             return Err(VaultError::AuditWriteFailed);
         }
+        self.log_event("vault", EventType::VaultLocked)?;
+        self.log_event("session", EventType::SessionEnded)?;
         if let Some(log) = self.audit.borrow().as_ref() {
             self.body.audit_anchor = log.head_event_hash().map(ToOwned::to_owned);
         }

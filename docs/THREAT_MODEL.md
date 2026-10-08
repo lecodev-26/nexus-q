@@ -412,7 +412,7 @@ What NEXUS-Q **does** claim, in plain terms:
 4. **Forward secrecy of session keys** (Fase 14+): a compromised
    long-term key does not reveal past session keys.
 5. **Post-quantum key-establishment resistance** through the implemented
-   ML-KEM-768/X25519 hybrid using the X-Wing construction and transcript binding, assuming the underlying schemes and construction
+   ML-KEM-768/X25519 hybrid using the documented X-Wing Internet-Draft construction and transcript binding, without claiming finalized-standard conformance; assuming the underlying schemes and construction
    remain secure. Current Ed25519 signatures are classical and are not
    post-quantum secure.
 6. **Authenticated audit log**: any modification of a past
