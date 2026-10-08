@@ -1,0 +1,35 @@
+name: NEXUS-Q v2 Correctness and Interoperability
+
+on:
+  pull_request:
+    branches: [nexusqv2]
+  push:
+    branches: [v2/v2-08-correctness-interoperability]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  core-regression:
+    name: Core correctness/interoperability regression
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run V2-08 regression suite
+        run: cargo test -p nexusq-core --test v2_correctness_interoperability --locked
+      - name: Run core unit and integration tests
+        run: cargo test -p nexusq-core --locked
+
+  ml-kem-vectors:
+    name: ML-KEM upstream NIST/ACVP and negative-vector tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run vendored ML-KEM vector suites
+        run: |
+          cargo test --manifest-path vendor/ml-kem/Cargo.toml --test key-gen --test encap-decap --test wycheproof --test pkcs8 --locked
+      - name: Run module-lattice regression tests
+        run: cargo test --manifest-path vendor/module-lattice/Cargo.toml --tests --locked
