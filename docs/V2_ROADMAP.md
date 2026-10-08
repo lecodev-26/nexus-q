@@ -32,8 +32,8 @@ v2 objective: materially improve ML-KEM-768/1024 and ML-DSA-65 performance throu
 - [x] **V2-03 — Optimize ML-KEM** — improve ML-KEM-768/1024 from measured hotspots. Issue #3.
 - [x] **V2-04 — Optimize ML-DSA** — improve ML-DSA-65 from measured hotspots. Issue #4.
 - [x] **V2-05 — Optimize memory and allocations** — remove measurable avoidable memory/copy/allocation costs without weakening zeroization. Issue #5.
-- [ ] **V2-06 — Evaluate SIMD and CPU backends** — add only measured, safely dispatched acceleration with scalar fallback. Issue #6.
-- [ ] **V2-07 — Define backend and primitive strategy** — document evidence-based native/platform/external backend decisions. Issue #7.
+- [x] **V2-06 — Evaluate SIMD and CPU backends** — add only measured, safely dispatched acceleration with scalar fallback. Issue #6.
+- [x] **V2-07 — Define backend and primitive strategy** — document evidence-based native/platform/external backend decisions. Issue #7.
 - [ ] **V2-08 — Correctness and interoperability regression suite** — expand KAT, invalid-input, serialization and cross-implementation coverage. Issue #8.
 - [ ] **V2-09 — Security regression and extended fuzzing** — complete security gates and prolonged fuzz campaigns. Issue #9.
 - [ ] **V2-10 — PQC Benchmark Arena performance gate** — demonstrate reproducible v2 improvement and pursue the fastest relevant comparator target. Issue #10.
