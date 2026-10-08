@@ -9,9 +9,9 @@
 //!   the vault is where keys live. The stub exists so the trait surface
 //!   is complete and so tests can exercise call sites.
 //! - Attestation: a no-op that reports unavailability.
-//! - Secure memory: best-effort. On Unix it attempts `mlock` through
-//!   the `libc` crate; on failure the buffer is still returned, just
-//!   not locked.
+//! - Secure memory: zeroizing buffers are provided, but the current
+//!   portable backend reports memory locking as `NotSupported`; it does
+//!   not claim `mlock` protection.
 //!
 //! See `docs/ARCHITECTURE.md` §6 and ADR 0001.
 
@@ -332,11 +332,9 @@ fn lock_memory(ptr: &mut [u8]) -> Result<(), HardwareError> {
     if ptr.is_empty() {
         return Ok(());
     }
-    // On a general-purpose OS we do not actually call mlock here: the
-    // Rust standard library does not expose it, and pulling in a
-    // platform crate is not worth it for v1.0. The operation is
-    // reported as not supported so callers do not rely on a guarantee
-    // we do not provide.
+    // The portable backend deliberately does not claim OS memory-locking
+    // until a platform implementation can provide and test the real call.
+    // Report NotSupported so callers cannot accidentally rely on it.
     Err(HardwareError::NotSupported)
 }
 

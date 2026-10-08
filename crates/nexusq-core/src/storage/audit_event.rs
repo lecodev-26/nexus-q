@@ -104,6 +104,8 @@ pub enum EventType {
     // --- Audit log ---
     /// The audit log configuration was changed.
     AuditConfigured,
+    /// The audit log configuration was removed.
+    AuditRemoved,
 
     // --- Session and policy ---
     /// A session ended.
@@ -160,6 +162,7 @@ impl EventType {
 
             // Audit log
             Self::AuditConfigured => "audit_configured",
+            Self::AuditRemoved => "audit_removed",
 
             // Session and policy
             Self::SessionEnded => "session_ended",

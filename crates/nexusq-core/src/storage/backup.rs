@@ -200,7 +200,7 @@ pub fn export(
     // makes the backup self-contained: import can safely re-wrap them
     // again under the newly created vault KEK.
     let backup_body = session.clone_body_rewrapped(backup_kek.as_ref())?;
-    let body_bytes = serde_helpers::to_vec(&backup_body)?;
+    let body_bytes = Zeroizing::new(serde_helpers::to_vec(&backup_body)?);
     let header_bytes = serde_helpers::to_vec(&header)?;
 
     // Encrypt with the header as AAD.
@@ -252,16 +252,18 @@ pub fn import(
     verify_backup_kek(&header, backup_kek.as_ref())?;
 
     let header_bytes = serde_helpers::to_vec(&header)?;
-    let plaintext = aead::decrypt(
-        AeadAlgorithm::Aes256Gcm,
-        backup_kek.as_ref(),
-        nonce,
-        &header_bytes,
-        ciphertext,
-    )
-    .map_err(|_| BackupError::WrongPassphrase)?;
+    let plaintext = Zeroizing::new(
+        aead::decrypt(
+            AeadAlgorithm::Aes256Gcm,
+            backup_kek.as_ref(),
+            nonce,
+            &header_bytes,
+            ciphertext,
+        )
+        .map_err(|_| BackupError::WrongPassphrase)?,
+    );
 
-    let mut body: VaultBody = serde_helpers::from_slice(&plaintext)?;
+    let mut body: VaultBody = serde_helpers::from_slice(plaintext.as_ref())?;
 
     // Audit logs are external to the backup bundle and are authenticated
     // with the source vault's KEK. A restored vault gets a new KEK, so

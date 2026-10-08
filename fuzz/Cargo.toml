@@ -9,6 +9,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
+tempfile = "3.27"
 nexusq-core = { path = "../crates/nexusq-core" }
 
 [[bin]]
@@ -49,6 +50,13 @@ bench = false
 [[bin]]
 name = "credential_decode"
 path = "fuzz_targets/credential_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "backup_import"
+path = "fuzz_targets/backup_import.rs"
 test = false
 doc = false
 bench = false

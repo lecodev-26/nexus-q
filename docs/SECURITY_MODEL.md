@@ -276,7 +276,7 @@ To verify the chain:
 2. Recompute each HMAC with the vault-derived audit key and compare.
 3. Verify `prev_hash` matches the previous event's authenticated hash.
 4. Verify `index` is strictly increasing.
-5. Verify the encrypted vault-side anchor is still present in the log.
+5. Verify both the encrypted vault-side audit anchor and the authenticated audit-tail commitment are still consistent with the complete on-disk log.
 
 Any mismatch = tampering or rollback detected. Verification is fail-closed
 and requires the vault-derived audit key.
