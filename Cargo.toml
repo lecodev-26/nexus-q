@@ -19,6 +19,7 @@ repository = "https://github.com/lecodev-26/nexusq"
 
 [patch.crates-io]
 ml-kem = { path = "vendor/ml-kem" }
+module-lattice = { path = "vendor/module-lattice" }
 
 [workspace.dependencies]
 nexusq-core = { path = "crates/nexusq-core", version = "0.1.0" }
