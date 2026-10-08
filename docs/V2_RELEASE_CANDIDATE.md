@@ -38,3 +38,7 @@ V2-11 produces CI evidence only. Public publication is deferred to V2-12,
 where the final version, signing, release artifacts and package registry gates
 are evaluated again from the frozen candidate.
 
+
+## Final release transition
+
+The RC is superseded by the V2-12 final release gate. The final release uses version `2.0.0` and repeats the acceptance contract from the final frozen commit.

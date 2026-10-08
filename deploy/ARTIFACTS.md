@@ -106,6 +106,6 @@ nexusq-server does not terminate TLS itself.
 
 ## Publication boundary
 
-This packaging flow is local/release preparation only. It does not publish
-GitHub repositories, crates, PyPI packages, SDK packages, or a v1.0 release.
-Those actions remain after Phase 22 and the final CI/release gates.
+This packaging flow is the deterministic local assembly step used by the V2
+release workflow. It does not publish crates, PyPI packages or SDK registries.
+Those remain separate post-GitHub-release package gates.
