@@ -288,7 +288,7 @@ jobs:
         run: |
           cd .arena-openssl
           ./Configure --prefix="$GITHUB_WORKSPACE/.arena-openssl-install" --openssldir="$GITHUB_WORKSPACE/.arena-openssl-install/ssl"
-          make -j2
+          make -j"$(nproc)"
           make install_sw
       - name: Build Arena adapter
         run: |
