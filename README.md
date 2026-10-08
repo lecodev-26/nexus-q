@@ -8,6 +8,16 @@
 
 ---
 
+## V2.0.0 closure status
+
+V2.0.0 is frozen as a historical engineering release. It is integrated into main and retained on nexusqv2 for reproducibility and review.
+
+The final benchmark record does not claim a performance improvement over V1. Corrected Arena runs produced geometric means of 0.885 and 1.0647513576 V2/V1, so performance remains an unresolved investigation item rather than a validated regression or improvement.
+
+See docs/V2_PERFORMANCE_RESULTS.md for the complete numbers, methodology, and retained GitHub Actions artifacts.
+
+Performance investigation is intentionally deferred to V3; V2 is not being modified to manufacture a benchmark result.
+
 ## What is NEXUS-Q?
 
 NEXUS-Q is a post-quantum cryptographic security engine designed to

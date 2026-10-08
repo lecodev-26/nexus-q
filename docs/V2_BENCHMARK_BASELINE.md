@@ -88,12 +88,35 @@ V2-10 remains the authoritative external performance gate. No performance-leader
 
 ## V2-10 performance gate
 
-The authoritative V2-10 gate runs the full Arena comparison on the nexusqv2 branch using the locked nine-operation matrix and the pinned comparator adapters. The gate records the exact commit, the security-equivalent V1 reference, and normalized measurements, then evaluates:
+The authoritative V2-10 gate compares V1 and V2 using the same benchmark harness on the same GitHub Actions runner. The current harness executes five alternating V1/V2 rounds with 50 measurement iterations and 10 warmups per operation.
 
-- geometric mean of V2 latency versus the locked v1 baseline must be <= 0.95;
-- no individual operation may regress by more than 5% versus v1;
-- the number of operations improving by at least 5% is reported as diagnostic evidence, but is not an acceptance condition;
-- every operation must have a measured best comparator from the executable Arena set;
-- comparator ratios are reported as evidence but are not converted into a composite leaderboard score.
+Acceptance criteria:
+- geometric mean V2/V1 <= 0.95;
+- no individual operation may regress by more than 5%;
+- the former 5-of-9 improvement rule is diagnostic only, not an acceptance criterion;
+- complete normalized coverage and retained raw artifacts are required.
 
-The gate is implemented by .github/workflows/pqc-arena.yml and publishes v2-10-performance-gate.json as a GitHub Actions artifact. The earlier `5/9` improvement-count condition was introduced by the original V2-10 gate commit (`ff53b82`); it was not part of V2-01 through V2-09, the frozen V1 Arena protocol, or the approved optimization evidence. It is therefore retained only as diagnostic evidence, not as a release-blocking criterion. The authoritative acceptance contract is now aggregate improvement (geomean <= 0.95) plus protection against material individual regressions (>5%), using repeated same-runner measurements. These thresholds are acceptance criteria for V2-10, not a claim of platform-wide performance leadership.
+The former 5-of-9 rule was introduced by V2-10 itself in commit ff53b82 and was not part of V2-01 through V2-09 or the frozen V1 Arena protocol. It is retained as historical process evidence, not as a release gate.
+
+The V1 reference uses the V2 security-equivalent ml-dsa/zeroize dependency feature and the current Arena runner harness, so the comparison isolates V2 implementation changes from that deliberate hardening cost.
+
+### Final V2 performance evidence
+
+GitHub Actions run 37815114581, commit 7ab06e4:
+- V1/V2 reference benchmark: PASS
+- V1 measurements: 45
+- V2 measurements: 45
+- external comparator adapters: PASS
+- normalized matrix: 138 rows
+- benchmark artifacts: uploaded
+
+Latest aggregate:
+- geometric mean V2/V1: 1.0647513576 (6.48% slower) — FAIL
+- individual regression >5%: yes — FAIL
+- operations improved >=5%: 0/9 — diagnostic only
+
+The immediately preceding corrected run 37811914420 produced V2/V1 = 0.885 with no individual regression above 5%. The contrast means V2 does not claim a validated performance improvement and does not claim that the latest regression is a stable V2-wide regression.
+
+See docs/V2_PERFORMANCE_RESULTS.md for the full comparison and artifact record.
+
+Evidence run: https://github.com/lecodev-26/nexus-q/actions/runs/37815114581
