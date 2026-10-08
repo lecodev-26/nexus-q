@@ -18,12 +18,10 @@ protect:
   revocation, destruction).
 - **Identities** — digital signatures and verifiable credentials.
 
-It is meant to be used by:
-
-- Applications (web, server, mobile).
-- Servers.
-- Devices with secure hardware (TPM, HSM, Secure Element, RISC-V,
-  enclave).
+It is intended as a cryptographic/security engine for applications and servers.
+The repository also defines hardware-provider abstraction points for future TPM,
+HSM, Secure Element, enclave and RISC-V integrations; the default software
+backend does not itself provide hardware isolation.
 
 ---
 
@@ -33,8 +31,9 @@ It is meant to be used by:
    and maintained cryptographic libraries; dependency audit status is documented explicitly.
 2. **Library-first.** The core is a Rust library; the CLI, SDKs and
    server are layers on top.
-3. **Hardware-agnostic.** Abstraction from day one, so software, TPM,
-   HSM and secure environments are interchangeable.
+3. **Hardware-agnostic boundary.** Hardware-provider interfaces are separated
+   from the software backend; concrete hardware isolation is only claimed when
+   a provider is implemented and tested.
 4. **Zeroization.** Secrets are wiped from memory when no longer
    needed.
 5. **Auditability.** Auditable security state changes and cryptographic
