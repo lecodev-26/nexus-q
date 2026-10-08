@@ -172,6 +172,21 @@ fn main() {
             }
             report(&workload, t.elapsed().as_nanos());
         }
+        "ml-dsa-65-verify-cached" => {
+            let key = pq_sign::MlDsa65KeyPair::generate();
+            let pk = key.public_key();
+            let verifier = pq_sign::MlDsa65VerifyingKey::from_public_key(&pk).unwrap();
+            let sig = key.sign(MESSAGE);
+            for _ in 0..20 {
+                black_box(verifier.verify(MESSAGE, &sig)).unwrap();
+            }
+            reset();
+            let t = Instant::now();
+            for _ in 0..ITERS {
+                black_box(verifier.verify(MESSAGE, &sig)).unwrap();
+            }
+            report(&workload, t.elapsed().as_nanos());
+        }
         _ => panic!("unknown workload: {workload}"),
     }
 }
