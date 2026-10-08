@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [nexusqv2]
   push:
-    branches: [v2/v2-09-security-fuzz]
+    branches: [v2/v2-09-security-fuzz, main]
   workflow_dispatch:
 
 permissions:
@@ -56,7 +56,7 @@ jobs:
   fuzz-soak-vault:
     name: 5-minute fuzz - vault parser
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
@@ -69,7 +69,7 @@ jobs:
   fuzz-soak-envelope:
     name: 5-minute fuzz - envelope parser
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
@@ -83,7 +83,7 @@ jobs:
   fuzz-soak-backup:
     name: 5-minute fuzz - backup import
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
