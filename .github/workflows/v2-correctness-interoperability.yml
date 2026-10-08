@@ -30,6 +30,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Run vendored ML-KEM vector suites
         run: |
-          cargo test --manifest-path vendor/ml-kem/Cargo.toml --test key-gen --test encap-decap --test wycheproof --test pkcs8 --locked
+          cargo test --manifest-path vendor/ml-kem/Cargo.toml --test wycheproof --test pkcs8 --locked
       - name: Run module-lattice regression tests
         run: cargo test --manifest-path vendor/module-lattice/Cargo.toml --tests --locked

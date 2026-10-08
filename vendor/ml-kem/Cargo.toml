@@ -191,3 +191,5 @@ unreachable_pub = "warn"
 unsafe_code = "deny"
 unused_lifetimes = "warn"
 unused_qualifications = "warn"
+
+[workspace]
