@@ -1,0 +1,42 @@
+name: NEXUS-Q v2 Hybrid Benchmark Gate
+
+on:
+  pull_request:
+    branches: ["nexusqv2"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hybrid-benchmark:
+    name: Production ML-KEM-768 + X25519 benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build benchmark
+        run: cargo build --release --manifest-path arena/runners/nexusq/Cargo.toml --bin hybrid_benchmark
+
+      - name: Run production hybrid benchmark
+        run: |
+          mkdir -p artifacts/v2/hybrid-benchmark
+          NEXUSQ_RUSTC_VERSION="$(rustc -Vv | tr '\n' ' ')" \
+            ./arena/runners/nexusq/target/release/hybrid_benchmark | tee artifacts/v2/hybrid-benchmark/result.txt
+
+      - name: Validate benchmark evidence
+        run: |
+          test "$(grep -c '^schema=v1$' artifacts/v2/hybrid-benchmark/result.txt)" -eq 1
+          grep -q '^implementation=nexusq-production-hybrid-ml-kem-768-x25519$' artifacts/v2/hybrid-benchmark/result.txt
+          grep -q '^samples=1000$' artifacts/v2/hybrid-benchmark/result.txt
+          grep -q '^cpu=' artifacts/v2/hybrid-benchmark/result.txt
+          grep -q '^rustc=' artifacts/v2/hybrid-benchmark/result.txt
+          grep -q '^encaps_p95_ns=' artifacts/v2/hybrid-benchmark/result.txt
+          grep -q '^decaps_p95_ns=' artifacts/v2/hybrid-benchmark/result.txt
+
+      - name: Upload benchmark evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2-hybrid-benchmark-${{ github.sha }}
+          path: artifacts/v2/hybrid-benchmark/

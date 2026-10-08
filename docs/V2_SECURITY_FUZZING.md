@@ -9,8 +9,8 @@ V2-09 adds a dedicated security gate for nexusqv2. The gate combines:
 - cargo audit dependency advisory checks.
 - cargo deny check supply-chain/license/source policy checks.
 - Locked dependency metadata retained as a CI artifact.
-- Build coverage for all six libFuzzer targets.
-- Extended parser fuzzing for the vault and envelope boundaries.
+- Build coverage for all existing and added libFuzzer targets.
+- Extended fuzzing for vault/envelope boundaries plus credential verification and backup import, including collision-safe temporary-file handling.
 - Repository secret scanning.
 
 The V2 workflow checks out Git submodules recursively so the correctness/interoperability vector suite remains reproducible.
@@ -21,6 +21,7 @@ The retained fuzz policy is **5 minutes per extended target**:
 
 - vault_parse: -max_total_time=300, CI timeout 5 minutes.
 - envelope_parse: -max_total_time=300, CI timeout 5 minutes.
+- backup_import: -max_total_time=300, CI timeout 5 minutes.
 
 This is intentional. Longer multi-hour soaking is not part of the V2 PR gate.
 

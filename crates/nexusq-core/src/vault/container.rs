@@ -411,16 +411,18 @@ impl Vault {
         let (nonce, ciphertext) = rest.split_at(BODY_NONCE_LEN);
 
         let header_bytes = serde_helpers::to_vec(&header)?;
-        let plaintext = aead::decrypt(
-            AeadAlgorithm::Aes256Gcm,
-            kek,
-            nonce,
-            &header_bytes,
-            ciphertext,
-        )
-        .map_err(|_| VaultError::WrongPassword)?;
+        let plaintext = Zeroizing::new(
+            aead::decrypt(
+                AeadAlgorithm::Aes256Gcm,
+                kek,
+                nonce,
+                &header_bytes,
+                ciphertext,
+            )
+            .map_err(|_| VaultError::WrongPassword)?,
+        );
 
-        let body: VaultBody = serde_helpers::from_slice(&plaintext)?;
+        let body: VaultBody = serde_helpers::from_slice(plaintext.as_ref())?;
         Ok(body)
     }
 
@@ -433,7 +435,7 @@ impl Vault {
         let mut nonce = [0u8; BODY_NONCE_LEN];
         rng.fill_bytes(&mut nonce)?;
 
-        let body_bytes = serde_helpers::to_vec(body)?;
+        let body_bytes = Zeroizing::new(serde_helpers::to_vec(body)?);
         let header_bytes = serde_helpers::to_vec(&self.header)?;
 
         let ciphertext = aead::encrypt(
@@ -466,7 +468,7 @@ impl Session {
     ///
     /// Mutations are only persisted when the session is passed back to
     /// [`Vault::lock`].
-    pub fn body_mut(&mut self) -> Result<&mut VaultBody, VaultError> {
+    pub(crate) fn body_mut(&mut self) -> Result<&mut VaultBody, VaultError> {
         self.require_writes_allowed()?;
         Ok(&mut self.body)
     }
@@ -1624,8 +1626,9 @@ impl Session {
     /// Activates a policy set for the current session.
     ///
     /// Once set, every auditable operation is evaluated against the
-    /// set before proceeding. The default-deny rule applies: an
-    /// operation with no matching policy is refused.
+    /// set before proceeding. An attached policy set is fail-closed:
+    /// an operation with no matching rule is refused. With no policy
+    /// set attached, the session is intentionally permissive.
     ///
     /// # Errors
     ///
@@ -1640,8 +1643,10 @@ impl Session {
 
     /// Deactivates the policy engine for the current session.
     ///
-    /// After this call, every operation is allowed again, matching
-    /// the behavior of a vault with no policies configured.
+    /// Policy administration is an authenticated session operation;
+    /// callers cannot bypass it through [`Session::body_mut`], which is
+    /// crate-internal. After this call, every operation is allowed again,
+    /// matching the behavior of a vault with no policies configured.
     ///
     /// # Errors
     ///
@@ -1698,8 +1703,14 @@ impl Session {
     /// or compromised.
     pub fn remove_audit_dir(&mut self) -> Result<(), VaultError> {
         self.require_writes_allowed()?;
+        // Record the administrative removal while the authenticated
+        // audit sink is still active. The event is durable before the
+        // sink is detached.
+        self.log_event("vault", EventType::AuditRemoved)?;
+        if let Some(log) = self.audit.borrow().as_ref() {
+            self.body.audit_anchor = log.head_event_hash().map(ToOwned::to_owned);
+        }
         self.body.audit_dir = None;
-        self.body.audit_anchor = None;
         *self.audit.borrow_mut() = None;
         Ok(())
     }
@@ -1911,14 +1922,13 @@ fn write_vault_file(
     out.extend_from_slice(nonce);
     out.extend_from_slice(ciphertext);
 
-    let tmp_path = unique_temp_path(path)?;
-
-    // Write and fsync the temp file.
-    {
-        let mut f = fs::File::create(&tmp_path)?;
-        f.write_all(&out)?;
-        f.sync_all()?;
-    }
+    // Atomically reserve the temporary file. A random name alone is not
+    // an exclusive-creation guarantee: an attacker or concurrent writer
+    // could pre-create it between name generation and File::create().
+    let (tmp_path, mut f) = create_unique_temp_file(path)?;
+    f.write_all(&out)?;
+    f.sync_all()?;
+    drop(f);
 
     // Rename onto the target. If this fails, try to clean up the temp.
     if let Err(e) = fs::rename(&tmp_path, path) {
@@ -1948,6 +1958,28 @@ fn write_vault_file(
 ///
 /// Format: `<name>.tmp.<8 hex chars>`. The suffix comes from the OS
 /// CSPRNG so two writers cannot collide.
+fn create_unique_temp_file(path: &Path) -> Result<(PathBuf, fs::File), VaultError> {
+    for _ in 0..16 {
+        let tmp = unique_temp_path(path)?;
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        match options.open(&tmp) {
+            Ok(file) => return Ok((tmp, file)),
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(err) => return Err(VaultError::Io(err)),
+        }
+    }
+    Err(VaultError::Io(std::io::Error::new(
+        std::io::ErrorKind::AlreadyExists,
+        "could not allocate unique vault temp file",
+    )))
+}
+
 fn unique_temp_path(path: &Path) -> Result<PathBuf, VaultError> {
     let rng = OsRandomSource::new();
     let mut suffix = [0u8; 4];
@@ -4093,6 +4125,27 @@ mod tests {
         let vault = Vault::open(&path).unwrap();
         let session = vault.unlock(b"pw").unwrap();
         assert_eq!(session.policies().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn remove_audit_dir_is_itself_audited() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        let audit_dir = dir.path().join("audit");
+        fs::create_dir(&audit_dir).unwrap();
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+        session.enable_audit(&audit_dir).unwrap();
+        session.remove_audit_dir().unwrap();
+        assert!(!session.has_audit());
+        session.enable_audit(&audit_dir).unwrap();
+        let events = session.audit_events().unwrap();
+        assert!(
+            events
+                .iter()
+                .any(|event| event.event_type == EventType::AuditRemoved)
+        );
     }
 
     #[test]
