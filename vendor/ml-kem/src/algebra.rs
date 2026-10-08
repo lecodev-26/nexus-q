@@ -266,7 +266,7 @@ impl MultiplyNtt for BaseField {
 ///
 /// This is a hot loop.  We promote to u64 so that we can do the absolute minimum number of
 /// modular reductions, since these are the expensive operation.
-#[inline(always)]
+#[inline]
 fn base_case_multiply(a0: Elem, a1: Elem, b0: Elem, b1: Elem, i: usize) -> (Elem, Elem) {
     let a0 = u32::from(a0.0);
     let a1 = u32::from(a1.0);

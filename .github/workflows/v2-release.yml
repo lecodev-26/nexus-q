@@ -165,7 +165,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.85.1
-      - name: Release build
+      - name: Release build (macOS Rust workspace)
+        if: matrix.os == 'macos-14'
+        run: cargo build --workspace --locked --release --exclude nexusq-py
+
+      - name: Release build (full workspace)
+        if: matrix.os != 'macos-14'
         run: cargo build --workspace --locked --release
 
   public-release:

@@ -144,7 +144,6 @@ impl<F: Field> Neg for Elem<F> {
 impl<F: Field> Add<Elem<F>> for Elem<F> {
     type Output = Elem<F>;
 
-    #[inline(always)]
     fn add(self, rhs: Elem<F>) -> Elem<F> {
         Elem(F::small_reduce(self.0 + rhs.0))
     }
@@ -153,7 +152,6 @@ impl<F: Field> Add<Elem<F>> for Elem<F> {
 impl<F: Field> Sub<Elem<F>> for Elem<F> {
     type Output = Elem<F>;
 
-    #[inline(always)]
     fn sub(self, rhs: Elem<F>) -> Elem<F> {
         Elem(F::small_reduce(self.0 + F::Q - rhs.0))
     }
@@ -162,7 +160,6 @@ impl<F: Field> Sub<Elem<F>> for Elem<F> {
 impl<F: Field> Mul<Elem<F>> for Elem<F> {
     type Output = Elem<F>;
 
-    #[inline(always)]
     fn mul(self, rhs: Elem<F>) -> Elem<F> {
         let lhs: F::Long = self.0.into();
         let rhs: F::Long = rhs.0.into();
@@ -198,7 +195,6 @@ where
 impl<F: Field> Add<&Polynomial<F>> for &Polynomial<F> {
     type Output = Polynomial<F>;
 
-    #[inline(always)]
     fn add(self, rhs: &Polynomial<F>) -> Polynomial<F> {
         Polynomial(
             self.0
@@ -213,7 +209,6 @@ impl<F: Field> Add<&Polynomial<F>> for &Polynomial<F> {
 impl<F: Field> Sub<&Polynomial<F>> for &Polynomial<F> {
     type Output = Polynomial<F>;
 
-    #[inline(always)]
     fn sub(self, rhs: &Polynomial<F>) -> Polynomial<F> {
         Polynomial(
             self.0
@@ -228,7 +223,6 @@ impl<F: Field> Sub<&Polynomial<F>> for &Polynomial<F> {
 impl<F: Field> Mul<&Polynomial<F>> for Elem<F> {
     type Output = Polynomial<F>;
 
-    #[inline(always)]
     fn mul(self, rhs: &Polynomial<F>) -> Polynomial<F> {
         Polynomial(rhs.0.iter().map(|&x| self * x).collect())
     }
