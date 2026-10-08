@@ -399,7 +399,7 @@ jobs:
         run: |
           cd .arena-botan
           ./configure.py --prefix="$GITHUB_WORKSPACE/.arena-botan-install" --without-documentation --disable-shared
-          make -j2
+          make -j"$(nproc)"
           make install
       - name: Build Arena adapter
         env:
