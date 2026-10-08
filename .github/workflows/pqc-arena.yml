@@ -608,7 +608,7 @@ jobs:
           files = list(Path("arena/results/ci").rglob("*.jsonl"))
           assert files
           rows = [json.loads(x) for p in files for x in p.read_text().splitlines() if x.startswith("{")]
-          assert len(rows) == 66, len(rows)
+          assert len(rows) == 138, len(rows)
           for row in rows:
               jsonschema.Draft202012Validator(schema).validate(row)
           matrix = {(r["algorithm"]["id"], r["algorithm"]["parameter_set"], r["operation"]) for r in rows}
