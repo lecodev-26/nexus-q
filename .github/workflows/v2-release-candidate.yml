@@ -1,0 +1,142 @@
+name: NEXUS-Q v2 Release Candidate
+
+on:
+  pull_request:
+    branches: ["nexusqv2"]
+  push:
+    branches: ["nexusqv2", "v2/issue-11-release-candidate"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  RC_VERSION: "2.0.0-rc.1"
+
+jobs:
+  rc-freeze:
+    name: RC / freeze and core validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Verify candidate version
+        run: |
+          test "$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n 1)" = "$RC_VERSION"
+          cargo metadata --format-version 1 --locked > rc-cargo-metadata.json
+          python3 - <<'PY'
+          import json
+          m=json.load(open("rc-cargo-metadata.json"))
+          bad=[p["name"]+":"+p["version"] for p in m["packages"] if p["name"].startswith("nexusq-") and p["version"]!="2.0.0-rc.1"]
+          assert not bad, bad
+          print("RC package versions: OK")
+          PY
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Check workspace
+        run: cargo check --workspace --locked
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Workspace tests
+        run: cargo test --workspace --locked
+      - name: Release-profile tests
+        run: cargo test --workspace --locked --release
+      - name: Build release workspace
+        run: cargo build --workspace --locked --release
+      - name: Package release twice
+        run: |
+          rm -rf rc-dist-a rc-dist-b
+          ./deploy/package-release.sh "$PWD/rc-dist-a"
+          ./deploy/package-release.sh "$PWD/rc-dist-b"
+          sha256sum rc-dist-a/*.tar.gz > rc-a.sha256
+          sha256sum rc-dist-b/*.tar.gz > rc-b.sha256
+          diff -u rc-a.sha256 rc-b.sha256
+          diff -u rc-dist-a/*.tar.gz rc-dist-b/*.tar.gz
+      - name: Generate CycloneDX SBOM
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.load(open("rc-cargo-metadata.json"))
+          components=[]
+          for p in sorted(m["packages"], key=lambda x:x["name"]):
+              c={"type":"library","bom-ref":f"pkg:cargo/{p['name']}@{p['version']}","name":p["name"],"version":p["version"],"purl":f"pkg:cargo/{p['name']}@{p['version']}"}
+              if p.get("license"): c["licenses"]=[{"license":{"id":p["license"]}}]
+              components.append(c)
+          bom={"bomFormat":"CycloneDX","specVersion":"1.5","serialNumber":"urn:nexusq:v2.0.0-rc.1","version":1,"metadata":{"component":{"type":"application","name":"NEXUS-Q","version":"2.0.0-rc.1"}},"components":components}
+          Path("nexusq-v2.0.0-rc.1-sbom.cdx.json").write_text(json.dumps(bom,indent=2)+"\n")
+          PY
+      - name: Generate checksums and provenance
+        run: |
+          find rc-dist-a -type f -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          p={"schema":"nexusq-release-provenance-v1","release":"2.0.0-rc.1","commit":os.environ["GITHUB_SHA"],"workflow":"NEXUS-Q v2 Release Candidate","repository":os.environ["GITHUB_REPOSITORY"],"ref":os.environ["GITHUB_REF"],"runner":os.environ["RUNNER_OS"],"artifact_checksums":Path("SHA256SUMS").read_text().splitlines(),"signed":False,"status":"release-candidate evidence; not a public release"}
+          Path("nexusq-v2.0.0-rc.1-provenance.json").write_text(json.dumps(p,indent=2)+"\n")
+          PY
+      - name: Upload RC evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexusq-v2.0.0-rc.1-evidence
+          path: |
+            rc-dist-a/*.tar.gz
+            rc-dist-a/*.sha256
+            SHA256SUMS
+            nexusq-v2.0.0-rc.1-sbom.cdx.json
+            nexusq-v2.0.0-rc.1-provenance.json
+            rc-cargo-metadata.json
+
+  platform-ubuntu:
+    name: RC / Ubuntu release build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo check --workspace --locked
+      - run: cargo build --workspace --locked --release
+
+  platform-macos:
+    name: RC / macOS release build
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo check --workspace --locked
+      - run: cargo build --workspace --locked --release
+
+  platform-windows:
+    name: RC / Windows release build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo check --workspace --locked
+      - run: cargo build --workspace --locked --release
+
+  sdk-smoke:
+    name: RC / SDK smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build -p nexusq-c --locked --release
+      - run: cargo test -p nexusq-c --locked
+      - run: cargo test -p nexusq-py --locked
+      - run: cargo test -p nexusq-cli --locked
+      - run: cargo test -p nexusq-server --locked
+
+  rc-contract:
+    name: RC / acceptance contract
+    runs-on: ubuntu-latest
+    needs: [rc-freeze, platform-ubuntu, platform-macos, platform-windows, sdk-smoke]
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          test -f docs/V2_RELEASE_CANDIDATE.md
+          grep -q "2.0.0-rc.1" docs/V2_RELEASE_CANDIDATE.md
+          grep -q "not a public release" docs/V2_RELEASE_CANDIDATE.md
+          echo "V2-11 acceptance contract: OK"
+
