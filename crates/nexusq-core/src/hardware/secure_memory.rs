@@ -19,10 +19,18 @@ use super::HardwareError;
 ///
 /// On backends that support it, the buffer is also locked in memory so
 /// it cannot be swapped to disk.
-#[derive(Debug)]
 pub struct SecureBuffer {
     inner: Zeroizing<Vec<u8>>,
     locked: bool,
+}
+
+impl std::fmt::Debug for SecureBuffer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SecureBuffer")
+            .field("inner", &"[REDACTED]")
+            .field("locked", &self.locked)
+            .finish()
+    }
 }
 
 impl SecureBuffer {

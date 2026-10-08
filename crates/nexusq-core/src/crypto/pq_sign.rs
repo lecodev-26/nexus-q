@@ -46,6 +46,35 @@ pub struct MlDsa65KeyPair {
     signing: ml_dsa::SigningKey<MlDsa65>,
 }
 
+/// Reusable ML-DSA-65 verifier with precomputed public-key state.
+///
+/// Constructing this value performs the public-key decode/precomputation once.
+/// Reusing it avoids rebuilding that state and its heap allocations for every
+/// verification operation. The existing `ml_dsa_65_verify` API remains unchanged.
+pub struct MlDsa65VerifyingKey {
+    verifying: ml_dsa::VerifyingKey<MlDsa65>,
+}
+
+impl MlDsa65VerifyingKey {
+    /// Decode and precompute a serialized ML-DSA-65 public key.
+    pub fn from_public_key(bytes: &[u8]) -> Result<Self, PqSignError> {
+        let enc = ml_dsa::EncodedVerifyingKey::<MlDsa65>::try_from(bytes)
+            .map_err(|_| PqSignError::InvalidKey)?;
+        Ok(Self {
+            verifying: ml_dsa::VerifyingKey::<MlDsa65>::decode(&enc),
+        })
+    }
+
+    /// Verify a signature using the cached public-key state.
+    pub fn verify(&self, message: &[u8], signature: &[u8]) -> Result<(), PqSignError> {
+        let sig = ml_dsa::Signature::<MlDsa65>::try_from(signature)
+            .map_err(|_| PqSignError::InvalidSignature)?;
+        self.verifying
+            .verify(message, &sig)
+            .map_err(|_| PqSignError::VerificationFailed)
+    }
+}
+
 impl MlDsa65KeyPair {
     /// Generate a new key pair.
     #[must_use]
@@ -189,6 +218,16 @@ mod tests {
         let pair = MlDsa65KeyPair::generate();
         let restored = MlDsa65KeyPair::from_secret_key(&pair.secret_key()).unwrap();
         assert_eq!(pair.public_key(), restored.public_key());
+    }
+
+    #[test]
+    fn ml_dsa_65_cached_verifier_roundtrip_and_reuse() {
+        let pair = MlDsa65KeyPair::generate();
+        let public_key = pair.public_key();
+        let verifier = MlDsa65VerifyingKey::from_public_key(&public_key).unwrap();
+        let sig = pair.sign(b"cached verifier");
+        verifier.verify(b"cached verifier", &sig).unwrap();
+        assert!(verifier.verify(b"tampered", &sig).is_err());
     }
 
     #[test]

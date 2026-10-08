@@ -69,12 +69,13 @@ nexusq identity list <vault>
 ```text
 nexusq credential issue <vault> --issuer <id> --subject <id> --claims <json> <output>
 nexusq credential verify <vault> <input>
+nexusq credential revoke <vault> <input> [--password-file <path>]
 ```
 
 ## Audit
 
 ```text
-nexusq audit verify <audit-dir>
+nexusq audit verify <audit-dir> --vault <vault> [--password-file <path>]
 nexusq audit show <audit-dir> [--last <n>]
 ```
 

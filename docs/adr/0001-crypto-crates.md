@@ -56,7 +56,7 @@ proves stable, we add it as a follow-up.
 
 **Negative:**
 
-- Until `ml-dsa` is added, NEXUS-Q only offers classical (Ed25519)
+- Historical note: before the ML-DSA integration, NEXUS-Q only offered classical (Ed25519)
   signatures. This is a temporary limitation, documented and tracked.
 - `ml-kem 0.3.x` is still pre-1.0; its API may break between minor
   versions. We pin it in `Cargo.toml` and review on each upgrade.

@@ -325,8 +325,11 @@ pub fn build_envelope(
         plaintext,
     )?;
 
-    // Wrap the DEK under the vault KEK, bound to the KeyId.
-    let wrapped_dek = wrapping::wrap(dek.as_ref(), kek, &key_id)?;
+    // Wrap the DEK under the actual per-key secret, not the vault-wide KEK.
+    // The vault KEK only protects the key record itself; key lifecycle
+    // operations therefore have real cryptographic effect on envelopes.
+    let key_material = wrapping::unwrap(key_record.material.bytes(), kek, &key_id)?;
+    let wrapped_dek = wrapping::wrap(dek.as_ref(), key_material.as_ref(), &key_id)?;
 
     let envelope = Envelope {
         header,
@@ -381,8 +384,11 @@ where
 
     check_can_decrypt(&key_record)?;
 
-    // Unwrap the DEK.
-    let dek = wrapping::unwrap(&envelope.wrapped_dek, kek, key_id)?;
+    // Unwrap the per-key secret under the vault KEK, then use that key
+    // to unwrap the envelope DEK. Destroying/revoking the key therefore
+    // has the intended cryptographic effect.
+    let key_material = wrapping::unwrap(key_record.material.bytes(), kek, key_id)?;
+    let dek = wrapping::unwrap(&envelope.wrapped_dek, key_material.as_ref(), key_id)?;
 
     // AAD for the payload is the CBOR encoding of the header as parsed.
     let header_bytes = serde_helpers::to_vec(&envelope.header)?;
@@ -500,7 +506,7 @@ pub fn open_envelope_with_kem(
 
 fn check_can_decrypt(record: &KeyRecord) -> Result<(), EnvelopeError> {
     match record.status() {
-        KeyStatus::Active | KeyStatus::Rotating | KeyStatus::Retired | KeyStatus::Revoked => Ok(()),
+        KeyStatus::Active | KeyStatus::Rotating | KeyStatus::Retired => Ok(()),
         status => Err(EnvelopeError::KeyNotUsable {
             key_id: record.key_id().clone(),
             status,
@@ -665,7 +671,7 @@ mod tests {
         let key_id = KeyId::generate(&rng, algorithm.as_str()).unwrap();
         KeyRecord::new(
             KeyMetadata {
-                key_id,
+                key_id: key_id.clone(),
                 algorithm,
                 purpose: match algorithm {
                     Algorithm::Aes256Gcm | Algorithm::ChaCha20Poly1305 => Purpose::Encrypt,
@@ -683,7 +689,9 @@ mod tests {
                 hardware_backed: false,
                 attestation: None,
             },
-            WrappedKeyMaterial::Symmetric(vec![0u8; 60]),
+            WrappedKeyMaterial::Symmetric(
+                super::wrapping::wrap(&[0u8; 32], &KEK, &key_id).unwrap(),
+            ),
         )
     }
 
@@ -794,13 +802,13 @@ mod tests {
     }
 
     #[test]
-    fn open_accepts_revoked_key() {
+    fn open_rejects_revoked_key() {
         let mut record = make_active_record(Algorithm::Aes256Gcm);
         let env_bytes = build_envelope(&KEK, &record, b"data", Vec::new()).unwrap();
         record.metadata.status = KeyStatus::Revoked;
 
-        let opened = open_envelope(&KEK, &env_bytes, lookup_ok(record)).unwrap();
-        assert_eq!(opened.as_slice(), b"data");
+        let err = open_envelope(&KEK, &env_bytes, lookup_ok(record)).unwrap_err();
+        assert!(matches!(err, EnvelopeError::KeyNotUsable { .. }));
     }
 
     #[test]

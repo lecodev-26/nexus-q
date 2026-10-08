@@ -9,7 +9,7 @@ See `docs/SECURITY_MODEL.md` §5.2 for the design rationale.
 
 ## Default deny
 
-A session with **no policies attached** allows every operation. This
+A session with **no policies attached** intentionally allows every operation. Once a policy set is attached, evaluation is fail-closed and a missing matching rule denies the operation. This
 is the historical behavior and what a fresh vault does.
 
 As soon as a `PolicySet` is attached — **even an empty one** — the

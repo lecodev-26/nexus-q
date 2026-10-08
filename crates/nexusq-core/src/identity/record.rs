@@ -58,6 +58,19 @@ pub struct Identity {
     /// Always present.
     pub signing_key: KeyId,
 
+    /// All signing keys ever assigned to this identity, in rotation order.
+    /// This lets long-lived credentials bind to the exact historical key.
+    #[serde(default)]
+    pub signing_key_history: Vec<KeyId>,
+
+    /// PQ credential signing key. New identities use ML-DSA-65 here.
+    #[serde(default)]
+    pub credential_signing_key: Option<KeyId>,
+
+    /// Historical credential signing keys, including legacy Ed25519 keys.
+    #[serde(default)]
+    pub credential_signing_key_history: Vec<KeyId>,
+
     /// Optional key that decrypts messages sent to this identity.
     pub encryption_key: Option<KeyId>,
 
@@ -142,6 +155,9 @@ mod tests {
         Identity {
             id: IdentityId::generate(&rng).unwrap(),
             signing_key: sample_key_id("ed25519"),
+            signing_key_history: Vec::new(),
+            credential_signing_key: None,
+            credential_signing_key_history: Vec::new(),
             encryption_key: Some(sample_key_id("aes256gcm")),
             key_agreement_key: Some(sample_key_id("mlkem768")),
             metadata: IdentityMetadata {

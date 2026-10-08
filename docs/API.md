@@ -27,7 +27,7 @@ NEXUS-Q exposes four layers of API, from lowest to highest:
 | L-A    | Rust library (`nexusq`) | Rust   | 2–6  |
 | L-B    | CLI (`nexusq` binary) | CLI      | 12   |
 | L-C    | Server (`nexusq-server`) | HTTP/IPC | 14 |
-| L-D    | SDKs (Rust, C, C++, Python, Go, Ruby, CI-only TypeScript/Java/Kotlin/C#/Swift/Dart) | Multiple | 13/19 |
+| L-D    | Rust library, C FFI, limited Python binding | Rust/C/Python | Current |
 
 **Rule:** all layers are thin wrappers over L-A. No layer re-implements
 logic that lives in the library. If a behavior exists in the CLI, it
@@ -86,10 +86,9 @@ may be `Send` (movable between threads).
 
 ### 3.8 No async in the core
 
-The core library is synchronous. Async wrappers live in the SDK layer
-(`nexusq-async`), built on top of the sync core. Rationale: async adds
-complexity and runtime dependencies that we do not want in the
-security-critical path.
+The core library is synchronous. No separate async wrapper crate is
+currently shipped; callers that need async integration must adapt the
+synchronous core at their application boundary.
 
 ---
 
@@ -180,7 +179,7 @@ session.identity_verify(&identity_id, &document, &signature)?;
 
 · Direct access to key bytes (except through explicit export).
 · Direct access to vault internals (metadata is exposed via accessors).
-· Any function that operates on raw bytes without a type wrapper.
+· The core intentionally exposes encoded byte slices for envelopes and credentials where the format itself is the API boundary.
 · Any function that bypasses the policy engine.
 
 ---
@@ -204,7 +203,7 @@ The public API never panics on well-formed input. Panics indicate a bug
 in NEXUS-Q, not a caller error. This is enforced by:
 
 · #![deny(clippy::panic)] in the library crate.
-· Fuzzing every public entry point (Fase 15).
+· Targeted fuzzing of vault, envelope, audit-event, audit-segment and credential parsing surfaces.
 · Documenting panics in the API docs if any exist (there should be none).
 
 ### 5.3 Error stability
@@ -272,7 +271,7 @@ nexusq credential verify <vault> <input>
 
 **Audit:**
 ```
-nexusq audit verify <audit-dir>
+nexusq audit verify <audit-dir> --vault <vault> [--password-file <path>] --vault <vault> [--password-file <path>]
 nexusq audit show <audit-dir> [--last <n>]
 ```
 
@@ -401,8 +400,8 @@ SDKs wrap the library for other languages and ecosystems.
 
 ### 8.1 Rust SDK
 
-- Essentially the library itself, re-exported with a stable API surface.
-- Async wrapper available in `nexusq-async`.
+- The Rust library itself is the primary API.
+- No separate async wrapper crate is currently shipped.
 
 ### 8.2 C SDK
 
@@ -419,7 +418,8 @@ SDKs wrap the library for other languages and ecosystems.
 
 ### 8.4 Additional SDKs
 
-C++, Go, Ruby and PHP bindings are present in the repository and use the C ABI family where applicable. TypeScript/Java/Kotlin/C#/Swift/Dart remain CI/release-scope work and are not presented as published SDKs.
+No C++, Go, Ruby, PHP, TypeScript, Java, Kotlin, C#, Swift or Dart SDK is
+claimed as shipped by the current repository.
 
 ### 8.5 SDK design rules
 
@@ -512,3 +512,8 @@ Resolved in Fase 12 (CLI), Fase 13 (SDK), Fase 14 (Server).
 ---
 
 *End of document.*
+
+
+### Trusted proxy configuration
+
+When remote trusted TLS termination is enabled, also set `NEXUSQ_TRUSTED_PROXY_IPS` to the comma-separated IP addresses of the reverse proxies that may connect directly to NEXUS-Q. X-Forwarded-For is ignored for security decisions unless the peer socket is loopback or matches this allowlist; the address is selected by walking the chain from the right and skipping trusted proxy hops. This prevents direct clients from spoofing X-Forwarded-For to evade the rate limiter.

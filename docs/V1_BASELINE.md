@@ -25,4 +25,4 @@ The exact Arena measurements are recorded in [`BENCHMARKS.md`](../BENCHMARKS.md)
 
 ## v2 hand-off
 
-The `nexusqv2` branch is the continuation point. Its first work package is to design and lock the performance optimization roadmap, acceptance thresholds and benchmark-driven phases before changing cryptographic hot paths.
+The `nexusqv2` branch became the completed V2 continuation line. V1 remains the frozen compatibility and benchmark reference; final V2 integration into `main` is the explicit compatibility checkpoint before public V2 release.

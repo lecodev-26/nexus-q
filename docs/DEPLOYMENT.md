@@ -198,3 +198,8 @@ A supervisor should provide the equivalent lifecycle properties:
 
 This is intentionally a portable operational contract rather than a mandatory
 service-unit format.
+
+
+### Trusted proxy configuration
+
+When remote trusted TLS termination is enabled, also set `NEXUSQ_TRUSTED_PROXY_IPS` to the comma-separated IP addresses of the reverse proxies that may connect directly to NEXUS-Q. X-Forwarded-For is ignored for security decisions unless the peer socket is loopback or matches this allowlist; the address is selected by walking the chain from the right and skipping trusted proxy hops. This prevents direct clients from spoofing X-Forwarded-For to evade the rate limiter.

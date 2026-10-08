@@ -207,7 +207,7 @@ rejected.
 
 | Purpose         | Allowed algorithms |
 |-----------------|--------------------|
-| SIGN            | ML-DSA-65, ML-DSA-87, SLH-DSA-*, Ed25519 (legacy) |
+| SIGN            | ML-DSA-65, SLH-DSA-SHAKE-128f, Ed25519 (legacy) |
 | ENCRYPT         | AES-256-GCM, ChaCha20-Poly1305 |
 | DECRYPT         | AES-256-GCM, ChaCha20-Poly1305 |
 | KEY_AGREEMENT   | ML-KEM-768 (+X25519 hybrid), ML-KEM-1024 |
@@ -476,33 +476,27 @@ NEXUS-Q supports several custody models.
 
 ## 13. Audit events for key operations
 
-Every key operation emits an audit event. The following events are
-mandatory:
+When auditing is enabled, the current implementation emits:
 
-| Event                | Trigger |
-|----------------------|---------|
-| `KEY_GENERATED`      | New key created |
-| `KEY_IMPORTED`       | Key imported from external source |
-| `KEY_ACTIVATED`      | Key moved to ACTIVE state |
-| `KEY_USED`           | Key used for a crypto operation (SIGN, DECRYPT, ...) |
-| `KEY_ROTATION_STARTED` | Rotation initiated |
-| `KEY_ROTATION_COMPLETED` | Rotation finished |
-| `KEY_RETIRED`        | Key moved to RETIRED |
-| `KEY_REVOKED`        | Key moved to REVOKED, with reason |
-| `KEY_DESTROYED`      | Key material erased |
-| `KEY_EXPORTED`       | Key exported (wrapped) |
-| `KEY_ACCESS_DENIED`  | Operation refused by policy |
+| Event | Trigger |
+|------|---------|
+| key_created | New key created |
+| key_activated | Key activated |
+| key_rotated | Key rotation completed |
+| key_revoked | Key revoked |
+| key_destroyed | Key destroyed |
+| key_access_denied | Key operation refused by policy |
+
+Key usage is represented by operation-specific events such as identity_signed,
+envelope_sealed, and envelope_opened; there is no generic key_used event for
+every primitive invocation. Key import/export and separate rotation-start and
+rotation-completion events are not independent operations in the current API.
 
 Rules:
-
-- Audit events **never** contain key material.
-- Audit events **never** contain plaintext.
-- Audit events **may** contain the KeyId, the operation, the caller
-  identity, the timestamp, and the result.
-- Audit events are chained (§`SECURITY_MODEL.md`) so that tampering is
-  detectable.
-
----
+- Audit events never contain key material or plaintext.
+- Events may contain a KeyId, operation, actor, timestamp, and result.
+- The external log is HMAC-authenticated with a vault-derived audit key.
+- The vault stores an encrypted anchor for the last persisted audit state.
 
 ## 14. Key management in hardware
 
@@ -527,7 +521,7 @@ This document implements defenses for the following threats from
 - **T-08 (key misuse)**: purposes are enforced by vault + policy.
 - **T-06 (offline vault theft)**: KEKs are derived via Argon2id, DEKs
   are wrapped under KEKs.
-- **T-09 (audit log tampering)**: every key op writes to the chained
+- **T-09 (audit log tampering)**: auditable key operations write to the HMAC-authenticated
   audit log.
 
 Threats that affect key management but are out of scope for v1.0:

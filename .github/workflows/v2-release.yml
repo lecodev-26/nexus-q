@@ -1,0 +1,205 @@
+name: NEXUS-Q v2 Final Release
+
+on:
+  pull_request:
+    branches: [nexusqv2]
+  push:
+    branches: [nexusqv2]
+    tags: ["v2.0.0"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_VERSION: "2.0.0"
+
+jobs:
+  release-gate:
+    name: Final release gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.85.1
+          components: rustfmt, clippy
+
+      - name: Verify final version and clean package graph
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n1)" = "${RELEASE_VERSION}"
+          ! grep -R '2\.0\.0-rc\.1' --include='Cargo.toml' --include='Cargo.lock' .
+          cargo metadata --format-version 1 --locked >/dev/null
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Check
+        run: cargo check --workspace --locked
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Test debug profile
+        run: cargo test --workspace --locked
+
+      - name: Test release profile
+        run: cargo test --workspace --locked --release
+
+      - name: Build release
+        run: cargo build --workspace --locked --release
+
+      - name: SDK smoke
+        run: |
+          cargo build -p nexusq-c --locked --release
+          cargo test -p nexusq-c --locked
+          cargo test -p nexusq-py --locked
+          cargo test -p nexusq-cli --locked
+          cargo test -p nexusq-server --locked
+
+      - name: Package release twice for reproducibility
+        run: |
+          rm -rf dist-a dist-b
+          ./deploy/package-release.sh dist-a
+          ./deploy/package-release.sh dist-b
+          A="$(find dist-a -maxdepth 1 -name '*.tar.gz' -type f -print -quit)"
+          B="$(find dist-b -maxdepth 1 -name '*.tar.gz' -type f -print -quit)"
+          test -n "$A" && test -n "$B"
+          test "$(sha256sum "$A" | cut -d' ' -f1)" = "$(sha256sum "$B" | cut -d' ' -f1)"
+          cmp "$A" "$B"
+          mkdir -p release
+          cp "$A" release/
+
+      - name: Generate release checksums
+        run: |
+          set -euo pipefail
+          (cd release && sha256sum *.tar.gz > SHA256SUMS)
+
+      - name: Generate CycloneDX SBOM
+        shell: python3 {0}
+        run: |
+          import json, subprocess
+          from pathlib import Path
+          m = json.loads(subprocess.check_output(["cargo","metadata","--format-version","1","--locked"]))
+          components = []
+          seen = set()
+          for p in m["packages"]:
+              if not p["name"].startswith("nexusq"):
+                  continue
+              key = (p["name"], p["version"])
+              if key in seen:
+                  continue
+              seen.add(key)
+              licenses = []
+              for lic in p.get("license", "").split(" OR "):
+                  if lic:
+                      licenses.append({"license":{"id":lic}})
+              c = {
+                  "type":"library",
+                  "bom-ref":f"pkg:cargo/{p['name']}@{p['version']}",
+                  "name":p["name"],
+                  "version":p["version"],
+                  "purl":f"pkg:cargo/{p['name']}@{p['version']}",
+              }
+              if licenses:
+                  c["licenses"] = licenses
+              components.append(c)
+          bom = {
+              "bomFormat":"CycloneDX",
+              "specVersion":"1.5",
+              "serialNumber":"urn:nexusq:release:2.0.0",
+              "version":1,
+              "metadata":{
+                  "component":{"type":"application","name":"nexusq","version":"2.0.0"}
+              },
+              "components":components,
+          }
+          Path("release/nexusq-v2.0.0-sbom.cdx.json").write_text(json.dumps(bom,indent=2)+"\n")
+
+      - name: Generate release provenance
+        shell: python3 {0}
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+          RELEASE_REF: ${{ github.ref }}
+        run: |
+          import json, os
+          from pathlib import Path
+          checksums = Path("release/SHA256SUMS").read_text().splitlines()
+          p = {
+              "schema":"nexusq-release-provenance-v1",
+              "release":"2.0.0",
+              "commit":os.environ["RELEASE_SHA"],
+              "repository":os.environ["GITHUB_REPOSITORY"],
+              "ref":os.environ["RELEASE_REF"],
+              "workflow":os.environ["GITHUB_WORKFLOW"],
+              "runner":os.environ["RUNNER_OS"],
+              "artifact_checksums":checksums,
+              "github_attestation":"required for public tag release",
+              "status":"final release evidence",
+          }
+          Path("release/nexusq-v2.0.0-provenance.json").write_text(json.dumps(p,indent=2)+"\n")
+
+      - name: Upload final release evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexusq-v2.0.0-release-evidence
+          path: release/
+          if-no-files-found: error
+
+  platform-gate:
+    name: ${{ matrix.os }} release build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.85.1
+      - name: Release build
+        run: cargo build --workspace --locked --release
+
+  public-release:
+    name: Publish GitHub v2.0.0 release
+    if: startsWith(github.ref, 'refs/tags/v2.0.0')
+    needs: [release-gate, platform-gate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download validated release evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: nexusq-v2.0.0-release-evidence
+          path: release
+
+      - name: Attest validated release artifact
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "release/*.tar.gz"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v2.0.0 \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "NEXUS-Q v2.0.0" \
+            --notes-file docs/V2_RELEASE.md \
+            release/*.tar.gz release/*.tar.gz.sha256 release/SHA256SUMS release/*.cdx.json release/*-provenance.json

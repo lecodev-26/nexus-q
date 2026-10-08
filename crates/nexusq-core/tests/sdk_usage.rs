@@ -67,14 +67,13 @@ fn full_workflow_through_the_public_api() {
 
     let vault = Vault::open(&vault_path).unwrap();
     let session = vault.unlock(b"password").unwrap();
-    assert_eq!(session.key_count(), 2); // signing key + identity's key
+    assert_eq!(session.key_count(), 3); // identity key + PQ credential key + test signing key
     assert_eq!(session.identity_count(), 1);
     assert!(session.policies().is_some());
     assert!(session.audit_dir().is_some());
 
-    // Verify the audit chain.
-    let log = AuditLog::open(&audit_dir).unwrap();
-    log.verify_all().unwrap();
+    // Verify the authenticated audit chain.
+    session.verify_audit().unwrap();
 }
 
 #[test]

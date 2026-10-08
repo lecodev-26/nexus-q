@@ -2,11 +2,12 @@
 
 use std::fs;
 
-use nexusq_core::storage::{AuditLog, AuditSegment};
+use nexusq_core::storage::AuditSegment;
 use serde_json::{Value, json};
 
 use crate::GlobalOptions;
 use crate::cli::{AuditCommand, AuditShowArgs, AuditVerifyArgs};
+use crate::commands::unlock_session;
 use crate::error::CliError;
 use crate::output::Output;
 
@@ -19,17 +20,41 @@ pub fn run(command: AuditCommand, global: &GlobalOptions) -> Result<(), CliError
 }
 
 fn verify(args: AuditVerifyArgs, global: &GlobalOptions) -> Result<(), CliError> {
-    let log = AuditLog::open(&args.audit_dir).map_err(|e| {
+    let session = unlock_session(&args.vault, args.password_file.as_deref())?;
+    let configured = session
+        .audit_dir()
+        .ok_or_else(|| CliError::Integrity("vault has no configured audit directory".into()))?;
+    let configured_path = if std::path::Path::new(configured).is_absolute() {
+        std::path::PathBuf::from(configured)
+    } else {
+        args.vault
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("."))
+            .join(configured)
+    };
+    let requested = args.audit_dir.canonicalize().map_err(|e| {
         CliError::Integrity(format!(
-            "failed to open audit log at {}: {e}",
+            "failed to resolve audit directory {}: {e}",
             args.audit_dir.display()
         ))
     })?;
+    let configured = configured_path.canonicalize().map_err(|e| {
+        CliError::Integrity(format!("failed to resolve configured audit directory: {e}"))
+    })?;
+    if requested != configured {
+        return Err(CliError::Integrity(
+            "requested audit directory does not match the vault's configured audit directory"
+                .into(),
+        ));
+    }
 
-    log.verify_all()
+    session
+        .verify_audit()
         .map_err(|e| CliError::Integrity(format!("audit chain verification failed: {e}")))?;
 
-    let segments = log.segment_count().unwrap_or(0);
+    let segments = fs::read_dir(&requested)
+        .map(|entries| entries.filter_map(Result::ok).count())
+        .unwrap_or(0);
 
     let human = format!(
         "Audit chain valid\nDirectory: {}\nSegments:  {}",

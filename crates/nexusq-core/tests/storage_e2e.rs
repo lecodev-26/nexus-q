@@ -12,14 +12,16 @@
 use std::fs;
 
 use nexusq_core::crypto::sign::Signature;
-use nexusq_core::storage::{AuditLog, EventType};
+use nexusq_core::storage::EventType;
 use nexusq_core::vault::lifecycle::RevokeReason;
 use nexusq_core::vault::{Algorithm, Purpose, Vault};
 use tempfile::TempDir;
 
 /// Runs a series of vault operations with auditing enabled and
 /// returns the audit log so the caller can inspect it.
-fn run_audited_session(dir: &TempDir) -> (std::path::PathBuf, AuditLog) {
+fn run_audited_session(
+    dir: &TempDir,
+) -> (std::path::PathBuf, Vec<nexusq_core::storage::AuditEvent>) {
     let vault_path = dir.path().join("vault.nqv");
     let audit_dir = dir.path().join("audit");
     fs::create_dir(&audit_dir).unwrap();
@@ -58,24 +60,21 @@ fn run_audited_session(dir: &TempDir) -> (std::path::PathBuf, AuditLog) {
         .revoke_key(&key_b, RevokeReason::Superseded)
         .unwrap();
 
+    session.verify_audit().unwrap();
+    let events = session.audit_events().unwrap();
     session.lock().unwrap();
-
-    let log = AuditLog::open(&audit_dir).unwrap();
-    (vault_path, log)
+    (vault_path, events)
 }
 
 #[test]
 fn full_lifecycle_produces_the_expected_audit_chain() {
     let dir = TempDir::new().unwrap();
-    let (_vault_path, log) = run_audited_session(&dir);
-
-    // Verify the hash chain before inspecting content.
-    log.verify_all().unwrap();
+    let (_vault_path, events) = run_audited_session(&dir);
 
     // Count events by type.
     let mut counts: std::collections::HashMap<&'static str, usize> =
         std::collections::HashMap::new();
-    for event in log_segment_events(&log) {
+    for event in &events {
         let key = match event.event_type {
             EventType::KeyCreated => "key_created",
             EventType::KeyActivated => "key_activated",
@@ -91,10 +90,10 @@ fn full_lifecycle_produces_the_expected_audit_chain() {
     }
 
     // Two keys created directly (key_a, key_c), one by rotation (key_b),
-    // plus one inside create_identity.
-    assert_eq!(counts.get("key_created"), Some(&4));
-    // Activated: key_a, key_b, key_c and the identity signing key.
-    assert_eq!(counts.get("key_activated"), Some(&4));
+    // plus the identity Ed25519 key and its ML-DSA-65 credential key.
+    assert_eq!(counts.get("key_created"), Some(&5));
+    // Every created key is activated in this scenario.
+    assert_eq!(counts.get("key_activated"), Some(&5));
     assert_eq!(counts.get("key_rotated"), Some(&1));
     assert_eq!(counts.get("key_revoked"), Some(&1));
     assert_eq!(counts.get("identity_created"), Some(&1));
@@ -106,41 +105,47 @@ fn full_lifecycle_produces_the_expected_audit_chain() {
     assert!(!counts.contains_key("other"));
 }
 
-/// Returns the events of the current segment, cloned.
-///
-/// `AuditLog` does not expose its events directly because a real
-/// deployment reads them from disk. For the test we reopen the
-/// directory, read the segment, and clone the events so the helper
-/// owns them.
-fn log_segment_events(log: &AuditLog) -> Vec<nexusq_core::storage::AuditEvent> {
-    let path = log.current_path();
-    let segment = nexusq_core::storage::AuditSegment::open(path).unwrap();
-    segment.events().to_vec()
-}
-
 #[test]
 fn tampering_with_the_audit_chain_is_detected() {
     let dir = TempDir::new().unwrap();
     let (_vault_path, _log) = run_audited_session(&dir);
 
-    // Corrupt a byte inside the segment file.
+    // Corrupt the authenticated segment trailer deterministically.
+    // The final 32 bytes are the segment HMAC, so changing any byte
+    // must make verification fail closed.
     let audit_dir = dir.path().join("audit");
     let segment_path = audit_dir.join("audit-00001.nqa");
     let mut bytes = fs::read(&segment_path).unwrap();
-    // Flip a byte near the middle of the file.
-    let mid = bytes.len() / 2;
-    bytes[mid] ^= 0x01;
+    let trailer_offset = bytes.len() - 32;
+    bytes[trailer_offset] ^= 0x01;
     fs::write(&segment_path, &bytes).unwrap();
 
-    // Reopening the log must fail.
-    let result = AuditLog::open(&audit_dir);
+    // Unlocking must fail closed because the audit log is authenticated.
+    let vault_path = dir.path().join("vault.nqv");
+    let result = nexusq_core::vault::Vault::open(&vault_path)
+        .unwrap()
+        .unlock(b"vault-pass");
     assert!(result.is_err(), "corrupted segment should be rejected");
+}
+
+#[test]
+fn audit_rollback_before_last_persisted_state_is_detected() {
+    let dir = TempDir::new().unwrap();
+    let (vault_path, _events) = run_audited_session(&dir);
+
+    // The final lock persisted an encrypted audit anchor in the vault.
+    // Removing the authenticated log must therefore fail closed on unlock.
+    let segment_path = dir.path().join("audit").join("audit-00001.nqa");
+    fs::remove_file(segment_path).unwrap();
+
+    let result = Vault::open(&vault_path).unwrap().unlock(b"vault-pass");
+    assert!(result.is_err(), "audit rollback must be rejected");
 }
 
 #[test]
 fn backup_and_restore_preserves_the_vault_content() {
     let dir = TempDir::new().unwrap();
-    let (vault_path, _log) = run_audited_session(&dir);
+    let (vault_path, _events) = run_audited_session(&dir);
     let backup_path = dir.path().join("backup.nqb");
     let restored_path = dir.path().join("restored.nqv");
 
@@ -164,6 +169,7 @@ fn backup_and_restore_preserves_the_vault_content() {
     // The restored vault opens with the NEW password.
     let restored = Vault::open(&restored_path).unwrap();
     let session = restored.unlock(b"new-vault-pass").unwrap();
+    assert!(session.audit_dir().is_none());
 
     // Same number of keys and identities as the original.
     let original = Vault::open(&vault_path).unwrap();
@@ -179,7 +185,7 @@ fn backup_and_restore_preserves_the_vault_content() {
 #[test]
 fn backup_uses_a_separate_passphrase() {
     let dir = TempDir::new().unwrap();
-    let (vault_path, _log) = run_audited_session(&dir);
+    let (vault_path, _events) = run_audited_session(&dir);
     let backup_path = dir.path().join("backup.nqb");
     let restored_path = dir.path().join("restored.nqv");
 

@@ -9,6 +9,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
+tempfile = "3.27"
 nexusq-core = { path = "../crates/nexusq-core" }
 
 [[bin]]
@@ -21,6 +22,41 @@ bench = false
 [[bin]]
 name = "envelope_parse"
 path = "fuzz_targets/envelope_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "vault_body_decode"
+path = "fuzz_targets/vault_body_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "audit_event_decode"
+path = "fuzz_targets/audit_event_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "audit_segment_decode"
+path = "fuzz_targets/audit_segment_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "credential_decode"
+path = "fuzz_targets/credential_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "backup_import"
+path = "fuzz_targets/backup_import.rs"
 test = false
 doc = false
 bench = false

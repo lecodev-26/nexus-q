@@ -77,6 +77,7 @@ pub fn encrypt_file_to_public_key(
         envelope::build_envelope_to_public_key(recipient_public_key, &plaintext, metadata)?;
     let output = encrypted_path_for(input);
     fs::write(&output, &envelope_bytes)?;
+    restrict_file_permissions(&output)?;
     Ok(output)
 }
 
@@ -119,6 +120,7 @@ pub fn encrypt_file_with_key(
     let envelope_bytes = envelope::build_envelope(kek, key_record, &plaintext, metadata)?;
     let output = encrypted_path_for(input);
     fs::write(&output, &envelope_bytes)?;
+    restrict_file_permissions(&output)?;
     Ok(output)
 }
 
@@ -152,7 +154,21 @@ where
 /// the file only after the buffer is accepted, and any partial write
 /// is detected by the caller (the error is propagated).
 fn write_zeroizing(path: &Path, data: &Zeroizing<Vec<u8>>) -> std::io::Result<()> {
-    fs::write(path, data.as_slice())
+    fs::write(path, data.as_slice())?;
+    restrict_file_permissions(path)
+}
+
+#[cfg(unix)]
+fn restrict_file_permissions(path: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    let mut permissions = fs::metadata(path)?.permissions();
+    permissions.set_mode(0o600);
+    fs::set_permissions(path, permissions)
+}
+
+#[cfg(not(unix))]
+fn restrict_file_permissions(_path: &Path) -> std::io::Result<()> {
+    Ok(())
 }
 
 #[cfg(test)]
@@ -253,7 +269,7 @@ mod tests {
         let key_id = KeyId::generate(&rng, "aes256gcm").unwrap();
         let record = KeyRecord::new(
             KeyMetadata {
-                key_id,
+                key_id: key_id.clone(),
                 algorithm: Algorithm::Aes256Gcm,
                 purpose: Purpose::Encrypt,
                 created_at: Timestamp::from_secs(1_700_000_000),
@@ -268,7 +284,9 @@ mod tests {
                 hardware_backed: false,
                 attestation: None,
             },
-            WrappedKeyMaterial::Symmetric(vec![0u8; 60]),
+            WrappedKeyMaterial::Symmetric(
+                crate::vault::wrapping::wrap(&[0u8; 32], &kek, &key_id).unwrap(),
+            ),
         );
 
         let encrypted_path =

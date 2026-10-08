@@ -268,7 +268,7 @@ a vulnerability.
 | T-06 | Vault file theft (offline)                   | Argon2id-derived KEK + AEAD |
 | T-07 | Malicious vault file (parser attack)         | Fuzzed parsers, strict validation |
 | T-08 | Key misuse (wrong operation for key purpose) | Policy engine enforces purpose |
-| T-09 | Audit log tampering                          | Chained MAC; verification on read |
+| T-09 | Audit log tampering                          | Vault-derived HMAC-SHA256 chain; verification on read |
 | T-10 | Silent downgrade of algorithm                | Version byte + strict algorithm binding |
 | T-11 | Weak or predictable randomness               | TRNG + OS CSPRNG mixing, health checks, fail-closed |
 | T-12 | Cross-version format confusion               | Version byte first; reject unknown |
@@ -412,10 +412,10 @@ What NEXUS-Q **does** claim, in plain terms:
 4. **Forward secrecy of session keys** (Fase 14+): a compromised
    long-term key does not reveal past session keys.
 5. **Post-quantum key-establishment resistance** through the implemented
-   ML-KEM-768/X25519 hybrid, assuming the underlying schemes and construction
+   ML-KEM-768/X25519 hybrid using the documented X-Wing Internet-Draft construction and transcript binding, without claiming finalized-standard conformance; assuming the underlying schemes and construction
    remain secure. Current Ed25519 signatures are classical and are not
    post-quantum secure.
-6. **Tamper-evidence of the audit log**: any modification of a past
+6. **Authenticated audit log**: any modification of a past
    entry invalidates the chain.
 7. **Fail-closed behavior**: on any error, no partial plaintext is
    returned.
@@ -464,6 +464,6 @@ process as code changes.
 
 ## Threat model v2 hardening status
 
-The current implementation now tracks explicit security invariants as executable tests: malformed vault/envelope input must be rejected, wrong passwords must not unlock, inactive/revoked keys must not perform protected operations, and session sealing must deny writes. Fuzz targets cover vault and envelope parsing. These controls reduce implementation risk but do not constitute an independent cryptographic audit.
+The current implementation now tracks explicit security invariants as executable tests: malformed vault/envelope input must be rejected, wrong passwords must not unlock, inactive/revoked keys must not perform protected operations, and session sealing must deny writes. Fuzz targets cover vault, envelope, audit-event, audit-segment, and credential parsing. These controls reduce implementation risk but do not constitute an independent cryptographic audit.
 
 The supported PQ primitives are ML-KEM-768/1024 hybridized with X25519 for key establishment, ML-DSA-65 for signatures, and SLH-DSA-SHAKE-128f as a hash-based signature alternative. Algorithm agility is preserved through explicit versioned identifiers.

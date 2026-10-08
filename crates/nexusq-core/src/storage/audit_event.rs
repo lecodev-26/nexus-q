@@ -11,7 +11,7 @@
 //! segment. The hash of event `n` is:
 //!
 //! ```text
-//! hash_n = SHA-256( canonical_bytes(body_n) || prev_hash_n )
+//! hash_n = HMAC-SHA256(audit_key, canonical_bytes(body_n) || prev_hash_n)
 //! ```
 //!
 //! where `body_n` is the event with the `hash` and `prev_hash` fields
@@ -21,14 +21,15 @@
 //! Modifying any field of any past event changes its hash, which
 //! breaks the `prev_hash` link of the next event, and so on to the
 //! end of the chain. A verifier only needs the first event and the
-//! hash chain to detect tampering.
+//! authenticated chain to detect tampering without the vault-derived audit key.
 //!
 //! See `docs/SECURITY_MODEL.md` §7 and `docs/STORAGE.md` §7.
 
 use serde::{Deserialize, Serialize};
 
-use crate::crypto::hash::sha256;
 use crate::vault::Timestamp;
+use sha2::{Digest, Sha256};
+use zeroize::Zeroizing;
 
 use super::db::DbError;
 
@@ -75,6 +76,8 @@ pub enum EventType {
     CredentialIssued,
     /// A credential was verified.
     CredentialVerified,
+    /// A single credential was revoked.
+    CredentialRevoked,
 
     // --- Envelope ---
     /// An envelope was sealed (data encrypted).
@@ -101,6 +104,8 @@ pub enum EventType {
     // --- Audit log ---
     /// The audit log configuration was changed.
     AuditConfigured,
+    /// The audit log configuration was removed.
+    AuditRemoved,
 
     // --- Session and policy ---
     /// A session ended.
@@ -139,6 +144,7 @@ impl EventType {
             // Credentials
             Self::CredentialIssued => "credential_issued",
             Self::CredentialVerified => "credential_verified",
+            Self::CredentialRevoked => "credential_revoked",
 
             // Envelope
             Self::EnvelopeSealed => "envelope_sealed",
@@ -156,6 +162,7 @@ impl EventType {
 
             // Audit log
             Self::AuditConfigured => "audit_configured",
+            Self::AuditRemoved => "audit_removed",
 
             // Session and policy
             Self::SessionEnded => "session_ended",
@@ -235,7 +242,7 @@ pub struct AuditEvent {
     #[serde(with = "serde_bytes")]
     pub prev_hash: Vec<u8>,
 
-    /// Hash of this event: `SHA-256(canonical(body) || prev_hash)`.
+    /// HMAC-authenticated hash over canonical(body) || prev_hash.
     #[serde(with = "serde_bytes")]
     pub hash: Vec<u8>,
 }
@@ -314,6 +321,7 @@ impl AuditEvent {
         timestamp: Timestamp,
         spec: AuditEventSpec,
         prev_hash: &[u8],
+        auth_key: &[u8; HASH_LEN],
     ) -> Result<Self, DbError> {
         if prev_hash.len() != HASH_LEN {
             return Err(DbError::MalformedRecord);
@@ -330,10 +338,7 @@ impl AuditEvent {
         };
 
         let body_bytes = canonical_body_bytes(&body)?;
-        let mut to_hash = Vec::with_capacity(body_bytes.len() + HASH_LEN);
-        to_hash.extend_from_slice(&body_bytes);
-        to_hash.extend_from_slice(prev_hash);
-        let hash = sha256(&to_hash).to_vec();
+        let hash = authenticate(auth_key, &body_bytes, prev_hash).to_vec();
 
         Ok(Self {
             index: body.index,
@@ -357,7 +362,7 @@ impl AuditEvent {
     ///
     /// Returns [`DbError::MalformedRecord`] if CBOR serialization
     /// fails or the stored `prev_hash` has the wrong length.
-    pub fn recompute_hash(&self) -> Result<Vec<u8>, DbError> {
+    pub fn recompute_hash(&self, auth_key: &[u8; HASH_LEN]) -> Result<Vec<u8>, DbError> {
         if self.prev_hash.len() != HASH_LEN {
             return Err(DbError::MalformedRecord);
         }
@@ -371,10 +376,7 @@ impl AuditEvent {
             context: self.context.clone(),
         };
         let body_bytes = canonical_body_bytes(&body)?;
-        let mut to_hash = Vec::with_capacity(body_bytes.len() + HASH_LEN);
-        to_hash.extend_from_slice(&body_bytes);
-        to_hash.extend_from_slice(&self.prev_hash);
-        Ok(sha256(&to_hash).to_vec())
+        Ok(authenticate(auth_key, &body_bytes, &self.prev_hash).to_vec())
     }
 
     /// Returns `true` if the stored hash matches a fresh computation.
@@ -383,10 +385,36 @@ impl AuditEvent {
     ///
     /// Returns [`DbError::MalformedRecord`] if the hash cannot be
     /// recomputed (see [`AuditEvent::recompute_hash`]).
-    pub fn is_intact(&self) -> Result<bool, DbError> {
-        let computed = self.recompute_hash()?;
+    pub fn is_intact(&self, auth_key: &[u8; HASH_LEN]) -> Result<bool, DbError> {
+        let computed = self.recompute_hash(auth_key)?;
         Ok(computed == self.hash)
     }
+}
+
+fn authenticate(key: &[u8; HASH_LEN], body: &[u8], prev_hash: &[u8]) -> [u8; HASH_LEN] {
+    const BLOCK: usize = 64;
+    let mut key_block = Zeroizing::new([0u8; BLOCK]);
+    if key.len() > BLOCK {
+        let digest = Sha256::digest(key);
+        key_block[..HASH_LEN].copy_from_slice(&digest);
+    } else {
+        key_block[..key.len()].copy_from_slice(key);
+    }
+
+    let mut inner = Sha256::new();
+    for byte in key_block.iter() {
+        inner.update([*byte ^ 0x36]);
+    }
+    inner.update(body);
+    inner.update(prev_hash);
+    let inner_hash = inner.finalize();
+
+    let mut outer = Sha256::new();
+    for byte in key_block.iter() {
+        outer.update([*byte ^ 0x5c]);
+    }
+    outer.update(inner_hash);
+    outer.finalize().into()
 }
 
 fn canonical_body_bytes(body: &AuditEventBody) -> Result<Vec<u8>, DbError> {
@@ -407,6 +435,7 @@ mod tests {
             Timestamp::from_secs(1_700_000_000 + index),
             spec,
             prev,
+            &[0x42; HASH_LEN],
         )
     }
 
@@ -470,49 +499,55 @@ mod tests {
     #[test]
     fn new_event_with_wrong_prev_hash_length_fails() {
         let spec = AuditEventSpec::new(EventType::VaultCreated);
-        let err = AuditEvent::new(1, Timestamp::from_secs(0), spec, b"short");
+        let err = AuditEvent::new(
+            1,
+            Timestamp::from_secs(0),
+            spec,
+            b"short",
+            &[0x42; HASH_LEN],
+        );
         assert!(matches!(err, Err(DbError::MalformedRecord)));
     }
 
     #[test]
     fn event_is_intact_right_after_creation() {
         let e = make(1, EventType::KeyCreated, &GENESIS_HASH).unwrap();
-        assert!(e.is_intact().unwrap());
+        assert!(e.is_intact(&[0x42; HASH_LEN]).unwrap());
     }
 
     #[test]
     fn modifying_index_breaks_the_hash() {
         let mut e = make(1, EventType::KeyCreated, &GENESIS_HASH).unwrap();
         e.index = 2;
-        assert!(!e.is_intact().unwrap());
+        assert!(!e.is_intact(&[0x42; HASH_LEN]).unwrap());
     }
 
     #[test]
     fn modifying_event_type_breaks_the_hash() {
         let mut e = make(1, EventType::KeyCreated, &GENESIS_HASH).unwrap();
         e.event_type = EventType::KeyDestroyed;
-        assert!(!e.is_intact().unwrap());
+        assert!(!e.is_intact(&[0x42; HASH_LEN]).unwrap());
     }
 
     #[test]
     fn modifying_actor_breaks_the_hash() {
         let mut e = make(1, EventType::KeyCreated, &GENESIS_HASH).unwrap();
         e.actor = "someone-else".into();
-        assert!(!e.is_intact().unwrap());
+        assert!(!e.is_intact(&[0x42; HASH_LEN]).unwrap());
     }
 
     #[test]
     fn modifying_context_breaks_the_hash() {
         let mut e = make(1, EventType::KeyCreated, &GENESIS_HASH).unwrap();
         e.context = b"different".to_vec();
-        assert!(!e.is_intact().unwrap());
+        assert!(!e.is_intact(&[0x42; HASH_LEN]).unwrap());
     }
 
     #[test]
     fn modifying_prev_hash_breaks_the_hash() {
         let mut e = make(1, EventType::KeyCreated, &GENESIS_HASH).unwrap();
         e.prev_hash = vec![0xAA; HASH_LEN];
-        assert!(!e.is_intact().unwrap());
+        assert!(!e.is_intact(&[0x42; HASH_LEN]).unwrap());
     }
 
     #[test]
@@ -529,7 +564,7 @@ mod tests {
         let bytes = crate::vault::to_vec(&e).unwrap();
         let back: AuditEvent = crate::vault::from_slice(&bytes).unwrap();
         assert_eq!(back, e);
-        assert!(back.is_intact().unwrap());
+        assert!(back.is_intact(&[0x42; HASH_LEN]).unwrap());
     }
 
     #[test]

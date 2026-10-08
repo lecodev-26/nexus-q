@@ -26,16 +26,15 @@ Concretely, this means:
 
 1. Every primitive is a standardized, peer-reviewed algorithm (NIST, IETF,
    ISO, or equivalent).
-2. Every algorithm has a mature implementation in a maintained, audited
-   library. We do not write our own AES, our own SHA-3, or our own
-   Kyber/Dilithium.
+2. Algorithms are implemented through maintained cryptographic libraries.
+   NEXUS-Q does not write its own AES, SHA-3, or PQC primitive. This project
+   does not claim that every dependency has undergone an independent audit.
 3. We do not modify primitives, key schedules, or padding schemes.
 4. We do not compose primitives ad-hoc when a standard composition exists
    (e.g., we use HPKE instead of rolling our own KEM+AEAD+HKDF pipeline
    unless there is a documented reason).
-5. If we need a primitive that has no mature Rust implementation, we
-   either integrate an audited C library or we do not ship that primitive
-   in v1.0.
+5. If we need a primitive that has no acceptable maintained implementation,
+   we do not silently replace it with a custom construction.
 
 Any deviation from this rule requires an ADR (Architecture Decision Record)
 in the repository and explicit approval in review.
@@ -132,7 +131,7 @@ TRNG without mixing, falling back to a weaker source on failure.
 
 **Primary:** SHA-256 (FIPS 180-4)
 
-- Used for: general-purpose digests, HKDF (via HMAC-SHA-256), audit chain.
+- Used for: general-purpose digests, HKDF (via HMAC-SHA-256), authenticated audit records.
 - 256-bit output, 128-bit collision resistance.
 
 **Secondary:** SHA-512 (FIPS 180-4)
@@ -227,21 +226,17 @@ SP 800-38D), ECB in any form, any custom mode.
 - Formerly known as CRYSTALS-Kyber.
 - Security level currently implemented:
   - ML-KEM-768 (NIST level 3) — default
-  - ML-KEM-1024 is implemented as a hybrid ML-KEM-1024 + X25519 construction
+  - ML-KEM-1024 is implemented as a NEXUS-Q-specific ML-KEM-1024 + X25519 hybrid; it is not claimed to be X-Wing.
 - Used for: establishing session keys, wrapping data keys, any
   public-key-based key agreement.
 - Public key size: 1184 bytes (ML-KEM-768), 1568 bytes (ML-KEM-1024)
 - Ciphertext size: 1088 bytes (ML-KEM-768), 1568 bytes (ML-KEM-1024)
 
-**Hybrid mode (recommended for v1.0):**
+**Hybrid mode (v2):**
 
-- Combine ML-KEM-768 with X25519 via HKDF to derive the final key.
-- Rationale: if ML-KEM is broken (unlikely but possible), X25519 still
-  protects; if X25519 is broken (by a quantum computer), ML-KEM still
-  protects. Hybrid = belt and suspenders.
-- Standard: follow the draft "Hybrid KEM" from IETF (draft-irtf-cfrg-hybrid-kems)
-  when finalized; until then, use the well-understood
-  `HKDF(X25519_shared || MLKEM_shared, info="hybrid-kem")`.
+- ML-KEM-768 + X25519 implements the X-Wing draft construction and its domain-separated SHA3-256 combiner; NEXUS-Q does not claim conformance to a finalized X-Wing standard.
+- The combiner binds the X25519 ciphertext and recipient public component.
+- The implementation follows the current active X-Wing Internet-Draft; it is not presented as a finalized IETF standard.
 
 **Forbidden:**
 
@@ -249,7 +244,8 @@ SP 800-38D), ECB in any form, any custom mode.
 - ECDH on P-256, P-384, P-521 for new keys (legacy import only).
 - Non-hybrid ML-KEM alone for **long-term** keys where the threat model
   includes a quantum adversary with a long horizon — hybrid is required.
-- Any custom KEM construction not published in a peer-reviewed venue.
+- The ML-KEM-1024 + X25519 variant is explicitly versioned and domain-separated;
+  it must not be represented as X-Wing or as a finalized IETF construction.
 
 ### 4.6 Digital signatures
 
@@ -257,11 +253,11 @@ SP 800-38D), ECB in any form, any custom mode.
 
 - Formerly CRYSTALS-Dilithium.
 - Security levels:
-  - ML-DSA-65 (NIST level 3) — **default**
-  - ML-DSA-87 (NIST level 5) — for long-term / high-value keys
+  - ML-DSA-65 (NIST level 3) — **default and currently implemented**
+  - ML-DSA-87 is not currently exposed by the public algorithm enum.
 - Used for: signing documents, credentials, transactions, messages.
-- Public key: 1952 bytes (ML-DSA-65), 2592 bytes (ML-DSA-87)
-- Signature: 3309 bytes (ML-DSA-65), 4627 bytes (ML-DSA-87)
+- Public key: 1952 bytes (ML-DSA-65)
+- Signature: 3309 bytes (ML-DSA-65)
 
 **Implemented secondary (PQC, stateless hash-based):** SLH-DSA-SHAKE-128f (FIPS 205)
 
@@ -273,13 +269,12 @@ SP 800-38D), ECB in any form, any custom mode.
   security.
 - Not the default; selected per-use-case.
 
-**Currently implemented signature:** Ed25519 (RFC 8032)
+**Legacy/classical signature:** Ed25519 (RFC 8032)
 
-- Used for: verifying signatures made by legacy systems; importing
-  existing Ed25519 keys for transition.
-- Current NEXUS-Q identity operations use Ed25519. Migration to a PQC signature
-  scheme is a planned crypto milestone; until then Ed25519 is a classical signature
-  and must not be described as post-quantum protection.
+- Existing identity document/message signing remains Ed25519 for API compatibility.
+- New credentials use ML-DSA-65 and record the exact issuer key ID and signature
+  algorithm in the signed payload. Legacy Ed25519 credentials remain verifiable.
+- Ed25519 must not be described as post-quantum protection.
 
 **Forbidden:**
 
@@ -320,8 +315,9 @@ As of Phase 13, the code actually exposes:
 | ML-KEM-768 | Implemented |
 | ML-KEM-768 + X25519 hybrid | Implemented |
 | Ed25519 | Implemented |
-| ML-DSA-65 | Implemented |
-| SLH-DSA-SHAKE-128f | Implemented |
+| ML-DSA-65 | Implemented and used for new credentials |
+| ML-DSA-87 | Not exposed |
+| SLH-DSA-SHAKE-128f | Implemented as an available signing primitive |
 | ML-KEM-1024 + X25519 | Implemented |
 | BLAKE2 | Not exposed by the current public crypto module |
 
@@ -356,17 +352,14 @@ fits, we prefer HPKE.
 
 ### 5.3 Hybrid KEM combiner
 
-Given `(X25519_ss, ML-KEM_ss)`, derive the combined secret as:
+For ML-KEM-768 + X25519, NEXUS-Q implements the current X-Wing Internet-Draft
+construction as pinned by this codebase: SHA3-256 over ss_M || ss_X || ct_X || pk_X || XWingLabel,
+where XWingLabel is the specified six-byte domain-separation string.
+The implementation is tied to the active Internet-Draft and is not
+presented as a finalized IETF standard.
 
-```
-
-IKM = X25519_ss || MLKEM_ss
-combined = HKDF-SHA256(IKM, info = "nexusq-hybrid-kem-v1", L = 32)
-
-```
-
-The exact construction follows the current IETF draft once finalized.
-Until then, this is our documented interim construction.
+ML-KEM-1024 + X25519 is a separate NEXUS-Q-specific, versioned construction
+and is not called X-Wing.
 
 ### 5.4 Key separation
 
@@ -375,7 +368,7 @@ with distinct `info` strings:
 
 - `"nexusq-vault-kek-v1"` — vault key encryption key
 - `"nexusq-envelope-dk-v1"` — envelope data key
-- `"nexusq-audit-chain-v1"` — audit chain key
+- `"nexusq-audit-log-v2"` — audit chain key
 - `"nexusq-signing-v1"` — signing key
 - `"nexusq-kem-v1"` — KEM key
 
@@ -407,7 +400,7 @@ Examples:
 | Argon2id iterations| 3                      | |
 | HKDF output        | 32 bytes               | Per derived key |
 | KEM (default)      | ML-KEM-768 + X25519    | Hybrid |
-| Signature default  | Ed25519 (current)      | ML-DSA-65 is implemented |
+| Signature default  | ML-DSA-65 for credentials | Ed25519 remains for legacy identity API operations |
 | Random salt        | 128–256 bits           | Unique per use |
 
 ---
@@ -485,7 +478,7 @@ algorithm we do not trust, we refuse the operation; we do not fall back.
 
 ## 10. Open questions
 
-- [ ] Final hybrid KEM construction (pending IETF draft finalization)
+- [x] ML-KEM-768 + X25519 implements the documented X-Wing draft construction and transcript-bound SHA3-256 combiner; no finalized-standard conformance claim
 - [ ] Whether to support SLH-DSA in v1.0 or defer to v1.1
 - [ ] Concrete Argon2id parameters per platform (mobile vs desktop)
 - [ ] Nonce management strategy for high-throughput servers

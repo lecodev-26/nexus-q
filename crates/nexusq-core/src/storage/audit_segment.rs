@@ -9,7 +9,7 @@
 //! ## Wire format
 //!
 //! ```text
-//! [magic \"NQA1\"]
+//! [magic \"NQA2\"]
 //! [version 1]
 //! [segment_id 16 bytes]
 //! [prev_segment 32 bytes]
@@ -27,11 +27,11 @@
 //! ## Segment hash
 //!
 //! ```text
-//! segment_hash = SHA-256(prev_segment || last_event_hash)
+//! segment_hash = HMAC-SHA256(audit_key, prev_segment || last_event_hash)
 //! ```
 //!
 //! For an empty segment, `last_event_hash` is omitted and the hash is
-//! `SHA-256(prev_segment)`.
+//! `HMAC-SHA256(audit_key, prev_segment)`.
 //!
 //! Modifying any event breaks its own hash, which breaks the segment
 //! hash, which breaks the next segment's `prev_segment` link.
@@ -39,22 +39,24 @@
 //! See `docs/STORAGE.md` §7 and `docs/SECURITY_MODEL.md` §7.
 
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::crypto::hash::sha256;
 use crate::crypto::random::{OsRandomSource, RandomError, RandomSource};
 use crate::vault::Timestamp;
+use sha2::{Digest, Sha256};
+use zeroize::Zeroizing;
 
 use super::audit_event::{AuditEvent, AuditEventSpec, GENESIS_HASH, HASH_LEN};
 use super::db::DbError;
 
 /// File magic for the audit segment format.
-pub const MAGIC: [u8; 4] = *b"NQA1";
+pub const MAGIC: [u8; 4] = *b"NQA2";
 
 /// Current format version.
-pub const FORMAT_VERSION: u8 = 1;
+pub const FORMAT_VERSION: u8 = 2;
 
 /// Length in bytes of a segment identifier.
 pub const SEGMENT_ID_LEN: usize = 16;
@@ -108,11 +110,13 @@ impl std::fmt::Display for SegmentId {
 }
 
 /// A segment: a file holding a chain of events.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct AuditSegment {
     id: SegmentId,
     prev_segment: [u8; HASH_LEN],
     events: Vec<AuditEvent>,
+    auth_key: Zeroizing<[u8; HASH_LEN]>,
+    stored_hash: [u8; HASH_LEN],
 }
 
 impl AuditSegment {
@@ -126,10 +130,22 @@ impl AuditSegment {
     /// Returns [`DbError::Io`] if the OS random source fails while
     /// generating the segment id.
     pub fn new(prev_segment: Option<[u8; HASH_LEN]>) -> Result<Self, DbError> {
+        Self::new_with_key(prev_segment, &[0u8; HASH_LEN])
+    }
+
+    pub fn new_with_key(
+        prev_segment: Option<[u8; HASH_LEN]>,
+        auth_key: &[u8; HASH_LEN],
+    ) -> Result<Self, DbError> {
+        let prev_segment = prev_segment.unwrap_or(GENESIS_HASH);
+        let auth_key = Zeroizing::new(*auth_key);
+        let stored_hash = authenticate_segment(&auth_key, &prev_segment);
         Ok(Self {
             id: SegmentId::generate()?,
-            prev_segment: prev_segment.unwrap_or(GENESIS_HASH),
+            prev_segment,
             events: Vec::new(),
+            auth_key,
+            stored_hash,
         })
     }
 
@@ -184,8 +200,9 @@ impl AuditSegment {
             .last()
             .map_or_else(|| GENESIS_HASH.to_vec(), |e| e.hash.clone());
 
-        let event = AuditEvent::new(index, timestamp, spec, &prev_hash)?;
+        let event = AuditEvent::new(index, timestamp, spec, &prev_hash, &self.auth_key)?;
         self.events.push(event);
+        self.stored_hash = self.segment_hash()?;
         Ok(self.events.last().expect("just pushed"))
     }
 
@@ -202,7 +219,7 @@ impl AuditSegment {
         if let Some(last) = self.events.last() {
             buf.extend_from_slice(&last.hash);
         }
-        Ok(sha256(&buf))
+        Ok(authenticate_segment(&self.auth_key, &buf))
     }
 
     /// Verifies the whole chain:
@@ -225,12 +242,15 @@ impl AuditSegment {
             if event.prev_hash != expected_prev {
                 return Err(DbError::RecordCrcMismatch);
             }
-            if !event.is_intact()? {
+            if !event.is_intact(&self.auth_key)? {
                 return Err(DbError::RecordCrcMismatch);
             }
             expected_prev.clone_from(&event.hash);
         }
 
+        if self.segment_hash()? != self.stored_hash {
+            return Err(DbError::TrailerCrcMismatch);
+        }
         Ok(())
     }
 
@@ -340,12 +360,9 @@ impl AuditSegment {
             id,
             prev_segment,
             events,
+            auth_key: Zeroizing::new([0u8; HASH_LEN]),
+            stored_hash,
         };
-        let computed_hash = segment.segment_hash()?;
-        if computed_hash != stored_hash {
-            return Err(DbError::TrailerCrcMismatch);
-        }
-
         Ok(segment)
     }
 
@@ -364,6 +381,12 @@ impl AuditSegment {
         Self::from_bytes(&bytes)
     }
 
+    /// Installs the vault-derived authentication key for verification and
+    /// subsequent appends.
+    pub fn set_auth_key(&mut self, auth_key: &[u8; HASH_LEN]) {
+        self.auth_key = Zeroizing::new(*auth_key);
+    }
+
     /// Writes the segment to disk atomically.
     ///
     /// # Errors
@@ -373,25 +396,86 @@ impl AuditSegment {
     pub fn save(&self, path: impl AsRef<Path>) -> Result<(), DbError> {
         let path = path.as_ref();
         let bytes = self.to_bytes()?;
-        let tmp = temp_path(path);
-        fs::write(&tmp, &bytes)?;
+        let (tmp, mut file) = create_unique_temp_file(path)?;
+        file.write_all(&bytes)?;
+        file.sync_all()?;
+        drop(file);
         if let Err(e) = fs::rename(&tmp, path) {
             let _ = fs::remove_file(&tmp);
             return Err(DbError::Io(e));
         }
+        sync_parent_dir(path)?;
         Ok(())
     }
 }
 
-fn temp_path(path: &Path) -> PathBuf {
-    let mut name = path.file_name().unwrap_or_default().to_os_string();
-    name.push(".tmp");
-    path.with_file_name(name)
+fn authenticate_segment(key: &[u8; HASH_LEN], data: &[u8]) -> [u8; HASH_LEN] {
+    const BLOCK: usize = 64;
+    let mut key_block = Zeroizing::new([0u8; BLOCK]);
+    if key.len() > BLOCK {
+        let digest = Sha256::digest(key);
+        key_block[..HASH_LEN].copy_from_slice(&digest);
+    } else {
+        key_block[..key.len()].copy_from_slice(key);
+    }
+    let mut inner = Sha256::new();
+    for byte in key_block.iter() {
+        inner.update([*byte ^ 0x36]);
+    }
+    inner.update(data);
+    let inner_hash = inner.finalize();
+    let mut outer = Sha256::new();
+    for byte in key_block.iter() {
+        outer.update([*byte ^ 0x5c]);
+    }
+    outer.update(inner_hash);
+    outer.finalize().into()
+}
+
+fn create_unique_temp_file(path: &Path) -> Result<(PathBuf, fs::File), DbError> {
+    for _ in 0..16 {
+        let mut suffix = [0u8; 16];
+        getrandom::fill(&mut suffix)
+            .map_err(|e| DbError::Io(std::io::Error::other(e.to_string())))?;
+        let name = format!(
+            "{}.tmp-{}",
+            path.file_name().and_then(|n| n.to_str()).unwrap_or("audit"),
+            hex::encode(suffix)
+        );
+        let tmp = path.with_file_name(name);
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        match options.open(&tmp) {
+            Ok(file) => return Ok((tmp, file)),
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(err) => return Err(DbError::Io(err)),
+        }
+    }
+    Err(DbError::Io(std::io::Error::new(
+        std::io::ErrorKind::AlreadyExists,
+        "could not allocate unique audit temp file",
+    )))
+}
+
+fn sync_parent_dir(path: &Path) -> Result<(), DbError> {
+    #[cfg(unix)]
+    {
+        if let Some(parent) = path.parent() {
+            fs::File::open(parent)?.sync_all()?;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
     use crate::storage::audit_event::{EventOutcome, EventType};
     use tempfile::TempDir;
 
@@ -472,7 +556,7 @@ mod tests {
     #[test]
     fn empty_segment_hash_matches_formula() {
         let seg = AuditSegment::new(None).unwrap();
-        let expected = sha256(&GENESIS_HASH);
+        let expected = authenticate_segment(&[0u8; HASH_LEN], &GENESIS_HASH);
         assert_eq!(seg.segment_hash().unwrap(), expected);
     }
 
@@ -506,7 +590,7 @@ mod tests {
     #[test]
     fn from_bytes_rejects_short_input() {
         assert!(matches!(
-            AuditSegment::from_bytes(b"NQA1"),
+            AuditSegment::from_bytes(b"NQA2"),
             Err(DbError::TooShort)
         ));
     }
@@ -542,10 +626,8 @@ mod tests {
         let mut bytes = seg.to_bytes().unwrap();
         let last = bytes.len() - 1;
         bytes[last] ^= 0x01;
-        assert!(matches!(
-            AuditSegment::from_bytes(&bytes),
-            Err(DbError::TrailerCrcMismatch)
-        ));
+        let back = AuditSegment::from_bytes(&bytes).unwrap();
+        assert!(matches!(back.verify(), Err(DbError::TrailerCrcMismatch)));
     }
 
     #[test]

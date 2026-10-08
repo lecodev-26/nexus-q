@@ -10,7 +10,7 @@
 //! ## Wire format
 //!
 //! ```text
-//! [magic \"NQB1\"][version 1][header_cbor_len u32 BE]
+//! [magic \"NQB1\"][version 2][header_cbor_len u32 BE]
 //! [header_cbor: N bytes]
 //! [body_nonce: 12 bytes]
 //! [body_ciphertext_and_tag: M bytes]
@@ -42,6 +42,7 @@
 //! See `docs/STORAGE.md` §8.
 
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -59,7 +60,7 @@ use crate::vault::{Session, Vault, VaultError};
 pub const MAGIC: [u8; 4] = *b"NQB1";
 
 /// Current format version.
-pub const FORMAT_VERSION: u8 = 1;
+pub const FORMAT_VERSION: u8 = 2;
 
 /// Length in bytes of the backup salt.
 pub const SALT_LEN: usize = 32;
@@ -195,8 +196,11 @@ pub fn export(
     let backup_kek = derive_backup_kek(backup_passphrase, &salt, &params)?;
     let header = build_header(params, salt.to_vec(), backup_kek.as_ref())?;
 
-    // Serialize the vault body and the header.
-    let body_bytes = serde_helpers::to_vec(session.body())?;
+    // Re-wrap key records under the backup KEK before serializing. This
+    // makes the backup self-contained: import can safely re-wrap them
+    // again under the newly created vault KEK.
+    let backup_body = session.clone_body_rewrapped(backup_kek.as_ref())?;
+    let body_bytes = Zeroizing::new(serde_helpers::to_vec(&backup_body)?);
     let header_bytes = serde_helpers::to_vec(&header)?;
 
     // Encrypt with the header as AAD.
@@ -248,22 +252,33 @@ pub fn import(
     verify_backup_kek(&header, backup_kek.as_ref())?;
 
     let header_bytes = serde_helpers::to_vec(&header)?;
-    let plaintext = aead::decrypt(
-        AeadAlgorithm::Aes256Gcm,
-        backup_kek.as_ref(),
-        nonce,
-        &header_bytes,
-        ciphertext,
-    )
-    .map_err(|_| BackupError::WrongPassphrase)?;
+    let plaintext = Zeroizing::new(
+        aead::decrypt(
+            AeadAlgorithm::Aes256Gcm,
+            backup_kek.as_ref(),
+            nonce,
+            &header_bytes,
+            ciphertext,
+        )
+        .map_err(|_| BackupError::WrongPassphrase)?,
+    );
 
-    let body: VaultBody = serde_helpers::from_slice(&plaintext)?;
+    let mut body: VaultBody = serde_helpers::from_slice(plaintext.as_ref())?;
+
+    // Audit logs are external to the backup bundle and are authenticated
+    // with the source vault's KEK. A restored vault gets a new KEK, so
+    // carrying the source audit path forward would make unlock fail
+    // against an unrelated log. Require the restored vault to explicitly
+    // attach a new audit log instead.
+    body.audit_dir = None;
+    body.audit_anchor = None;
 
     // Create a fresh vault and replace its body with the imported one.
     Vault::create(new_vault_path, new_vault_password, None)?;
     let vault = Vault::open(new_vault_path)?;
     let mut session = vault.unlock(new_vault_password)?;
-    *session.body_mut() = body;
+    session.rewrap_body_from(&mut body, backup_kek.as_ref())?;
+    *session.body_mut()? = body;
     let vault = session.lock()?;
 
     Ok(vault)
@@ -301,7 +316,7 @@ fn compute_kek_verifier(kek: &[u8]) -> Result<[u8; KEK_VERIFIER_LEN], BackupErro
     let mut verifier = [0u8; KEK_VERIFIER_LEN];
     let derived =
         kdf::hkdf_sha256(kek, None, BACKUP_KEK_VERIFIER_INFO).map_err(BackupError::Kdf)?;
-    verifier.copy_from_slice(&derived);
+    verifier.copy_from_slice(&*derived);
     Ok(verifier)
 }
 
@@ -312,8 +327,7 @@ fn derive_backup_kek(
 ) -> Result<Zeroizing<[u8; kdf::DERIVED_KEY_LEN]>, BackupError> {
     // Only Argon2id is supported in v1; the params field is present
     // for future algorithm agility, the same way it is in the vault.
-    let kek = kdf::argon2id(passphrase, salt)?;
-    Ok(Zeroizing::new(kek))
+    Ok(kdf::argon2id(passphrase, salt)?)
 }
 
 // =============================================================================
@@ -338,12 +352,30 @@ fn write_backup_file(
     out.extend_from_slice(nonce);
     out.extend_from_slice(ciphertext);
 
-    let tmp = temp_path(path);
-    fs::write(&tmp, &out)?;
+    let (tmp, mut file) = create_unique_temp_file(path)?;
+    file.write_all(&out)?;
+    file.sync_all()?;
+    drop(file);
     if let Err(e) = fs::rename(&tmp, path) {
         let _ = fs::remove_file(&tmp);
         return Err(BackupError::Io(e));
     }
+    restrict_file_permissions(path)?;
+    sync_parent_dir(path)?;
+    Ok(())
+}
+
+#[cfg(unix)]
+fn restrict_file_permissions(path: &Path) -> Result<(), BackupError> {
+    use std::os::unix::fs::PermissionsExt;
+    let mut permissions = fs::metadata(path)?.permissions();
+    permissions.set_mode(0o600);
+    fs::set_permissions(path, permissions)?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn restrict_file_permissions(_path: &Path) -> Result<(), BackupError> {
     Ok(())
 }
 
@@ -372,10 +404,46 @@ fn parse_backup_file(bytes: &[u8]) -> Result<(BackupHeader, &[u8]), BackupError>
     Ok((header, rest))
 }
 
-fn temp_path(path: &Path) -> PathBuf {
-    let mut name = path.file_name().unwrap_or_default().to_os_string();
-    name.push(".tmp");
-    path.with_file_name(name)
+fn create_unique_temp_file(path: &Path) -> Result<(PathBuf, fs::File), BackupError> {
+    for _ in 0..16 {
+        let mut suffix = [0u8; 16];
+        getrandom::fill(&mut suffix)
+            .map_err(|e| BackupError::Io(std::io::Error::other(e.to_string())))?;
+        let name = format!(
+            "{}.tmp-{}",
+            path.file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("backup"),
+            hex::encode(suffix)
+        );
+        let tmp = path.with_file_name(name);
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        match options.open(&tmp) {
+            Ok(file) => return Ok((tmp, file)),
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(err) => return Err(BackupError::Io(err)),
+        }
+    }
+    Err(BackupError::Io(std::io::Error::new(
+        std::io::ErrorKind::AlreadyExists,
+        "could not allocate unique backup temp file",
+    )))
+}
+
+fn sync_parent_dir(path: &Path) -> Result<(), BackupError> {
+    #[cfg(unix)]
+    {
+        if let Some(parent) = path.parent() {
+            fs::File::open(parent)?.sync_all()?;
+        }
+    }
+    Ok(())
 }
 
 // KdfAlgorithm is re-exported by the vault header module and used

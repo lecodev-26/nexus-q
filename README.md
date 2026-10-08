@@ -4,7 +4,7 @@
 
 > Post-quantum cryptographic security engine for protecting data, keys, and identities.
 
-**Status**: **NEXUS-Q v1.0 baseline complete and frozen.** The v1 line is documented, tested, benchmarked, and ready to serve as the reference baseline for v2 optimization. v1 is intentionally **not being published as a stable package release** (crates.io, PyPI, npm, RubyGems, Packagist, NuGet, Maven, pub.dev, etc.) because the project prioritizes a stronger performance target before public distribution.
+**Status**: **NEXUS-Q v2.0.0 engineering line frozen on `nexusqv2`.** V1 remains the frozen compatibility and benchmark baseline. V2 implementation, security/correctness gates, performance gate, release-candidate validation and final release gate are complete; integration into `main` and the public GitHub v2.0.0 release remain the next release-control steps. No external audit, certification, or downstream registry publication is implied.
 
 ---
 
@@ -18,27 +18,26 @@ protect:
   revocation, destruction).
 - **Identities** — digital signatures and verifiable credentials.
 
-It is meant to be used by:
-
-- Applications (web, server, mobile).
-- Servers.
-- Devices with secure hardware (TPM, HSM, Secure Element, RISC-V,
-  enclave).
+It is intended as a cryptographic/security engine for applications and servers.
+The repository also defines hardware-provider abstraction points for future TPM,
+HSM, Secure Element, enclave and RISC-V integrations; the default software
+backend does not itself provide hardware isolation.
 
 ---
 
 ## Design principles
 
 1. **We do not invent cryptography.** Only standardized algorithms
-   and audited libraries.
+   and maintained cryptographic libraries; dependency audit status is documented explicitly.
 2. **Library-first.** The core is a Rust library; the CLI, SDKs and
    server are layers on top.
-3. **Hardware-agnostic.** Abstraction from day one, so software, TPM,
-   HSM and secure environments are interchangeable.
+3. **Hardware-agnostic boundary.** Hardware-provider interfaces are separated
+   from the software backend; concrete hardware isolation is only claimed when
+   a provider is implemented and tested.
 4. **Zeroization.** Secrets are wiped from memory when no longer
    needed.
-5. **Auditability.** Every security-relevant operation is recorded in
-   a tamper-evident log.
+5. **Auditability.** Auditable security state changes and cryptographic
+   actions are recorded in a tamper-evident, HMAC-authenticated log.
 6. **Security from the ground up.** Threat model and cryptographic
    rules before code.
 
@@ -73,10 +72,19 @@ Completed:
   and RISC-V.
 - TRNG support with health checks and mixing.
 - Cross-compilation to RISC-V verified.
-- Storage: audit log with hash chaining, backup bundle, storage DB.
+- Storage: HMAC-authenticated audit log with rollback anchoring, backup bundle, storage DB.
 - Policy engine with deny-by-default.
 - CLI covering vault, key, data, sign, identity, credential and audit
   commands.
+
+
+## v2.0.0 status
+
+The v2 engineering line is frozen on `nexusqv2` at version `2.0.0`. V2 preserves the v1 security model while adding the completed performance, correctness/interoperability, security/fuzzing, backend-strategy and release gates. The final integration PR against `main` is the compatibility checkpoint between the frozen v1 baseline and v2.
+
+The public GitHub v2.0.0 release is intentionally performed only after that integration path and its CI gates are green. Crates.io, PyPI and other SDK registries remain separate publication operations.
+
+See [`docs/V2_ROADMAP.md`](docs/V2_ROADMAP.md), [`docs/V2_RELEASE.md`](docs/V2_RELEASE.md) and [`docs/V2_BENCHMARK_BASELINE.md`](docs/V2_BENCHMARK_BASELINE.md).
 
 ## v1.0 baseline status
 
@@ -112,7 +120,7 @@ production tokens, vaults, private keys, or logs.
   - Linux (x86_64, aarch64).
   - Android / Termux (aarch64).
   - RISC-V (riscv64gc-unknown-linux-gnu) — build verified.
-  - macOS and Windows: planned.
+  - macOS and Windows: release builds are validated by the V2 CI/release gate.
 
 ---
 

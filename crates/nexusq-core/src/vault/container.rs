@@ -20,7 +20,7 @@ use crate::crypto::random::{OsRandomSource, RandomError, RandomSource};
 
 use super::algorithm::Algorithm;
 use super::body::{CURRENT_SCHEMA_VERSION, VaultBody, VaultMetadata};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 use super::envelope::{self, EnvelopeError};
 use super::header::{HeaderError, KdfParams, MAGIC, SALT_LEN, VaultHeader};
@@ -33,7 +33,7 @@ use super::serde_helpers::{self, CborError};
 use super::state::{StateTransitionError, VaultState};
 use super::status::KeyStatus;
 use super::timestamp::Timestamp;
-use super::wrapping::{WrappingError, wrap};
+use super::wrapping::{self, WrappingError, wrap};
 use crate::crypto::sign::{self, SignError, Signature};
 use crate::identity::{
     Credential, CredentialError, Identity, IdentityId, IdentityMetadata, IdentityStatus,
@@ -181,6 +181,10 @@ pub enum VaultError {
     #[error("audit error: {0}")]
     Audit(#[from] crate::storage::DbError),
 
+    /// An earlier audit write failed, so this session cannot persist its in-memory mutations.
+    #[error("session cannot persist after an audit write failure")]
+    AuditWriteFailed,
+
     /// The policy engine refused the operation.
     #[error("operation denied by policy")]
     PolicyDenied(PolicyDecision),
@@ -201,7 +205,6 @@ pub struct Vault {
 /// Holds the derived KEK and the decrypted body in memory. Dropping the
 /// session zeroizes the KEK. Passing it back to [`Vault::lock`] persists
 /// any changes and returns ownership of the [`Vault`].
-#[derive(Debug)]
 pub struct Session {
     vault: Vault,
     kek: Zeroizing<[u8; kdf::DERIVED_KEY_LEN]>,
@@ -212,6 +215,20 @@ pub struct Session {
     /// `&self` methods; a session is not shared across threads, so
     /// interior mutability is safe here.
     audit: RefCell<Option<AuditLog>>,
+    /// Once an audit write fails, the in-memory mutation must never be persisted.
+    audit_failed: Cell<bool>,
+}
+
+impl std::fmt::Debug for Session {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Session")
+            .field("vault", &self.vault)
+            .field("kek", &"[REDACTED]")
+            .field("body", &self.body)
+            .field("state", &self.state)
+            .field("audit", &"[REDACTED]")
+            .finish()
+    }
 }
 
 impl Vault {
@@ -230,13 +247,13 @@ impl Vault {
     ) -> Result<Self, VaultError> {
         let path = path.as_ref().to_path_buf();
 
-        // Fail fast if the file already exists.
-        if path.exists() {
-            return Err(VaultError::Io(std::io::Error::new(
-                std::io::ErrorKind::AlreadyExists,
-                "vault file already exists",
-            )));
-        }
+        // Reserve the destination atomically. A plain exists()+rename()
+        // check is vulnerable to two creators racing on the same path.
+        let reservation = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)?;
+        drop(reservation);
 
         let rng = OsRandomSource::new();
 
@@ -299,7 +316,28 @@ impl Vault {
             .verify_kek(kek.as_ref())
             .map_err(|_| VaultError::WrongPassword)?;
 
-        let body = self.read_body(&kek)?;
+        let mut body = self.read_body(&kek)?;
+
+        // Backfill signing-key history for identities created before
+        // credential key-id binding was introduced.
+        for identity in &mut body.identities {
+            if identity.signing_key_history.is_empty() {
+                identity
+                    .signing_key_history
+                    .push(identity.signing_key.clone());
+            }
+            if identity.credential_signing_key_history.is_empty() {
+                if let Some(key_id) = &identity.credential_signing_key {
+                    identity.credential_signing_key_history.push(key_id.clone());
+                } else {
+                    // Existing identities predate the PQ credential key.
+                    // Keep their Ed25519 signing key as the legacy history entry.
+                    identity
+                        .credential_signing_key_history
+                        .push(identity.signing_key.clone());
+                }
+            }
+        }
 
         // If the vault is configured with an audit log, open it now.
         // A failure to open is a failure to unlock: the vault promises
@@ -308,19 +346,29 @@ impl Vault {
         let audit = match &body.audit_dir {
             Some(dir) => {
                 let resolved = resolve_audit_path(&self.path, Path::new(dir));
-                let log = AuditLog::open_with(&resolved, AuditLogConfig::default())?;
+                let audit_auth = audit_key(kek.as_ref());
+                let log = AuditLog::open_with(&resolved, AuditLogConfig::default(), &audit_auth)?;
+                log.verify_all()?;
+                if let Some(anchor) = body.audit_anchor.as_deref() {
+                    if !log.contains_event_hash(anchor) {
+                        return Err(crate::storage::DbError::AuditAnchorMismatch.into());
+                    }
+                }
                 RefCell::new(Some(log))
             }
             None => RefCell::new(None),
         };
 
-        Ok(Session {
+        let session = Session {
             vault: self.clone(),
             kek,
             body,
             state: VaultState::Unlocked,
             audit,
-        })
+            audit_failed: Cell::new(false),
+        };
+        session.log_event("vault", EventType::VaultUnlocked)?;
+        Ok(session)
     }
 
     /// Returns the path of the vault file.
@@ -363,16 +411,18 @@ impl Vault {
         let (nonce, ciphertext) = rest.split_at(BODY_NONCE_LEN);
 
         let header_bytes = serde_helpers::to_vec(&header)?;
-        let plaintext = aead::decrypt(
-            AeadAlgorithm::Aes256Gcm,
-            kek,
-            nonce,
-            &header_bytes,
-            ciphertext,
-        )
-        .map_err(|_| VaultError::WrongPassword)?;
+        let plaintext = Zeroizing::new(
+            aead::decrypt(
+                AeadAlgorithm::Aes256Gcm,
+                kek,
+                nonce,
+                &header_bytes,
+                ciphertext,
+            )
+            .map_err(|_| VaultError::WrongPassword)?,
+        );
 
-        let body: VaultBody = serde_helpers::from_slice(&plaintext)?;
+        let body: VaultBody = serde_helpers::from_slice(plaintext.as_ref())?;
         Ok(body)
     }
 
@@ -385,7 +435,7 @@ impl Vault {
         let mut nonce = [0u8; BODY_NONCE_LEN];
         rng.fill_bytes(&mut nonce)?;
 
-        let body_bytes = serde_helpers::to_vec(body)?;
+        let body_bytes = Zeroizing::new(serde_helpers::to_vec(body)?);
         let header_bytes = serde_helpers::to_vec(&self.header)?;
 
         let ciphertext = aead::encrypt(
@@ -418,8 +468,45 @@ impl Session {
     ///
     /// Mutations are only persisted when the session is passed back to
     /// [`Vault::lock`].
-    pub fn body_mut(&mut self) -> &mut VaultBody {
-        &mut self.body
+    pub(crate) fn body_mut(&mut self) -> Result<&mut VaultBody, VaultError> {
+        self.require_writes_allowed()?;
+        Ok(&mut self.body)
+    }
+
+    pub(crate) fn clone_body_rewrapped(&self, to_kek: &[u8]) -> Result<VaultBody, VaultError> {
+        let mut body = self.body.clone();
+        Self::rewrap_body_keys(&mut body, self.kek.as_ref(), to_kek)?;
+        Ok(body)
+    }
+
+    pub(crate) fn rewrap_body_from(
+        &self,
+        body: &mut VaultBody,
+        from_kek: &[u8],
+    ) -> Result<(), VaultError> {
+        Self::rewrap_body_keys(body, from_kek, self.kek.as_ref())
+    }
+
+    fn rewrap_body_keys(
+        body: &mut VaultBody,
+        from_kek: &[u8],
+        to_kek: &[u8],
+    ) -> Result<(), VaultError> {
+        for record in &mut body.keys {
+            let is_hardware = matches!(&record.material, WrappedKeyMaterial::HardwareHandle(_));
+            if is_hardware {
+                continue;
+            }
+            let is_symmetric = matches!(&record.material, WrappedKeyMaterial::Symmetric(_));
+            let material = wrapping::unwrap(record.material.bytes(), from_kek, record.key_id())?;
+            let wrapped = wrap(&material, to_kek, record.key_id())?;
+            record.material = if is_symmetric {
+                WrappedKeyMaterial::Symmetric(wrapped)
+            } else {
+                WrappedKeyMaterial::Asymmetric(wrapped)
+            };
+        }
+        Ok(())
     }
 
     /// Generates a new key of the given algorithm and purpose.
@@ -563,6 +650,7 @@ impl Session {
     /// allowed (for example, from a compromised session).
     pub fn seal(&mut self) -> Result<(), VaultError> {
         self.state = self.state.transition_to(VaultState::Sealed)?;
+        self.log_event("vault", EventType::VaultSealed)?;
         Ok(())
     }
 
@@ -608,9 +696,12 @@ impl Session {
         self.require_writes_allowed()?;
         self.check_policy(PolicyOperation::IdentityCreate, "new-identity", None, None)?;
 
-        // Generate the signing key inside the vault.
+        // Identity signatures remain Ed25519 for API compatibility. Credentials
+        // get a dedicated ML-DSA-65 key so the credential path is PQ-protected.
         let signing_key = self.generate_key(Algorithm::Ed25519, Purpose::Sign)?;
         self.activate_key(&signing_key)?;
+        let credential_signing_key = self.generate_key(Algorithm::MlDsa65, Purpose::Sign)?;
+        self.activate_key(&credential_signing_key)?;
 
         // Build the identity.
         let rng = OsRandomSource::new();
@@ -634,7 +725,10 @@ impl Session {
 
         let identity = Identity {
             id: identity_id.clone(),
-            signing_key,
+            signing_key: signing_key.clone(),
+            signing_key_history: vec![signing_key],
+            credential_signing_key: Some(credential_signing_key.clone()),
+            credential_signing_key_history: vec![credential_signing_key],
             encryption_key: None,
             key_agreement_key: None,
             metadata,
@@ -689,6 +783,7 @@ impl Session {
     /// Active, [`VaultError::Lifecycle`] if the signing key is not
     /// Active, or another error if unwrapping or signing fails.
     pub fn identity_sign(&self, id: &IdentityId, message: &[u8]) -> Result<Signature, VaultError> {
+        self.require_writes_allowed()?;
         self.check_policy(PolicyOperation::IdentitySign, id.as_str(), None, Some(id))?;
 
         let identity = self
@@ -817,6 +912,12 @@ impl Session {
         // Generate the replacement signing key and activate it.
         let new_signing_key = self.generate_key(Algorithm::Ed25519, Purpose::Sign)?;
         self.activate_key(&new_signing_key)?;
+        let old_credential_key = self
+            .body
+            .find_identity(id)
+            .and_then(|identity| identity.credential_signing_key.clone());
+        let new_credential_key = self.generate_key(Algorithm::MlDsa65, Purpose::Sign)?;
+        self.activate_key(&new_credential_key)?;
 
         // Retire the old key: Active -> Rotating -> Retired.
         {
@@ -835,10 +936,45 @@ impl Session {
             old_record.metadata.status = retired;
         }
 
+        if let Some(old_credential_key) = old_credential_key.as_ref() {
+            if old_credential_key != &old_signing_key {
+                let record = self
+                    .body
+                    .find_key_mut(old_credential_key)
+                    .ok_or_else(|| LifecycleError::KeyNotFound(old_credential_key.clone()))?;
+                let rotating = record
+                    .metadata
+                    .status
+                    .transition_to(KeyStatus::Rotating)
+                    .map_err(LifecycleError::from)?;
+                record.metadata.status = rotating
+                    .transition_to(KeyStatus::Retired)
+                    .map_err(LifecycleError::from)?;
+            }
+        }
+
         // Update the identity: swap the signing key, bump the version.
         {
             let identity = self.body.find_identity_mut(id).expect("checked above");
             identity.signing_key = new_signing_key.clone();
+            identity.signing_key_history.push(new_signing_key.clone());
+            if let Some(old_key) = old_credential_key.clone() {
+                if !identity.credential_signing_key_history.contains(&old_key) {
+                    identity.credential_signing_key_history.push(old_key);
+                }
+            } else if !identity
+                .credential_signing_key_history
+                .contains(&old_signing_key)
+            {
+                // Preserve legacy Ed25519 credentials when migrating this identity.
+                identity
+                    .credential_signing_key_history
+                    .push(old_signing_key.clone());
+            }
+            identity.credential_signing_key = Some(new_credential_key.clone());
+            identity
+                .credential_signing_key_history
+                .push(new_credential_key);
             identity.metadata.version = current_version + 1;
         }
 
@@ -944,10 +1080,14 @@ impl Session {
             });
         }
 
+        let credential_key_id = identity
+            .credential_signing_key
+            .as_ref()
+            .unwrap_or(&identity.signing_key);
         let record = self
             .body
-            .find_key(&identity.signing_key)
-            .ok_or_else(|| LifecycleError::KeyNotFound(identity.signing_key.clone()))?;
+            .find_key(credential_key_id)
+            .ok_or_else(|| LifecycleError::KeyNotFound(credential_key_id.clone()))?;
 
         if record.status() != KeyStatus::Active {
             return Err(VaultError::IdentityNotUsable {
@@ -960,28 +1100,70 @@ impl Session {
         let seed_bytes = super::wrapping::unwrap(
             record.material.bytes(),
             self.kek.as_ref(),
-            &identity.signing_key,
+            credential_key_id,
         )?;
-        let signing_key = sign::SigningKey::from_bytes(&seed_bytes)?;
 
         let now = Timestamp::now().unwrap_or(Timestamp::from_secs(0));
-        let credential_bytes = Credential::issue(
-            &signing_key,
-            issuer.clone(),
-            subject,
-            claims,
-            now,
-            expires_at,
-        )?;
+        let credential_bytes = match record.algorithm() {
+            Algorithm::MlDsa65 => Credential::issue_ml_dsa65(
+                seed_bytes.as_ref(),
+                issuer.clone(),
+                credential_key_id.clone(),
+                subject,
+                claims,
+                now,
+                expires_at,
+            )?,
+            Algorithm::Ed25519 => {
+                let signing_key = sign::SigningKey::from_bytes(&seed_bytes)?;
+                Credential::issue(
+                    &signing_key,
+                    issuer.clone(),
+                    credential_key_id.clone(),
+                    subject,
+                    claims,
+                    now,
+                    expires_at,
+                )?
+            }
+            _ => return Err(VaultError::Credential(CredentialError::AlgorithmMismatch)),
+        };
         self.log_event(issuer.as_str(), EventType::CredentialIssued)?;
         Ok(credential_bytes)
     }
 
+    /// Revokes one credential without revoking the issuer key.
+    ///
+    /// The credential is identified by SHA3-256 over its canonical encoding.
+    /// The revocation is persisted with the vault and enforced by credential verification.
+    pub fn revoke_credential(&mut self, bytes: &[u8]) -> Result<(), VaultError> {
+        self.require_writes_allowed()?;
+        let credential: Credential = crate::vault::from_slice(bytes)?;
+        self.check_policy(
+            PolicyOperation::CredentialRevoke,
+            credential.issuer.as_str(),
+            None,
+            Some(&credential.issuer),
+        )?;
+        let id = credential.revocation_id()?;
+        if !self
+            .body
+            .revoked_credentials
+            .iter()
+            .any(|existing| existing.as_slice() == id.as_slice())
+        {
+            self.body.revoked_credentials.push(id.to_vec());
+        }
+        self.log_event(credential.issuer.as_str(), EventType::CredentialRevoked)?;
+        Ok(())
+    }
+
     /// Verifies a credential using the issuer's public signing key.
     ///
-    /// Does not check expiry: callers that need expiry enforcement
-    /// should inspect [`Credential::is_expired_at`].
+    /// Enforces credential expiry and resolves the exact historical issuer signing key.
     ///
+    /// Credentials remain verifiable after issuer key rotation while their
+    /// signing key remains in the issuer signing-key history.
     /// # Errors
     ///
     /// Returns [`VaultError::Credential`] if the bytes are malformed or
@@ -992,22 +1174,60 @@ impl Session {
         // Parse once to learn who the issuer is.
         let credential: Credential = crate::vault::from_slice(bytes)?;
 
+        self.check_policy(
+            PolicyOperation::CredentialVerify,
+            credential.issuer.as_str(),
+            None,
+            Some(&credential.issuer),
+        )?;
+
         let identity = self
             .body
             .find_identity(&credential.issuer)
             .ok_or_else(|| VaultError::IdentityNotFound(credential.issuer.clone()))?;
 
+        if identity.metadata.status != IdentityStatus::Active {
+            return Err(VaultError::IdentityNotUsable {
+                id: credential.issuer.clone(),
+                status: identity.metadata.status,
+            });
+        }
+        if credential.is_expired_at(Timestamp::now().unwrap_or(Timestamp::from_secs(0))) {
+            return Err(VaultError::Credential(CredentialError::Expired));
+        }
+        let revocation_id = credential.revocation_id()?;
+        if self
+            .body
+            .revoked_credentials
+            .iter()
+            .any(|existing| existing.as_slice() == revocation_id.as_slice())
+        {
+            return Err(VaultError::Credential(CredentialError::Revoked));
+        }
+        let in_history = identity
+            .credential_signing_key_history
+            .iter()
+            .any(|key_id| key_id == &credential.issuer_key_id);
+        if !in_history {
+            return Err(VaultError::Credential(CredentialError::Signature(
+                SignError::VerificationFailed,
+            )));
+        }
+
         let record = self
             .body
-            .find_key(&identity.signing_key)
-            .ok_or_else(|| LifecycleError::KeyNotFound(identity.signing_key.clone()))?;
+            .find_key(&credential.issuer_key_id)
+            .ok_or_else(|| LifecycleError::KeyNotFound(credential.issuer_key_id.clone()))?;
+        if record.status() == KeyStatus::Revoked || record.status() == KeyStatus::Destroyed {
+            return Err(VaultError::Credential(CredentialError::Signature(
+                SignError::VerificationFailed,
+            )));
+        }
 
         let pk_bytes = record
             .public_key_bytes()
-            .ok_or_else(|| VaultError::MissingPublicKey(identity.signing_key.clone()))?;
-
-        let verifying_key = sign::VerifyingKey::from_bytes(pk_bytes)?;
-        let verified = Credential::verify_with_key(bytes, &verifying_key)?;
+            .ok_or_else(|| VaultError::MissingPublicKey(credential.issuer_key_id.clone()))?;
+        let verified = Credential::verify_with_public_key(bytes, pk_bytes)?;
         self.log_event(verified.issuer.as_str(), EventType::CredentialVerified)?;
         Ok(verified)
     }
@@ -1380,6 +1600,9 @@ impl Session {
 
     /// Internal helper: rejects operations when writes are not allowed.
     fn require_writes_allowed(&self) -> Result<(), VaultError> {
+        if self.audit_failed.get() {
+            return Err(VaultError::AuditWriteFailed);
+        }
         if self.state.allows_writes() {
             Ok(())
         } else {
@@ -1403,8 +1626,9 @@ impl Session {
     /// Activates a policy set for the current session.
     ///
     /// Once set, every auditable operation is evaluated against the
-    /// set before proceeding. The default-deny rule applies: an
-    /// operation with no matching policy is refused.
+    /// set before proceeding. An attached policy set is fail-closed:
+    /// an operation with no matching rule is refused. With no policy
+    /// set attached, the session is intentionally permissive.
     ///
     /// # Errors
     ///
@@ -1419,8 +1643,10 @@ impl Session {
 
     /// Deactivates the policy engine for the current session.
     ///
-    /// After this call, every operation is allowed again, matching
-    /// the behavior of a vault with no policies configured.
+    /// Policy administration is an authenticated session operation;
+    /// callers cannot bypass it through [`Session::body_mut`], which is
+    /// crate-internal. After this call, every operation is allowed again,
+    /// matching the behavior of a vault with no policies configured.
     ///
     /// # Errors
     ///
@@ -1456,8 +1682,10 @@ impl Session {
         // Open the log first so a bad path fails before we touch the
         // body.
         let resolved = resolve_audit_path(&self.vault.path, audit_dir);
-        let log = AuditLog::open_with(&resolved, AuditLogConfig::default())?;
+        let audit_auth = audit_key(self.kek.as_ref());
+        let log = AuditLog::open_with(&resolved, AuditLogConfig::default(), &audit_auth)?;
 
+        self.body.audit_anchor = log.head_event_hash().map(ToOwned::to_owned);
         *self.audit.borrow_mut() = Some(log);
         self.body.audit_dir = Some(audit_dir.to_string_lossy().into_owned());
         self.log_event("vault", EventType::AuditConfigured)?;
@@ -1475,6 +1703,13 @@ impl Session {
     /// or compromised.
     pub fn remove_audit_dir(&mut self) -> Result<(), VaultError> {
         self.require_writes_allowed()?;
+        // Record the administrative removal while the authenticated
+        // audit sink is still active. The event is durable before the
+        // sink is detached.
+        self.log_event("vault", EventType::AuditRemoved)?;
+        if let Some(log) = self.audit.borrow().as_ref() {
+            self.body.audit_anchor = log.head_event_hash().map(ToOwned::to_owned);
+        }
         self.body.audit_dir = None;
         *self.audit.borrow_mut() = None;
         Ok(())
@@ -1506,8 +1741,11 @@ impl Session {
         audit_dir: impl AsRef<std::path::Path>,
     ) -> Result<(), VaultError> {
         self.require_writes_allowed()?;
-        let log = AuditLog::open_with(audit_dir.as_ref(), AuditLogConfig::default())?;
+        let audit_auth = audit_key(self.kek.as_ref());
+        let log = AuditLog::open_with(audit_dir.as_ref(), AuditLogConfig::default(), &audit_auth)?;
+        self.body.audit_anchor = log.head_event_hash().map(ToOwned::to_owned);
         *self.audit.borrow_mut() = Some(log);
+        self.body.audit_dir = Some(audit_dir.as_ref().to_string_lossy().into_owned());
         Ok(())
     }
 
@@ -1540,7 +1778,10 @@ impl Session {
                 .with_subject(subject)
                 .with_outcome(outcome);
             let now = Timestamp::now().unwrap_or(Timestamp::from_secs(0));
-            log.append(now, spec)?;
+            if let Err(err) = log.append(now, spec) {
+                self.audit_failed.set(true);
+                return Err(err.into());
+            }
         }
         Ok(())
     }
@@ -1596,7 +1837,15 @@ impl Session {
     ///
     /// Returns an error if the body cannot be re-encrypted or the file
     /// cannot be written.
-    pub fn lock(self) -> Result<Vault, VaultError> {
+    pub fn lock(mut self) -> Result<Vault, VaultError> {
+        if self.audit_failed.get() {
+            return Err(VaultError::AuditWriteFailed);
+        }
+        self.log_event("vault", EventType::VaultLocked)?;
+        self.log_event("session", EventType::SessionEnded)?;
+        if let Some(log) = self.audit.borrow().as_ref() {
+            self.body.audit_anchor = log.head_event_hash().map(ToOwned::to_owned);
+        }
         self.vault.write_body(&self.body, &self.kek)?;
         Ok(self.vault)
     }
@@ -1673,20 +1922,20 @@ fn write_vault_file(
     out.extend_from_slice(nonce);
     out.extend_from_slice(ciphertext);
 
-    let tmp_path = unique_temp_path(path)?;
-
-    // Write and fsync the temp file.
-    {
-        let mut f = fs::File::create(&tmp_path)?;
-        f.write_all(&out)?;
-        f.sync_all()?;
-    }
+    // Atomically reserve the temporary file. A random name alone is not
+    // an exclusive-creation guarantee: an attacker or concurrent writer
+    // could pre-create it between name generation and File::create().
+    let (tmp_path, mut f) = create_unique_temp_file(path)?;
+    f.write_all(&out)?;
+    f.sync_all()?;
+    drop(f);
 
     // Rename onto the target. If this fails, try to clean up the temp.
     if let Err(e) = fs::rename(&tmp_path, path) {
         let _ = fs::remove_file(&tmp_path);
         return Err(VaultError::Io(e));
     }
+    restrict_file_permissions(path)?;
 
     // fsync the directory so the rename is durable. Best-effort on
     // platforms that do not support directory fsync.
@@ -1709,6 +1958,28 @@ fn write_vault_file(
 ///
 /// Format: `<name>.tmp.<8 hex chars>`. The suffix comes from the OS
 /// CSPRNG so two writers cannot collide.
+fn create_unique_temp_file(path: &Path) -> Result<(PathBuf, fs::File), VaultError> {
+    for _ in 0..16 {
+        let tmp = unique_temp_path(path)?;
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        match options.open(&tmp) {
+            Ok(file) => return Ok((tmp, file)),
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(err) => return Err(VaultError::Io(err)),
+        }
+    }
+    Err(VaultError::Io(std::io::Error::new(
+        std::io::ErrorKind::AlreadyExists,
+        "could not allocate unique vault temp file",
+    )))
+}
+
 fn unique_temp_path(path: &Path) -> Result<PathBuf, VaultError> {
     let rng = OsRandomSource::new();
     let mut suffix = [0u8; 4];
@@ -1732,8 +2003,7 @@ fn derive_kek(
     // Only Argon2id is supported in v1; unknown values will be rejected
     // at header parse time once more algorithms are added.
     let _ = params.algorithm;
-    let kek = kdf::argon2id(password, salt)?;
-    Ok(Zeroizing::new(kek))
+    kdf::argon2id(password, salt).map_err(VaultError::Kdf)
 }
 
 fn generate_vault_id<S: RandomSource>(source: &S) -> Result<String, VaultError> {
@@ -1808,12 +2078,30 @@ fn generate_material<S: RandomSource>(
 /// are returned unchanged. A vault with no parent (a bare filename)
 /// resolves relative to the current working directory, matching how
 /// the vault file itself is opened.
+fn audit_key(kek: &[u8]) -> Zeroizing<[u8; 32]> {
+    kdf::hkdf_sha256(kek, None, b"nexusq-audit-log-v2").expect("fixed audit HKDF info must fit")
+}
+
 fn resolve_audit_path(vault_path: &Path, audit_dir: &Path) -> PathBuf {
     if audit_dir.is_absolute() {
         return audit_dir.to_path_buf();
     }
     let parent = vault_path.parent().unwrap_or_else(|| Path::new("."));
     parent.join(audit_dir)
+}
+
+#[cfg(unix)]
+fn restrict_file_permissions(path: &Path) -> Result<(), VaultError> {
+    use std::os::unix::fs::PermissionsExt;
+    let mut permissions = fs::metadata(path)?.permissions();
+    permissions.set_mode(0o600);
+    fs::set_permissions(path, permissions)?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn restrict_file_permissions(_path: &Path) -> Result<(), VaultError> {
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1880,7 +2168,7 @@ mod tests {
         {
             let vault = Vault::open(&path).unwrap();
             let mut session = vault.unlock(b"pw").unwrap();
-            session.body_mut().metadata.label = Some("renamed".to_string());
+            session.body_mut().unwrap().metadata.label = Some("renamed".to_string());
             session.lock().unwrap();
         }
 
@@ -2607,7 +2895,7 @@ mod tests {
 
         let id = session.create_identity(Some("alice".to_string())).unwrap();
         assert_eq!(session.identity_count(), 1);
-        assert_eq!(session.key_count(), 1);
+        assert_eq!(session.key_count(), 2);
 
         let identity = session.find_identity(&id).unwrap();
         assert_eq!(identity.metadata.label.as_deref(), Some("alice"));
@@ -2646,7 +2934,7 @@ mod tests {
         let b = session.create_identity(None).unwrap();
         assert_ne!(a, b);
         assert_eq!(session.identity_count(), 2);
-        assert_eq!(session.key_count(), 2);
+        assert_eq!(session.key_count(), 4);
     }
 
     #[test]
@@ -3082,8 +3370,9 @@ mod tests {
         session.rotate_identity_key(&id).unwrap();
         assert_eq!(session.find_identity(&id).unwrap().metadata.version, 3);
 
-        // Every rotation adds a new key; none is deleted.
-        assert_eq!(session.key_count(), 3);
+        // Every rotation adds replacement identity and credential keys;
+        // historical keys remain for credential verification.
+        assert_eq!(session.key_count(), 6);
         assert_eq!(session.identity_count(), 1);
     }
 
@@ -3317,6 +3606,68 @@ mod tests {
     }
 
     #[test]
+    fn revoked_envelope_key_cannot_decrypt() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let key_id = session
+            .generate_key(Algorithm::Aes256Gcm, Purpose::Encrypt)
+            .unwrap();
+        session.activate_key(&key_id).unwrap();
+
+        let envelope = session.encrypt(&key_id, b"secret", Vec::new()).unwrap();
+        session
+            .revoke_key(&key_id, RevokeReason::Compromised)
+            .unwrap();
+
+        let err = session.decrypt(&envelope).unwrap_err();
+        assert!(matches!(
+            err,
+            VaultError::Envelope(EnvelopeError::KeyNotUsable { .. })
+        ));
+    }
+
+    #[test]
+    fn revoke_credential_rejects_only_the_selected_credential() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let issuer = session.create_identity(None).unwrap();
+        let subject = session.create_identity(None).unwrap();
+
+        let revoked = session
+            .issue_credential(&issuer, subject.clone(), b"revoked".to_vec(), None)
+            .unwrap();
+        let live = session
+            .issue_credential(&issuer, subject, b"live".to_vec(), None)
+            .unwrap();
+
+        session.revoke_credential(&revoked).unwrap();
+
+        let err = session.verify_credential(&revoked).unwrap_err();
+        assert!(matches!(
+            err,
+            VaultError::Credential(CredentialError::Revoked)
+        ));
+        assert!(session.verify_credential(&live).is_ok());
+
+        let vault = session.lock().unwrap();
+        let reopened = vault.unlock(b"pw").unwrap();
+        let err = reopened.verify_credential(&revoked).unwrap_err();
+        assert!(matches!(
+            err,
+            VaultError::Credential(CredentialError::Revoked)
+        ));
+        assert!(reopened.verify_credential(&live).is_ok());
+    }
+
+    #[test]
     fn verify_credential_rejects_tampered_claims() {
         let dir = TempDir::new().unwrap();
         let path = temp_path(&dir, "test.nqv");
@@ -3422,14 +3773,16 @@ mod tests {
             .issue_credential(&issuer, subject, b"claims".to_vec(), None)
             .unwrap();
 
-        // Rotate the issuer's signing key. The credential was signed
-        // by the old key. Since the identity now points to the new key,
-        // verifying through the session would fail (correctly, the
-        // credential is no longer signed by the current key). We assert
-        // that by using verify_with_key with the old public key.
-        let old_signing_key = session.find_identity(&issuer).unwrap().signing_key.clone();
+        // Rotate the issuer's signing key. The credential remains bound to
+        // the historical key that actually signed it.
+        let old_credential_key = session
+            .find_identity(&issuer)
+            .unwrap()
+            .credential_signing_key
+            .clone()
+            .unwrap();
         let old_pk = session
-            .find_key(&old_signing_key)
+            .find_key(&old_credential_key)
             .unwrap()
             .public_key_bytes()
             .unwrap()
@@ -3437,15 +3790,15 @@ mod tests {
 
         session.rotate_identity_key(&issuer).unwrap();
 
-        // The credential still verifies against the old public key.
-        let vk = sign::VerifyingKey::from_bytes(&old_pk).unwrap();
-        let cred = Credential::verify_with_key(&cred_bytes, &vk).unwrap();
+        // The credential still verifies against the old ML-DSA public key.
+        let cred = Credential::verify_with_public_key(&cred_bytes, &old_pk).unwrap();
         assert_eq!(cred.issuer, issuer);
+        assert_eq!(cred.issuer_key_id, old_credential_key);
 
-        // But the session's verification now fails, because the
-        // identity's current key is the new one.
-        let err = session.verify_credential(&cred_bytes).unwrap_err();
-        assert!(matches!(err, VaultError::Credential(_)));
+        // Session verification resolves the historical issuer key and
+        // therefore still succeeds after rotation.
+        let verified = session.verify_credential(&cred_bytes).unwrap();
+        assert_eq!(verified.issuer, issuer);
     }
 
     #[test]
@@ -3467,12 +3820,60 @@ mod tests {
             .revoke_identity(&issuer, RevokeReason::Superseded)
             .unwrap();
 
-        // The signing key is untouched by revocation, so verification
-        // still succeeds. Whether a real deployment should refuse
-        // credentials from revoked issuers is a policy decision
-        // (Phase 11).
-        let cred = session.verify_credential(&cred_bytes).unwrap();
-        assert_eq!(cred.issuer, issuer);
+        let err = session.verify_credential(&cred_bytes).unwrap_err();
+        assert!(matches!(err, VaultError::IdentityNotUsable { .. }));
+    }
+
+    #[test]
+    fn verify_credential_rejects_expired() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let issuer = session.create_identity(None).unwrap();
+        let subject = session.create_identity(None).unwrap();
+        let now = Timestamp::now().unwrap();
+        let cred_bytes = session
+            .issue_credential(&issuer, subject, b"claims".to_vec(), Some(now))
+            .unwrap();
+
+        let err = session.verify_credential(&cred_bytes).unwrap_err();
+        assert!(matches!(
+            err,
+            VaultError::Credential(CredentialError::Expired)
+        ));
+    }
+
+    #[test]
+    fn verify_credential_rejects_revoked_credential_key() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let issuer = session.create_identity(None).unwrap();
+        let subject = session.create_identity(None).unwrap();
+        let credential_key = session
+            .find_identity(&issuer)
+            .unwrap()
+            .credential_signing_key
+            .clone()
+            .unwrap();
+        let cred_bytes = session
+            .issue_credential(&issuer, subject, b"claims".to_vec(), None)
+            .unwrap();
+
+        session
+            .revoke_key(&credential_key, RevokeReason::Compromised)
+            .unwrap();
+        let err = session.verify_credential(&cred_bytes).unwrap_err();
+        assert!(matches!(
+            err,
+            VaultError::Credential(CredentialError::Signature(_))
+        ));
     }
 
     #[test]
@@ -3576,10 +3977,8 @@ mod tests {
             .revoke_key(&key_id, crate::vault::lifecycle::RevokeReason::Compromised)
             .unwrap();
 
-        // Reopen the audit log and verify.
-        let log = crate::storage::AuditLog::open(&audit_dir).unwrap();
-        assert_eq!(log.current_len(), 3);
-        log.verify_all().unwrap();
+        session.verify_audit().unwrap();
+        assert_eq!(session.audit_events().unwrap().len(), 3);
     }
 
     #[test]
@@ -3597,13 +3996,10 @@ mod tests {
         let identity_id = session.create_identity(None).unwrap();
         session.identity_sign(&identity_id, b"message").unwrap();
 
-        // create_identity → IdentityCreated
-        // generate_key (inside) → KeyCreated
-        // activate_key (inside) → KeyActivated
-        // identity_sign → IdentitySigned
-        let log = crate::storage::AuditLog::open(&audit_dir).unwrap();
-        assert_eq!(log.current_len(), 4);
-        log.verify_all().unwrap();
+        // create_identity plus its Ed25519 and ML-DSA-65 credential keys
+        // produce five events; identity_sign adds the sixth.
+        session.verify_audit().unwrap();
+        assert_eq!(session.audit_events().unwrap().len(), 6);
     }
 
     #[test]
@@ -3636,6 +4032,10 @@ mod tests {
             let mut perms = std::fs::metadata(&audit_dir).unwrap().permissions();
             perms.set_mode(0o700);
             std::fs::set_permissions(&audit_dir, perms).unwrap();
+
+            // The failed audit write permanently blocks persistence of the
+            // in-memory mutation. The vault on disk must remain unchanged.
+            assert!(session.lock().is_err());
         }
     }
 
@@ -3728,6 +4128,27 @@ mod tests {
     }
 
     #[test]
+    fn remove_audit_dir_is_itself_audited() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "test.nqv");
+        let audit_dir = dir.path().join("audit");
+        fs::create_dir(&audit_dir).unwrap();
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+        session.enable_audit(&audit_dir).unwrap();
+        session.remove_audit_dir().unwrap();
+        assert!(!session.has_audit());
+        session.enable_audit(&audit_dir).unwrap();
+        let events = session.audit_events().unwrap();
+        assert!(
+            events
+                .iter()
+                .any(|event| event.event_type == EventType::AuditRemoved)
+        );
+    }
+
+    #[test]
     fn set_policies_emits_policy_changed_event() {
         let dir = TempDir::new().unwrap();
         let vault_path = temp_path(&dir, "v.nqv");
@@ -3742,8 +4163,8 @@ mod tests {
         let set = crate::policy::PolicySet::new();
         session.set_policies(set).unwrap();
 
-        let log = crate::storage::AuditLog::open(&audit_dir).unwrap();
-        assert_eq!(log.current_len(), 1);
+        session.verify_audit().unwrap();
+        assert_eq!(session.audit_events().unwrap().len(), 1);
     }
 
     #[test]
@@ -3756,7 +4177,7 @@ mod tests {
         for i in 0..3 {
             let vault = Vault::open(&path).unwrap();
             let mut session = vault.unlock(b"pw").unwrap();
-            session.body_mut().metadata.label = Some(format!("run-{i}"));
+            session.body_mut().unwrap().metadata.label = Some(format!("run-{i}"));
             session.lock().unwrap();
         }
 

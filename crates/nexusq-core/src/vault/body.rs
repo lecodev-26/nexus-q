@@ -106,6 +106,13 @@ pub struct VaultBody {
     /// audit log without editing the configuration.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub audit_dir: Option<String>,
+    /// HMAC-authenticated audit-event hash recorded at the last successful vault persistence.
+    /// This encrypted vault-side anchor detects rollback or truncation before that state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audit_anchor: Option<Vec<u8>>,
+    /// SHA3-256 identifiers of individually revoked credentials.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub revoked_credentials: Vec<Vec<u8>>,
 }
 
 impl VaultBody {
@@ -118,6 +125,8 @@ impl VaultBody {
             identities: Vec::new(),
             policies: None,
             audit_dir: None,
+            audit_anchor: None,
+            revoked_credentials: Vec::new(),
         }
     }
 

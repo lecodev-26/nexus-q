@@ -8,7 +8,7 @@
 use std::fs;
 
 use nexusq_core::policy::{Policy, PolicyEffect, PolicyOperation, PolicySet, PolicyTarget};
-use nexusq_core::storage::{AuditLog, EventOutcome};
+use nexusq_core::storage::EventOutcome;
 use nexusq_core::vault::{Algorithm, Purpose, Vault};
 use tempfile::TempDir;
 
@@ -172,10 +172,9 @@ fn denied_operations_are_recorded_in_the_audit_log() {
     // denial before the operation returns.
     let _ = session.activate_key(&key_id);
 
-    // Reopen the audit log and look for a denied event.
-    let log = AuditLog::open(&audit_dir).unwrap();
-    let segment = nexusq_core::storage::AuditSegment::open(log.current_path()).unwrap();
-    let events = segment.events();
+    // Verify through the authenticated session key and inspect the current segment.
+    session.verify_audit().unwrap();
+    let events = session.audit_events().unwrap();
 
     let denied = events
         .iter()
@@ -194,9 +193,8 @@ fn audit_records_policy_changed_events() {
     session.set_policies(PolicySet::new()).unwrap();
     session.clear_policies().unwrap();
 
-    let log = AuditLog::open(&audit_dir).unwrap();
-    let segment = nexusq_core::storage::AuditSegment::open(log.current_path()).unwrap();
-    let events = segment.events();
+    session.verify_audit().unwrap();
+    let events = session.audit_events().unwrap();
 
     // Two PolicyChanged events.
     let count = events

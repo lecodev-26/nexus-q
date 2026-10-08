@@ -21,7 +21,7 @@ This guide describes the current implemented surface. Features described as CI-o
 
 ## Current support boundary
 
-The local delivery boundary includes the Rust core, CLI, C/C++/Python/Go/Ruby/PHP bindings, and the authenticated HTTP server. Cross-platform SDKs and external publication remain release gates.
+The local delivery boundary includes the Rust core, CLI, C FFI, limited Python binding, and authenticated HTTP server. Other language SDKs and external publication are not claimed as shipped.
 
 The default server bind is loopback. Remote exposure requires a trusted TLS termination boundary; NEXUS-Q does not terminate TLS itself.
 
