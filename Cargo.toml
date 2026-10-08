@@ -17,6 +17,9 @@ authors = ["lecodev-26 <325287752+lecodev-26@users.noreply.github.com>"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/lecodev-26/nexusq"
 
+[patch.crates-io]
+ml-kem = { path = "vendor/ml-kem" }
+
 [workspace.dependencies]
 nexusq-core = { path = "crates/nexusq-core", version = "0.1.0" }
 
