@@ -85,3 +85,15 @@ V2-10 remains the authoritative external performance gate. No performance-leader
 - canonical runner: `arena/runners/nexusq/src/main.rs`
 - local V2-01 JSONL: `artifacts/v2/v2-01/nexusq-local.jsonl`
 - CI baseline workflow: `.github/workflows/v2-benchmark-baseline.yml`
+
+## V2-10 performance gate
+
+The authoritative V2-10 gate runs the full Arena comparison on the nexusqv2 branch using the locked nine-operation matrix and the pinned comparator adapters. The gate records the exact commit and normalized measurements, then evaluates:
+
+- geometric mean of V2 latency versus the locked v1 baseline must be <= 0.95;
+- no individual operation may regress by more than 5% versus v1;
+- at least 5 of the 9 operations must improve by at least 5%;
+- every operation must have a measured best comparator from the executable Arena set;
+- comparator ratios are reported as evidence but are not converted into a composite leaderboard score.
+
+The gate is implemented by .github/workflows/pqc-arena.yml and publishes v2-10-performance-gate.json as a GitHub Actions artifact. These thresholds are acceptance criteria for V2-10, not a claim of platform-wide performance leadership.

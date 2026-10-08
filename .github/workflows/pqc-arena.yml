@@ -3,7 +3,7 @@ name: PQC Benchmark Arena
 on:
   workflow_dispatch:
   push:
-    branches: ["ci/benchmark-arena"]
+    branches: ["ci/benchmark-arena", "nexusqv2"]
 
 permissions:
   contents: read
@@ -552,3 +552,58 @@ jobs:
           assert {r["implementation"]["id"] for r in rows} == {"nexusq", "liboqs", "circl", "openssl", "aws-lc", "botan", "rustcrypto-kems", "pq-code-package"}
           print("normalized Arena schema/matrix: OK", len(rows))
           PY
+
+
+  v2-performance-gate:
+    name: V2-10 performance gate
+    runs-on: ubuntu-latest
+    needs: compare-schema
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: pqc-arena-nexusq-reference
+          path: arena/results/ci/nexusq
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: pqc-arena-*
+          path: arena/results/ci/comparators
+          merge-multiple: true
+      - name: Evaluate V2-10 gate
+        run: |
+          python3 - <<'PY'
+          import json, math
+          from pathlib import Path
+          baseline={("ml-kem","768","keygen"):33940.0,("ml-kem","768","encaps"):27970.0,("ml-kem","768","decaps"):34620.0,("ml-kem","1024","keygen"):53890.0,("ml-kem","1024","encaps"):46050.0,("ml-kem","1024","decaps"):52140.0,("ml-dsa","65","keygen"):168690.0,("ml-dsa","65","sign"):600730.0,("ml-dsa","65","verify"):101200.0}
+          expected=set(baseline)
+          rows=[json.loads(x) for x in Path("arena/results/ci/nexusq/nexusq-reference.jsonl").read_text().splitlines() if x.startswith("{")]
+          assert len(rows)==9
+          best={}
+          for p in Path("arena/results/ci/comparators").rglob("*.jsonl"):
+            for line in p.read_text().splitlines():
+              if not line.startswith("{"): continue
+              r=json.loads(line); k=(r["algorithm"]["id"],r["algorithm"]["parameter_set"],r["operation"])
+              if k in expected and r["implementation"]["id"]!="nexusq":
+                lat=float(r["measurement"]["latency_ns"])
+                if k not in best or lat<best[k]["latency_ns"]: best[k]={"implementation":r["implementation"]["id"],"latency_ns":lat}
+          assert {(r["algorithm"]["id"],r["algorithm"]["parameter_set"],r["operation"]) for r in rows}==expected
+          assert set(best)==expected
+          results=[]; ratios=[]; improved=0; no_regression=True
+          for r in rows:
+            k=(r["algorithm"]["id"],r["algorithm"]["parameter_set"],r["operation"]); lat=float(r["measurement"]["latency_ns"]); vr=lat/baseline[k]; ratios.append(vr)
+            if vr<.95: improved+=1
+            if vr>1.05: no_regression=False
+            results.append({"algorithm":k[0],"parameter_set":k[1],"operation":k[2],"v2_latency_ns":lat,"v1_latency_ns":baseline[k],"v2_vs_v1":vr,"best_comparator":best[k]["implementation"],"best_comparator_ns":best[k]["latency_ns"],"v2_vs_best":lat/best[k]["latency_ns"]})
+          geomean=math.exp(sum(math.log(x) for x in ratios)/len(ratios))
+          report={"schema":"nexusq-v2-performance-gate-v1","commit":"${{ github.sha }}","criteria":{"max_geomean_vs_v1":.95,"max_individual_regression_vs_v1":1.05,"minimum_operations_improved_by_5_percent":5},"geomean_vs_v1":geomean,"operations_improved_by_5_percent":improved,"no_individual_regression_over_5_percent":no_regression,"results":results}
+          Path("arena/results/ci/v2-performance-gate.json").write_text(json.dumps(report,indent=2)+"\n")
+          print(json.dumps(report,indent=2))
+          assert geomean<=.95, f"V2 geomean gate failed: {geomean:.4f}"
+          assert no_regression, "V2 individual regression gate failed"
+          assert improved>=5, f"Only {improved}/9 operations improved by >=5%"
+          print("V2-10 performance gate: PASS")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v2-10-performance-gate-${{ github.sha }}
+          path: arena/results/ci/v2-performance-gate.json
