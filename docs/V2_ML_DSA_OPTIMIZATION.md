@@ -4,14 +4,11 @@
 
 V2-04 targets ML-DSA-65 using the measured V2-02 hotspot profile. No ML-DSA parameter, FIPS 204 algorithm, serialization format, or security semantics are changed.
 
-## Retained optimization
+## Optimization result
 
-`module-lattice` 0.2.3 is vendored and its hottest field/polynomial arithmetic operator implementations are marked `#[inline(always)]`:
+The earlier `#[inline(always)]` experiments in the vendored `module-lattice` arithmetic and the ML-KEM base-multiplication hot loop were reverted. The GitHub-hosted V2 Arena showed that forced inlining made the generated code slower, so these changes are not retained in the release line.
 
-- field `Add`, `Sub`, `Mul`
-- polynomial `Add`, `Sub`, `Mul`
-
-This is a compiler/code-generation optimization only. The arithmetic operations and their reductions are unchanged.
+The vendored `ml-kem` and `module-lattice` sources now match the corresponding upstream crate source in the affected areas. Security hardening remains unchanged.
 
 ## Local evidence
 
