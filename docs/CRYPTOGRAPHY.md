@@ -234,7 +234,7 @@ SP 800-38D), ECB in any form, any custom mode.
 
 **Hybrid mode (v2):**
 
-- ML-KEM-768 + X25519 uses the X-Wing construction and its domain-separated SHA3-256 combiner.
+- ML-KEM-768 + X25519 implements the X-Wing draft construction and its domain-separated SHA3-256 combiner; NEXUS-Q does not claim conformance to a finalized X-Wing standard.
 - The combiner binds the X25519 ciphertext and recipient public component.
 - The implementation follows the current active X-Wing Internet-Draft; it is not presented as a finalized IETF standard.
 
@@ -352,8 +352,8 @@ fits, we prefer HPKE.
 
 ### 5.3 Hybrid KEM combiner
 
-For ML-KEM-768 + X25519, NEXUS-Q follows the current X-Wing Internet-Draft
-construction: SHA3-256 over ss_M || ss_X || ct_X || pk_X || XWingLabel,
+For ML-KEM-768 + X25519, NEXUS-Q implements the current X-Wing Internet-Draft
+construction as pinned by this codebase: SHA3-256 over ss_M || ss_X || ct_X || pk_X || XWingLabel,
 where XWingLabel is the specified six-byte domain-separation string.
 The implementation is tied to the active Internet-Draft and is not
 presented as a finalized IETF standard.
@@ -478,7 +478,7 @@ algorithm we do not trust, we refuse the operation; we do not fall back.
 
 ## 10. Open questions
 
-- [x] ML-KEM-768 + X25519 uses the X-Wing construction and transcript-bound SHA3-256 combiner
+- [x] ML-KEM-768 + X25519 implements the documented X-Wing draft construction and transcript-bound SHA3-256 combiner; no finalized-standard conformance claim
 - [ ] Whether to support SLH-DSA in v1.0 or defer to v1.1
 - [ ] Concrete Argon2id parameters per platform (mobile vs desktop)
 - [ ] Nonce management strategy for high-throughput servers
