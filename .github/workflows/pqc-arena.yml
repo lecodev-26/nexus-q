@@ -65,6 +65,39 @@ jobs:
           print("Arena registry/matrix/state/coverage contract: OK", len(matrix), "pairs")
           PY
 
+  v1-reference:
+    name: V1 reference benchmark (same runner)
+    runs-on: ubuntu-latest
+    needs: validate-registry
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v1.0.0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build V1 Arena reference runner
+        run: cargo build --release --manifest-path arena/runners/nexusq/Cargo.toml
+      - name: Run V1 reference workload
+        run: |
+          mkdir -p arena/results/ci
+          ./arena/runners/nexusq/target/release/nexusq-arena-runner > arena/results/ci/v1-reference.jsonl
+      - name: Validate V1 reference matrix
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path("arena/results/ci/v1-reference.jsonl")
+          rows=[json.loads(x) for x in p.read_text().splitlines() if x.startswith("{")]
+          assert len(rows)==9
+          assert all(r["implementation"]["id"]=="nexusq" for r in rows)
+          assert all(r["measurement"]["iterations"]==20 for r in rows)
+          assert all(r["measurement"]["warmups"]==3 for r in rows)
+          print("V1 same-runner reference: OK")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pqc-arena-v1-reference
+          path: arena/results/ci/v1-reference.jsonl
+
   nexusq-reference:
     name: NEXUS-Q reference benchmark
     runs-on: ubuntu-latest
@@ -485,9 +518,14 @@ jobs:
   compare-schema:
     name: Validate normalized adapter output
     runs-on: ubuntu-latest
-    needs: [nexusq-reference, liboqs-reference, circl-reference, openssl-reference, aws-lc-reference, botan-reference, rustcrypto-kems-reference, pq-code-package-reference]
+    needs: [v1-reference, nexusq-reference, liboqs-reference, circl-reference, openssl-reference, aws-lc-reference, botan-reference, rustcrypto-kems-reference, pq-code-package-reference]
     steps:
       - uses: actions/checkout@v4
+      - name: Download V1 reference artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pqc-arena-v1-reference
+          path: arena/results/ci/v1
       - name: Download NEXUS-Q artifact
         uses: actions/download-artifact@v4
         with:
@@ -576,7 +614,8 @@ jobs:
           python3 - <<'PY'
           import json, math
           from pathlib import Path
-          baseline={("ml-kem","768","keygen"):33940.0,("ml-kem","768","encaps"):27970.0,("ml-kem","768","decaps"):34620.0,("ml-kem","1024","keygen"):53890.0,("ml-kem","1024","encaps"):46050.0,("ml-kem","1024","decaps"):52140.0,("ml-dsa","65","keygen"):168690.0,("ml-dsa","65","sign"):600730.0,("ml-dsa","65","verify"):101200.0}
+          v1_rows=[json.loads(x) for x in Path("arena/results/ci/v1/v1-reference.jsonl").read_text().splitlines() if x.startswith("{")]
+          baseline={(r["algorithm"]["id"],r["algorithm"]["parameter_set"],r["operation"]):float(r["measurement"]["latency_ns"]) for r in v1_rows}
           expected=set(baseline)
           rows=[json.loads(x) for x in Path("arena/results/ci/nexusq/nexusq-reference.jsonl").read_text().splitlines() if x.startswith("{")]
           assert len(rows)==9
@@ -597,7 +636,7 @@ jobs:
             if vr>1.05: no_regression=False
             results.append({"algorithm":k[0],"parameter_set":k[1],"operation":k[2],"v2_latency_ns":lat,"v1_latency_ns":baseline[k],"v2_vs_v1":vr,"best_comparator":best[k]["implementation"],"best_comparator_ns":best[k]["latency_ns"],"v2_vs_best":lat/best[k]["latency_ns"]})
           geomean=math.exp(sum(math.log(x) for x in ratios)/len(ratios))
-          report={"schema":"nexusq-v2-performance-gate-v1","commit":"${{ github.sha }}","criteria":{"max_geomean_vs_v1":.95,"max_individual_regression_vs_v1":1.05,"minimum_operations_improved_by_5_percent":5},"geomean_vs_v1":geomean,"operations_improved_by_5_percent":improved,"no_individual_regression_over_5_percent":no_regression,"results":results}
+          report={"schema":"nexusq-v2-performance-gate-v2","commit":"${{ github.sha }}","criteria":{"max_geomean_vs_v1":.95,"max_individual_regression_vs_v1":1.05,"minimum_operations_improved_by_5_percent":5,"baseline_source":"v1.0.0 benchmark executed on the same runner"},"geomean_vs_v1":geomean,"operations_improved_by_5_percent":improved,"no_individual_regression_over_5_percent":no_regression,"results":results}
           Path("arena/results/ci/v2-performance-gate.json").write_text(json.dumps(report,indent=2)+"\n")
           print(json.dumps(report,indent=2))
           assert geomean<=.95, f"V2 geomean gate failed: {geomean:.4f}"

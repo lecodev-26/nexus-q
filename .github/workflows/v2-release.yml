@@ -166,7 +166,16 @@ jobs:
         with:
           toolchain: 1.85.1
       - name: Release build
-        run: cargo build --workspace --locked --release
+        run: |
+          if [ "${{ matrix.os }}" = "macos-14" ]; then
+            # nexusq-py is validated by the Linux release gate and SDK smoke.
+            # The macOS ARM64 workspace linker cannot produce the PyO3 extension
+            # without a matching Python framework; keep the native Rust platform
+            # gate focused on the deployable Rust workspace.
+            cargo build --workspace --locked --release --exclude nexusq-py
+          else
+            cargo build --workspace --locked --release
+          fi
 
   public-release:
     name: Publish GitHub v2.0.0 release

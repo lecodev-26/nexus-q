@@ -75,7 +75,7 @@ This workflow is intentionally separate from the normal V2 PR CI so baseline mea
 
 ## V2 regression rule
 
-The v1 values are the reference point for optimization decisions. A retained performance change must show a reproducible improvement under the same benchmark conditions. A local improvement alone is insufficient for the final Arena gate.
+The v1 values above remain the locked historical optimization reference. For the authoritative V2-10 gate, the workflow now checks out `v1.0.0` and executes the same nine-operation runner on the same GitHub-hosted runner as the V2 measurement. This avoids treating measurements from different runner instances or hardware as directly comparable. A retained performance change must still show a reproducible improvement under the same benchmark conditions.
 
 V2-10 remains the authoritative external performance gate. No performance-leadership claim is made before that gate.
 
@@ -88,7 +88,7 @@ V2-10 remains the authoritative external performance gate. No performance-leader
 
 ## V2-10 performance gate
 
-The authoritative V2-10 gate runs the full Arena comparison on the nexusqv2 branch using the locked nine-operation matrix and the pinned comparator adapters. The gate records the exact commit and normalized measurements, then evaluates:
+The authoritative V2-10 gate runs the full Arena comparison on the nexusqv2 branch using the locked nine-operation matrix and the pinned comparator adapters. The gate records the exact commit, the same-runner V1 reference, and normalized measurements, then evaluates:
 
 - geometric mean of V2 latency versus the locked v1 baseline must be <= 0.95;
 - no individual operation may regress by more than 5% versus v1;
