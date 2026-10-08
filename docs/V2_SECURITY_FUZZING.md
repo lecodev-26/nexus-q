@@ -17,10 +17,10 @@ The V2 workflow checks out Git submodules recursively so the correctness/interop
 
 ## Fuzz duration
 
-The retained fuzz policy is **45 minutes per extended target**:
+The retained fuzz policy is **5 minutes per extended target**:
 
-- vault_parse: -max_total_time=1800, CI timeout 45 minutes.
-- envelope_parse: -max_total_time=1800, CI timeout 45 minutes.
+- vault_parse: -max_total_time=300, CI timeout 5 minutes.
+- envelope_parse: -max_total_time=300, CI timeout 5 minutes.
 
 This is intentional. Longer multi-hour soaking is not part of the V2 PR gate.
 

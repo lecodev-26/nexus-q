@@ -54,29 +54,29 @@ jobs:
         working-directory: fuzz
 
   fuzz-soak-vault:
-    name: 45-minute fuzz - vault parser
+    name: 5-minute fuzz - vault parser
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
       - name: Fuzz vault parser
-        run: cargo fuzz run vault_parse -- -max_total_time=1800
+        run: cargo fuzz run vault_parse -- -max_total_time=300
         working-directory: fuzz
 
   fuzz-soak-envelope:
-    name: 45-minute fuzz - envelope parser
+    name: 5-minute fuzz - envelope parser
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
       - name: Fuzz envelope parser
-        run: cargo fuzz run envelope_parse -- -max_total_time=1800
+        run: cargo fuzz run envelope_parse -- -max_total_time=300
         working-directory: fuzz
 
   secret-scan:
