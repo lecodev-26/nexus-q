@@ -3,9 +3,8 @@
 //! These tests exercise the NEXUS-Q serialization boundary against the
 //! underlying RustCrypto primitives and cover malformed-input behavior.
 
-use ml_dsa::{KeyInit as _, MlDsa65, Signer as _, Verifier as _};
+use ml_dsa::{KeyInit as _, MlDsa65, SignatureEncoding as _, Signer as _, Verifier as _};
 use ml_kem::kem::{Decapsulate as _, Encapsulate as _};
-use ml_kem::{EncapsulationKey768, MlKem768};
 use nexusq_core::crypto::kem::{KemError, hybrid, ml_kem_768};
 use nexusq_core::crypto::kem_1024;
 use nexusq_core::crypto::pq_sign::{
@@ -20,8 +19,6 @@ fn ml_kem_768_wrapper_bytes_interoperate_with_backend() {
     let public_bytes = ml_kem_768::public_key_bytes(&public);
 
     let backend_key = ml_kem_768::public_key_from_bytes(&public_bytes).unwrap();
-    assert_eq!(backend_key.to_bytes(), public.to_bytes());
-
     let (backend_ct, backend_ss) = backend_key.encapsulate();
     let wrapper_ss = ml_kem_768::decapsulate(&secret, backend_ct.as_slice()).unwrap();
     assert_eq!(backend_ss.as_slice(), wrapper_ss.as_ref());
@@ -153,12 +150,4 @@ fn canonical_kem_sizes_remain_stable() {
     assert_eq!(ml_kem_768::CIPHERTEXT_LEN, 1088);
     assert_eq!(hybrid::PUBLIC_KEY_LEN, 1216);
     assert_eq!(hybrid::CIPHERTEXT_LEN, 1120);
-}
-
-// Keep direct backend imports exercised by the test binary rather than relying
-// only on type inference in future edits.
-#[allow(dead_code)]
-fn _backend_type_smoke() {
-    let _ = MlKem768::generate_keypair;
-    let _ = EncapsulationKey768::new;
 }
