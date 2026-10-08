@@ -4,6 +4,8 @@ on:
   workflow_dispatch:
   push:
     branches: ["ci/benchmark-arena", "nexusqv2"]
+  pull_request:
+    branches: ["nexusqv2"]
 
 permissions:
   contents: read
