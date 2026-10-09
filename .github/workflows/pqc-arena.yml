@@ -834,8 +834,18 @@ jobs:
                 cgu16) binary="$RUNNER_TEMP/nexusq-profile-cgu16/release/nexusq-arena-runner" ;;
               esac
               echo "=== profile round $round: $variant ==="
+              sample_file="$RUNNER_TEMP/profile-$variant-round-$round.jsonl"
+              : > "$sample_file"
               NEXUSQ_CPU="$cpu" NEXUSQ_CPU_FEATURES="$features" RUSTC_VERSION="$(rustc --version --verbose | head -1)" NEXUSQ_OPT=release NEXUSQ_RUN_ID="profile-$variant-round-$round" \
-                "$binary" >> arena/results/ci/profile-diagnostic.jsonl
+                "$binary" > "$sample_file"
+              sample_count="$(grep -c '^{"' "$sample_file" || true)"
+              echo "Profile $variant round $round emitted $sample_count JSON records"
+              if [[ "$sample_count" -ne 10 ]]; then
+                echo "Expected 10 records from one cached-verifier runner invocation; got $sample_count" >&2
+                cat "$sample_file" >&2
+                exit 1
+              fi
+              cat "$sample_file" >> arena/results/ci/profile-diagnostic.jsonl
             done
           done
       - name: Validate profile samples and report descriptive medians

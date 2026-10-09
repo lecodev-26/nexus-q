@@ -40,3 +40,11 @@ Ratios are diagnostic-build `zeroize-off` latency divided by `zeroize-on` latenc
 - Root cause in the workflow harness: CPU feature detection assumed `/proc/cpuinfo` always contains an x86-style `Flags:` field. Linux runners can instead expose `Features:` (for example on ARM) or omit that optional field; with `set -euo pipefail`, the unmatched `grep` terminated the step.
 - Correction: parse either `flags` or `Features` in Python and allow an empty feature list when metadata is unavailable. CPU metadata is descriptive only and must not block the benchmark.
 - The profile experiment remains pending a successful CI rerun. This is a harness portability failure, not evidence of a cryptographic implementation or benchmark-performance failure.
+
+## Follow-up: second LTO/codegen diagnostic CI attempt (2026-10-09)
+
+- Workflow run: [37902904308](https://github.com/lecodev-26/nexus-q/actions/runs/37902904308).
+- All three profile builds and the other benchmark/reference-adapter jobs passed. The profile validator failed because it expected 300 records but received 27; therefore the profile comparison did not produce usable evidence or an artifact.
+- The CPU-feature portability correction was effective in allowing the benchmark step to run, but it did not resolve this separate sample-capture/count failure.
+- Next harness change: capture each profile invocation to its own temporary JSONL file, assert that each invocation emits exactly 10 records, log the per-invocation count, then append to the aggregate. This should make the point of failure observable instead of only reporting the aggregate count.
+- No LTO/codegen performance conclusion is justified yet. Production code and production zeroization settings remain unchanged.
