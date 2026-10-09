@@ -814,8 +814,18 @@ jobs:
         run: |
           set -euo pipefail
           : > arena/results/ci/profile-diagnostic.jsonl
-          cpu="$(lscpu | awk -F: '/Model name/ {sub(/^[ \t]+/, "", $2); print $2; exit}')"
-          features="$(grep -m1 '^Flags:' /proc/cpuinfo | cut -d: -f2- | xargs)"
+          cpu="$(lscpu | awk -F: '/Model name|Model:/ {sub(/^[ \t]+/, "", $2); print $2; exit}')"
+          # Linux reports x86 features as "flags" and ARM features as "Features";
+          # some virtualized runners may omit the field entirely. Never fail the
+          # diagnostic just because optional CPU metadata is unavailable.
+          features="$(python3 - <<'PYCPU'
+          from pathlib import Path
+          for line in Path('/proc/cpuinfo').read_text(errors='ignore').splitlines():
+              if ':' in line and line.split(':', 1)[0].strip().lower() in {'flags', 'features'}:
+                  print(' '.join(line.split(':', 1)[1].split()))
+                  break
+          PYCPU
+          )"
           for round in $(seq 1 10); do
             for variant in $(printf '%s\n' baseline no-lto cgu16 | shuf); do
               case "$variant" in

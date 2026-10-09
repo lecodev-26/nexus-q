@@ -31,3 +31,12 @@ Ratios are diagnostic-build `zeroize-off` latency divided by `zeroize-on` latenc
 - The paired min–max ranges cross 1 for all six operations, and show substantial round-to-round variation relative to the median differences. This is descriptive evidence, not a formal confidence interval.
 - Therefore this run does **not** identify SHA-3 `zeroize` as the cause of the earlier ~3–5% ML-KEM differences. It also does not prove the feature has zero cost in every context.
 - Do not disable zeroization in production based on this result. Next: run controlled LTO/codegen-units variants with the same V3 source and workload, then document the profile comparison.
+
+
+## Follow-up: LTO/codegen diagnostic CI attempt (2026-10-09)
+
+- Workflow run: [37901842937](https://github.com/lecodev-26/nexus-q/actions/runs/37901842937).
+- The build step for all three profile variants passed. The measurement step failed before the first profile round emitted results, so **no LTO/codegen performance conclusions can be drawn from this run** and no profile artifact was produced.
+- Root cause in the workflow harness: CPU feature detection assumed `/proc/cpuinfo` always contains an x86-style `Flags:` field. Linux runners can instead expose `Features:` (for example on ARM) or omit that optional field; with `set -euo pipefail`, the unmatched `grep` terminated the step.
+- Correction: parse either `flags` or `Features` in Python and allow an empty feature list when metadata is unavailable. CPU metadata is descriptive only and must not block the benchmark.
+- The profile experiment remains pending a successful CI rerun. This is a harness portability failure, not evidence of a cryptographic implementation or benchmark-performance failure.
