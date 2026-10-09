@@ -109,3 +109,36 @@ Median absolute deviations across the 10 observations were calculated from the r
 2. With LTO disabled, changing from the default codegen-unit count to `codegen-units=1` yielded small apparent gains of 0.12–1.69%; this does not establish the effect of CGU count under Thin LTO.
 3. **No production-profile decision is supported by this run.** The workflow correction explicitly compares the actual repository release settings against no-LTO/CGU=1 and Thin-LTO/CGU=16, holding opt-level, panic and strip settings constant.
 4. Production cryptographic code and zeroization settings remain unchanged. The original run does not resolve all V1/V2/V3 discrepancies and does not justify a universal V3 speedup.
+
+## Corrected production-profile comparison — CI run 37908810902 (2026-10-09)
+
+**Status: all 300 samples validated; results reviewed from the downloaded raw artifact.** The companion [NEXUS-Q V3 Incremental CI](https://github.com/lecodev-26/nexus-q/actions/runs/37908810920) and [PQC Benchmark Arena](https://github.com/lecodev-26/nexus-q/actions/runs/37908810902) runs both succeeded on commit `fdd328675fade5a55a1853daa94640b6a48ae713`. The diagnostic artifact, including raw JSONL, toolchain/CPU metadata, dependency tree and explicit profile manifest, is [available here](https://github.com/lecodev-26/nexus-q/actions/runs/37908810902/artifacts/11606245702).
+
+The three builds now explicitly use these settings, keeping opt-level, panic, strip and debug behavior constant:
+
+- **Production-equivalent baseline:** `opt-level=3`, `lto="thin"`, `codegen-units=1`, `panic="abort"`, `strip="symbols"`, `debug=false`.
+- **No LTO:** same settings except `lto=false`.
+- **Thin LTO / CGU16:** same settings except `codegen-units=16`.
+
+Environment: GitHub-hosted Ubuntu 24.04, `rustc 1.98.1 (48a229cea 2026-09-01)`, LLVM 22.1.8, 10 randomized alternating rounds per profile. The raw artifact contains 300 rows, 30 measurement-method/profile groups, and exactly 10 samples per group. Numbers below are per-group medians; percentages are relative to the production-equivalent baseline (negative is faster).
+
+| Measurement | Baseline | No LTO / CGU1 | No LTO delta | Thin LTO / CGU16 | CGU16 delta |
+|---|---:|---:|---:|---:|---:|
+| ML-KEM-768 keygen | 52,113.5 ns | 56,064.0 ns | +7.58% | 53,631.0 ns | +2.91% |
+| ML-KEM-768 encaps | 45,063.0 ns | 50,261.0 ns | +11.53% | 46,380.0 ns | +2.92% |
+| ML-KEM-768 decaps | 54,652.5 ns | 60,000.0 ns | +9.78% | 56,004.5 ns | +2.47% |
+| ML-KEM-1024 keygen | 82,524.0 ns | 88,868.5 ns | +7.69% | 86,130.0 ns | +4.37% |
+| ML-KEM-1024 encaps | 69,880.0 ns | 77,902.0 ns | +11.48% | 73,766.0 ns | +5.56% |
+| ML-KEM-1024 decaps | 82,433.5 ns | 90,366.0 ns | +9.62% | 86,785.5 ns | +5.28% |
+| ML-DSA-65 keygen | 309,896.0 ns | 306,321.0 ns | -1.15% | 312,224.5 ns | +0.75% |
+| ML-DSA-65 sign (64-key corpus) | 691,555.0 ns | 690,393.0 ns | -0.17% | 708,350.0 ns | +2.43% |
+| ML-DSA-65 verify (cached key) | 74,967.5 ns | 74,732.5 ns | -0.31% | 76,876.0 ns | +2.55% |
+| ML-DSA-65 verify (conventional) | 197,807.0 ns | 195,544.0 ns | -1.14% | 201,473.0 ns | +1.85% |
+
+### Interpretation and decision
+
+1. **The previous run's apparent 5.75–9.04% ML-KEM gain does not survive a correct production-profile comparison.** With the repository's actual Thin-LTO/CGU1 settings as baseline, Thin-LTO/CGU16 is slower in all six ML-KEM medians (+2.47% to +5.56%) and all four ML-DSA measurements (+0.75% to +2.55%) on this runner.
+2. The no-LTO/CGU1 variant is 7.58–11.53% slower on all six ML-KEM medians, while ML-DSA is between -1.15% and -0.17% (slightly faster). This argues against disabling LTO as a general optimization.
+3. **Keep the production release profile unchanged.** These are descriptive medians from one hosted runner and 10 samples per group; they are not a multi-machine confidence interval. Do not infer a universal regression or speedup from this one run.
+4. The corrected profile experiment addresses one methodological issue in Phase 1. It does not by itself classify the historical V1/V2/V3 ML-KEM delta. The remaining investigation should inspect generated code and compare like-for-like build artifacts while preserving the existing zeroization/security settings.
+5. No production cryptographic implementation or zeroization setting was changed.
