@@ -1,0 +1,112 @@
+name: NEXUS-Q V3 Incremental CI
+
+on:
+  push:
+    branches: [nexusqv3]
+    paths:
+      - '.github/workflows/v3-incremental-ci.yml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/nexusq-core/**'
+      - 'arena/runners/nexusq/**'
+      - 'arena/schemas/**'
+      - 'arena/registry/**'
+      - 'vendor/ml-kem/**'
+      - 'vendor/module-lattice/**'
+  pull_request:
+    branches: [nexusqv3]
+    paths:
+      - '.github/workflows/v3-incremental-ci.yml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/nexusq-core/**'
+      - 'arena/runners/nexusq/**'
+      - 'arena/schemas/**'
+      - 'arena/registry/**'
+      - 'vendor/ml-kem/**'
+      - 'vendor/module-lattice/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v3-incremental-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fast-validation:
+    name: V3 / fast validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99.0
+        with:
+          components: rustfmt
+      - name: Record toolchain and revision
+        run: |
+          mkdir -p v3-ci-results
+          rustc -Vv > v3-ci-results/rustc.txt
+          cargo -V > v3-ci-results/cargo.txt
+          git rev-parse HEAD > v3-ci-results/commit.txt
+          sha256sum Cargo.lock > v3-ci-results/Cargo.lock.sha256
+      - name: Formatting
+        run: cargo fmt --all -- --check
+      - name: Check core without running full workspace tests
+        run: cargo check -p nexusq-core --locked
+      - name: Validate Arena JSON and required schema files
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          files = sorted(Path("arena").rglob("*.json"))
+          for path in files:
+              json.loads(path.read_text())
+          required = [
+              Path("arena/registry/algorithms.json"),
+              Path("arena/registry/implementations.json"),
+              Path("arena/registry/matrix.json"),
+              Path("arena/schemas/benchmark-result.schema.json"),
+          ]
+          missing = [str(p) for p in required if not p.is_file()]
+          assert not missing, f"Missing Arena contract files: {missing}"
+          print(f"Arena JSON valid: {len(files)} files; required schema/registry files present")
+          PY
+      - name: Upload fast validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v3-fast-validation-${{ github.sha }}
+          path: v3-ci-results/
+          if-no-files-found: warn
+          retention-days: 14
+
+  arena-runner-diagnostic:
+    name: V3 / Arena runner build and dependency diagnostic
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - name: Build the Arena runner only
+        run: cargo build --manifest-path arena/runners/nexusq/Cargo.toml --locked
+      - name: Assert Arena resolves repository-local PQC sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p v3-ci-results
+          cargo tree --locked --manifest-path arena/runners/nexusq/Cargo.toml -i ml-kem | tee v3-ci-results/arena-ml-kem-tree.txt
+          cargo tree --locked --manifest-path arena/runners/nexusq/Cargo.toml -i module-lattice | tee v3-ci-results/arena-module-lattice-tree.txt
+          grep -Eq 'ml-kem v[^ ]+ \(.*/vendor/ml-kem\)' v3-ci-results/arena-ml-kem-tree.txt
+          grep -Eq 'module-lattice v[^ ]+ \(.*/vendor/module-lattice\)' v3-ci-results/arena-module-lattice-tree.txt
+          echo 'Arena dependency resolution assertions: PASS' | tee v3-ci-results/arena-resolution-result.txt
+      - name: Upload Arena diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v3-arena-diagnostic-${{ github.sha }}
+          path: v3-ci-results/
+          if-no-files-found: warn
+          retention-days: 14

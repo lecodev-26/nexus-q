@@ -457,8 +457,6 @@ dependencies = [
 [[package]]
 name = "ml-kem"
 version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e15f3e5b957493873e396a66914e83e616b6afe335cdef7efe5c6e1216aba66"
 dependencies = [
  "hybrid-array",
  "kem",
@@ -472,8 +470,6 @@ dependencies = [
 [[package]]
 name = "module-lattice"
 version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c61b87c9683ab7cb1c6871d261ad5479b6b10ceb52c4352aaca3b5d35a8febe"
 dependencies = [
  "ctutils",
  "hybrid-array",
@@ -492,7 +488,7 @@ dependencies = [
 
 [[package]]
 name = "nexusq-core"
-version = "0.1.0"
+version = "2.0.0"
 dependencies = [
  "aes-gcm",
  "argon2",
