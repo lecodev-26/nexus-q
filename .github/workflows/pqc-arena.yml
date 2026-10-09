@@ -807,9 +807,11 @@ jobs:
       - name: Build baseline and controlled profile variants
         run: |
           set -euo pipefail
+          # Pin profile overrides explicitly with Cargo --config instead of relying
+          # on inherited environment. Baseline matches the repository release profile.
           CARGO_TARGET_DIR="$RUNNER_TEMP/nexusq-profile-baseline" cargo build --locked --release --features cached-verifier --manifest-path arena/runners/nexusq/Cargo.toml
-          CARGO_PROFILE_RELEASE_LTO=false CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1 CARGO_TARGET_DIR="$RUNNER_TEMP/nexusq-profile-no-lto" cargo build --locked --release --features cached-verifier --manifest-path arena/runners/nexusq/Cargo.toml
-          CARGO_PROFILE_RELEASE_LTO=thin CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 CARGO_TARGET_DIR="$RUNNER_TEMP/nexusq-profile-cgu16" cargo build --locked --release --features cached-verifier --manifest-path arena/runners/nexusq/Cargo.toml
+          CARGO_TARGET_DIR="$RUNNER_TEMP/nexusq-profile-no-lto" cargo build --locked --release --features cached-verifier --config profile.release.lto=false --config profile.release.codegen-units=1 --manifest-path arena/runners/nexusq/Cargo.toml
+          CARGO_TARGET_DIR="$RUNNER_TEMP/nexusq-profile-cgu16" cargo build --locked --release --features cached-verifier --config 'profile.release.lto="thin"' --config profile.release.codegen-units=16 --manifest-path arena/runners/nexusq/Cargo.toml
       - name: Run 10 randomized alternating rounds per profile
         run: |
           set -euo pipefail
@@ -860,23 +862,29 @@ jobs:
           for r in rows:
             run=r['run_id']
             variant=next(v for v in ('baseline','no-lto','cgu16') if f'profile-{v}-' in run)
-            key=(r['algorithm']['id'],r['algorithm']['parameter_set'],r['operation'],variant)
+            # ML-DSA verify is emitted twice: cached-verifier and conventional
+            # verification. Include the method or these distinct measurements merge.
+            method=r['measurement']['measurement_method']
+            key=(r['algorithm']['id'],r['algorithm']['parameter_set'],r['operation'],method,variant)
             groups.setdefault(key,[]).append(float(r['measurement']['latency_ns']))
-          # The runner emits 10 rows per invocation but has 9 distinct
-          # (algorithm, parameter-set, operation) keys; 3 profiles yield 27 groups.
-          assert len(groups)==27, len(groups)
+          assert len(groups)==30, len(groups)
           assert all(len(v)==10 for v in groups.values()), {k:len(v) for k,v in groups.items() if len(v)!=10}
-          for alg,param,op in sorted({k[:3] for k in groups}):
-            baseline=statistics.median(groups[(alg,param,op,'baseline')])
+          operations=sorted({k[:4] for k in groups})
+          assert len(operations)==10, operations
+          verify_methods={k[3] for k in operations if k[0]=='ml-dsa' and k[2]=='verify'}
+          assert verify_methods=={'per-operation std::time::Instant; median latency','per-operation std::time::Instant; cached MlDsa65VerifyingKey'}, verify_methods
+          for alg,param,op,method in operations:
+            baseline=statistics.median(groups[(alg,param,op,method,'baseline')])
             ratios=[]
             for variant in ('no-lto','cgu16'):
-              value=statistics.median(groups[(alg,param,op,variant)])
+              value=statistics.median(groups[(alg,param,op,method,variant)])
               ratio=value/baseline
               ratios.append((variant,value,ratio))
-            print(f'{alg}-{param} {op}: baseline={baseline:.1f}ns ' + ' '.join(f'{v}={lat:.1f}ns ratio={ratio:.4f} ({(ratio-1)*100:+.2f}%)' for v,lat,ratio in ratios))
-          print('Profile diagnostic: 300 rows, 10 observations per operation/profile: OK')
+            print(f'{alg}-{param} {op} [{method}]: baseline={baseline:.1f}ns ' + ' '.join(f'{v}={lat:.1f}ns ratio={ratio:.4f} ({(ratio-1)*100:+.2f}%)' for v,lat,ratio in ratios))
+          print('Profile diagnostic: 300 rows, 10 measurement-method/profile groups, 10 observations per group: OK')
           PY
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: pqc-arena-v3-profile-diagnostic
           path: |
