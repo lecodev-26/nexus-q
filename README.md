@@ -4,7 +4,7 @@
 
 > Post-quantum cryptographic security engine for protecting data, keys, and identities.
 
-**Version status (engineering branches):** V1 is the frozen baseline; V2 is frozen on `nexusqv2`; V3 is under review on `nexusqv3` and in [PR #44](https://github.com/lecodev-26/nexus-q/pull/44) for promotion to `main`; V4 is the planned architecture-specific performance-kernel line based on [Issue #23](https://github.com/lecodev-26/nexus-q/issues/23). V3 is not considered promoted/released until PR #44 review and required CI gates finish. No external audit, certification, or downstream registry publication is implied.
+**Version status (2026-10-09):** V1 is the frozen baseline (`v1.0.0`); V2 is frozen on `nexusqv2` (`v2.0.0`); V3 has been integrated into `main` by [PR #45](https://github.com/lecodev-26/nexus-q/pull/45), with its V3 Incremental CI and PQC Benchmark Arena runs green. The post-merge `main` CI, including the four-hour fuzz soaks, is a separate validation step and must finish before V3 is treated as fully verified. V4 is the planned architecture-specific performance-kernel line tracked by [Issue #23](https://github.com/lecodev-26/nexus-q/issues/23). No independent audit, certification, or downstream registry publication is implied.
 
 ---
 
@@ -34,13 +34,17 @@ See docs/V2_PERFORMANCE_RESULTS.md for the complete numbers, methodology, and re
 
 Performance investigation is intentionally deferred to V3; V2 is not being modified to manufacture a benchmark result.
 
-## V3 and V4 engineering status
+## V3 engineering release and V4 status
 
-V3 focuses on the hardened post-quantum implementation, reproducible Arena measurements, dependency/source diagnostics, and preservation of security controls. The latest recovered V1/V2/V3 artifacts and checksums are tracked in [`artifact-archive/README.md`](artifact-archive/README.md). The V1-to-V3 latency investigation is documented there as a forensic report; it records observed differences and explicitly distinguishes hypotheses from proven causes. In particular, the current ML-DSA-only zeroize control does not prove SHA3/SHAKE zeroization is the cause of the ML-KEM latency delta.
+V3 consolidates the hardened implementation, the reproducible PQC Benchmark Arena, dependency/profile diagnostics, corrected benchmark sampling and archived evidence. The paired V1/V3 investigation found median increases of +2.70% to +6.33% across the six measured ML-KEM operations in the recorded hosted-runner experiment; conventional ML-DSA verification was +6.40%, key generation +6.82%, and signing median -0.76%. These are observations from one CI runner and ten paired rounds, not universal performance claims. See [`BENCHMARKS.md`](BENCHMARKS.md) and the [forensic report](arena/results/issue-41-v1-v3-latency-root-cause.md).
+
+The V3 GitHub release is an engineering release, not a claim of independent audit, certification, or registry publication. The four-hour fuzz soaks are tracked separately in `main` CI; their completion and results must be reviewed before starting V4.
+
+V3 focuses on the hardened post-quantum implementation, reproducible Arena measurements, dependency/source diagnostics, and preservation of security controls. The latest recovered V1/V2/V3 artifacts and checksums are tracked in [`artifact-archive/README.md`](artifact-archive/README.md). The V1-to-V3 latency investigation is documented as a forensic report; it records observed differences and explicitly distinguishes hypotheses from proven causes. In particular, the ML-DSA-only zeroize control does not prove SHA3/SHAKE zeroization is the cause of the ML-KEM latency delta.
 
 V4 is a **planned development line**, not a release. Its performance work is tracked by [Issue #23](https://github.com/lecodev-26/nexus-q/issues/23). The plan is to prototype AVX2/NEON kernels behind explicit feature dispatch, retain a portable fallback, and require differential tests, cryptographic test vectors, fuzzing, constant-time review, and repeatable same-hardware benchmarks before enabling optimized paths by default. Security zeroization must not be removed as a shortcut to improve latency.
 
-See [`docs/V3_V4_ROADMAP.md`](docs/V3_V4_ROADMAP.md) for the version history and transition checklist. Issue #41 remains open until its benchmark-forensics acceptance criteria are fully met; a green single-run CI does not by itself close that investigation.
+See [`docs/V3_V4_ROADMAP.md`](docs/V3_V4_ROADMAP.md) for the version history and transition checklist. Issue #41 was closed by explicit project decision: V1 prioritizes speed, while V3 retains security hardening and accepts the observed performance cost. The forensic report documents measured deltas without claiming that zeroization explains every difference.
 
 ---
 
@@ -118,7 +122,7 @@ Completed:
 
 The v2 engineering line is frozen on `nexusqv2` at version `2.0.0`. V2 preserves the v1 security model while adding the completed performance, correctness/interoperability, security/fuzzing, backend-strategy and release gates. The final integration PR against `main` is the compatibility checkpoint between the frozen v1 baseline and v2.
 
-The public GitHub v2.0.0 release is intentionally performed only after that integration path and its CI gates are green. Crates.io, PyPI and other SDK registries remain separate publication operations.
+The GitHub V2.0.0 engineering release is historical. Crates.io, PyPI and other SDK registries remain separate publication operations.
 
 See [`docs/V2_ROADMAP.md`](docs/V2_ROADMAP.md), [`docs/V2_RELEASE.md`](docs/V2_RELEASE.md) and [`docs/V2_BENCHMARK_BASELINE.md`](docs/V2_BENCHMARK_BASELINE.md).
 
@@ -210,6 +214,6 @@ Tokio and Serde).
 
 ---
 
-Warning
+Release and assurance note
 
-NEXUS-Q v1.0 is a frozen engineering baseline, not a public package release or independent security certification. The benchmark evidence is intentionally transparent: performance optimization is the principal v2 objective. Do not treat the v1 baseline as production-certified.
+V1, V2 and V3 are engineering version lines. A GitHub release does not imply independent security audit, certification, production readiness, or publication to crates.io/PyPI/other registries. V3 preserves zeroization and accepts the currently observed performance tradeoff. Review the latest `main` CI and four-hour fuzz-soak outcomes before beginning V4.

@@ -8,7 +8,7 @@ Updated: 2026-10-09
 |---|---|---|---|
 | V1 | tag `v1.0.0` | Frozen original baseline for compatibility and performance comparisons | Historical baseline |
 | V2 | `nexusqv2`, tag `v2.0.0` | Security hardening, correctness/interoperability and fuzz/release-gate work | Frozen engineering line; retained for reproducibility |
-| V3 | `nexusqv3`, PR [#44](https://github.com/lecodev-26/nexus-q/pull/44) | Hardened PQC implementation, reproducible benchmark tooling, security hardening, documentation and evidence archive | Integrated into `main` by PR #44; post-merge CI is the final integration gate |
+| V3 | tag `v3.0.0`, branch `nexusqv3`, PR [#45](https://github.com/lecodev-26/nexus-q/pull/45) | Hardened PQC implementation, reproducible benchmark tooling, security hardening, documentation and evidence archive | Integrated into `main`; V3 CI green; post-merge `main` four-hour fuzz soak pending review |
 | V4 | planned branch `nexusqv4` | Assembly/architecture-specific performance-kernel experiments | Planned; issue [#23](https://github.com/lecodev-26/nexus-q/issues/23) remains the source of work |
 
 ## Evidence and artifacts
@@ -20,7 +20,7 @@ Updated: 2026-10-09
 ## Open work before declaring V3 complete
 
 1. Issue #41 is closed by an explicit project decision: V1 prioritizes speed; V3 retains the security hardening and accepts its observed performance cost. Archived measurements are evidence, not proof that every individual delta is caused by zeroization.
-2. PR #42 and PR #44 are merged. The post-merge CI on `main` must finish and its actual conclusions must be reviewed before any further promotion/cleanup. Jobs marked skipped are not evidence that their underlying soak/test completed.
+2. PR #42, #44 and #45 are merged. V3 Incremental CI and PQC Benchmark Arena passed; post-merge CI on `main`, especially both four-hour fuzz soaks, must finish and its actual conclusions must be reviewed before starting V4. Jobs marked skipped are not evidence that their underlying soak/test completed.
 3. Preserve security properties. Do not disable zeroization or weaken controls to chase latency. V4 optimizations must preserve the hardened behavior.
 
 ## V4 performance-kernel entry criteria
