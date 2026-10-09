@@ -56,3 +56,13 @@ Ratios are diagnostic-build `zeroize-off` latency divided by `zeroize-on` latenc
 - Root cause: the runner emits 10 measurements per invocation but only 9 distinct algorithm/parameter/operation keys. Across three profiles, the correct number of groups is 27 (9 × 3), with 10 observations in each group. The previous assertion incorrectly expected 30 groups.
 - Correction: validator now asserts 27 groups and retains the 300-row and 10-observations-per-group checks. Other CI jobs passed; the profile comparison remains unaccepted until this corrected validator runs and the artifact is inspected.
 - No profile performance conclusions are drawn from this failed run; production code and zeroization settings are unchanged.
+- **Correction in the fourth follow-up below:** this 27-group explanation was incomplete because the grouping key omitted `measurement_method`, merging cached and conventional ML-DSA verification. The correct expected count is 30 groups.
+
+
+## Follow-up: fourth LTO/codegen diagnostic CI attempt (2026-10-09)
+
+- Workflow run: [37905756222](https://github.com/lecodev-26/nexus-q/actions/runs/37905756222). The 300-row capture completed, but validation still failed; no performance conclusion is accepted.
+- Root cause after reviewing the runner rather than only the failing assertion: the runner emits **two ML-DSA `verify` measurements** when `cached-verifier` is enabled: conventional verification and cached-verifier verification. They share algorithm, parameter set and operation, but have different `measurement_method` values. Grouping on only algorithm/parameter/operation merged them, which is why the previous “27 groups” correction was wrong and could not enforce ten samples for every distinct measurement.
+- Correct model: 10 distinct measurement types (including both ML-DSA verify methods) × 3 profiles = **30 groups**, each with exactly 10 observations. The validator now includes `measurement_method` in its grouping key and explicitly asserts that both verification methods are present.
+- Build profile overrides are now expressed as explicit Cargo `--config profile.release...` arguments instead of environment overrides, so the intended no-LTO and codegen-units=16 settings are visible in the build command. Artifact upload runs even when validation fails, preserving diagnostic evidence.
+- These are workflow-harness corrections only. Production cryptographic code and zeroization settings are unchanged. Do not launch the next CI until the local validator and workflow checks pass.
