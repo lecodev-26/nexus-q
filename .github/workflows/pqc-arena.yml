@@ -690,6 +690,10 @@ jobs:
 
   v2-performance-gate:
     name: V2-10 performance evidence
+    # V2-10 is the frozen V2 release-line gate. V3 now uses a different
+    # ten-round benchmark schema and its own evidence checks; do not feed V3
+    # artifacts into the legacy five-round V2 evaluator.
+    if: github.ref == 'refs/heads/nexusqv2' || github.base_ref == 'nexusqv2'
     runs-on: ubuntu-latest
     needs: compare-schema
     steps:
