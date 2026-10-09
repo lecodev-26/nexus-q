@@ -1,6 +1,15 @@
 # Issue #41 — Phase 0 local harness smoke test
 
-**Status:** local harness smoke test passed; full hosted CI comparison is pending.
+**Status:** local harness smoke test and hosted CI comparison passed. The PR remains open pending review of all Phase 0 acceptance criteria.
+
+## Hosted CI evidence (2026-10-09)
+
+- [PQC Benchmark Arena run #34](https://github.com/lecodev-26/nexus-q/actions/runs/37895517814) — all executed jobs passed.
+- [NEXUS-Q V3 Incremental CI run #7](https://github.com/lecodev-26/nexus-q/actions/runs/37895517862) — both jobs passed.
+- The CI validated 90 records for V1, 90 for V1+zeroize, and 100 for V3; all matched the JSON Schema and signing sample contract.
+- Across 10 randomized rounds and the same 64 signing seeds, matched-seed latency ratios (candidate / V1) were: V1+zeroize min/median/max = 0.9887 / 1.0015 / 1.0157; V3 = 0.9998 / 1.0014 / 1.0177.
+- Interpretation: V3 median ratio 1.0014 is approximately 0.14% slower than V1 in this dataset. This is descriptive evidence, not proof of performance equivalence or a release performance guarantee.
+- Artifacts: [V1 JSONL](https://github.com/lecodev-26/nexus-q/actions/runs/37895517814/artifacts/11600271953), [V1+zeroize JSONL](https://github.com/lecodev-26/nexus-q/actions/runs/37895517814/artifacts/11600097486), [V3 JSONL](https://github.com/lecodev-26/nexus-q/actions/runs/37895517814/artifacts/11600660639).
 
 ## Environment
 
