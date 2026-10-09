@@ -1,0 +1,12 @@
+fd6e241ded4542de12523d07f356b7679a452103e63d0b63a02cfc858c311634  artifact-archive/workflow-artifacts/2026-10-09/pqc-arena-aws-lc-ec05f25.zip
+7522a50757466421e9543a9601fced96e0a036e86559665c07c6a02d3b1682f3  artifact-archive/workflow-artifacts/2026-10-09/pqc-arena-botan-3.13.0.zip
+926b64485136b0ac349a642b9b2dfd94b50d85858d63758aaada7eb0f706d0e0  artifact-archive/workflow-artifacts/2026-10-09/pqc-arena-circl-1.6.4.zip
+4c6dbb5bea31f27d1bf5ea528a9fd4cef35182ad51ff4d162c9f54f626d9611c  artifact-archive/workflow-artifacts/2026-10-09/pqc-arena-liboqs-0.16.0.zip
+1c8b2fdab800f099bc0abdf3261fafbc30745213175f89ebe718187de99cbbfe  artifact-archive/workflow-artifacts/2026-10-09/pqc-arena-nexusq-reference.zip
+4190b5ff8eb5dfcd436a09f86d929ca143e3dd8080d053aacca756180b5fd404  artifact-archive/workflow-artifacts/2026-10-09/pqc-arena-openssl-3.5.9.zip
+96de1458d445c58098da35e96816f1c0e2ccaf852ab0b58362533cf03bcd61a4  artifact-archive/workflow-artifacts/2026-10-09/pqc-arena-pq-code-package.zip
+2acb65e7cb7fb82f0e8a975c85fe4685ad98de9f7937ce211954e332cfaa1d73  artifact-archive/workflow-artifacts/2026-10-09/pqc-arena-rustcrypto-kems.zip
+48eba8feba1c15c2b5e872fb9bc46560bff5e9e6f20c14096414ed47d19dff86  artifact-archive/workflow-artifacts/2026-10-09/pqc-arena-v1-reference.zip
+ff523bda3cfce500f79696df27311b67197eda1a01accbc35e59ea71258e4861  artifact-archive/workflow-artifacts/2026-10-09/pqc-arena-v1-zeroize-reference.zip
+ffd20167dfcebe75333c0b8ad8c7d76d3c14a81d8e12decb3d6392986c203d5a  artifact-archive/workflow-artifacts/2026-10-09/v3-arena-diagnostic.zip
+461b42906c43971e5b362f7c21b16f5db7ae35da6016e051670e065c4a95cf8b  artifact-archive/workflow-artifacts/2026-10-09/v3-fast-validation.zip
