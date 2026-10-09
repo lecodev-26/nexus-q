@@ -65,4 +65,42 @@ Ratios are diagnostic-build `zeroize-off` latency divided by `zeroize-on` latenc
 - Root cause after reviewing the runner rather than only the failing assertion: the runner emits **two ML-DSA `verify` measurements** when `cached-verifier` is enabled: conventional verification and cached-verifier verification. They share algorithm, parameter set and operation, but have different `measurement_method` values. Grouping on only algorithm/parameter/operation merged them, which is why the previous “27 groups” correction was wrong and could not enforce ten samples for every distinct measurement.
 - Correct model: 10 distinct measurement types (including both ML-DSA verify methods) × 3 profiles = **30 groups**, each with exactly 10 observations. The validator now includes `measurement_method` in its grouping key and explicitly asserts that both verification methods are present.
 - Build profile overrides are now expressed as explicit Cargo `--config profile.release...` arguments instead of environment overrides, so the intended no-LTO and codegen-units=16 settings are visible in the build command. Artifact upload runs even when validation fails, preserving diagnostic evidence.
-- These are workflow-harness corrections only. Production cryptographic code and zeroization settings are unchanged. Do not launch the next CI until the local validator and workflow checks pass.
+- These were workflow-harness corrections only. Production cryptographic code and zeroization settings remained unchanged. The subsequent successful run and its measured results are documented below.
+
+
+## LTO/codegen diagnostic results — CI run 37906728654 (2026-10-09)
+
+**Status: capture and validator passed; evidence reviewed.** The companion NEXUS-Q V3 Incremental CI run `37906728626` also passed for commit `9947385d970f39b00494e62dd26dd44f7d3273c9`. The profile artifact is [available from the PQC Benchmark Arena run](https://github.com/lecodev-26/nexus-q/actions/runs/37906728654/artifacts/11605185482).
+
+Environment: GitHub-hosted `ubuntu-latest`, AMD EPYC 7763 virtualized runner (4 visible CPUs), `rustc 1.98.1 (48a229cea 2026-09-01)`, LLVM 22.1.8. Three release builds were compared in 10 randomized alternating rounds per profile. Each invocation emitted 10 JSON rows; artifact has 300 rows total, 30 distinct measurement-method/profile groups, and 10 observations per group. The raw JSONL, CPU/compiler metadata and dependency tree were downloaded and inspected.
+
+Profiles:
+
+- **Baseline:** repository release profile (`opt-level=3`, Thin LTO, `codegen-units=1`).
+- **No LTO:** `lto=false`, `codegen-units=1`.
+- **CGU16:** Thin LTO, `codegen-units=16`.
+
+Medians and ratios (variant latency / baseline latency; negative percentages mean faster in this run):
+
+| Measurement | Baseline median | No-LTO median | No-LTO vs baseline | CGU16 median | CGU16 vs baseline |
+|---|---:|---:|---:|---:|---:|
+| ML-KEM-768 keygen | 51,125.5 ns | 51,065.5 ns | -0.12% | 48,184.5 ns | -5.75% |
+| ML-KEM-768 encaps | 46,747.0 ns | 46,426.5 ns | -0.69% | 43,095.5 ns | -7.81% |
+| ML-KEM-768 decaps | 56,014.5 ns | 55,639.0 ns | -0.67% | 52,413.0 ns | -6.43% |
+| ML-KEM-1024 keygen | 81,788.0 ns | 80,830.5 ns | -1.17% | 75,806.5 ns | -7.31% |
+| ML-KEM-1024 encaps | 72,951.0 ns | 72,571.0 ns | -0.52% | 66,359.0 ns | -9.04% |
+| ML-KEM-1024 decaps | 84,808.5 ns | 84,572.5 ns | -0.28% | 78,186.0 ns | -7.81% |
+| ML-DSA-65 keygen | 280,994.5 ns | 278,329.5 ns | -0.95% | 282,071.5 ns | +0.38% |
+| ML-DSA-65 sign | 623,258.5 ns | 612,713.5 ns | -1.69% | 625,672.5 ns | +0.39% |
+| ML-DSA-65 verify (cached key) | 69,936.0 ns | 68,884.0 ns | -1.50% | 70,437.0 ns | +0.72% |
+| ML-DSA-65 verify (conventional) | 181,298.5 ns | 178,603.5 ns | -1.49% | 181,724.0 ns | +0.23% |
+
+Median absolute deviations across the 10 observations were also calculated from the raw artifact. For the CGU16 ML-KEM measurements, MAD ranged from 120.0 to 360.5 ns; the observed median gains were materially larger than this within-profile dispersion. This is descriptive evidence from one hosted runner, not a multi-machine benchmark or a statistical guarantee.
+
+### Interpretation and decision
+
+1. **The CGU16 profile is a promising ML-KEM performance candidate on this runner:** all six ML-KEM medians were 5.75–9.04% lower than baseline. This is a profile-level result, not evidence that the cryptographic implementation itself changed.
+2. **The same profile did not improve ML-DSA:** keygen, sign and both verify paths were between +0.23% and +0.72% relative to baseline (slower by those amounts). Do not generalize the ML-KEM result to ML-DSA.
+3. **Disabling LTO had small apparent gains** across these ten medians (0.12–1.69%), which are not sufficient on their own to justify changing the production release profile.
+4. **No production profile change is made by this diagnostic.** Keep the repository baseline unchanged until a broader, repeated comparison establishes the impact on representative end-to-end workloads, binary size, and other target environments. No zeroization setting was changed or disabled.
+5. This result addresses a compile-profile hypothesis only. It does not by itself explain or resolve every prior V1/V2/V3 benchmark discrepancy, and it does not justify claiming a universal V3 speedup.
