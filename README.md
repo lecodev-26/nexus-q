@@ -4,7 +4,7 @@
 
 > Post-quantum cryptographic security engine for protecting data, keys, and identities.
 
-**Version status (2026-10-09):** V1 is the frozen baseline (`v1.0.0`); V2 is frozen on `nexusqv2` (`v2.0.0`); V3 has been integrated into `main` by [PR #45](https://github.com/lecodev-26/nexus-q/pull/45), with its V3 Incremental CI and PQC Benchmark Arena runs green. The post-merge `main` CI, including the four-hour fuzz soaks, is a separate validation step and must finish before V3 is treated as fully verified. V4 is the planned architecture-specific performance-kernel line tracked by [Issue #23](https://github.com/lecodev-26/nexus-q/issues/23). No independent audit, certification, or downstream registry publication is implied.
+**Version status (2026-10-09):** V1 is the frozen baseline (`v1.0.0`); V2 is frozen on `nexusqv2` (`v2.0.0`); V3 has been integrated into `main` by [PR #45](https://github.com/lecodev-26/nexus-q/pull/45), with V3 Incremental CI and PQC Benchmark Arena evidence retained. The release includes a downloadable evidence archive and SHA-256 manifest. Post-release `main` CI and four-hour fuzz soaks are tracked separately; see the linked Actions runs for their current status. V4 is the planned architecture-specific performance-kernel line tracked by [Issue #23](https://github.com/lecodev-26/nexus-q/issues/23). No independent audit, certification, or downstream registry publication is implied.
 
 ---
 
@@ -38,7 +38,7 @@ Performance investigation is intentionally deferred to V3; V2 is not being modif
 
 V3 consolidates the hardened implementation, the reproducible PQC Benchmark Arena, dependency/profile diagnostics, corrected benchmark sampling and archived evidence. The paired V1/V3 investigation found median increases of +2.70% to +6.33% across the six measured ML-KEM operations in the recorded hosted-runner experiment; conventional ML-DSA verification was +6.40%, key generation +6.82%, and signing median -0.76%. These are observations from one CI runner and ten paired rounds, not universal performance claims. See [`BENCHMARKS.md`](BENCHMARKS.md) and the [forensic report](arena/results/issue-41-v1-v3-latency-root-cause.md).
 
-The V3 GitHub release is an engineering release, not a claim of independent audit, certification, or registry publication. The four-hour fuzz soaks are tracked separately in `main` CI; their completion and results must be reviewed before starting V4.
+The V3 GitHub release is an engineering release, not a claim of independent audit, certification, or registry publication. The four-hour fuzz soaks are tracked separately in `main` CI. V4 work can be prepared on its own branch, while the final V3 CI/fuzz result is reviewed.
 
 V3 focuses on the hardened post-quantum implementation, reproducible Arena measurements, dependency/source diagnostics, and preservation of security controls. The latest recovered V1/V2/V3 artifacts and checksums are tracked in [`artifact-archive/README.md`](artifact-archive/README.md). The V1-to-V3 latency investigation is documented as a forensic report; it records observed differences and explicitly distinguishes hypotheses from proven causes. In particular, the ML-DSA-only zeroize control does not prove SHA3/SHAKE zeroization is the cause of the ML-KEM latency delta.
 
@@ -216,4 +216,4 @@ Tokio and Serde).
 
 Release and assurance note
 
-V1, V2 and V3 are engineering version lines. A GitHub release does not imply independent security audit, certification, production readiness, or publication to crates.io/PyPI/other registries. V3 preserves zeroization and accepts the currently observed performance tradeoff. Review the latest `main` CI and four-hour fuzz-soak outcomes before beginning V4.
+V1, V2 and V3 are engineering version lines. A GitHub release does not imply independent security audit, certification, production readiness, or publication to crates.io/PyPI/other registries. V3 preserves zeroization and accepts the currently observed performance tradeoff. The V3 release carries the retained benchmark evidence archive. Review the latest `main` CI and four-hour fuzz-soak outcomes before declaring the final validation cycle complete.

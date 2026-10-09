@@ -3,7 +3,7 @@ name: PQC Benchmark Arena
 on:
   workflow_dispatch:
   push:
-    branches: ["ci/benchmark-arena", "nexusqv2", "nexusqv3"]
+    branches: ["main", "ci/benchmark-arena", "nexusqv2", "nexusqv3"]
   pull_request:
     branches: ["nexusqv2", "nexusqv3"]
 
