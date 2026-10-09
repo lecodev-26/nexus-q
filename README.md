@@ -4,7 +4,7 @@
 
 > Post-quantum cryptographic security engine for protecting data, keys, and identities.
 
-**Status**: **NEXUS-Q v2.0.0 engineering line frozen on `nexusqv2` and integrated into `main`.** V1 remains the frozen compatibility and benchmark baseline. V2 implementation, security/correctness gates, performance gate, release-candidate validation and final release gate are complete. PR #37 completed the V2-to-V1 compatibility integration into `main`; the post-merge `main` CI is the final validation checkpoint before the public GitHub v2.0.0 release. No external audit, certification, or downstream registry publication is implied.
+**Version status (engineering branches):** V1 is the frozen baseline; V2 is frozen on `nexusqv2`; V3 is under review on `nexusqv3` and in [PR #44](https://github.com/lecodev-26/nexus-q/pull/44) for promotion to `main`; V4 is the planned architecture-specific performance-kernel line based on [Issue #23](https://github.com/lecodev-26/nexus-q/issues/23). V3 is not considered promoted/released until PR #44 review and required CI gates finish. No external audit, certification, or downstream registry publication is implied.
 
 ---
 
@@ -33,6 +33,16 @@ These are same-runner V1/V2 reference measurements from the retained Arena JSONL
 See docs/V2_PERFORMANCE_RESULTS.md for the complete numbers, methodology, and retained GitHub Actions artifacts.
 
 Performance investigation is intentionally deferred to V3; V2 is not being modified to manufacture a benchmark result.
+
+## V3 and V4 engineering status
+
+V3 focuses on the hardened post-quantum implementation, reproducible Arena measurements, dependency/source diagnostics, and preservation of security controls. The latest recovered V1/V2/V3 artifacts and checksums are tracked in [`artifact-archive/README.md`](artifact-archive/README.md). The V1-to-V3 latency investigation is documented there as a forensic report; it records observed differences and explicitly distinguishes hypotheses from proven causes. In particular, the current ML-DSA-only zeroize control does not prove SHA3/SHAKE zeroization is the cause of the ML-KEM latency delta.
+
+V4 is a **planned development line**, not a release. Its performance work is tracked by [Issue #23](https://github.com/lecodev-26/nexus-q/issues/23). The plan is to prototype AVX2/NEON kernels behind explicit feature dispatch, retain a portable fallback, and require differential tests, cryptographic test vectors, fuzzing, constant-time review, and repeatable same-hardware benchmarks before enabling optimized paths by default. Security zeroization must not be removed as a shortcut to improve latency.
+
+See [`docs/V3_V4_ROADMAP.md`](docs/V3_V4_ROADMAP.md) for the version history and transition checklist. Issue #41 remains open until its benchmark-forensics acceptance criteria are fully met; a green single-run CI does not by itself close that investigation.
+
+---
 
 ## What is NEXUS-Q?
 
