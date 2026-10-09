@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
+[features]
+default = []
+cached-verifier = []
+
 [dependencies]
 nexusq-core = { path = "../../../crates/nexusq-core" }
 ml-kem = "0.3.2"
