@@ -10,7 +10,7 @@ The files from the existing `artifacts/v2/` tree are copied without modification
 
 - `v2/v2-01/nexusq-local.jsonl`
 - `v2/v2-02/local-profile.tsv`
-- additional files present under `artifacts/v2/v2-02/perf/` are preserved as copied from the repository tree.
+The tracked source tree currently contains these two files; no additional files under `artifacts/v2/v2-02/perf/` were present in the source tree at the time of this snapshot.
 
 ### GitHub Actions archives: V1, V1+zeroize, V3 and adapters
 
