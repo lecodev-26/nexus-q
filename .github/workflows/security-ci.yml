@@ -2,9 +2,9 @@ name: Security and Release Gates
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'v4/**']
   pull_request:
-    branches: [main]
+    branches: [main, nexusqv4]
   workflow_dispatch:
 
 permissions:
@@ -39,8 +39,11 @@ jobs:
           name: cargo-metadata
           path: cargo-metadata.json
 
+  # Fuzzing (including harness builds) is deliberately deferred on V4 work branches.
+  # Full fuzz campaigns remain enabled on pushes to main as the release/security gate.
   fuzz-build:
     name: Fuzz harness build
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

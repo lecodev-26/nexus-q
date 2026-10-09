@@ -11,7 +11,7 @@ This checklist mirrors the phases and acceptance criteria in Issue #23. Keep it 
 
 - [ ] Make `arena/runners/nexusq` resolve the exact local kernel/backend source under development; prove it with `cargo tree -i ml-kem` (or the corresponding resolved dependency tree).
 - [ ] Commit required vendored sources and patch configuration, or remove them; no untracked vendor/patch dependency.
-- [ ] Benchmark all nine operations through the same primitive layer: ML-KEM-768/1024 keygen, encaps, decaps; ML-DSA-65 keygen, sign, verify.
+- [ ] Benchmark all nine operations through the same primitive layer: ML-KEM-768/1024 keygen, encaps, decaps; ML-DSA-65 keygen, sign, verify. See [V4 Arena baseline audit](V4_ARENA_BASELINE_AUDIT.md) for the archived-result limitations.
 - [ ] Use at least 1,000 measured iterations and 100 warmups; `black_box` inputs and outputs; report median, p95, and standard deviation.
 - [ ] Record CPU model/features, governor, toolchain, build/profile and environment metadata in JSONL; compare implementations in the same CI job.
 - [ ] Add cycle counts (`rdtsc`/`cntvct`) alongside wall-clock timing where supported, with a safe unsupported-platform fallback.
@@ -64,7 +64,7 @@ This checklist mirrors the phases and acceptance criteria in Issue #23. Keep it 
 - [ ] NIST ACVP KATs for ML-KEM keygen/encaps/decaps and ML-DSA keygen/sign/verify for every used parameter set.
 - [ ] Differential testing against RustCrypto and AWS-LC (Arena adapter), including invalid inputs and malformed encodings; retain reproducible corpus/results.
 - [ ] Constant-time review and dudect-style timing tests; secret-poisoning/memcheck where supported; document permitted variable-time behavior (public rejection sampling and signing rejection loop only as justified).
-- [ ] Long `cargo-fuzz` campaigns for each kernel and top-level operation; link run evidence and regression corpus.
+- [ ] Long `cargo-fuzz` campaigns for each kernel and top-level operation; link run evidence and regression corpus. These are intentionally deferred during iterative V4 branch commits and must be completed as a release/security gate before final release/merge to `main`.
 - [ ] Miri/sanitizers for scalar/safe code; ASan/UBSan for kernel tests where supported.
 - [ ] Review every unsafe block and assembly routine; record findings and rationale in `docs/PQC_KERNELS.md` and an ADR.
 
@@ -96,5 +96,5 @@ This checklist mirrors the phases and acceptance criteria in Issue #23. Keep it 
 1. Phase 0 blocks optimization claims and subsequent phase completion until measurement plumbing is proven.
 2. Preserve V2/V3 branches and tags; do not modify `main` as part of V4 implementation.
 3. Keep this PR targeted at `nexusqv4`. Once complete and green, merge into `nexusqv4`; only then open a separate review PR from `nexusqv4` to `main`.
-4. Do not weaken zeroization, constant-time requirements, KATs, fuzzing, or release gates to improve speed.
+4. Do not weaken zeroization, constant-time requirements, KATs, fuzzing, or release gates to improve speed. During iterative V4 development, `.github/workflows/security-ci.yml` skips all fuzz jobs on `v4/**` and PRs targeting `nexusqv4`; the full fuzz soaks remain enabled on pushes to `main` and are required before final release. Existing fuzz-build behavior on PRs targeting `main` is preserved.
 5. Every checked box must point to evidence in the PR, CI, or linked issue.
