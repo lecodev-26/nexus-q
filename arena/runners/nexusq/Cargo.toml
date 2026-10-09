@@ -8,3 +8,9 @@ publish = false
 nexusq-core = { path = "../../../crates/nexusq-core" }
 ml-kem = "0.3.2"
 serde_json = "1"
+
+# Keep the standalone Arena runner on the exact PQC sources tested by the
+# main workspace; this manifest is excluded from the root workspace.
+[patch.crates-io]
+ml-kem = { path = "../../../vendor/ml-kem" }
+module-lattice = { path = "../../../vendor/module-lattice" }

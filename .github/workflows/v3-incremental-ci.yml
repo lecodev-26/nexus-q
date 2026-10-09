@@ -92,18 +92,16 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.99.0
       - name: Build the Arena runner only
         run: cargo build --manifest-path arena/runners/nexusq/Cargo.toml --locked
-      - name: Record which ML-KEM source Arena resolves
+      - name: Assert Arena resolves repository-local PQC sources
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p v3-ci-results
-          set +e
-          cargo tree --manifest-path arena/runners/nexusq/Cargo.toml -i ml-kem > v3-ci-results/arena-ml-kem-tree.txt 2>&1
-          rc=$?
-          set -e
-          cat v3-ci-results/arena-ml-kem-tree.txt
-          echo "cargo_tree_exit=$rc" >> v3-ci-results/arena-ml-kem-tree.txt
-          # Diagnostic only for the initial V3 setup. Issue #41 Phase 0 will
-          # turn expected local-path resolution into a blocking assertion.
+          cargo tree --locked --manifest-path arena/runners/nexusq/Cargo.toml -i ml-kem | tee v3-ci-results/arena-ml-kem-tree.txt
+          cargo tree --locked --manifest-path arena/runners/nexusq/Cargo.toml -i module-lattice | tee v3-ci-results/arena-module-lattice-tree.txt
+          grep -Eq 'ml-kem v[^ ]+ \(.*/vendor/ml-kem\)' v3-ci-results/arena-ml-kem-tree.txt
+          grep -Eq 'module-lattice v[^ ]+ \(.*/vendor/module-lattice\)' v3-ci-results/arena-module-lattice-tree.txt
+          echo 'Arena dependency resolution assertions: PASS' | tee v3-ci-results/arena-resolution-result.txt
       - name: Upload Arena diagnostic
         if: always()
         uses: actions/upload-artifact@v4
