@@ -862,7 +862,9 @@ jobs:
             variant=next(v for v in ('baseline','no-lto','cgu16') if f'profile-{v}-' in run)
             key=(r['algorithm']['id'],r['algorithm']['parameter_set'],r['operation'],variant)
             groups.setdefault(key,[]).append(float(r['measurement']['latency_ns']))
-          assert len(groups)==30, len(groups)
+          # The runner emits 10 rows per invocation but has 9 distinct
+          # (algorithm, parameter-set, operation) keys; 3 profiles yield 27 groups.
+          assert len(groups)==27, len(groups)
           assert all(len(v)==10 for v in groups.values()), {k:len(v) for k,v in groups.items() if len(v)!=10}
           for alg,param,op in sorted({k[:3] for k in groups}):
             baseline=statistics.median(groups[(alg,param,op,'baseline')])

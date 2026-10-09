@@ -48,3 +48,11 @@ Ratios are diagnostic-build `zeroize-off` latency divided by `zeroize-on` latenc
 - The CPU-feature portability correction was effective in allowing the benchmark step to run, but it did not resolve this separate sample-capture/count failure.
 - Next harness change: capture each profile invocation to its own temporary JSONL file, assert that each invocation emits exactly 10 records, log the per-invocation count, then append to the aggregate. This should make the point of failure observable instead of only reporting the aggregate count.
 - No LTO/codegen performance conclusion is justified yet. Production code and production zeroization settings remain unchanged.
+
+## Follow-up: third LTO/codegen diagnostic CI attempt (2026-10-09)
+
+- Workflow run: [37904007579](https://github.com/lecodev-26/nexus-q/actions/runs/37904007579).
+- The per-invocation capture fix worked: all 30 randomized profile invocations emitted exactly 10 JSON records each, for 300 total rows. The validator then failed at its group-count assertion (`AssertionError: 27`), not at sample capture.
+- Root cause: the runner emits 10 measurements per invocation but only 9 distinct algorithm/parameter/operation keys. Across three profiles, the correct number of groups is 27 (9 × 3), with 10 observations in each group. The previous assertion incorrectly expected 30 groups.
+- Correction: validator now asserts 27 groups and retains the 300-row and 10-observations-per-group checks. Other CI jobs passed; the profile comparison remains unaccepted until this corrected validator runs and the artifact is inspected.
+- No profile performance conclusions are drawn from this failed run; production code and zeroization settings are unchanged.
