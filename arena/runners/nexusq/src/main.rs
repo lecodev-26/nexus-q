@@ -27,7 +27,21 @@ fn emit(
         "implementation": {"id":"nexusq","version":env!("CARGO_PKG_VERSION"),"commit":option_env!("NEXUSQ_COMMIT")},
         "algorithm": {"id":algorithm,"parameter_set":parameter_set},
         "operation": operation,
-        "environment": {"target":format!("{}-{}",env::consts::ARCH,env::consts::OS),"os":env::consts::OS,"cpu":env::var("NEXUSQ_CPU").unwrap_or_else(|_| "unknown".into()),"cpu_features":env::var("NEXUSQ_CPU_FEATURES").unwrap_or_default().split(',').filter(|x| !x.is_empty()).collect::<Vec<_>>(),"compiler":"rustc","compiler_version":env::var("RUSTC_VERSION").unwrap_or_else(|_| "unknown".into()),"optimization":env::var("NEXUSQ_OPT").unwrap_or_else(|_| "unknown".into()),"harness_version":"arena-v1"},
+        "environment": {
+            "target":format!("{}-{}",env::consts::ARCH,env::consts::OS),
+            "os":env::consts::OS,
+            "cpu":env::var("NEXUSQ_CPU").unwrap_or_else(|_| "unknown".into()),
+            "cpu_features":env::var("NEXUSQ_CPU_FEATURES").unwrap_or_default().split(',').filter(|x| !x.is_empty()).collect::<Vec<_>>(),
+            "compiler":"rustc",
+            "compiler_version":env::var("RUSTC_VERSION").unwrap_or_else(|_| "unknown".into()),
+            "rustc_verbose":env::var("NEXUSQ_RUSTC_VERBOSE").unwrap_or_else(|_| "unknown".into()),
+            "cargo_lock_sha256":env::var("NEXUSQ_CARGO_LOCK_SHA256").unwrap_or_else(|_| "unknown".into()),
+            "cpu_frequency_khz":env::var("NEXUSQ_CPU_FREQUENCY_KHZ").ok().and_then(|x| x.parse::<u64>().ok()),
+            "cpu_governor":env::var("NEXUSQ_CPU_GOVERNOR").unwrap_or_else(|_| "unknown".into()),
+            "run_order":env::var("NEXUSQ_RUN_ORDER").unwrap_or_else(|_| "unknown".into()),
+            "optimization":env::var("NEXUSQ_OPT").unwrap_or_else(|_| "unknown".into()),
+            "harness_version":"arena-v2-distribution"
+        },
         "measurement": {"iterations":ITERATIONS,"warmups":WARMUPS,"measurement_timestamp_unix_ns":SystemTime::now().duration_since(UNIX_EPOCH).expect("system clock before Unix epoch").as_nanos(),"latency_ns":latency_ns,"throughput_ops_s":1_000_000_000.0/latency_ns,"memory_bytes":null,"measurement_method":"std::time::Instant mean wall-clock latency"},
         "sizes":sizes
     });
