@@ -177,21 +177,43 @@ jobs:
             assert len(rows[name])==expected, (name,len(rows[name]),expected)
             for row in rows[name]: jsonschema.Draft202012Validator(schema).validate(row)
             assert all(r["measurement"]["iterations"]==320 for r in rows[name] if r["operation"]=="sign")
+            assert all(len(r["measurement"].get("samples_ns",[]))==320 for r in rows[name] if r["operation"]=="sign")
             assert all(len(r["measurement"].get("seed_samples",[]))==64 for r in rows[name] if r["operation"]=="sign")
+            if name == "v3":
+              for row in rows[name]:
+                measurement=row["measurement"]
+                if row["operation"] != "sign":
+                  assert measurement["iterations"]==50, (row["algorithm"],row["operation"],measurement["iterations"])
+                  assert len(measurement.get("samples_ns",[]))==50, (row["algorithm"],row["operation"],"missing individual samples")
+                  stats=measurement.get("statistics",{})
+                  assert all(key in stats for key in ("sample_count","min_ns","median_ns","p95_ns","stddev_ns")), (row["algorithm"],row["operation"],"missing summary stats")
+                  assert stats["sample_count"]==50
             assert all(r["environment"].get("cargo_lock_sha256") for r in rows[name])
             assert all(r["environment"].get("rustc_verbose") for r in rows[name])
             assert len({r["environment"]["cpu"] for r in rows[name]})==1
             print(name, "schema/metadata/sign-sample contract: OK", len(rows[name]), "records")
           def sign_rows(name):
             return [r for r in rows[name] if r["operation"]=="sign"]
-          def seed_medians(row):
-            return {s["seed_id"]:s["summary"]["median_ns"] for s in row["measurement"]["seed_samples"]}
+          from statistics import median
+          def aggregate_seed_medians(name):
+            rounds=sign_rows(name)
+            assert len(rounds)==10, (name,"expected ten sign rounds",len(rounds))
+            per_seed={}
+            expected_seed_ids=None
+            for row in rounds:
+              seed_values={s["seed_id"]:s["summary"]["median_ns"] for s in row["measurement"]["seed_samples"]}
+              assert len(seed_values)==64, (name,"seed count mismatch")
+              if expected_seed_ids is None: expected_seed_ids=set(seed_values)
+              assert set(seed_values)==expected_seed_ids, (name,"seed corpus changed between rounds")
+              for seed_id,value in seed_values.items(): per_seed.setdefault(seed_id,[]).append(value)
+            assert all(len(values)==10 for values in per_seed.values()), (name,"incomplete seed rounds")
+            return {seed_id:median(values) for seed_id,values in per_seed.items()}
+          baseline=aggregate_seed_medians("v1")
           for name in ("v1-zeroize","v3"):
-            baseline={s["seed_id"]:s["summary"]["median_ns"] for s in sign_rows("v1")[0]["measurement"]["seed_samples"]}
-            candidate=seed_medians(sign_rows(name)[0])
+            candidate=aggregate_seed_medians(name)
             assert baseline.keys()==candidate.keys(), (name,"seed corpus mismatch")
             ratios=sorted(candidate[k]/baseline[k] for k in baseline)
-            print(name, "matched-seed sign median ratio min/median/max:", round(ratios[0],4), round(ratios[len(ratios)//2],4), round(ratios[-1],4))
+            print(name, "matched-seed ratio across 10 rounds min/median/max:", round(ratios[0],4), round(ratios[len(ratios)//2],4), round(ratios[-1],4))
           assert all(r["environment"]["run_order"]!="unknown" for group in rows.values() for r in group)
           print("10 randomized rounds and identical 64-seed sign corpus: OK")
           PY3
