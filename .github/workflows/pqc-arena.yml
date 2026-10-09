@@ -804,14 +804,21 @@ jobs:
           rustc -vV > arena/results/ci/profile-diagnostic-rustc.txt
           lscpu > arena/results/ci/profile-diagnostic-lscpu.txt
           cargo tree --locked --manifest-path arena/runners/nexusq/Cargo.toml -i ml-kem > arena/results/ci/profile-diagnostic-ml-kem-tree.txt
-      - name: Build baseline and controlled profile variants
+      - name: Build explicit production-equivalent and controlled profile variants
         run: |
           set -euo pipefail
-          # Pin profile overrides explicitly with Cargo --config instead of relying
-          # on inherited environment. Baseline matches the repository release profile.
-          CARGO_TARGET_DIR="$RUNNER_TEMP/nexusq-profile-baseline" cargo build --locked --release --features cached-verifier --manifest-path arena/runners/nexusq/Cargo.toml
-          CARGO_TARGET_DIR="$RUNNER_TEMP/nexusq-profile-no-lto" cargo build --locked --release --features cached-verifier --config profile.release.lto=false --config profile.release.codegen-units=1 --manifest-path arena/runners/nexusq/Cargo.toml
-          CARGO_TARGET_DIR="$RUNNER_TEMP/nexusq-profile-cgu16" cargo build --locked --release --features cached-verifier --config 'profile.release.lto="thin"' --config profile.release.codegen-units=16 --manifest-path arena/runners/nexusq/Cargo.toml
+          # The Arena runner is an independent workspace, so the root Cargo.toml
+          # [profile.release] is NOT inherited. Pin every relevant setting explicitly.
+          # Match the repository release profile: opt=3, thin LTO, CGU=1,
+          # panic=abort, strip=symbols, debug=false.
+          printf '%s\n' \
+            'baseline: opt-level=3,lto=thin,codegen-units=1,panic=abort,strip=symbols,debug=false' \
+            'no-lto: opt-level=3,lto=false,codegen-units=1,panic=abort,strip=symbols,debug=false' \
+            'cgu16: opt-level=3,lto=thin,codegen-units=16,panic=abort,strip=symbols,debug=false' \
+            > arena/results/ci/profile-diagnostic-profiles.txt
+          CARGO_TARGET_DIR="$RUNNER_TEMP/nexusq-profile-baseline" cargo build --locked --release --features cached-verifier --config profile.release.opt-level=3 --config 'profile.release.lto="thin"' --config profile.release.codegen-units=1 --config 'profile.release.panic="abort"' --config 'profile.release.strip="symbols"' --config profile.release.debug=false --manifest-path arena/runners/nexusq/Cargo.toml
+          CARGO_TARGET_DIR="$RUNNER_TEMP/nexusq-profile-no-lto" cargo build --locked --release --features cached-verifier --config profile.release.opt-level=3 --config profile.release.lto=false --config profile.release.codegen-units=1 --config 'profile.release.panic="abort"' --config 'profile.release.strip="symbols"' --config profile.release.debug=false --manifest-path arena/runners/nexusq/Cargo.toml
+          CARGO_TARGET_DIR="$RUNNER_TEMP/nexusq-profile-cgu16" cargo build --locked --release --features cached-verifier --config profile.release.opt-level=3 --config 'profile.release.lto="thin"' --config profile.release.codegen-units=16 --config 'profile.release.panic="abort"' --config 'profile.release.strip="symbols"' --config profile.release.debug=false --manifest-path arena/runners/nexusq/Cargo.toml
       - name: Run 10 randomized alternating rounds per profile
         run: |
           set -euo pipefail
@@ -892,6 +899,7 @@ jobs:
             arena/results/ci/profile-diagnostic-rustc.txt
             arena/results/ci/profile-diagnostic-lscpu.txt
             arena/results/ci/profile-diagnostic-ml-kem-tree.txt
+            arena/results/ci/profile-diagnostic-profiles.txt
           retention-days: 14
 
 
