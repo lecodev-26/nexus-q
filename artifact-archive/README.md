@@ -47,3 +47,18 @@ The archived run validated 90 V1 records, 90 V1+zeroize records and 100 V3 recor
 ## Scope note
 
 This is the initial V1/V2/V3 archive snapshot. It captures all currently tracked files under the repository's `artifacts/v2/` directory and the listed V1/V3 CI artifacts from the identified runs. Historical V2 GitHub Actions artifacts from other runs must be enumerated and added separately if they are still available; this README intentionally does not claim that every historical Actions artifact has already been recovered.
+
+## Version history and next development line
+
+- **V1** — original baseline implementation. Historical tag: `v1.0.0`. Archived benchmark inputs are reference evidence, not a guarantee that every historical CI artifact remains recoverable.
+- **V2** — security hardening and the V2 release line. The repository snapshot currently includes the two tracked V2 research files listed above. The four-hour fuzz soak checks on the 2026-10-09 `Security and Release Gates` run were skipped by workflow conditions; do not describe that run as a completed four-hour soak.
+- **V3** — current PQC implementation and benchmark/CI work on `nexusqv3`. The latest captured Arena run is [37918298351](https://github.com/lecodev-26/nexus-q/actions/runs/37918298351), with its raw downloaded JSONL and diagnostic metadata retained under `workflow-artifacts/2026-10-09/latest-issue41-run-37918298351/`. The latest security-gate artifacts are from [37918321901](https://github.com/lecodev-26/nexus-q/actions/runs/37918321901) and are retained under `workflow-artifacts/2026-10-09/latest-security-run-37918321901/`.
+- **V4 (planned)** — performance-kernel experiments tracked by [Issue #23](https://github.com/lecodev-26/nexus-q/issues/23), including architecture-specific AVX2/NEON paths, portable fallback, differential tests, cryptographic test vectors, fuzzing, constant-time review, and reproducible benchmarks. V4 is a development branch/plan, not a released version. Do not remove or close Issue #23.
+
+## Issue #41 forensic report
+
+The report [`research-results/issue-41-v1-v3-latency-root-cause.md`](research-results/issue-41-v1-v3-latency-root-cause.md) documents the observed paired V1/V3 results and limits of causal attribution. In particular, the V1+zeroize control toggles ML-DSA's zeroize feature; it does not prove that SHA3/SHAKE zeroization caused the ML-KEM delta. The report is a research snapshot and does not mean Issue #41's full acceptance criteria have been met or that the issue is closed.
+
+## Artifact completeness and integrity
+
+This archive now includes raw files downloaded from the latest recorded Arena and security-gate runs in addition to the earlier ZIP snapshot. The download is scoped to those identified runs; it is **not** an assertion that every historical artifact from every V1/V2/V3 branch has been recovered. A checksum manifest is generated for the complete tracked archive contents. To verify files from the repository root, run `sha256sum -c artifact-archive/SHA256SUMS-2026-10-09.txt`.
