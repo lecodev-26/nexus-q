@@ -791,6 +791,80 @@ jobs:
           PY
 
 
+  profile-diagnostic:
+    name: V3 LTO / codegen-units diagnostic
+    if: github.event_name == 'workflow_dispatch' || github.base_ref == 'nexusqv3' || github.ref == 'refs/heads/nexusqv3'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.98.1
+      - name: Capture profile diagnostic environment
+        run: |
+          mkdir -p arena/results/ci
+          rustc -vV > arena/results/ci/profile-diagnostic-rustc.txt
+          lscpu > arena/results/ci/profile-diagnostic-lscpu.txt
+          cargo tree --locked --manifest-path arena/runners/nexusq/Cargo.toml -i ml-kem > arena/results/ci/profile-diagnostic-ml-kem-tree.txt
+      - name: Build baseline and controlled profile variants
+        run: |
+          set -euo pipefail
+          CARGO_TARGET_DIR="$RUNNER_TEMP/nexusq-profile-baseline" cargo build --locked --release --features cached-verifier --manifest-path arena/runners/nexusq/Cargo.toml
+          CARGO_PROFILE_RELEASE_LTO=false CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1 CARGO_TARGET_DIR="$RUNNER_TEMP/nexusq-profile-no-lto" cargo build --locked --release --features cached-verifier --manifest-path arena/runners/nexusq/Cargo.toml
+          CARGO_PROFILE_RELEASE_LTO=thin CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 CARGO_TARGET_DIR="$RUNNER_TEMP/nexusq-profile-cgu16" cargo build --locked --release --features cached-verifier --manifest-path arena/runners/nexusq/Cargo.toml
+      - name: Run 10 randomized alternating rounds per profile
+        run: |
+          set -euo pipefail
+          : > arena/results/ci/profile-diagnostic.jsonl
+          cpu="$(lscpu | awk -F: '/Model name/ {sub(/^[ \t]+/, "", $2); print $2; exit}')"
+          features="$(grep -m1 '^Flags:' /proc/cpuinfo | cut -d: -f2- | xargs)"
+          for round in $(seq 1 10); do
+            for variant in $(printf '%s\n' baseline no-lto cgu16 | shuf); do
+              case "$variant" in
+                baseline) binary="$RUNNER_TEMP/nexusq-profile-baseline/release/nexusq-arena-runner" ;;
+                no-lto) binary="$RUNNER_TEMP/nexusq-profile-no-lto/release/nexusq-arena-runner" ;;
+                cgu16) binary="$RUNNER_TEMP/nexusq-profile-cgu16/release/nexusq-arena-runner" ;;
+              esac
+              echo "=== profile round $round: $variant ==="
+              NEXUSQ_CPU="$cpu" NEXUSQ_CPU_FEATURES="$features" RUSTC_VERSION="$(rustc --version --verbose | head -1)" NEXUSQ_OPT=release NEXUSQ_RUN_ID="profile-$variant-round-$round" \
+                "$binary" >> arena/results/ci/profile-diagnostic.jsonl
+            done
+          done
+      - name: Validate profile samples and report descriptive medians
+        run: |
+          python3 - <<'PY'
+          import json, statistics
+          from pathlib import Path
+          p=Path('arena/results/ci/profile-diagnostic.jsonl')
+          rows=[json.loads(x) for x in p.read_text().splitlines() if x.strip()]
+          assert len(rows)==300, len(rows)
+          groups={}
+          for r in rows:
+            run=r['run_id']
+            variant=next(v for v in ('baseline','no-lto','cgu16') if f'profile-{v}-' in run)
+            key=(r['algorithm']['id'],r['algorithm']['parameter_set'],r['operation'],variant)
+            groups.setdefault(key,[]).append(float(r['measurement']['latency_ns']))
+          assert len(groups)==30, len(groups)
+          assert all(len(v)==10 for v in groups.values()), {k:len(v) for k,v in groups.items() if len(v)!=10}
+          for alg,param,op in sorted({k[:3] for k in groups}):
+            baseline=statistics.median(groups[(alg,param,op,'baseline')])
+            ratios=[]
+            for variant in ('no-lto','cgu16'):
+              value=statistics.median(groups[(alg,param,op,variant)])
+              ratio=value/baseline
+              ratios.append((variant,value,ratio))
+            print(f'{alg}-{param} {op}: baseline={baseline:.1f}ns ' + ' '.join(f'{v}={lat:.1f}ns ratio={ratio:.4f} ({(ratio-1)*100:+.2f}%)' for v,lat,ratio in ratios))
+          print('Profile diagnostic: 300 rows, 10 observations per operation/profile: OK')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pqc-arena-v3-profile-diagnostic
+          path: |
+            arena/results/ci/profile-diagnostic.jsonl
+            arena/results/ci/profile-diagnostic-rustc.txt
+            arena/results/ci/profile-diagnostic-lscpu.txt
+            arena/results/ci/profile-diagnostic-ml-kem-tree.txt
+          retention-days: 14
+
+
   v2-performance-gate:
     name: V2-10 performance evidence
     # V2-10 is the frozen V2 release-line gate. V3 now uses a different
