@@ -120,6 +120,21 @@ jobs:
           git reset --hard "${{ github.event.pull_request.head.sha || github.sha }}"
           echo "$(sha256sum arena/runners/nexusq/Cargo.lock | cut -d' ' -f1)" > "${{ runner.temp }}/v3-lock-hash"
           NEXUSQ_COMMIT="${{ github.event.pull_request.head.sha || github.sha }}" cargo build --locked --release --features cached-verifier --manifest-path arena/runners/nexusq/Cargo.toml
+      - name: Assert Arena resolves the intended patched PQC sources
+        run: |
+          kem_tree="$(cargo tree --locked --manifest-path arena/runners/nexusq/Cargo.toml -i ml-kem)"
+          printf '%s\n' "$kem_tree"
+          printf '%s\n' "$kem_tree" | grep -F 'vendor/ml-kem' >/dev/null || {
+            echo 'ERROR: Arena ml-kem does not resolve to vendor/ml-kem' >&2
+            exit 1
+          }
+          lattice_tree="$(cargo tree --locked --manifest-path arena/runners/nexusq/Cargo.toml -i module-lattice)"
+          printf '%s\n' "$lattice_tree"
+          printf '%s\n' "$lattice_tree" | grep -F 'vendor/module-lattice' >/dev/null || {
+            echo 'ERROR: Arena module-lattice does not resolve to vendor/module-lattice' >&2
+            exit 1
+          }
+          echo 'Arena patched PQC source resolution: OK'
       - name: Run 10 randomized alternating rounds
         env:
           CPU: ${{ steps.env.outputs.cpu }}
