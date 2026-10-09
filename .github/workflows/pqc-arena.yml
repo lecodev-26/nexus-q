@@ -120,6 +120,25 @@ jobs:
           git reset --hard "${{ github.event.pull_request.head.sha || github.sha }}"
           echo "$(sha256sum arena/runners/nexusq/Cargo.lock | cut -d' ' -f1)" > "${{ runner.temp }}/v3-lock-hash"
           NEXUSQ_COMMIT="${{ github.event.pull_request.head.sha || github.sha }}" cargo build --locked --release --features cached-verifier --manifest-path arena/runners/nexusq/Cargo.toml
+      - name: Build diagnostic variant without SHA3 zeroize feature (non-production)
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}/nexusq-arena-v3-sha3-zeroize-off
+        run: |
+          python3 - <<'PYDIAG'
+          from pathlib import Path
+          p = Path("Cargo.toml")
+          s = p.read_text()
+          old = 'sha3 = { version = "0.11.0-rc.5", features = ["zeroize"] }'
+          new = 'sha3 = "0.11.0-rc.5"'
+          assert old in s, "expected V3 SHA3 zeroize feature declaration"
+          p.write_text(s.replace(old, new, 1))
+          PYDIAG
+          # Diagnostic only: isolate SHA3 state zeroization cost. Never publish this variant.
+          cargo check --offline --manifest-path arena/runners/nexusq/Cargo.toml
+          echo "$(sha256sum arena/runners/nexusq/Cargo.lock | cut -d' ' -f1)" > "${{ runner.temp }}/v3-sha3-zeroize-off-lock-hash"
+          NEXUSQ_COMMIT="${{ github.event.pull_request.head.sha || github.sha }}-sha3-zeroize-off-diagnostic" cargo build --locked --release --features cached-verifier --manifest-path arena/runners/nexusq/Cargo.toml
+          git checkout -- Cargo.toml arena/runners/nexusq/Cargo.lock
+          git diff --exit-code -- Cargo.toml arena/runners/nexusq/Cargo.lock
       - name: Assert Arena resolves the intended patched PQC sources
         run: |
           kem_tree="$(cargo tree --locked --manifest-path arena/runners/nexusq/Cargo.toml -i ml-kem)"
@@ -170,6 +189,25 @@ jobs:
               NEXUSQ_CPU_FREQUENCY_KHZ="$CPU_FREQUENCY" NEXUSQ_CPU_GOVERNOR="$CPU_GOVERNOR" \
               NEXUSQ_RUN_ORDER="round-$round-$variant" NEXUSQ_OPT=release NEXUSQ_RUN_ID="$variant-round-$round" \
                 "$binary" >> "$output"
+            done
+          done
+          : > arena/results/ci/v3-sha3-zeroize-diagnostic.jsonl
+          for round in $(seq 1 10); do
+            for variant in $(printf '%s\n' v3-sha3-zeroize-on v3-sha3-zeroize-off | shuf); do
+              case "$variant" in
+                v3-sha3-zeroize-on)
+                  binary="${{ runner.temp }}/nexusq-arena-v3/release/nexusq-arena-runner"
+                  lock_hash="$(cat '${{ runner.temp }}/v3-lock-hash')" ;;
+                v3-sha3-zeroize-off)
+                  binary="${{ runner.temp }}/nexusq-arena-v3-sha3-zeroize-off/release/nexusq-arena-runner"
+                  lock_hash="$(cat '${{ runner.temp }}/v3-sha3-zeroize-off-lock-hash')" ;;
+              esac
+              echo "=== SHA3 zeroize diagnostic round $round: $variant ==="
+              NEXUSQ_CPU="$CPU" NEXUSQ_CPU_FEATURES="$FEATURES" RUSTC_VERSION="$RUSTC_VERSION" \
+              NEXUSQ_RUSTC_VERBOSE="$RUSTC_VERBOSE" NEXUSQ_CARGO_LOCK_SHA256="$lock_hash" \
+              NEXUSQ_CPU_FREQUENCY_KHZ="$CPU_FREQUENCY" NEXUSQ_CPU_GOVERNOR="$CPU_GOVERNOR" \
+              NEXUSQ_RUN_ORDER="round-$round-$variant" NEXUSQ_OPT=release NEXUSQ_RUN_ID="$variant-round-$round" \
+                "$binary" >> arena/results/ci/v3-sha3-zeroize-diagnostic.jsonl
             done
           done
       - name: Validate samples, metadata and matched-seed comparisons
@@ -231,6 +269,29 @@ jobs:
             print(name, "matched-seed ratio across 10 rounds min/median/max:", round(ratios[0],4), round(ratios[len(ratios)//2],4), round(ratios[-1],4))
           assert all(r["environment"]["run_order"]!="unknown" for group in rows.values() for r in group)
           print("10 randomized rounds and identical 64-seed sign corpus: OK")
+          diagnostic_path=Path("arena/results/ci/v3-sha3-zeroize-diagnostic.jsonl")
+          diagnostic=[json.loads(line) for line in diagnostic_path.read_text().splitlines() if line.startswith("{")]
+          assert len(diagnostic)==200, ("sha3 zeroize diagnostic row count",len(diagnostic))
+          for row in diagnostic:
+            jsonschema.Draft202012Validator(schema).validate(row)
+            assert row["operation"] in {"keygen","encaps","decaps","sign","verify"}
+          from collections import defaultdict
+          grouped=defaultdict(dict)
+          for row in diagnostic:
+            order=row["environment"]["run_order"]
+            variant="off" if "zeroize-off" in order else "on"
+            round_id=order.split("-")[1]
+            key=(row["algorithm"]["id"],row["algorithm"]["parameter_set"],row["operation"])
+            grouped[key].setdefault(round_id,{})[variant]=row["measurement"]["statistics"]["median_ns"]
+          for key, rounds in sorted(grouped.items()):
+            if key[0] != "ml-kem":
+              continue
+            ratios=[pair["off"]/pair["on"] for pair in rounds.values() if set(pair)=={"on","off"}]
+            assert len(ratios)==10, (key,"expected ten paired rounds",len(ratios))
+            ratios.sort()
+            print("SHA3 zeroize diagnostic off/on median ratio",key,"min/median/max:",round(ratios[0],4),round(ratios[len(ratios)//2],4),round(ratios[-1],4))
+          assert all(len(rounds)==10 and all(set(pair)=={"on","off"} for pair in rounds.values()) for key,rounds in grouped.items() if key[0]=="ml-kem")
+          print("SHA3 zeroize diagnostic: 10 paired rounds per ML-KEM operation: OK")
           PY3
       - uses: actions/upload-artifact@v4
         with:
@@ -246,6 +307,11 @@ jobs:
         with:
           name: pqc-arena-nexusq-reference
           path: arena/results/ci/nexusq-reference.jsonl
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pqc-arena-v3-sha3-zeroize-diagnostic
+          path: arena/results/ci/v3-sha3-zeroize-diagnostic.jsonl
           retention-days: 14
 
 # External implementations will be added only with pinned versions/commits,
