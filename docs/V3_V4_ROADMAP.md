@@ -8,7 +8,7 @@ Updated: 2026-10-09
 |---|---|---|---|
 | V1 | tag `v1.0.0` | Frozen original baseline for compatibility and performance comparisons | Historical baseline |
 | V2 | `nexusqv2`, tag `v2.0.0` | Security hardening, correctness/interoperability and fuzz/release-gate work | Frozen engineering line; retained for reproducibility |
-| V3 | `nexusqv3`, PR [#44](https://github.com/lecodev-26/nexus-q/pull/44) | Hardened PQC implementation, benchmark reproducibility, dependency/profile diagnostics, documentation and evidence archive | Integration review; do not claim promoted to `main` until required checks and review complete |
+| V3 | `nexusqv3`, PR [#44](https://github.com/lecodev-26/nexus-q/pull/44) | Hardened PQC implementation, reproducible benchmark tooling, security hardening, documentation and evidence archive | Integrated into `main` by PR #44; post-merge CI is the final integration gate |
 | V4 | planned branch `nexusqv4` | Assembly/architecture-specific performance-kernel experiments | Planned; issue [#23](https://github.com/lecodev-26/nexus-q/issues/23) remains the source of work |
 
 ## Evidence and artifacts
@@ -19,10 +19,9 @@ Updated: 2026-10-09
 
 ## Open work before declaring V3 complete
 
-1. Finish the forensic acceptance criteria for [Issue #41](https://github.com/lecodev-26/nexus-q/issues/41): isolate dependency source, feature/zeroize, and profile effects; run at least three comparable Arena jobs; report robust statistics; and document the ML-KEM cause only when demonstrated.
-2. Finish review and required CI on PR #42 before merging the benchmark work into `nexusqv3`.
-3. Finish PR #44 review and required checks before promoting V3 to `main`. Jobs marked skipped are not evidence that their underlying soak/test completed.
-4. Preserve security properties. Do not disable zeroization or weaken controls to chase latency.
+1. Issue #41 is closed by an explicit project decision: V1 prioritizes speed; V3 retains the security hardening and accepts its observed performance cost. Archived measurements are evidence, not proof that every individual delta is caused by zeroization.
+2. PR #42 and PR #44 are merged. The post-merge CI on `main` must finish and its actual conclusions must be reviewed before any further promotion/cleanup. Jobs marked skipped are not evidence that their underlying soak/test completed.
+3. Preserve security properties. Do not disable zeroization or weaken controls to chase latency. V4 optimizations must preserve the hardened behavior.
 
 ## V4 performance-kernel entry criteria
 
@@ -34,4 +33,4 @@ Updated: 2026-10-09
 
 ## Branch hygiene
 
-The intended long-lived branches are `main`, `nexusqv2`, `nexusqv3`, and `nexusqv4`. Delete diagnostic or temporary branches only after verifying their unique commits and artifacts are merged or preserved in the archive. Do not delete `nexusqv2` or `nexusqv3`. Do not close Issue #23. Close Issue #41 only after its explicit acceptance criteria are met—not merely because a related PR or one CI run is green.
+The intended long-lived branches are `main`, `nexusqv2`, `nexusqv3`, and `nexusqv4`. Delete diagnostic or temporary branches only after verifying their unique commits and artifacts are merged or preserved in the archive. Do not delete `nexusqv2` or `nexusqv3`. Do not close Issue #23. Issue #41 is closed under the documented speed-versus-security decision. Do not close Issue #23 until its own implementation and validation criteria are met.
