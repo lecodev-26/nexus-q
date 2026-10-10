@@ -1,12 +1,12 @@
 name: Security and Release Gates
 
 on:
-  # V4 PRs receive the full security gates through pull_request; avoid
-  # duplicating the same expensive run on every push to the PR branch.
+  # Run the full Rust security gates for main and V4 PRs targeting nexusqv4.
+  # Fuzz harness builds and long fuzz soaks remain release-gated on main.
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, nexusqv4]
   workflow_dispatch:
 
 permissions:

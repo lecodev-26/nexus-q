@@ -74,18 +74,10 @@ pub extern "C" fn nexusq_last_error_message() -> *const c_char {
     })
 }
 
-// A helper to read a NUL-terminated C string as a &str slice.
-//
-// Returns None on null input or invalid UTF-8.
-//
-// # Safety
-//
-// `s` must be either null or a valid NUL-terminated C string.
-unsafe fn cstr_to_str<'a>(s: *const c_char) -> Option<&'a str> {
-    if s.is_null() {
-        return None;
-    }
-    unsafe { CStr::from_ptr(s) }.to_str().ok()
+// Read UTF-8 from an already validated CStr. The returned borrow is tied to
+// the CStr reference, not an unconstrained lifetime attached to a raw pointer.
+fn cstr_to_str(s: &CStr) -> Option<&str> {
+    s.to_str().ok()
 }
 
 // =============================================================================
@@ -111,19 +103,27 @@ pub unsafe extern "C" fn nexusq_vault_create(
     label: *const c_char,
 ) -> i32 {
     clear_last_error();
-    let Some(path) = (unsafe { cstr_to_str(path) }) else {
+    let Some(path) = (if path.is_null() {
+        None
+    } else {
+        unsafe { cstr_to_str(CStr::from_ptr(path)) }
+    }) else {
         set_last_error("path is null or not valid UTF-8".into());
         return -1;
     };
-    let Some(password) = (unsafe { cstr_to_str(password) }) else {
+    let Some(password) = (if password.is_null() {
+        None
+    } else {
+        unsafe { cstr_to_str(CStr::from_ptr(password)) }
+    }) else {
         set_last_error("password is null or not valid UTF-8".into());
         return -1;
     };
     let label = if label.is_null() {
         None
     } else {
-        match unsafe { cstr_to_str(label) } {
-            Some(s) => Some(s.to_string()),
+        match unsafe { cstr_to_str(CStr::from_ptr(label)) } {
+            Some(s) => Some(s.to_owned()),
             None => {
                 set_last_error("label is not valid UTF-8".into());
                 return -1;
@@ -149,7 +149,11 @@ pub unsafe extern "C" fn nexusq_vault_create(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nexusq_vault_format_version(path: *const c_char) -> i32 {
     clear_last_error();
-    let Some(path) = (unsafe { cstr_to_str(path) }) else {
+    let Some(path) = (if path.is_null() {
+        None
+    } else {
+        unsafe { cstr_to_str(CStr::from_ptr(path)) }
+    }) else {
         set_last_error("path is null or not valid UTF-8".into());
         return -1;
     };
@@ -196,21 +200,16 @@ mod tests {
     }
 
     #[test]
-    fn cstr_to_str_handles_valid_input() {
+    fn cstr_to_str_borrows_valid_input_with_its_cstr_lifetime() {
         let s = CString::new("hola").unwrap();
-        let parsed = unsafe { cstr_to_str(s.as_ptr()) };
-        assert_eq!(parsed, Some("hola"));
-    }
-
-    #[test]
-    fn cstr_to_str_handles_null() {
-        assert_eq!(unsafe { cstr_to_str(std::ptr::null()) }, None);
+        assert_eq!(cstr_to_str(&s), Some("hola"));
     }
 
     #[test]
     fn cstr_to_str_rejects_invalid_utf8() {
         let bytes = [0xffu8, 0x00];
-        assert_eq!(unsafe { cstr_to_str(bytes.as_ptr().cast()) }, None);
+        let cstr = unsafe { CStr::from_ptr(bytes.as_ptr().cast()) };
+        assert_eq!(cstr_to_str(cstr), None);
     }
 
     #[test]

@@ -47,12 +47,23 @@ const ML_KEM_768_SECRET_KEY_LEN: usize = 2400;
 const ML_KEM_1024_SECRET_KEY_LEN: usize = 3168;
 const ML_DSA_65_SECRET_KEY_LEN: usize = 4032;
 
-fn percentile(sorted: &[u128], percentile: f64) -> u128 {
+fn median(sorted: &[u128]) -> u128 {
+    let middle = sorted.len() / 2;
+    if sorted.len() % 2 == 0 {
+        let lower = sorted[middle - 1];
+        let upper = sorted[middle];
+        lower + (upper - lower) / 2
+    } else {
+        sorted[middle]
+    }
+}
+
+fn nearest_rank_percentile(sorted: &[u128], percentile: f64) -> u128 {
     if sorted.is_empty() {
         return 0;
     }
-    let index = ((sorted.len() - 1) as f64 * percentile).ceil() as usize;
-    sorted[index.min(sorted.len() - 1)]
+    let rank = ((sorted.len() as f64) * percentile).ceil() as usize;
+    sorted[rank.saturating_sub(1).min(sorted.len() - 1)]
 }
 
 fn summary(samples: &[u128]) -> serde_json::Value {
@@ -70,8 +81,8 @@ fn summary(samples: &[u128]) -> serde_json::Value {
     serde_json::json!({
         "sample_count": samples.len(),
         "min_ns": sorted.first().copied().unwrap_or_default(),
-        "median_ns": percentile(&sorted, 0.50),
-        "p95_ns": percentile(&sorted, 0.95),
+        "median_ns": median(&sorted),
+        "p95_ns": nearest_rank_percentile(&sorted, 0.95),
         "stddev_ns": variance.sqrt(),
     })
 }
@@ -245,6 +256,28 @@ fn deterministic_seed(index: usize) -> [u8; 32] {
         chunk.copy_from_slice(&z.to_le_bytes());
     }
     seed
+}
+
+#[cfg(test)]
+mod statistics_tests {
+    use super::{median, nearest_rank_percentile};
+
+    #[test]
+    fn median_averages_the_middle_pair_for_even_sample_counts() {
+        assert_eq!(median(&[10, 20]), 15);
+        assert_eq!(median(&[10, 20, 30, 40]), 25);
+    }
+
+    #[test]
+    fn median_selects_the_middle_value_for_odd_sample_counts() {
+        assert_eq!(median(&[10, 20, 30]), 20);
+    }
+
+    #[test]
+    fn p95_uses_the_nearest_rank_definition_shared_with_aws_lc() {
+        let samples: Vec<u128> = (1..=1000).collect();
+        assert_eq!(nearest_rank_percentile(&samples, 0.95), 950);
+    }
 }
 
 fn main() {

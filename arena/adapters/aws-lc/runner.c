@@ -41,6 +41,46 @@ static const char *env_or(const char *name, const char *fallback) {
     return value && *value ? value : fallback;
 }
 
+static void format_cpu_features(char *output, size_t output_len) {
+    if (output_len < 3) return;
+    snprintf(output, output_len, "[]");
+    const char *value = env_or("ARENA_CPU_FEATURES", "");
+    if (!*value) return;
+
+    char *copy = strdup(value);
+    if (!copy) return;
+    size_t used = 0;
+    int written = snprintf(output, output_len, "[");
+    if (written < 0 || (size_t)written >= output_len) {
+        free(copy);
+        snprintf(output, output_len, "[]");
+        return;
+    }
+    used = (size_t)written;
+    int first = 1;
+    char *saveptr = NULL;
+    for (char *token = strtok_r(copy, ",", &saveptr); token != NULL;
+         token = strtok_r(NULL, ",", &saveptr)) {
+        /* CPU feature names are identifiers; reject anything that is not one. */
+        if (strspn(token, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-") != strlen(token)) {
+            continue;
+        }
+        written = snprintf(output + used, output_len - used, "%s\"%s\"", first ? "" : ",", token);
+        if (written < 0 || (size_t)written >= output_len - used) {
+            free(copy);
+            snprintf(output, output_len, "[]");
+            return;
+        }
+        used += (size_t)written;
+        first = 0;
+    }
+    written = snprintf(output + used, output_len - used, "]");
+    if (written < 0 || (size_t)written >= output_len - used) {
+        snprintf(output, output_len, "[]");
+    }
+    free(copy);
+}
+
 static void meta(char *target, size_t target_len, char *os, size_t os_len,
                  char *cpu, size_t cpu_len) {
     struct utsname u;
@@ -134,9 +174,10 @@ static void emit(const char *algorithm, const char *parameter, const char *opera
                  size_t ciphertext_bytes, size_t signature_bytes,
                  int has_ciphertext, int has_signature) {
     char target[256], os[128], cpu[256];
-    char ciphertext_json[32], signature_json[32];
+    char ciphertext_json[32], signature_json[32], features_json[8192];
     struct timespec now;
     meta(target, sizeof(target), os, sizeof(os), cpu, sizeof(cpu));
+    format_cpu_features(features_json, sizeof(features_json));
     if (clock_gettime(CLOCK_REALTIME, &now) != 0) {
         fprintf(stderr, "clock_gettime(CLOCK_REALTIME) failed\n");
         exit(70);
@@ -148,19 +189,20 @@ static void emit(const char *algorithm, const char *parameter, const char *opera
     sample_statistics stats = summarize(samples, (size_t)count);
 
     printf("{\"schema_version\":1,\"run_id\":\"aws-lc-%s-%s-%s\","
-           "\"implementation\":{\"id\":\"aws-lc\",\"version\":\"%s\",\"commit\":\"ec05f25\"},"
+           "\"implementation\":{\"id\":\"aws-lc\",\"version\":\"%s\",\"commit\":\"ec05f25ef5bcb1bf03d2e2f44ba57973a878e0ba\"},"
            "\"algorithm\":{\"id\":\"%s\",\"parameter_set\":\"%s\"},\"operation\":\"%s\","
            "\"environment\":{\"target\":\"%s\",\"os\":\"%s\",\"cpu\":\"%s\","
-           "\"cpu_features\":[],\"compiler\":\"cc\",\"compiler_version\":\"%s\","
-           "\"optimization\":\"%s\",\"harness_version\":\"arena-v1\"},"
+           "\"cpu_features\":%s,\"compiler\":\"cc\",\"compiler_version\":\"%s\","
+           "\"optimization\":\"%s\",\"run_order\":\"%s\",\"harness_version\":\"arena-v2-distribution\"},"
            "\"measurement\":{\"iterations\":%d,\"warmups\":%d,"
            "\"measurement_timestamp_unix_ns\":%llu,\"latency_ns\":%llu,"
            "\"throughput_ops_s\":%.6f,\"memory_bytes\":null,"
            "\"measurement_method\":\"per-operation clock_gettime(CLOCK_MONOTONIC); median of raw samples\","
            "\"samples_ns\":[",
            algorithm, parameter, operation, env_or("AWSLC_VERSION", "runtime"),
-           algorithm, parameter, operation, target, os, cpu, __VERSION__,
-           env_or("ARENA_OPT", "release"), count, warmup_count, timestamp,
+           algorithm, parameter, operation, target, os, cpu, features_json, __VERSION__,
+           env_or("ARENA_OPT", "release"), env_or("ARENA_RUN_ORDER", "unknown"),
+           count, warmup_count, timestamp,
            (unsigned long long)stats.median_ns,
            1e9 / (double)stats.median_ns);
 

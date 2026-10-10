@@ -62,6 +62,14 @@ jobs:
             | tee phase0-evidence/tree-module-lattice.txt
           cargo tree --locked --manifest-path "$manifest" -i ml-dsa \
             | tee phase0-evidence/tree-ml-dsa.txt
+          grep -F 'vendor/ml-kem' phase0-evidence/tree-ml-kem.txt >/dev/null || {
+            echo 'ERROR: Arena ml-kem does not resolve to vendor/ml-kem' >&2
+            exit 1
+          }
+          grep -F 'vendor/module-lattice' phase0-evidence/tree-module-lattice.txt >/dev/null || {
+            echo 'ERROR: Arena module-lattice does not resolve to vendor/module-lattice' >&2
+            exit 1
+          }
           cargo metadata --locked --format-version 1 --manifest-path "$manifest" \
             > phase0-evidence/cargo-metadata.json
           sha256sum Cargo.toml Cargo.lock "$manifest" arena/runners/nexusq/Cargo.lock \
@@ -147,8 +155,18 @@ jobs:
           latest_sha="$(git ls-remote origin "refs/heads/$HEAD_REF" | awk 'NR == 1 {print $1}')"
           [[ -n "$latest_sha" ]] || { echo 'Unable to resolve current PR head' >&2; exit 1; }
           # Never mark newer code green from a run that tested an older source commit.
-          changed_files="$(gh api "repos/$GITHUB_REPOSITORY/compare/$SOURCE_SHA...$latest_sha" --jq '[.files[].filename] | .[]' || true)"
-          if grep -qv '^artifact-archive/' <<< "$changed_files"; then
+          if [[ "$SOURCE_SHA" == "$latest_sha" ]]; then
+            compare_json='{"status":"identical","files":[]}'
+          else
+            compare_json="$(gh api "repos/$GITHUB_REPOSITORY/compare/$SOURCE_SHA...$latest_sha")"
+          fi
+          jq -e '(.status == "identical" and ((.files // []) | type == "array")) or (.status == "ahead" and (.files | type == "array"))' \
+            <<< "$compare_json" >/dev/null || {
+              echo 'Unable to prove the PR head differs only by archived evidence; refusing to publish statuses.' >&2
+              exit 1
+            }
+          if ! jq -e '[.files[].filename | select(startswith("artifact-archive/") | not)] | length == 0' \
+              <<< "$compare_json" >/dev/null; then
             echo "PR head contains newer non-archive changes; leaving statuses to the newer CI run."
             exit 0
           fi

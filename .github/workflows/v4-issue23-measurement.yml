@@ -60,6 +60,9 @@ jobs:
             "$NEXUSQ_ITERATIONS" "$NEXUSQ_WARMUPS" "$NEXUSQ_SIGN_SAMPLES_PER_SEED" "$AWSLC_ITERATIONS" "$AWSLC_WARMUPS" \
             | tee arena/results/v4-phase0/measurement-policy.txt
 
+      - name: Test benchmark statistics conventions
+        run: cargo test --locked --manifest-path arena/runners/nexusq/Cargo.toml --bin nexusq-arena-runner
+
       - name: Build locked NEXUS-Q Arena runner
         shell: bash
         run: |
@@ -103,6 +106,7 @@ jobs:
         run: |
           set -euo pipefail
           NEXUSQ_RUN_ID="v4-phase0-${GITHUB_RUN_ID}" \
+          NEXUSQ_RUN_ORDER=nexusq-before-aws-lc \
           NEXUSQ_CPU="$(cat arena/results/v4-phase0/cpu.txt)" \
           NEXUSQ_CPU_FEATURES="$(tr ' ' ',' < arena/results/v4-phase0/cpu-features.txt)" \
           NEXUSQ_RUSTC_VERBOSE="$(rustc --version --verbose | tr '\n' ';')" \
@@ -113,6 +117,7 @@ jobs:
             | tee arena/results/v4-phase0/nexusq.jsonl
           ARENA_CPU="$(cat arena/results/v4-phase0/cpu.txt)" \
           ARENA_CPU_FEATURES="$(tr ' ' ',' < arena/results/v4-phase0/cpu-features.txt)" \
+          ARENA_RUN_ORDER=aws-lc-after-nexusq \
           ARENA_TARGET=x86_64-linux-gnu ARENA_OS=Ubuntu ARENA_OPT=release \
           arena/results/v4-phase0/aws-lc-runner \
             | tee arena/results/v4-phase0/aws-lc.jsonl
@@ -153,7 +158,39 @@ jobs:
           aws_rows = [json.loads(line) for line in (root / 'aws-lc.jsonl').read_text().splitlines() if line.strip()]
           actual_aws = {(r['algorithm']['id'], r['algorithm']['parameter_set'], r['operation']) for r in aws_rows}
           assert actual_aws == expected_aws, (actual_aws, expected_aws)
-          print('AWS-LC operation coverage: OK')
+
+          from collections import Counter
+          nexus_rows = [json.loads(line) for line in (root / 'nexusq.jsonl').read_text().splitlines() if line.strip()]
+          expected_nexusq = {
+              ('ml-kem', '768', 'keygen'), ('ml-kem', '768', 'encaps'), ('ml-kem', '768', 'decaps'),
+              ('ml-kem', '1024', 'keygen'), ('ml-kem', '1024', 'encaps'), ('ml-kem', '1024', 'decaps'),
+              ('ml-dsa', '65', 'keygen'), ('ml-dsa', '65', 'sign'), ('ml-dsa', '65', 'verify'),
+          }
+          actual_nexusq = {(r['algorithm']['id'], r['algorithm']['parameter_set'], r['operation']) for r in nexus_rows}
+          assert actual_nexusq == expected_nexusq, (actual_nexusq, expected_nexusq)
+          expected_counts = {op: 1 for op in expected_nexusq}
+          expected_counts[('ml-dsa', '65', 'verify')] = 2  # conventional and cached verification remain distinct records
+          actual_counts = Counter((r['algorithm']['id'], r['algorithm']['parameter_set'], r['operation']) for r in nexus_rows)
+          assert actual_counts == Counter(expected_counts), (actual_counts, expected_counts)
+          assert len(nexus_rows) == 10, f'expected 10 NEXUS-Q records (nine operations plus separate cached verify), got {len(nexus_rows)}'
+
+          nexus_env = nexus_rows[0]['environment']
+          aws_env = aws_rows[0]['environment']
+          assert nexus_env['cpu'] == aws_env['cpu'], (nexus_env['cpu'], aws_env['cpu'])
+          assert nexus_env.get('cpu_features') and nexus_env['cpu_features'] == aws_env.get('cpu_features'), (
+              nexus_env.get('cpu_features'), aws_env.get('cpu_features'))
+          assert nexus_env.get('optimization') == aws_env.get('optimization') == 'release', (
+              nexus_env.get('optimization'), aws_env.get('optimization'))
+          assert nexus_env.get('run_order') == 'nexusq-before-aws-lc', nexus_env.get('run_order')
+          assert aws_env.get('run_order') == 'aws-lc-after-nexusq', aws_env.get('run_order')
+          assert all(r['environment'].get('run_order') == nexus_env.get('run_order') for r in nexus_rows)
+          assert all(r['environment'].get('run_order') == aws_env.get('run_order') for r in aws_rows)
+          assert all(r['environment'].get('cpu') == nexus_env['cpu'] and
+                     r['environment'].get('cpu_features') == nexus_env['cpu_features'] for r in nexus_rows)
+          assert all(r['environment'].get('cpu') == aws_env['cpu'] and
+                     r['environment'].get('cpu_features') == aws_env['cpu_features'] for r in aws_rows)
+          print('NEXUS-Q operation coverage: OK (all nine operations; cached verify separate)')
+          print('Matched-host metadata: CPU, CPU feature set, and release profile agree across both runners')
           print('Both implementations provide per-operation raw samples and median/p95/stddev statistics.')
           PY
 
@@ -222,8 +259,18 @@ jobs:
           latest_sha="$(git ls-remote origin "refs/heads/$HEAD_REF" | awk 'NR == 1 {print $1}')"
           [[ -n "$latest_sha" ]] || { echo 'Unable to resolve current PR head' >&2; exit 1; }
           # Never mark newer code green from a run that tested an older source commit.
-          changed_files="$(gh api "repos/$GITHUB_REPOSITORY/compare/$SOURCE_SHA...$latest_sha" --jq '[.files[].filename] | .[]' || true)"
-          if grep -qv '^artifact-archive/' <<< "$changed_files"; then
+          if [[ "$SOURCE_SHA" == "$latest_sha" ]]; then
+            compare_json='{"status":"identical","files":[]}'
+          else
+            compare_json="$(gh api "repos/$GITHUB_REPOSITORY/compare/$SOURCE_SHA...$latest_sha")"
+          fi
+          jq -e '(.status == "identical" and ((.files // []) | type == "array")) or (.status == "ahead" and (.files | type == "array"))' \
+            <<< "$compare_json" >/dev/null || {
+              echo 'Unable to prove the PR head differs only by archived evidence; refusing to publish statuses.' >&2
+              exit 1
+            }
+          if ! jq -e '[.files[].filename | select(startswith("artifact-archive/") | not)] | length == 0' \
+              <<< "$compare_json" >/dev/null; then
             echo "PR head contains newer non-archive changes; leaving statuses to the newer CI run."
             exit 0
           fi

@@ -23,7 +23,7 @@ This checklist mirrors the phases and acceptance criteria in Issue #23. Keep it 
 - [ ] Implement portable scalar reference kernels for NTT, inverse NTT, basemul/pointwise, reduce/freeze, compression/decompression, pack/unpack, CBD, rejection samplers, and Keccak-f[1600].
 - [ ] Add explicit target-feature detection/dispatch resolved once, plus `NEXUSQ_FORCE_SCALAR` test override.
 - [ ] Differential tests compare every optimized kernel to scalar on random and edge/boundary inputs, bit-exactly.
-- [ ] Every `unsafe` block has a `// SAFETY:` justification; add CI auditing (`cargo geiger` and/or a repository gate).
+- [ ] Every `unsafe` block in the optimized-kernel surface has a `// SAFETY:` justification; add CI auditing (`cargo geiger` and/or a repository gate). `nexusq-core` remains `forbid(unsafe_code)`. The existing `nexusq-c` crate is a narrow C-ABI boundary and necessarily contains raw-pointer/FFI unsafe; audit that boundary separately, but do not put SIMD, assembly, or cryptographic kernel logic there.
 
 ## Phase 2 — Keccak/SHAKE
 
@@ -90,6 +90,8 @@ This checklist mirrors the phases and acceptance criteria in Issue #23. Keep it 
 - [ ] Public API and persistent/wire formats are unchanged; v1 data still opens.
 - [ ] Evidence artifacts and operation-level ratio table are linked from Issue #10; docs and ADR are complete.
 - [ ] Final PR review is complete and every CI check is green before merging this work into `nexusqv4`.
+
+**Unsafe-code policy clarification:** the kernel crate is the only crate allowed to implement unsafe SIMD/assembly/cryptographic kernels. `nexusq-core` must continue to forbid unsafe code. The pre-existing `nexusq-c` crate is the separately audited C ABI boundary; its minimal raw-pointer operations are an explicit exception and must not grow into a kernel implementation.
 
 ## Working rules
 

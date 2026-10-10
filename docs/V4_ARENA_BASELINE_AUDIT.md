@@ -73,9 +73,27 @@ The new artifact has been uploaded and CI assertions passed; all measurement-equ
 5. Add AWS-LC ML-KEM-1024 only if the pinned version and adapter expose the required operation with equivalent semantics; otherwise record the coverage limitation and use the best valid comparator available for that operation.
 6. Preserve raw JSONL, metadata, run URLs, dependency trees, and generated ratios as PR/Issue evidence. Do not infer causation from one run or combine cached ML-DSA verification with ordinary verification.
 
-## V4-only CI policy (restarted 2026-10-10)
+## V4-only CI policy and repository audit — 2026-10-10
 
-V4 has its own lightweight workflow, `.github/workflows/v4-issue23-phase0.yml`, with the same file/configuration on `nexusqv4` and `v4/issue-23-kernel-work`. It triggers on PR updates targeting `nexusqv4` only when the PR head is `v4/issue-23-kernel-work`, or on manual dispatch from either exact V4 ref. It intentionally has no `push` trigger, avoiding duplicate push-plus-PR runs. Concurrency is scoped to the ref or PR and cancels superseded runs within that V4 work item. It captures toolchain/host metadata, locked dependency trees for ML-KEM, module-lattice and ML-DSA, Cargo metadata, patch paths and kernel-crate readiness as an artifact. It deliberately does not run workspace tests, fuzz soaks, SDK jobs, release jobs or benchmarks from other version lines. Do not add V4 to global `main` security/release workflows as a shortcut.
+The active PR branch is `v4/issue-23-kernel-work`, targeting `nexusqv4`. The PR-only Phase 0 and measurement workflows trigger on pushes to that exact head branch, ignore commits containing only `artifact-archive/**`, and can be manually dispatched only from that same branch. They check out the event SHA, archive run evidence in canonical per-run directories, upload normal Actions artifacts, and publish named commit statuses on the current PR head only when the intervening commits are proven to be archive-only. Status publication fails closed if the compare API cannot prove that condition. The current branch's enhanced Phase 0 workflow was reconciled with the separately added base-branch workflow during the repository audit to remove the PR merge conflict.
+
+The measurement job runs the Rust and pinned AWS-LC harnesses in the same GitHub-hosted job. It asserts all nine distinct NEXUS-Q operations are present (with conventional and cached ML-DSA verification kept as separate records), checks sample counts/statistics, and checks matching CPU model/features and release profile. The runners now record the known fixed execution order, and the Rust and C harnesses use the same even-sample median and nearest-rank p95 definitions. These are measurement-integrity checks, not a performance gate.
+
+`.github/workflows/security-ci.yml` now runs the full non-fuzz Rust security gate and secret scan for PRs targeting `nexusqv4` as well as `main`. Fuzz harness builds and long fuzz soaks remain restricted to the existing release/security policy; they are not claimed to have run for this V4 PR. The repository-wide SDK matrix and release workflows remain separately scoped.
+
+## Audit status and remaining Phase 0 blockers
+
+The 2026-10-10 audit found and addressed a merge conflict, fail-open status-publishing behavior, missing local dependency-source assertions, incomplete NEXUS-Q operation-coverage assertions, missing AWS-LC CPU-feature metadata, inconsistent median/p95 conventions, a raw-pointer helper returning an unconstrained Rust lifetime, and a missing security-CI trigger for the V4 PR base. Formatting checks and workflow YAML/shell syntax checks passed after these fixes. The exact audit findings and repository-level caveats are recorded in `docs/REPOSITORY_AUDIT_2026-10-10.md`.
+
+Phase 0 remains **incomplete**. The current measurement workflow is still a matched-host harness smoke test, not a valid all-operation speed comparison or regression gate. Open requirements include:
+
+- A valid comparator for ML-KEM-1024 (AWS-LC currently emits only ML-KEM-768 and ML-DSA-65 operations).
+- Fully equivalent primitive semantics and measurement layers for all nine operations; ML-KEM-768/ML-DSA still go through `nexusq-core` wrappers while ML-KEM-1024 uses the raw `ml-kem` API.
+- Reliable benchmark-record metadata for CPU frequency/governor and cycle counts where supported; unknown/unavailable values must remain explicit rather than fabricated.
+- A reviewed per-operation baseline/ratio gate against the best valid comparator from the same run, followed by at least three reproducible runs before any performance-leadership claim.
+- The `crates/nexusq-kernels` implementation and all correctness/security gates remain future phases; the presence of a green Phase 0 workflow does not mean a kernel exists or that Issue #23 is complete.
+
+Do not use current smoke-run timings as an optimization result or mark Phase 0 complete. The latest archived evidence is tied to the exact run IDs and source SHA recorded in each run-local README and SHA-256 manifest.
 
 ## Current status
 
