@@ -4,6 +4,8 @@
 
 > Post-quantum cryptographic security engine for protecting data, keys, and identities.
 
+**Website:** [nexus-q-topaz.vercel.app](https://nexus-q-topaz.vercel.app) — a plain-language tour of the project: what it is, how it works, benchmarks and security posture.
+
 **Version status (2026-10-09):** V1 is the frozen baseline (`v1.0.0`); V2 is frozen on `nexusqv2` (`v2.0.0`); V3 has been integrated into `main` by [PR #45](https://github.com/lecodev-26/nexus-q/pull/45), with V3 Incremental CI and PQC Benchmark Arena evidence retained. The release includes a downloadable evidence archive and SHA-256 manifest. Post-release `main` CI and four-hour fuzz soaks are tracked separately; see the linked Actions runs for their current status. V4 is the planned architecture-specific performance-kernel line tracked by [Issue #23](https://github.com/lecodev-26/nexus-q/issues/23). No independent audit, certification, or downstream registry publication is implied.
 
 ---
