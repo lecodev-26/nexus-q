@@ -5,5 +5,5 @@
   "buildCommand": null,
   "outputDirectory": "site",
   "cleanUrls": true,
-  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- site/; result=$?; if [ \"$result\" -eq 0 ]; then exit 0; else exit 1; fi"
+  "ignoreCommand": "case \"$VERCEL_GIT_COMMIT_REF\" in nexusqv4|v4/issue-23-kernel-work) exit 0 ;; esac; git diff --quiet HEAD^ HEAD -- site/; result=$?; if [ \"$result\" -eq 0 ]; then exit 0; else exit 1; fi"
 }
