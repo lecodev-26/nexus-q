@@ -1,8 +1,10 @@
 name: Security and Release Gates
 
 on:
+  # V4 PRs receive the full security gates through pull_request; avoid
+  # duplicating the same expensive run on every push to the PR branch.
   push:
-    branches: [main, 'v4/**']
+    branches: [main]
   pull_request:
     branches: [main, nexusqv4]
   workflow_dispatch:
