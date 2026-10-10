@@ -11,16 +11,52 @@ permissions:
   contents: write
 
 concurrency:
-  group: v4-issue23-measurement-${{ github.event.pull_request.number || github.ref }}
+  group: v4-issue23-measurement-${{ github.event.pull_request.head.sha || github.ref }}
   cancel-in-progress: true
 
 jobs:
+  pr-change-scope:
+    name: Skip archive-only PR updates
+    runs-on: ubuntu-latest
+    outputs:
+      run_ci: ${{ steps.scope.outputs.run_ci }}
+    steps:
+      - name: Checkout PR head for commit-scope check
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 2
+
+      - name: Detect archive-only commit
+        id: scope
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            echo "run_ci=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed_files="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          if [[ -z "$changed_files" ]] || grep -qv '^artifact-archive/' <<< "$changed_files"; then
+            echo "run_ci=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_ci=false" >> "$GITHUB_OUTPUT"
+            echo "Archive-only commit detected; skipping expensive V4 checks."
+          fi
+
   matched-host-smoke:
+    needs: pr-change-scope
     if: >-
+      needs.pr-change-scope.outputs.run_ci == 'true' &&
+      (
       (github.event_name == 'workflow_dispatch' &&
        (github.ref == 'refs/heads/nexusqv4' || github.ref == 'refs/heads/v4/issue-23-kernel-work')) ||
       (github.event_name == 'pull_request' &&
        github.base_ref == 'nexusqv4' && github.head_ref == 'v4/issue-23-kernel-work')
+      )
     name: Build and exercise Rust/AWS-LC on one host
     runs-on: ubuntu-latest
     timeout-minutes: 45
