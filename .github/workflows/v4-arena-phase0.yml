@@ -1,9 +1,11 @@
 name: V4 Arena Phase 0 — dependency provenance
 
-# Phase 0 provenance is an on-demand diagnostic after the initial audit.
-# Keep it manually runnable; do not repeat it on every V4 push or PR.
 on:
   workflow_dispatch:
+  push:
+    branches: ['v4/**']
+  pull_request:
+    branches: [nexusqv4]
 
 permissions:
   contents: read
