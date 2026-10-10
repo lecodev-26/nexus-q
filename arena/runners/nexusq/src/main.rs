@@ -33,7 +33,15 @@ fn warmups() -> usize {
     configured_count("NEXUSQ_WARMUPS", DEFAULT_WARMUPS, 0)
 }
 const ML_DSA_SIGN_SEEDS: usize = 64;
-const ML_DSA_SIGN_SAMPLES_PER_SEED: usize = 5;
+const DEFAULT_ML_DSA_SIGN_SAMPLES_PER_SEED: usize = 5;
+
+fn ml_dsa_sign_samples_per_seed() -> usize {
+    configured_count(
+        "NEXUSQ_SIGN_SAMPLES_PER_SEED",
+        DEFAULT_ML_DSA_SIGN_SAMPLES_PER_SEED,
+        1,
+    )
+}
 const MESSAGE: &[u8] = b"nexusq-pqc-arena-v1";
 const ML_KEM_768_SECRET_KEY_LEN: usize = 2400;
 const ML_KEM_1024_SECRET_KEY_LEN: usize = 3168;
@@ -159,13 +167,13 @@ fn emit_ml_dsa_sign_distribution(
     signature_len: usize,
 ) {
     let mut per_seed = Vec::with_capacity(keys.len());
-    let mut all_samples = Vec::with_capacity(keys.len() * ML_DSA_SIGN_SAMPLES_PER_SEED);
+    let mut all_samples = Vec::with_capacity(keys.len() * ml_dsa_sign_samples_per_seed());
     for (key, seed_id) in keys.iter().zip(seed_ids) {
         for _ in 0..warmups() {
             black_box(key.sign(MESSAGE));
         }
-        let mut samples = Vec::with_capacity(ML_DSA_SIGN_SAMPLES_PER_SEED);
-        for _ in 0..ML_DSA_SIGN_SAMPLES_PER_SEED {
+        let mut samples = Vec::with_capacity(ml_dsa_sign_samples_per_seed());
+        for _ in 0..ml_dsa_sign_samples_per_seed() {
             let start = Instant::now();
             black_box(key.sign(MESSAGE));
             samples.push(start.elapsed().as_nanos());
@@ -185,7 +193,7 @@ fn emit_ml_dsa_sign_distribution(
         .as_nanos();
     let obj = serde_json::json!({
         "schema_version": 1,
-        "run_id": format!("{}-ml-dsa-65-sign-distribution-{}x{}", env::var("NEXUSQ_RUN_ID").unwrap_or_else(|_| "nexusq-local".into()), keys.len(), ML_DSA_SIGN_SAMPLES_PER_SEED),
+        "run_id": format!("{}-ml-dsa-65-sign-distribution-{}x{}", env::var("NEXUSQ_RUN_ID").unwrap_or_else(|_| "nexusq-local".into()), keys.len(), ml_dsa_sign_samples_per_seed()),
         "implementation": {"id":"nexusq","version":env!("CARGO_PKG_VERSION"),"commit":option_env!("NEXUSQ_COMMIT").or_else(|| Some("unknown"))},
         "algorithm": {"id":"ml-dsa","parameter_set":"65"},
         "operation": "sign",
@@ -216,7 +224,7 @@ fn emit_ml_dsa_sign_distribution(
             "statistics":overall,
             "seed_samples":per_seed,
             "seed_count":keys.len(),
-            "samples_per_seed":ML_DSA_SIGN_SAMPLES_PER_SEED
+            "samples_per_seed":ml_dsa_sign_samples_per_seed()
         },
         "sizes":{"public_key_bytes":public_key.len(),"secret_key_bytes":ML_DSA_65_SECRET_KEY_LEN,"ciphertext_bytes":null,"signature_bytes":signature_len}
     });

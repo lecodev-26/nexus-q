@@ -54,7 +54,7 @@ Observed facts from the artifact:
 - The equivalent `module-lattice` tree resolves the local `vendor/module-lattice` source.
 - `ml-dsa 0.1.1` still resolves from the registry; this workflow confirms that gap rather than hiding it.
 - `crates/nexusq-kernels/Cargo.toml` is absent. The current runner therefore does not yet exercise the planned optimized kernel crate.
-- The workflow is a provenance/evidence gate only. A green result is not a benchmark result and does not complete Phase 0.
+- The workflow is a provenance/evidence gate only. A green result is not a benchmark result and does not complete Phase 0. A separate V4-only workflow, `.github/workflows/v4-issue23-measurement.yml`, is being added to build and exercise the Rust and pinned AWS-LC runners on the same GitHub-hosted job with the 1,000-iteration/100-warmup policy. The Rust ML-DSA signing distribution can be increased with `NEXUSQ_SIGN_SAMPLES_PER_SEED`; the acceptance job sets it to 16 samples across the deterministic 64-key corpus (1,024 measured signatures). This remains an intermediate gate—not proof of statistical equivalence—because AWS-LC still emits only aggregate means.
 
 The artifact was downloaded and inspected from the successful PR run. This evidence supersedes the prior note that CI artifact evidence was pending; all measurement-equivalence items below remain open.
 

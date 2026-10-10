@@ -1,0 +1,149 @@
+name: NEXUS-Q V4 — Issue 23 — Measurement harness
+
+on:
+  pull_request:
+    branches: [nexusqv4]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v4-issue23-measurement-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  matched-host-smoke:
+    if: >-
+      (github.event_name == 'workflow_dispatch' &&
+       (github.ref == 'refs/heads/nexusqv4' || github.ref == 'refs/heads/v4/issue-23-kernel-work')) ||
+      (github.event_name == 'pull_request' &&
+       github.base_ref == 'nexusqv4' && github.head_ref == 'v4/issue-23-kernel-work')
+    name: Build and exercise Rust/AWS-LC on one host
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      NEXUSQ_ITERATIONS: "1000"
+      NEXUSQ_WARMUPS: "100"
+      NEXUSQ_SIGN_SAMPLES_PER_SEED: "16"
+      AWSLC_ITERATIONS: "1000"
+      AWSLC_WARMUPS: "100"
+      ARENA_OPT: release
+      ARENA_TARGET: x86_64-linux-gnu
+      ARENA_OS: Ubuntu
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install native build dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build build-essential perl
+
+      - name: Capture shared host and toolchain metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p arena/results/v4-phase0
+          uname -a | tee arena/results/v4-phase0/uname.txt
+          lscpu | tee arena/results/v4-phase0/lscpu.txt
+          rustc --version --verbose | tee arena/results/v4-phase0/rustc.txt
+          cargo --version | tee arena/results/v4-phase0/cargo.txt
+          cc --version | head -1 | tee arena/results/v4-phase0/cc.txt
+          awk -F': ' '/model name|Hardware|Processor/{print $2; exit}' /proc/cpuinfo | tee arena/results/v4-phase0/cpu.txt
+          awk -F': ' '/^flags|^Features/{print $2; exit}' /proc/cpuinfo | tee arena/results/v4-phase0/cpu-features.txt
+          printf 'NEXUSQ_ITERATIONS=%s\nNEXUSQ_WARMUPS=%s\nNEXUSQ_SIGN_SAMPLES_PER_SEED=%s\nAWSLC_ITERATIONS=%s\nAWSLC_WARMUPS=%s\n' \
+            "$NEXUSQ_ITERATIONS" "$NEXUSQ_WARMUPS" "$NEXUSQ_SIGN_SAMPLES_PER_SEED" "$AWSLC_ITERATIONS" "$AWSLC_WARMUPS" \
+            | tee arena/results/v4-phase0/measurement-policy.txt
+
+      - name: Build locked NEXUS-Q Arena runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          NEXUSQ_COMMIT="$GITHUB_SHA" \
+          NEXUSQ_CPU="$(cat arena/results/v4-phase0/cpu.txt)" \
+          NEXUSQ_CPU_FEATURES="$(tr ' ' ',' < arena/results/v4-phase0/cpu-features.txt)" \
+          NEXUSQ_RUSTC_VERBOSE="$(rustc --version --verbose | tr '\n' ';')" \
+          RUSTC_VERSION="$(rustc --version)" \
+          NEXUSQ_CARGO_LOCK_SHA256="$(sha256sum arena/runners/nexusq/Cargo.lock | cut -d' ' -f1)" \
+          NEXUSQ_OPT=release \
+          cargo build --locked --release --features cached-verifier --manifest-path arena/runners/nexusq/Cargo.toml
+          cp arena/runners/nexusq/target/release/nexusq-arena-runner arena/results/v4-phase0/nexusq-arena-runner
+
+      - name: Fetch pinned AWS-LC source
+        run: |
+          git init .arena-aws-lc
+          git -C .arena-aws-lc remote add origin https://github.com/aws/aws-lc.git
+          git -C .arena-aws-lc fetch --depth 1 origin ec05f25ef5bcb1bf03d2e2f44ba57973a878e0ba
+          git -C .arena-aws-lc checkout --detach ec05f25ef5bcb1bf03d2e2f44ba57973a878e0ba
+          test "$(git -C .arena-aws-lc rev-parse HEAD)" = "ec05f25ef5bcb1bf03d2e2f44ba57973a878e0ba"
+
+      - name: Build pinned AWS-LC
+        run: |
+          cmake -S .arena-aws-lc -B .arena-aws-lc-build -GNinja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+          cmake --build .arena-aws-lc-build --parallel 2
+
+      - name: Compile AWS-LC adapter with strict warnings
+        run: |
+          cc -std=c11 -O3 -Wall -Wextra -Werror \
+            -I"$GITHUB_WORKSPACE/.arena-aws-lc/include" \
+            arena/adapters/aws-lc/runner.c \
+            -L"$GITHUB_WORKSPACE/.arena-aws-lc-build/crypto" \
+            -Wl,-rpath,"$GITHUB_WORKSPACE/.arena-aws-lc-build/crypto" \
+            -lcrypto -o arena/results/v4-phase0/aws-lc-runner
+
+      - name: Run both harnesses with Phase 0 iteration policy
+        shell: bash
+        env:
+          NEXUSQ_RUN_ID: v4-phase0-${{ github.run_id }}
+          NEXUSQ_CPU: github-actions-runner
+          NEXUSQ_OPT: release
+          AWSLC_VERSION: ec05f25
+          ARENA_CPU: github-actions-runner
+        run: |
+          set -euo pipefail
+          ARENA_CPU_FEATURES="$(tr ' ' ',' < arena/results/v4-phase0/cpu-features.txt)" \
+            arena/runners/nexusq/target/release/nexusq-arena-runner \
+            | tee arena/results/v4-phase0/nexusq.jsonl
+          arena/results/v4-phase0/aws-lc-runner \
+            | tee arena/results/v4-phase0/aws-lc.jsonl
+
+      - name: Validate schema, operation coverage, and configured counts
+        shell: bash
+        run: |
+          python3 -m pip install --disable-pip-version-check --no-input 'jsonschema==4.26.0'
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          import jsonschema
+
+          schema = json.loads(Path('arena/schemas/benchmark-result.schema.json').read_text())
+          validator = jsonschema.Draft202012Validator(schema)
+          root = Path('arena/results/v4-phase0')
+          expected_aws = {
+              ('ml-kem', '768', 'keygen'), ('ml-kem', '768', 'encaps'), ('ml-kem', '768', 'decaps'),
+              ('ml-dsa', '65', 'keygen'), ('ml-dsa', '65', 'sign'), ('ml-dsa', '65', 'verify'),
+          }
+          for name, implementation in [('nexusq.jsonl', 'nexusq'), ('aws-lc.jsonl', 'aws-lc')]:
+              rows = [json.loads(line) for line in (root / name).read_text().splitlines() if line.strip()]
+              assert rows, f'{name}: no records emitted'
+              for row in rows:
+                  validator.validate(row)
+                  assert row['implementation']['id'] == implementation, (name, row['implementation'])
+                  measurement = row['measurement']
+                  assert measurement['iterations'] >= 1000, (name, row['operation'], measurement['iterations'])
+                  assert measurement['warmups'] >= 100, (name, row['operation'], measurement['warmups'])
+                  if implementation == 'nexusq' and row['operation'] != 'sign':
+                      assert len(measurement.get('samples_ns', [])) == measurement['iterations'], (name, row['operation'])
+                      assert measurement.get('statistics', {}).get('sample_count') == measurement['iterations'], (name, row['operation'])
+              print(f'{name}: {len(rows)} schema-valid records; counts meet configured thresholds')
+          aws_rows = [json.loads(line) for line in (root / 'aws-lc.jsonl').read_text().splitlines() if line.strip()]
+          actual_aws = {(r['algorithm']['id'], r['algorithm']['parameter_set'], r['operation']) for r in aws_rows}
+          assert actual_aws == expected_aws, (actual_aws, expected_aws)
+          print('AWS-LC operation coverage: OK')
+          print('NOTE: same-host build/measurement gate only; AWS-LC currently emits aggregate means without per-operation samples.')
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v4-issue23-measurement-${{ github.sha }}
+          path: arena/results/v4-phase0/
+          if-no-files-found: error
+          retention-days: 30
