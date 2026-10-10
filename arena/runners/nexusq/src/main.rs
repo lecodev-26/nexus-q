@@ -237,7 +237,7 @@ fn emit_ml_dsa_sign_distribution(
             "latency_ns":latency_ns,
             "throughput_ops_s":1_000_000_000.0 / latency_ns,
             "memory_bytes":null,
-            "measurement_method":"per-sign std::time::Instant; deterministic 64-key seed corpus; fixed message",
+            "measurement_method":"per-sign std::time::Instant; nexusq-core ML-DSA wrapper; deterministic 64-key seed corpus; fixed message",
             "samples_ns":all_samples,
             "statistics":overall,
             "seed_samples":per_seed,
