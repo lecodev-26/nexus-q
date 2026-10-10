@@ -1,9 +1,6 @@
 name: NEXUS-Q V4 — Issue 23 — Phase 0
 
 on:
-  push:
-    branches:
-      - v4/issue-23-kernel-work
   pull_request:
     branches:
       - nexusqv4
@@ -19,8 +16,6 @@ concurrency:
 jobs:
   dependency-provenance:
     if: >-
-      (github.event_name == 'push' &&
-       github.ref == 'refs/heads/v4/issue-23-kernel-work') ||
       (github.event_name == 'workflow_dispatch' &&
        (github.ref == 'refs/heads/nexusqv4' || github.ref == 'refs/heads/v4/issue-23-kernel-work')) ||
       (github.event_name == 'pull_request' &&
