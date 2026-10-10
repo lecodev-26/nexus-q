@@ -3,10 +3,12 @@ name: NEXUS-Q V4 — Issue 23 — Measurement harness
 on:
   pull_request:
     branches: [nexusqv4]
+    paths-ignore:
+      - 'Artifacts/**'
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: v4-issue23-measurement-${{ github.event.pull_request.number || github.ref }}
@@ -33,6 +35,9 @@ jobs:
       ARENA_OS: Ubuntu
     steps:
       - uses: actions/checkout@v4
+        id: checkout
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
       - name: Install native build dependencies
         run: sudo apt-get update && sudo apt-get install -y cmake ninja-build build-essential perl
@@ -57,7 +62,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          NEXUSQ_COMMIT="$GITHUB_SHA" \
+          NEXUSQ_COMMIT="$(git rev-parse HEAD)" \
           NEXUSQ_CPU="$(cat arena/results/v4-phase0/cpu.txt)" \
           NEXUSQ_CPU_FEATURES="$(tr ' ' ',' < arena/results/v4-phase0/cpu-features.txt)" \
           NEXUSQ_RUSTC_VERBOSE="$(rustc --version --verbose | tr '\n' ';')" \
@@ -89,19 +94,24 @@ jobs:
             -Wl,-rpath,"$GITHUB_WORKSPACE/.arena-aws-lc-build/crypto" \
             -lcrypto -lm -o arena/results/v4-phase0/aws-lc-runner
 
-      - name: Run both harnesses with Phase 0 iteration policy
+      - name: Run both harnesses with Phase 0 iteration policy and real host metadata
         shell: bash
         env:
-          NEXUSQ_RUN_ID: v4-phase0-${{ github.run_id }}
-          NEXUSQ_CPU: github-actions-runner
-          NEXUSQ_OPT: release
           AWSLC_VERSION: ec05f25
-          ARENA_CPU: github-actions-runner
         run: |
           set -euo pipefail
-          ARENA_CPU_FEATURES="$(tr ' ' ',' < arena/results/v4-phase0/cpu-features.txt)" \
-            arena/runners/nexusq/target/release/nexusq-arena-runner \
+          NEXUSQ_RUN_ID="v4-phase0-${GITHUB_RUN_ID}" \
+          NEXUSQ_CPU="$(cat arena/results/v4-phase0/cpu.txt)" \
+          NEXUSQ_CPU_FEATURES="$(tr ' ' ',' < arena/results/v4-phase0/cpu-features.txt)" \
+          NEXUSQ_RUSTC_VERBOSE="$(rustc --version --verbose | tr '\n' ';')" \
+          RUSTC_VERSION="$(rustc --version)" \
+          NEXUSQ_CARGO_LOCK_SHA256="$(sha256sum arena/runners/nexusq/Cargo.lock | cut -d' ' -f1)" \
+          NEXUSQ_OPT=release \
+          arena/runners/nexusq/target/release/nexusq-arena-runner \
             | tee arena/results/v4-phase0/nexusq.jsonl
+          ARENA_CPU="$(cat arena/results/v4-phase0/cpu.txt)" \
+          ARENA_CPU_FEATURES="$(tr ' ' ',' < arena/results/v4-phase0/cpu-features.txt)" \
+          ARENA_TARGET=x86_64-linux-gnu ARENA_OS=Ubuntu ARENA_OPT=release \
           arena/results/v4-phase0/aws-lc-runner \
             | tee arena/results/v4-phase0/aws-lc.jsonl
 
@@ -145,9 +155,48 @@ jobs:
           print('Both implementations provide per-operation raw samples and median/p95/stddev statistics.')
           PY
 
+      - name: Archive measurement outputs in repository Artifacts/
+        if: always() && steps.checkout.outcome == 'success'
+        shell: bash
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref || github.ref_name }}
+        run: |
+          set -euo pipefail
+          destination="Artifacts/v4-issue23-measurement/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -p "$destination"
+          if [[ -d arena/results/v4-phase0 ]]; then cp -a arena/results/v4-phase0/. "$destination/"; fi
+          cat > "$destination/README.txt" <<EOF
+          NEXUS-Q V4 measurement CI archive
+          workflow_run_id=${GITHUB_RUN_ID}
+          workflow_attempt=${GITHUB_RUN_ATTEMPT}
+          source_commit=$(git rev-parse HEAD)
+          source_ref=${GITHUB_REF}
+          workflow_url=https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$destination"
+          if git diff --cached --quiet; then
+            echo "No new measurement files to archive."
+            exit 0
+          fi
+          git commit -m "chore(artifacts): archive V4 measurement run ${GITHUB_RUN_ID}"
+          for attempt in 1 2 3; do
+            git fetch origin "$HEAD_REF"
+            git rebase FETCH_HEAD
+            if git push origin "HEAD:refs/heads/${HEAD_REF}"; then
+              echo "Archived measurement output in ${destination}"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Unable to push archived measurement output after retries" >&2
+          exit 1
+
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: v4-issue23-measurement-${{ github.sha }}
           path: arena/results/v4-phase0/
-          if-no-files-found: error
+          if-no-files-found: ignore
           retention-days: 30

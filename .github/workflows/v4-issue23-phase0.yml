@@ -4,10 +4,12 @@ on:
   pull_request:
     branches:
       - nexusqv4
+    paths-ignore:
+      - 'Artifacts/**'
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: v4-issue23-phase0-${{ github.event.pull_request.number || github.ref }}
@@ -25,7 +27,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout V4 ref
+        id: checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
       - name: Install stable Rust
         uses: dtolnay/rust-toolchain@stable
@@ -35,7 +40,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p phase0-evidence
-          printf '%s\n' "$GITHUB_SHA" > phase0-evidence/commit.txt
+          printf '%s\n' "$(git rev-parse HEAD)" > phase0-evidence/commit.txt
           printf '%s\n' "$GITHUB_REF" > phase0-evidence/ref.txt
           rustc --version --verbose | tee phase0-evidence/rustc.txt
           cargo --version | tee phase0-evidence/cargo.txt
@@ -75,10 +80,49 @@ jobs:
               | tee phase0-evidence/kernel-crate-status.txt
           fi
 
+      - name: Archive Phase 0 evidence in repository Artifacts/
+        if: always() && steps.checkout.outcome == 'success'
+        shell: bash
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref || github.ref_name }}
+        run: |
+          set -euo pipefail
+          destination="Artifacts/v4-issue23-phase0/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -p "$destination"
+          if [[ -d phase0-evidence ]]; then cp -a phase0-evidence/. "$destination/"; fi
+          cat > "$destination/README.txt" <<EOF
+          NEXUS-Q V4 Phase 0 provenance CI archive
+          workflow_run_id=${GITHUB_RUN_ID}
+          workflow_attempt=${GITHUB_RUN_ATTEMPT}
+          source_commit=$(git rev-parse HEAD)
+          source_ref=${GITHUB_REF}
+          workflow_url=https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$destination"
+          if git diff --cached --quiet; then
+            echo "No new Phase 0 files to archive."
+            exit 0
+          fi
+          git commit -m "chore(artifacts): archive V4 Phase 0 run ${GITHUB_RUN_ID}"
+          for attempt in 1 2 3; do
+            git fetch origin "$HEAD_REF"
+            git rebase FETCH_HEAD
+            if git push origin "HEAD:refs/heads/${HEAD_REF}"; then
+              echo "Archived Phase 0 output in ${destination}"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Unable to push archived Phase 0 output after retries" >&2
+          exit 1
+
       - name: Upload Phase 0 evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: v4-issue23-phase0-${{ github.sha }}
           path: phase0-evidence/
-          if-no-files-found: error
+          if-no-files-found: ignore
           retention-days: 30
