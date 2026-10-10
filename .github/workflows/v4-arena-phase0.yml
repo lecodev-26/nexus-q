@@ -1,0 +1,48 @@
+name: V4 Arena Phase 0 — dependency provenance
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['v4/**']
+  pull_request:
+    branches: [nexusqv4]
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-provenance:
+    name: Resolve locked Arena dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Capture toolchain and dependency resolution
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p phase0-evidence
+          rustc --version --verbose | tee phase0-evidence/rustc.txt
+          cargo --version | tee phase0-evidence/cargo.txt
+          cargo tree --locked --manifest-path arena/runners/nexusq/Cargo.toml -i ml-kem \
+            | tee phase0-evidence/tree-ml-kem.txt
+          cargo tree --locked --manifest-path arena/runners/nexusq/Cargo.toml -i module-lattice \
+            | tee phase0-evidence/tree-module-lattice.txt
+          cargo tree --locked --manifest-path arena/runners/nexusq/Cargo.toml -i ml-dsa \
+            | tee phase0-evidence/tree-ml-dsa.txt
+          cargo metadata --locked --format-version 1 --manifest-path arena/runners/nexusq/Cargo.toml \
+            > phase0-evidence/cargo-metadata.json
+          printf '\n--- Local patch targets ---\n'
+          grep -nE 'ml-kem = \{ path =|module-lattice = \{ path =' arena/runners/nexusq/Cargo.toml \
+            | tee phase0-evidence/local-patches.txt
+          printf '\n--- Kernel crate presence (informational) ---\n'
+          if test -f crates/nexusq-kernels/Cargo.toml; then
+            echo 'nexusq-kernels manifest exists' | tee phase0-evidence/kernel-crate-status.txt
+          else
+            echo 'nexusq-kernels manifest not present yet; Phase 0 remains incomplete' \
+              | tee phase0-evidence/kernel-crate-status.txt
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v4-arena-phase0-dependency-provenance
+          path: phase0-evidence/

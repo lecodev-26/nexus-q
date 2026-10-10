@@ -29,6 +29,20 @@ The archived numbers are useful for triage, not as a fair head-to-head claim. In
 
 These are medians across archived NEXUS-Q per-round medians versus one AWS-LC mean record, not matched statistics on proven-identical hosts. Do **not** treat their quotients as valid speed ratios, acceptance thresholds, or a public leaderboard. They do establish which operations deserve early profiling. The ML-KEM-1024 AWS-LC comparison is missing from this artifact set. Phase 0 must make the runner, primitive layer, host, compiler settings, measurement statistics, warmups, and iteration policy equivalent and verifiable in the same job.
 
+## Dependency provenance confirmed by manifest inspection (2026-10-10)
+
+The standalone runner is explicitly excluded from the root Cargo workspace. Its own `arena/runners/nexusq/Cargo.toml` has local `[patch.crates-io]` entries for `ml-kem` and `module-lattice`, pointing at `vendor/ml-kem` and `vendor/module-lattice`; the root manifest also patches those crates. The standalone runner has its own committed `Cargo.lock`, where patched path packages correctly have no registry `source` field. Existing Rust dependency-info files under the runner's build directory also show a compiled `ml-kem` artifact sourced from `vendor/ml-kem`. These are useful local clues, but CI must emit the resolved dependency trees from the exact locked manifest before this is accepted as reproducible evidence.
+
+Two important limitations remain:
+
+- There is no `crates/nexusq-kernels` or V4 optimized backend yet, so the runner cannot currently prove that it exercises the kernel implementation planned by Issue #23.
+- ML-DSA is still resolved from the crates.io `ml-dsa 0.1.1` package; only ML-KEM and `module-lattice` are locally patched. This is not evidence of a local ML-DSA kernel path.
+- The runner currently measures ML-KEM-768 and ML-DSA-65 through `nexusq-core` wrappers, but ML-KEM-1024 directly through `ml-kem` types. All three parameter-set groups must be traced and standardized on a semantically equivalent primitive layer before baseline ratios can be considered fair.
+- The current NEXUS-Q runner uses 50 iterations / 10 warmups and reports a single mean latency per operation; the AWS-LC adapter uses 20 iterations / 3 warmups and also reports a mean. Neither meets the Phase 0 acceptance policy of at least 1,000 measured samples, 100 warmups, median, p95 and standard deviation.
+- NEXUS-Q and AWS-LC currently run in separate GitHub Actions jobs. Their metadata does not establish a shared physical/virtual host or matching CPU features.
+
+Accordingly, the dependency manifest configuration is present, but Phase 0 is **not complete**. No kernel-performance claim or fair baseline ratio is approved yet.
+
 ## Phase 0 actions required
 
 1. Prove the Arena runner resolves the exact local source under test using `cargo tree --locked --manifest-path arena/runners/nexusq/Cargo.toml -i ml-kem` and equivalent trees for every relevant dependency. The Arena runner is excluded from the workspace, so the root `[patch.crates-io]` alone is not sufficient evidence; its own manifest must be checked.
