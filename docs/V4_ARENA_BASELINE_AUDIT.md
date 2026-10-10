@@ -54,9 +54,7 @@ Accordingly, the dependency manifest configuration is present, but Phase 0 is **
 
 ## V4-only CI policy (restarted 2026-10-10)
 
-V4 now has its own lightweight workflow, `.github/workflows/v4-issue23-phase0.yml`. It triggers only on pushes to `nexusqv4` and `v4/issue-23-kernel-work`, or a manual dispatch on either of those exact refs. Concurrency is scoped by ref and cancels superseded runs on the same V4 ref. It captures toolchain/host metadata, locked dependency trees for ML-KEM, module-lattice and ML-DSA, Cargo metadata, patch paths and kernel-crate readiness as an artifact. It deliberately does not run workspace tests, fuzz soaks, SDK jobs, release jobs or benchmarks from other version lines.
-
-The workflow currently lives on the V4 working branch. GitHub `pull_request` workflows normally need the workflow definition on the PR base branch; therefore this file alone does not promise a PR check on an already-existing `nexusqv4` base. The push-triggered V4 check is the initial gate. A PR-triggered check should only be enabled after the same V4-owned workflow is deliberately introduced on the V4 base branch, and its job must filter to the Issue #23 working branch. Do not add V4 to global `main` security/release workflows as a shortcut.
+V4 has its own lightweight workflow, `.github/workflows/v4-issue23-phase0.yml`, with the same file/configuration on `nexusqv4` and `v4/issue-23-kernel-work`. It triggers on pushes to either exact V4 ref, manual dispatch on either exact V4 ref, and PRs targeting `nexusqv4` only when the PR head is `v4/issue-23-kernel-work`. Concurrency is scoped to the ref or PR and cancels superseded runs within that V4 work item. It captures toolchain/host metadata, locked dependency trees for ML-KEM, module-lattice and ML-DSA, Cargo metadata, patch paths and kernel-crate readiness as an artifact. It deliberately does not run workspace tests, fuzz soaks, SDK jobs, release jobs or benchmarks from other version lines. Do not add V4 to global `main` security/release workflows as a shortcut.
 
 ## Current status
 

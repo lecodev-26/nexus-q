@@ -3,20 +3,28 @@ name: NEXUS-Q V4 — Issue 23 — Phase 0
 on:
   push:
     branches:
-      - nexusqv4
       - v4/issue-23-kernel-work
+  pull_request:
+    branches:
+      - nexusqv4
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: v4-issue23-phase0-${{ github.ref }}
+  group: v4-issue23-phase0-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   dependency-provenance:
-    if: github.ref == 'refs/heads/nexusqv4' || github.ref == 'refs/heads/v4/issue-23-kernel-work'
+    if: >-
+      (github.event_name == 'push' &&
+       github.ref == 'refs/heads/v4/issue-23-kernel-work') ||
+      (github.event_name == 'workflow_dispatch' &&
+       (github.ref == 'refs/heads/nexusqv4' || github.ref == 'refs/heads/v4/issue-23-kernel-work')) ||
+      (github.event_name == 'pull_request' &&
+       github.base_ref == 'nexusqv4' && github.head_ref == 'v4/issue-23-kernel-work')
     name: V4 Phase 0 / dependency provenance
     runs-on: ubuntu-latest
     timeout-minutes: 10
