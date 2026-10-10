@@ -52,13 +52,16 @@ Accordingly, the dependency manifest configuration is present, but Phase 0 is **
 5. Add AWS-LC ML-KEM-1024 only if the pinned version and adapter expose the required operation with equivalent semantics; otherwise record the coverage limitation and use the best valid comparator available for that operation.
 6. Preserve raw JSONL, metadata, run URLs, dependency trees, and generated ratios as PR/Issue evidence. Do not infer causation from one run or combine cached ML-DSA verification with ordinary verification.
 
-## Temporary fuzz policy for V4 development
+## V4-only CI policy (restarted 2026-10-10)
 
-The `security-ci.yml` workflow now runs its normal Rust security checks and secret scan on `v4/**` pushes and PRs targeting `nexusqv4`. The fuzz harness build retains its previous behavior for pushes to `main` and PRs targeting `main`; all long fuzz soaks remain restricted to pushes to `main`. Thus iterative V4 branch commits and PRs to `nexusqv4` do not run fuzz, while existing main-PR behavior and the four-hour main release/security gates are preserved. Fuzzing is deferred during V4 iteration, not removed from the project. No fuzz target or other workflow is deleted.
+V4 now has its own lightweight workflow, `.github/workflows/v4-issue23-phase0.yml`. It triggers only on pushes to `nexusqv4` and `v4/issue-23-kernel-work`, or a manual dispatch on either of those exact refs. Concurrency is scoped by ref and cancels superseded runs on the same V4 ref. It captures toolchain/host metadata, locked dependency trees for ML-KEM, module-lattice and ML-DSA, Cargo metadata, patch paths and kernel-crate readiness as an artifact. It deliberately does not run workspace tests, fuzz soaks, SDK jobs, release jobs or benchmarks from other version lines.
+
+The workflow currently lives on the V4 working branch. GitHub `pull_request` workflows normally need the workflow definition on the PR base branch; therefore this file alone does not promise a PR check on an already-existing `nexusqv4` base. The push-triggered V4 check is the initial gate. A PR-triggered check should only be enabled after the same V4-owned workflow is deliberately introduced on the V4 base branch, and its job must filter to the Issue #23 working branch. Do not add V4 to global `main` security/release workflows as a shortcut.
 
 ## Current status
 
 - [x] Read the documented baseline and inspect the archived 2026-10-09 Arena records.
 - [x] Identify the current artifacts' comparability limitations.
 - [ ] Repair/prove measurement equivalence and local-source resolution in Phase 0.
+- [x] Add a V4-only Phase 0 provenance workflow on the V4 refs; actual CI artifact evidence is still pending.
 - [ ] Re-run the fair baseline before using any ratios as optimization gates.

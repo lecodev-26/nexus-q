@@ -1,0 +1,81 @@
+name: NEXUS-Q V4 — Issue 23 — Phase 0
+
+on:
+  push:
+    branches:
+      - nexusqv4
+      - v4/issue-23-kernel-work
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v4-issue23-phase0-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-provenance:
+    if: github.ref == 'refs/heads/nexusqv4' || github.ref == 'refs/heads/v4/issue-23-kernel-work'
+    name: V4 Phase 0 / dependency provenance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout V4 ref
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Capture toolchain and runner identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p phase0-evidence
+          printf '%s\n' "$GITHUB_SHA" > phase0-evidence/commit.txt
+          printf '%s\n' "$GITHUB_REF" > phase0-evidence/ref.txt
+          rustc --version --verbose | tee phase0-evidence/rustc.txt
+          cargo --version | tee phase0-evidence/cargo.txt
+          uname -a | tee phase0-evidence/uname.txt
+          if command -v lscpu >/dev/null 2>&1; then
+            lscpu | tee phase0-evidence/lscpu.txt
+          fi
+          git status --short | tee phase0-evidence/git-status.txt
+
+      - name: Prove locked Arena dependency sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest=arena/runners/nexusq/Cargo.toml
+          cargo tree --locked --manifest-path "$manifest" -i ml-kem \
+            | tee phase0-evidence/tree-ml-kem.txt
+          cargo tree --locked --manifest-path "$manifest" -i module-lattice \
+            | tee phase0-evidence/tree-module-lattice.txt
+          cargo tree --locked --manifest-path "$manifest" -i ml-dsa \
+            | tee phase0-evidence/tree-ml-dsa.txt
+          cargo metadata --locked --format-version 1 --manifest-path "$manifest" \
+            > phase0-evidence/cargo-metadata.json
+          sha256sum Cargo.toml Cargo.lock "$manifest" arena/runners/nexusq/Cargo.lock \
+            | tee phase0-evidence/manifest-sha256.txt
+
+      - name: Record local patch targets and kernel readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -nE 'ml-kem = \{ path =|module-lattice = \{ path =' \
+            arena/runners/nexusq/Cargo.toml \
+            | tee phase0-evidence/local-patches.txt
+          if test -f crates/nexusq-kernels/Cargo.toml; then
+            echo 'nexusq-kernels manifest exists' | tee phase0-evidence/kernel-crate-status.txt
+          else
+            echo 'nexusq-kernels manifest not present; Phase 0 remains incomplete' \
+              | tee phase0-evidence/kernel-crate-status.txt
+          fi
+
+      - name: Upload Phase 0 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: v4-issue23-phase0-${{ github.sha }}
+          path: phase0-evidence/
+          if-no-files-found: error
+          retention-days: 30
