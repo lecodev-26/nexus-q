@@ -87,7 +87,7 @@ jobs:
             arena/adapters/aws-lc/runner.c \
             -L"$GITHUB_WORKSPACE/.arena-aws-lc-build/crypto" \
             -Wl,-rpath,"$GITHUB_WORKSPACE/.arena-aws-lc-build/crypto" \
-            -lcrypto -o arena/results/v4-phase0/aws-lc-runner
+            -lcrypto -lm -o arena/results/v4-phase0/aws-lc-runner
 
       - name: Run both harnesses with Phase 0 iteration policy
         shell: bash
@@ -130,15 +130,19 @@ jobs:
                   measurement = row['measurement']
                   assert measurement['iterations'] >= 1000, (name, row['operation'], measurement['iterations'])
                   assert measurement['warmups'] >= 100, (name, row['operation'], measurement['warmups'])
-                  if implementation == 'nexusq' and row['operation'] != 'sign':
-                      assert len(measurement.get('samples_ns', [])) == measurement['iterations'], (name, row['operation'])
-                      assert measurement.get('statistics', {}).get('sample_count') == measurement['iterations'], (name, row['operation'])
-              print(f'{name}: {len(rows)} schema-valid records; counts meet configured thresholds')
+                  samples = measurement.get('samples_ns', [])
+                  stats = measurement.get('statistics')
+                  assert len(samples) == measurement['iterations'], (name, row['operation'], len(samples))
+                  assert stats is not None, (name, row['operation'], 'missing statistics')
+                  assert stats.get('sample_count') == measurement['iterations'], (name, row['operation'], stats)
+                  assert stats['min_ns'] <= stats['median_ns'] <= stats['p95_ns'], (name, row['operation'], stats)
+                  assert measurement['latency_ns'] == stats['median_ns'], (name, row['operation'], measurement['latency_ns'], stats['median_ns'])
+              print(f'{name}: {len(rows)} schema-valid records with raw samples/statistics; counts meet configured thresholds')
           aws_rows = [json.loads(line) for line in (root / 'aws-lc.jsonl').read_text().splitlines() if line.strip()]
           actual_aws = {(r['algorithm']['id'], r['algorithm']['parameter_set'], r['operation']) for r in aws_rows}
           assert actual_aws == expected_aws, (actual_aws, expected_aws)
           print('AWS-LC operation coverage: OK')
-          print('NOTE: same-host build/measurement gate only; AWS-LC currently emits aggregate means without per-operation samples.')
+          print('Both implementations provide per-operation raw samples and median/p95/stddev statistics.')
           PY
 
       - uses: actions/upload-artifact@v4

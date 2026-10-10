@@ -1,9 +1,13 @@
 #define _POSIX_C_SOURCE 200809L
 #include <openssl/evp.h>
 #include <openssl/base.h>
+#include <errno.h>
+#include <math.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
+#include <string.h>
 #include <time.h>
 #include <sys/utsname.h>
 
@@ -11,24 +15,354 @@
 #define DEFAULT_WARMUPS 3
 #define MESSAGE "nexusq-pqc-arena-v1"
 
-static double elapsed_ns(struct timespec a, struct timespec b){return (double)(b.tv_sec-a.tv_sec)*1e9+(double)(b.tv_nsec-a.tv_nsec);}
+typedef int (*operation_fn)(void *);
+
+static double elapsed_ns(struct timespec a, struct timespec b) {
+    return (double)(b.tv_sec - a.tv_sec) * 1e9 + (double)(b.tv_nsec - a.tv_nsec);
+}
+
 static int configured_count(const char *name, int fallback, int minimum) {
     const char *value = getenv(name);
     if (value == NULL || *value == '\0') return fallback;
     char *end = NULL;
+    errno = 0;
     long parsed = strtol(value, &end, 10);
-    if (end == value || *end != '\0' || parsed < minimum || parsed > 1000000L) {
+    if (errno || end == value || *end != '\0' || parsed < minimum || parsed > 1000000L) {
         fprintf(stderr, "%s must be an integer in [%d, 1000000]; got '%s'\n", name, minimum, value);
         exit(64);
     }
     return (int)parsed;
 }
+
 static int iterations(void) { return configured_count("AWSLC_ITERATIONS", DEFAULT_ITERATIONS, 1); }
 static int warmups(void) { return configured_count("AWSLC_WARMUPS", DEFAULT_WARMUPS, 0); }
-static const char *env_or(const char*n,const char*f){const char*v=getenv(n);return v&&*v?v:f;}
-static void meta(char*t,size_t tl,char*o,size_t ol,char*c,size_t cl){struct utsname u;if(getenv("ARENA_TARGET")&&getenv("ARENA_OS")&&getenv("ARENA_CPU")){snprintf(t,tl,"%s",getenv("ARENA_TARGET"));snprintf(o,ol,"%s",getenv("ARENA_OS"));snprintf(c,cl,"%s",getenv("ARENA_CPU"));return;}if(uname(&u)==0){snprintf(t,tl,"%s-%s",u.machine,u.sysname);snprintf(o,ol,"%s",u.sysname);snprintf(c,cl,"%s",u.machine);return;}snprintf(t,tl,"unknown");snprintf(o,ol,"unknown");snprintf(c,cl,"unknown");}
-static void emit(const char*a,const char*p,const char*op,double lat,size_t pk,size_t sk,size_t ct,size_t sig,int hasct,int hassig){char t[256],o[128],c[256],cj[32],sj[32];struct timespec ts;meta(t,sizeof(t),o,sizeof(o),c,sizeof(c));clock_gettime(CLOCK_REALTIME,&ts);snprintf(cj,sizeof(cj),hasct?"%zu":"null",ct);snprintf(sj,sizeof(sj),hassig?"%zu":"null",sig);unsigned long long stamp=(unsigned long long)ts.tv_sec*1000000000ULL+(unsigned long long)ts.tv_nsec;printf("{\"schema_version\":1,\"run_id\":\"aws-lc-%s-%s-%s\",\"implementation\":{\"id\":\"aws-lc\",\"version\":\"%s\",\"commit\":\"ec05f25\"},\"algorithm\":{\"id\":\"%s\",\"parameter_set\":\"%s\"},\"operation\":\"%s\",\"environment\":{\"target\":\"%s\",\"os\":\"%s\",\"cpu\":\"%s\",\"cpu_features\":[],\"compiler\":\"cc\",\"compiler_version\":\"%s\",\"optimization\":\"%s\",\"harness_version\":\"arena-v1\"},\"measurement\":{\"iterations\":%d,\"warmups\":%d,\"measurement_timestamp_unix_ns\":%llu,\"latency_ns\":%.3f,\"throughput_ops_s\":%.6f,\"memory_bytes\":null,\"measurement_method\":\"clock_gettime(CLOCK_MONOTONIC) mean wall-clock latency\"},\"sizes\":{\"public_key_bytes\":%zu,\"secret_key_bytes\":%zu,\"ciphertext_bytes\":%s,\"signature_bytes\":%s}}\n",a,p,op,env_or("AWSLC_VERSION", "runtime"),a,p,op,t,o,c,__VERSION__,env_or("ARENA_OPT","release"),iterations(),warmups(),stamp,lat,1e9/lat,pk,sk,cj,sj);}
-static int kem(void){EVP_PKEY *key=NULL;EVP_PKEY_CTX*ctx=NULL;unsigned char*ct=NULL,*ss=NULL;size_t ctl=0,ssl=0;struct timespec a,b;for(int w=0;w<warmups();w++){ctx=EVP_PKEY_CTX_new_id(EVP_PKEY_KEM,NULL);if(!ctx||!EVP_PKEY_keygen_init(ctx)||!EVP_PKEY_CTX_kem_set_params(ctx,NID_MLKEM768)||!EVP_PKEY_keygen(ctx,&key))return 1;EVP_PKEY_CTX_free(ctx);ctx=NULL;EVP_PKEY_free(key);key=NULL;}clock_gettime(CLOCK_MONOTONIC,&a);for(int i=0;i<iterations();i++){ctx=EVP_PKEY_CTX_new_id(EVP_PKEY_KEM,NULL);if(!ctx||!EVP_PKEY_keygen_init(ctx)||!EVP_PKEY_CTX_kem_set_params(ctx,NID_MLKEM768)||!EVP_PKEY_keygen(ctx,&key))return 2;EVP_PKEY_CTX_free(ctx);ctx=NULL;EVP_PKEY_free(key);key=NULL;}clock_gettime(CLOCK_MONOTONIC,&b);emit("ml-kem","768","keygen",elapsed_ns(a,b)/iterations(),1184,2400,1088,0,1,0);
-ctx=EVP_PKEY_CTX_new_id(EVP_PKEY_KEM,NULL);if(!ctx||!EVP_PKEY_keygen_init(ctx)||!EVP_PKEY_CTX_kem_set_params(ctx,NID_MLKEM768)||!EVP_PKEY_keygen(ctx,&key))return 3;EVP_PKEY_CTX_free(ctx);ctx=NULL;ctx=EVP_PKEY_CTX_new(key,NULL);if(!ctx||!EVP_PKEY_encapsulate(ctx,NULL,&ctl,NULL,&ssl))return 4;ct=OPENSSL_malloc(ctl);ss=OPENSSL_malloc(ssl);if(!ct||!ss)return 5;EVP_PKEY_CTX_free(ctx);ctx=NULL;for(int w=0;w<warmups();w++){ctx=EVP_PKEY_CTX_new(key,NULL);if(!ctx||!EVP_PKEY_encapsulate(ctx,ct,&ctl,ss,&ssl))return 6;EVP_PKEY_CTX_free(ctx);ctx=NULL;}clock_gettime(CLOCK_MONOTONIC,&a);for(int i=0;i<iterations();i++){ctx=EVP_PKEY_CTX_new(key,NULL);if(!ctx||!EVP_PKEY_encapsulate(ctx,ct,&ctl,ss,&ssl))return 7;EVP_PKEY_CTX_free(ctx);ctx=NULL;}clock_gettime(CLOCK_MONOTONIC,&b);emit("ml-kem","768","encaps",elapsed_ns(a,b)/iterations(),1184,2400,ctl,0,1,0);for(int w=0;w<warmups();w++){ctx=EVP_PKEY_CTX_new(key,NULL);if(!ctx||!EVP_PKEY_decapsulate(ctx,ss,&ssl,ct,ctl))return 8;EVP_PKEY_CTX_free(ctx);ctx=NULL;}clock_gettime(CLOCK_MONOTONIC,&a);for(int i=0;i<iterations();i++){ctx=EVP_PKEY_CTX_new(key,NULL);if(!ctx||!EVP_PKEY_decapsulate(ctx,ss,&ssl,ct,ctl))return 9;EVP_PKEY_CTX_free(ctx);ctx=NULL;}clock_gettime(CLOCK_MONOTONIC,&b);emit("ml-kem","768","decaps",elapsed_ns(a,b)/iterations(),1184,2400,ctl,0,1,0);OPENSSL_free(ct);OPENSSL_free(ss);EVP_PKEY_free(key);return 0;}
-static int dsa(void){EVP_PKEY*key=NULL;EVP_PKEY_CTX*kctx=NULL;EVP_MD_CTX*md=NULL;unsigned char sig[4096];size_t sl=sizeof(sig);const unsigned char msg[]=MESSAGE;struct timespec a,b;for(int w=0;w<warmups();w++){kctx=EVP_PKEY_CTX_new_id(EVP_PKEY_PQDSA,NULL);if(!kctx||!EVP_PKEY_keygen_init(kctx)||!EVP_PKEY_CTX_pqdsa_set_params(kctx,NID_MLDSA65)||!EVP_PKEY_keygen(kctx,&key))return 1;EVP_PKEY_CTX_free(kctx);kctx=NULL;EVP_PKEY_free(key);key=NULL;}clock_gettime(CLOCK_MONOTONIC,&a);for(int i=0;i<iterations();i++){kctx=EVP_PKEY_CTX_new_id(EVP_PKEY_PQDSA,NULL);if(!kctx||!EVP_PKEY_keygen_init(kctx)||!EVP_PKEY_CTX_pqdsa_set_params(kctx,NID_MLDSA65)||!EVP_PKEY_keygen(kctx,&key))return 2;EVP_PKEY_CTX_free(kctx);kctx=NULL;EVP_PKEY_free(key);key=NULL;}clock_gettime(CLOCK_MONOTONIC,&b);emit("ml-dsa","65","keygen",elapsed_ns(a,b)/iterations(),1952,4032,0,3309,0,1);kctx=EVP_PKEY_CTX_new_id(EVP_PKEY_PQDSA,NULL);if(!kctx||!EVP_PKEY_keygen_init(kctx)||!EVP_PKEY_CTX_pqdsa_set_params(kctx,NID_MLDSA65)||!EVP_PKEY_keygen(kctx,&key))return 3;EVP_PKEY_CTX_free(kctx);for(int w=0;w<warmups();w++){md=EVP_MD_CTX_new();if(!md||!EVP_DigestSignInit(md,NULL,NULL,NULL,key)||!EVP_DigestSign(md,sig,&sl,msg,sizeof(msg)-1))return 4;EVP_MD_CTX_free(md);sl=sizeof(sig);}clock_gettime(CLOCK_MONOTONIC,&a);for(int i=0;i<iterations();i++){md=EVP_MD_CTX_new();if(!md||!EVP_DigestSignInit(md,NULL,NULL,NULL,key)||!EVP_DigestSign(md,sig,&sl,msg,sizeof(msg)-1))return 5;EVP_MD_CTX_free(md);sl=sizeof(sig);}clock_gettime(CLOCK_MONOTONIC,&b);emit("ml-dsa","65","sign",elapsed_ns(a,b)/iterations(),1952,4032,0,3309,0,1);for(int w=0;w<warmups();w++){md=EVP_MD_CTX_new();if(!md||!EVP_DigestVerifyInit(md,NULL,NULL,NULL,key)||!EVP_DigestVerify(md,sig,3309,msg,sizeof(msg)-1))return 6;EVP_MD_CTX_free(md);}clock_gettime(CLOCK_MONOTONIC,&a);for(int i=0;i<iterations();i++){md=EVP_MD_CTX_new();if(!md||!EVP_DigestVerifyInit(md,NULL,NULL,NULL,key)||!EVP_DigestVerify(md,sig,3309,msg,sizeof(msg)-1))return 7;EVP_MD_CTX_free(md);}clock_gettime(CLOCK_MONOTONIC,&b);emit("ml-dsa","65","verify",elapsed_ns(a,b)/iterations(),1952,4032,0,3309,0,1);EVP_PKEY_free(key);return 0;}
-int main(void){if(kem()!=0)return 1;if(dsa()!=0)return 2;return 0;}
+static const char *env_or(const char *name, const char *fallback) {
+    const char *value = getenv(name);
+    return value && *value ? value : fallback;
+}
+
+static void meta(char *target, size_t target_len, char *os, size_t os_len,
+                 char *cpu, size_t cpu_len) {
+    struct utsname u;
+    if (getenv("ARENA_TARGET") && getenv("ARENA_OS") && getenv("ARENA_CPU")) {
+        snprintf(target, target_len, "%s", getenv("ARENA_TARGET"));
+        snprintf(os, os_len, "%s", getenv("ARENA_OS"));
+        snprintf(cpu, cpu_len, "%s", getenv("ARENA_CPU"));
+        return;
+    }
+    if (uname(&u) == 0) {
+        snprintf(target, target_len, "%s-%s", u.machine, u.sysname);
+        snprintf(os, os_len, "%s", u.sysname);
+        snprintf(cpu, cpu_len, "%s", u.machine);
+        return;
+    }
+    snprintf(target, target_len, "unknown");
+    snprintf(os, os_len, "unknown");
+    snprintf(cpu, cpu_len, "unknown");
+}
+
+static int compare_u64(const void *left, const void *right) {
+    uint64_t a = *(const uint64_t *)left;
+    uint64_t b = *(const uint64_t *)right;
+    return (a > b) - (a < b);
+}
+
+typedef struct {
+    uint64_t min_ns;
+    uint64_t median_ns;
+    uint64_t p95_ns;
+    double stddev_ns;
+} sample_statistics;
+
+static sample_statistics summarize(const uint64_t *samples, size_t count) {
+    uint64_t *sorted = malloc(count * sizeof(*sorted));
+    if (!sorted) {
+        fprintf(stderr, "unable to allocate sample statistics buffer\n");
+        exit(70);
+    }
+    memcpy(sorted, samples, count * sizeof(*sorted));
+    qsort(sorted, count, sizeof(*sorted), compare_u64);
+
+    sample_statistics result;
+    result.min_ns = sorted[0];
+    if (count % 2 == 0) {
+        result.median_ns = sorted[count / 2 - 1] / 2 + sorted[count / 2] / 2
+                         + ((sorted[count / 2 - 1] % 2 + sorted[count / 2] % 2) / 2);
+    } else {
+        result.median_ns = sorted[count / 2];
+    }
+    size_t p95_index = (count * 95 + 99) / 100 - 1;
+    result.p95_ns = sorted[p95_index];
+
+    long double mean = 0.0L;
+    long double sum_squares = 0.0L;
+    for (size_t i = 0; i < count; ++i) {
+        long double delta = (long double)samples[i] - mean;
+        mean += delta / (long double)(i + 1);
+        sum_squares += delta * ((long double)samples[i] - mean);
+    }
+    result.stddev_ns = sqrt((double)(sum_squares / (long double)count));
+    free(sorted);
+    return result;
+}
+
+static int run_samples(operation_fn operation, void *context, uint64_t *samples,
+                       int sample_count, int warmup_count) {
+    for (int i = 0; i < warmup_count; ++i) {
+        if (!operation(context)) {
+            fprintf(stderr, "AWS-LC warmup operation failed at sample %d\n", i);
+            return 0;
+        }
+    }
+    for (int i = 0; i < sample_count; ++i) {
+        struct timespec start, end;
+        if (clock_gettime(CLOCK_MONOTONIC, &start) != 0) return 0;
+        if (!operation(context)) {
+            fprintf(stderr, "AWS-LC measured operation failed at sample %d\n", i);
+            return 0;
+        }
+        if (clock_gettime(CLOCK_MONOTONIC, &end) != 0) return 0;
+        double elapsed = elapsed_ns(start, end);
+        samples[i] = elapsed < 1.0 ? 1 : (uint64_t)(elapsed + 0.5);
+    }
+    return 1;
+}
+
+static void emit(const char *algorithm, const char *parameter, const char *operation,
+                 const uint64_t *samples, int count, int warmup_count,
+                 size_t public_key_bytes, size_t secret_key_bytes,
+                 size_t ciphertext_bytes, size_t signature_bytes,
+                 int has_ciphertext, int has_signature) {
+    char target[256], os[128], cpu[256];
+    char ciphertext_json[32], signature_json[32];
+    struct timespec now;
+    meta(target, sizeof(target), os, sizeof(os), cpu, sizeof(cpu));
+    if (clock_gettime(CLOCK_REALTIME, &now) != 0) {
+        fprintf(stderr, "clock_gettime(CLOCK_REALTIME) failed\n");
+        exit(70);
+    }
+    unsigned long long timestamp = (unsigned long long)now.tv_sec * 1000000000ULL
+                                 + (unsigned long long)now.tv_nsec;
+    snprintf(ciphertext_json, sizeof(ciphertext_json), has_ciphertext ? "%zu" : "null", ciphertext_bytes);
+    snprintf(signature_json, sizeof(signature_json), has_signature ? "%zu" : "null", signature_bytes);
+    sample_statistics stats = summarize(samples, (size_t)count);
+
+    printf("{\"schema_version\":1,\"run_id\":\"aws-lc-%s-%s-%s\","
+           "\"implementation\":{\"id\":\"aws-lc\",\"version\":\"%s\",\"commit\":\"ec05f25\"},"
+           "\"algorithm\":{\"id\":\"%s\",\"parameter_set\":\"%s\"},\"operation\":\"%s\","
+           "\"environment\":{\"target\":\"%s\",\"os\":\"%s\",\"cpu\":\"%s\","
+           "\"cpu_features\":[],\"compiler\":\"cc\",\"compiler_version\":\"%s\","
+           "\"optimization\":\"%s\",\"harness_version\":\"arena-v1\"},"
+           "\"measurement\":{\"iterations\":%d,\"warmups\":%d,"
+           "\"measurement_timestamp_unix_ns\":%llu,\"latency_ns\":%llu,"
+           "\"throughput_ops_s\":%.6f,\"memory_bytes\":null,"
+           "\"measurement_method\":\"per-operation clock_gettime(CLOCK_MONOTONIC); median of raw samples\","
+           "\"samples_ns\":[",
+           algorithm, parameter, operation, env_or("AWSLC_VERSION", "runtime"),
+           algorithm, parameter, operation, target, os, cpu, __VERSION__,
+           env_or("ARENA_OPT", "release"), count, warmup_count, timestamp,
+           (unsigned long long)stats.median_ns,
+           1e9 / (double)stats.median_ns);
+
+    for (int i = 0; i < count; ++i) {
+        printf("%s%llu", i ? "," : "", (unsigned long long)samples[i]);
+    }
+    printf("],\"statistics\":{\"sample_count\":%d,\"min_ns\":%llu,\"median_ns\":%llu,"
+           "\"p95_ns\":%llu,\"stddev_ns\":%.3f}},"
+           "\"sizes\":{\"public_key_bytes\":%zu,\"secret_key_bytes\":%zu,"
+           "\"ciphertext_bytes\":%s,\"signature_bytes\":%s}}\n",
+           count, (unsigned long long)stats.min_ns, (unsigned long long)stats.median_ns,
+           (unsigned long long)stats.p95_ns, stats.stddev_ns,
+           public_key_bytes, secret_key_bytes, ciphertext_json, signature_json);
+}
+
+static int generate_kem_key(EVP_PKEY **key) {
+    EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_KEM, NULL);
+    int ok = ctx && EVP_PKEY_keygen_init(ctx)
+          && EVP_PKEY_CTX_kem_set_params(ctx, NID_MLKEM768)
+          && EVP_PKEY_keygen(ctx, key);
+    EVP_PKEY_CTX_free(ctx);
+    return ok;
+}
+
+static int generate_dsa_key(EVP_PKEY **key) {
+    EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_PQDSA, NULL);
+    int ok = ctx && EVP_PKEY_keygen_init(ctx)
+          && EVP_PKEY_CTX_pqdsa_set_params(ctx, NID_MLDSA65)
+          && EVP_PKEY_keygen(ctx, key);
+    EVP_PKEY_CTX_free(ctx);
+    return ok;
+}
+
+static int kem_keygen_once(void *unused) {
+    (void)unused;
+    EVP_PKEY *key = NULL;
+    int ok = generate_kem_key(&key);
+    EVP_PKEY_free(key);
+    return ok;
+}
+
+typedef struct {
+    EVP_PKEY *key;
+    unsigned char *ciphertext;
+    size_t ciphertext_capacity;
+    unsigned char *secret;
+    size_t secret_capacity;
+} kem_context;
+
+static int kem_encaps_once(void *opaque) {
+    kem_context *ctx = opaque;
+    EVP_PKEY_CTX *op = EVP_PKEY_CTX_new(ctx->key, NULL);
+    size_t ciphertext_len = ctx->ciphertext_capacity;
+    size_t secret_len = ctx->secret_capacity;
+    int ok = op && EVP_PKEY_encapsulate(op, ctx->ciphertext, &ciphertext_len,
+                                        ctx->secret, &secret_len);
+    EVP_PKEY_CTX_free(op);
+    return ok;
+}
+
+static int kem_decaps_once(void *opaque) {
+    kem_context *ctx = opaque;
+    EVP_PKEY_CTX *op = EVP_PKEY_CTX_new(ctx->key, NULL);
+    size_t secret_len = ctx->secret_capacity;
+    int ok = op && EVP_PKEY_decapsulate(op, ctx->secret, &secret_len,
+                                        ctx->ciphertext, ctx->ciphertext_capacity);
+    EVP_PKEY_CTX_free(op);
+    return ok;
+}
+
+static int dsa_keygen_once(void *unused) {
+    (void)unused;
+    EVP_PKEY *key = NULL;
+    int ok = generate_dsa_key(&key);
+    EVP_PKEY_free(key);
+    return ok;
+}
+
+typedef struct {
+    EVP_PKEY *key;
+    const unsigned char *message;
+    size_t message_len;
+    unsigned char *signature;
+    size_t signature_capacity;
+    size_t signature_len;
+} dsa_context;
+
+static int dsa_sign_once(void *opaque) {
+    dsa_context *ctx = opaque;
+    EVP_MD_CTX *md = EVP_MD_CTX_new();
+    size_t signature_len = ctx->signature_capacity;
+    int ok = md && EVP_DigestSignInit(md, NULL, NULL, NULL, ctx->key)
+          && EVP_DigestSign(md, ctx->signature, &signature_len,
+                            ctx->message, ctx->message_len);
+    EVP_MD_CTX_free(md);
+    if (ok) ctx->signature_len = signature_len;
+    return ok;
+}
+
+static int dsa_verify_once(void *opaque) {
+    dsa_context *ctx = opaque;
+    EVP_MD_CTX *md = EVP_MD_CTX_new();
+    int ok = md && EVP_DigestVerifyInit(md, NULL, NULL, NULL, ctx->key)
+          && EVP_DigestVerify(md, ctx->signature, ctx->signature_len,
+                              ctx->message, ctx->message_len) == 1;
+    EVP_MD_CTX_free(md);
+    return ok;
+}
+
+static int kem(void) {
+    int count = iterations(), warmup_count = warmups();
+    uint64_t *samples = calloc((size_t)count, sizeof(*samples));
+    EVP_PKEY *key = NULL;
+    if (!samples) return 1;
+
+    if (!run_samples(kem_keygen_once, NULL, samples, count, warmup_count)) goto fail;
+    emit("ml-kem", "768", "keygen", samples, count, warmup_count,
+         1184, 2400, 1088, 0, 1, 0);
+
+    if (!generate_kem_key(&key)) goto fail;
+    EVP_PKEY_CTX *size_ctx = EVP_PKEY_CTX_new(key, NULL);
+    size_t ciphertext_len = 0, secret_len = 0;
+    if (!size_ctx || !EVP_PKEY_encapsulate(size_ctx, NULL, &ciphertext_len, NULL, &secret_len)) {
+        EVP_PKEY_CTX_free(size_ctx);
+        goto fail;
+    }
+    EVP_PKEY_CTX_free(size_ctx);
+    kem_context context = {0};
+    context.key = key;
+    context.ciphertext_capacity = ciphertext_len;
+    context.secret_capacity = secret_len;
+    context.ciphertext = OPENSSL_malloc(ciphertext_len);
+    context.secret = OPENSSL_malloc(secret_len);
+    if (!context.ciphertext || !context.secret) {
+        OPENSSL_free(context.ciphertext);
+        OPENSSL_free(context.secret);
+        goto fail;
+    }
+
+    if (!run_samples(kem_encaps_once, &context, samples, count, warmup_count)) {
+        OPENSSL_free(context.ciphertext); OPENSSL_free(context.secret); goto fail;
+    }
+    emit("ml-kem", "768", "encaps", samples, count, warmup_count,
+         1184, 2400, ciphertext_len, 0, 1, 0);
+    if (!run_samples(kem_decaps_once, &context, samples, count, warmup_count)) {
+        OPENSSL_free(context.ciphertext); OPENSSL_free(context.secret); goto fail;
+    }
+    emit("ml-kem", "768", "decaps", samples, count, warmup_count,
+         1184, 2400, ciphertext_len, 0, 1, 0);
+
+    OPENSSL_free(context.ciphertext);
+    OPENSSL_free(context.secret);
+    EVP_PKEY_free(key);
+    free(samples);
+    return 0;
+
+fail:
+    EVP_PKEY_free(key);
+    free(samples);
+    fprintf(stderr, "AWS-LC ML-KEM benchmark failed\n");
+    return 1;
+}
+
+static int dsa(void) {
+    int count = iterations(), warmup_count = warmups();
+    uint64_t *samples = calloc((size_t)count, sizeof(*samples));
+    EVP_PKEY *key = NULL;
+    const unsigned char message[] = MESSAGE;
+    const size_t signature_capacity = 4096;
+    unsigned char *signature = OPENSSL_malloc(signature_capacity);
+    if (!samples || !signature) { free(samples); OPENSSL_free(signature); return 1; }
+
+    if (!run_samples(dsa_keygen_once, NULL, samples, count, warmup_count)) goto fail;
+    emit("ml-dsa", "65", "keygen", samples, count, warmup_count,
+         1952, 4032, 0, 3309, 0, 1);
+
+    if (!generate_dsa_key(&key)) goto fail;
+    dsa_context context = {key, message, sizeof(message) - 1,
+                           signature, signature_capacity, 0};
+    if (!dsa_sign_once(&context)) goto fail;
+    if (!run_samples(dsa_sign_once, &context, samples, count, warmup_count)) goto fail;
+    emit("ml-dsa", "65", "sign", samples, count, warmup_count,
+         1952, 4032, 0, context.signature_len, 0, 1);
+    if (!run_samples(dsa_verify_once, &context, samples, count, warmup_count)) goto fail;
+    emit("ml-dsa", "65", "verify", samples, count, warmup_count,
+         1952, 4032, 0, context.signature_len, 0, 1);
+
+    EVP_PKEY_free(key);
+    OPENSSL_free(signature);
+    free(samples);
+    return 0;
+
+fail:
+    EVP_PKEY_free(key);
+    OPENSSL_free(signature);
+    free(samples);
+    fprintf(stderr, "AWS-LC ML-DSA benchmark failed\n");
+    return 1;
+}
+
+int main(void) {
+    if (kem() != 0) return 1;
+    if (dsa() != 0) return 2;
+    return 0;
+}
