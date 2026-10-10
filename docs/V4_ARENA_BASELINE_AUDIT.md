@@ -43,6 +43,21 @@ Two important limitations remain:
 
 Accordingly, the dependency manifest configuration is present, but Phase 0 is **not complete**. No kernel-performance claim or fair baseline ratio is approved yet.
 
+## V4 Phase 0 CI evidence — run 38037011873 (2026-10-10)
+
+Artifact: `v4-issue23-phase0-d0787312a4a1a7fd9c5922cb469614aaaa65d4bc` (uploaded by the V4-only workflow).
+
+Observed facts from the artifact:
+
+- The standalone Arena manifest and lockfile hashes were recorded; the run captured Rust/Cargo versions, `uname`, `lscpu`, commit/ref and Cargo metadata.
+- `cargo tree --locked --manifest-path arena/runners/nexusq/Cargo.toml -i ml-kem` resolves `ml-kem 0.3.2` from `vendor/ml-kem`.
+- The equivalent `module-lattice` tree resolves the local `vendor/module-lattice` source.
+- `ml-dsa 0.1.1` still resolves from the registry; this workflow confirms that gap rather than hiding it.
+- `crates/nexusq-kernels/Cargo.toml` is absent. The current runner therefore does not yet exercise the planned optimized kernel crate.
+- The workflow is a provenance/evidence gate only. A green result is not a benchmark result and does not complete Phase 0.
+
+The artifact was downloaded and inspected from the successful PR run. This evidence supersedes the prior note that CI artifact evidence was pending; all measurement-equivalence items below remain open.
+
 ## Phase 0 actions required
 
 1. Prove the Arena runner resolves the exact local source under test using `cargo tree --locked --manifest-path arena/runners/nexusq/Cargo.toml -i ml-kem` and equivalent trees for every relevant dependency. The Arena runner is excluded from the workspace, so the root `[patch.crates-io]` alone is not sufficient evidence; its own manifest must be checked.
@@ -54,12 +69,12 @@ Accordingly, the dependency manifest configuration is present, but Phase 0 is **
 
 ## V4-only CI policy (restarted 2026-10-10)
 
-V4 has its own lightweight workflow, `.github/workflows/v4-issue23-phase0.yml`, with the same file/configuration on `nexusqv4` and `v4/issue-23-kernel-work`. It triggers on pushes to either exact V4 ref, manual dispatch on either exact V4 ref, and PRs targeting `nexusqv4` only when the PR head is `v4/issue-23-kernel-work`. Concurrency is scoped to the ref or PR and cancels superseded runs within that V4 work item. It captures toolchain/host metadata, locked dependency trees for ML-KEM, module-lattice and ML-DSA, Cargo metadata, patch paths and kernel-crate readiness as an artifact. It deliberately does not run workspace tests, fuzz soaks, SDK jobs, release jobs or benchmarks from other version lines. Do not add V4 to global `main` security/release workflows as a shortcut.
+V4 has its own lightweight workflow, `.github/workflows/v4-issue23-phase0.yml`, with the same file/configuration on `nexusqv4` and `v4/issue-23-kernel-work`. It triggers on PR updates targeting `nexusqv4` only when the PR head is `v4/issue-23-kernel-work`, or on manual dispatch from either exact V4 ref. It intentionally has no `push` trigger, avoiding duplicate push-plus-PR runs. Concurrency is scoped to the ref or PR and cancels superseded runs within that V4 work item. It captures toolchain/host metadata, locked dependency trees for ML-KEM, module-lattice and ML-DSA, Cargo metadata, patch paths and kernel-crate readiness as an artifact. It deliberately does not run workspace tests, fuzz soaks, SDK jobs, release jobs or benchmarks from other version lines. Do not add V4 to global `main` security/release workflows as a shortcut.
 
 ## Current status
 
 - [x] Read the documented baseline and inspect the archived 2026-10-09 Arena records.
 - [x] Identify the current artifacts' comparability limitations.
 - [ ] Repair/prove measurement equivalence and local-source resolution in Phase 0.
-- [x] Add a V4-only Phase 0 provenance workflow on the V4 refs; actual CI artifact evidence is still pending.
+- [x] Add a V4-only Phase 0 provenance workflow and collect its first artifact: [run 38037011873](https://github.com/lecodev-26/nexus-q/actions/runs/38037011873).
 - [ ] Re-run the fair baseline before using any ratios as optimization gates.
