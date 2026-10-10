@@ -6,11 +6,11 @@ This directory preserves generated research and benchmark evidence in the Git re
 
 ### Existing repository artifacts (V2)
 
-The files from the existing `artifacts/v2/` tree are copied without modification under `repository-artifacts/v2/`:
+The original V2 research files are preserved without modification under `repository-artifacts/v2/`. The redundant top-level `artifacts/` directory has been consolidated into this canonical archive:
 
 - `v2/v2-01/nexusq-local.jsonl`
 - `v2/v2-02/local-profile.tsv`
-The tracked source tree currently contains these two files; no additional files under `artifacts/v2/v2-02/perf/` were present in the source tree at the time of this snapshot.
+No additional files under `v2/v2-02/perf/` were present in the original source tree at the time of the snapshot.
 
 ### GitHub Actions archives: V1, V1+zeroize, V3 and adapters
 
@@ -46,7 +46,7 @@ The archived run validated 90 V1 records, 90 V1+zeroize records and 100 V3 recor
 
 ## Scope note
 
-This is the initial V1/V2/V3 archive snapshot. It captures all currently tracked files under the repository's `artifacts/v2/` directory and the listed V1/V3 CI artifacts from the identified runs. Historical V2 GitHub Actions artifacts from other runs must be enumerated and added separately if they are still available; this README intentionally does not claim that every historical Actions artifact has already been recovered.
+This is the initial V1/V2/V3 archive snapshot. It captures the two original V2 research files now consolidated under `repository-artifacts/v2/` and the listed V1/V3 CI artifacts from the identified runs. Historical V2 GitHub Actions artifacts from other runs must be enumerated and added separately if they are still available; this README intentionally does not claim that every historical Actions artifact has already been recovered.
 
 ## Version history and next development line
 
@@ -62,3 +62,12 @@ The report [`research-results/issue-41-v1-v3-latency-root-cause.md`](research-re
 ## Artifact completeness and integrity
 
 This archive now includes raw files downloaded from the latest recorded Arena and security-gate runs in addition to the earlier ZIP snapshot. The download is scoped to those identified runs; it is **not** an assertion that every historical artifact from every V1/V2/V3 branch has been recovered. A checksum manifest is generated for the complete tracked archive contents. To verify files from the repository root, run `sha256sum -c artifact-archive/SHA256SUMS-2026-10-09.txt`.
+
+## Single canonical artifact directory
+
+`artifact-archive/` is the repository's only artifact archive directory. All historical research data, benchmark outputs, downloaded Actions artifacts, and future V4 CI evidence belong here. The duplicate top-level `artifacts/` and `Artifacts/` directories have been removed after verifying that the two original V2 files match their archived copies byte-for-byte.
+
+- `v4-issue23-measurement/<run-id>-<attempt>/` stores the matched-host measurement outputs and host/toolchain evidence produced by the V4 measurement workflow.
+- `v4-issue23-phase0/<run-id>-<attempt>/` stores dependency provenance and Phase 0 evidence.
+- Each run directory includes a README with its workflow URL and a run-local `SHA256SUMS.txt`. The workflows also upload their outputs as normal GitHub Actions artifacts.
+- Archive-only commits are excluded from triggering another measurement or Phase 0 run.

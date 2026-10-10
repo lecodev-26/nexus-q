@@ -5,7 +5,7 @@ on:
     branches:
       - nexusqv4
     paths-ignore:
-      - 'Artifacts/**'
+      - 'artifact-archive/**'
   workflow_dispatch:
 
 permissions:
@@ -80,14 +80,14 @@ jobs:
               | tee phase0-evidence/kernel-crate-status.txt
           fi
 
-      - name: Archive Phase 0 evidence in repository Artifacts/
+      - name: Archive Phase 0 evidence in canonical artifact-archive/
         if: always() && steps.checkout.outcome == 'success'
         shell: bash
         env:
           HEAD_REF: ${{ github.event.pull_request.head.ref || github.ref_name }}
         run: |
           set -euo pipefail
-          destination="Artifacts/v4-issue23-phase0/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          destination="artifact-archive/v4-issue23-phase0/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           mkdir -p "$destination"
           if [[ -d phase0-evidence ]]; then cp -a phase0-evidence/. "$destination/"; fi
           cat > "$destination/README.txt" <<EOF
@@ -98,6 +98,7 @@ jobs:
           source_ref=${GITHUB_REF}
           workflow_url=https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
           EOF
+          find "$destination" -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > "$destination/SHA256SUMS.txt"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add "$destination"

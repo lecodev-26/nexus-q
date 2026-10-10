@@ -1,9 +1,0 @@
-ml-kem-768-keygen	iterations=2000	ns_per_op=148788.9	allocs_per_op=5.00	reallocs_per_op=0.00	allocated_bytes_per_op=4736.0	deallocated_bytes_per_op=4736.0
-ml-kem-768-encaps	iterations=2000	ns_per_op=142615.8	allocs_per_op=1.00	reallocs_per_op=0.00	allocated_bytes_per_op=1088.0	deallocated_bytes_per_op=1088.0
-ml-kem-768-decaps	iterations=2000	ns_per_op=166872.6	allocs_per_op=0.00	reallocs_per_op=0.00	allocated_bytes_per_op=0.0	deallocated_bytes_per_op=0.0
-ml-kem-1024-keygen	iterations=2000	ns_per_op=240166.5	allocs_per_op=5.00	reallocs_per_op=0.00	allocated_bytes_per_op=6272.0	deallocated_bytes_per_op=6272.0
-ml-kem-1024-encaps	iterations=2000	ns_per_op=231501.2	allocs_per_op=0.00	reallocs_per_op=0.00	allocated_bytes_per_op=0.0	deallocated_bytes_per_op=0.0
-ml-kem-1024-decaps	iterations=2000	ns_per_op=261608.0	allocs_per_op=0.00	reallocs_per_op=0.00	allocated_bytes_per_op=0.0	deallocated_bytes_per_op=0.0
-ml-dsa-65-keygen	iterations=2000	ns_per_op=895151.7	allocs_per_op=4.00	reallocs_per_op=0.00	allocated_bytes_per_op=108768.0	deallocated_bytes_per_op=108768.0
-ml-dsa-65-sign	iterations=2000	ns_per_op=809402.5	allocs_per_op=3.00	reallocs_per_op=0.00	allocated_bytes_per_op=13549.0	deallocated_bytes_per_op=13549.0
-ml-dsa-65-verify	iterations=2000	ns_per_op=535778.3	allocs_per_op=3.00	reallocs_per_op=0.00	allocated_bytes_per_op=48192.0	deallocated_bytes_per_op=48192.0
