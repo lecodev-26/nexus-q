@@ -1,0 +1,328 @@
+name: NEXUS-Q V4 — Issue 23 — Measurement harness
+
+on:
+  push:
+    branches:
+      - v4/issue-23-kernel-work
+    paths-ignore:
+      - 'artifact-archive/**'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+  statuses: write
+
+concurrency:
+  group: v4-issue23-measurement-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  matched-host-smoke:
+    if: >-
+      (github.event_name == 'workflow_dispatch' &&
+       github.ref == 'refs/heads/v4/issue-23-kernel-work') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/v4/issue-23-kernel-work')
+    name: Build and exercise Rust/AWS-LC on one host
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      NEXUSQ_ITERATIONS: "1000"
+      NEXUSQ_WARMUPS: "100"
+      NEXUSQ_SIGN_SAMPLES_PER_SEED: "16"
+      AWSLC_ITERATIONS: "1000"
+      AWSLC_WARMUPS: "100"
+      ARENA_OPT: release
+      ARENA_TARGET: x86_64-linux-gnu
+      ARENA_OS: Ubuntu
+    steps:
+      - uses: actions/checkout@v4
+        id: checkout
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Install native build dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build build-essential perl
+
+      - name: Capture shared host and toolchain metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p arena/results/v4-phase0
+          uname -a | tee arena/results/v4-phase0/uname.txt
+          lscpu | tee arena/results/v4-phase0/lscpu.txt
+          rustc --version --verbose | tee arena/results/v4-phase0/rustc.txt
+          cargo --version | tee arena/results/v4-phase0/cargo.txt
+          cc --version | head -1 | tee arena/results/v4-phase0/cc.txt
+          awk -F': ' '/model name|Hardware|Processor/{print $2; exit}' /proc/cpuinfo | tee arena/results/v4-phase0/cpu.txt
+          awk -F': ' '/^flags|^Features/{print $2; exit}' /proc/cpuinfo | tee arena/results/v4-phase0/cpu-features.txt
+          printf 'NEXUSQ_ITERATIONS=%s\nNEXUSQ_WARMUPS=%s\nNEXUSQ_SIGN_SAMPLES_PER_SEED=%s\nAWSLC_ITERATIONS=%s\nAWSLC_WARMUPS=%s\n' \
+            "$NEXUSQ_ITERATIONS" "$NEXUSQ_WARMUPS" "$NEXUSQ_SIGN_SAMPLES_PER_SEED" "$AWSLC_ITERATIONS" "$AWSLC_WARMUPS" \
+            | tee arena/results/v4-phase0/measurement-policy.txt
+
+      - name: Test benchmark statistics conventions
+        run: cargo test --locked --manifest-path arena/runners/nexusq/Cargo.toml --bin nexusq-arena-runner
+
+      - name: Build locked NEXUS-Q Arena runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          NEXUSQ_COMMIT="$(git rev-parse HEAD)" \
+          NEXUSQ_CPU="$(cat arena/results/v4-phase0/cpu.txt)" \
+          NEXUSQ_CPU_FEATURES="$(tr ' ' ',' < arena/results/v4-phase0/cpu-features.txt)" \
+          NEXUSQ_RUSTC_VERBOSE="$(rustc --version --verbose | tr '\n' ';')" \
+          RUSTC_VERSION="$(rustc --version)" \
+          NEXUSQ_CARGO_LOCK_SHA256="$(sha256sum arena/runners/nexusq/Cargo.lock | cut -d' ' -f1)" \
+          NEXUSQ_OPT=release \
+          cargo build --locked --release --features cached-verifier --manifest-path arena/runners/nexusq/Cargo.toml
+          cp arena/runners/nexusq/target/release/nexusq-arena-runner arena/results/v4-phase0/nexusq-arena-runner
+
+      - name: Fetch pinned AWS-LC source
+        run: |
+          git init .arena-aws-lc
+          git -C .arena-aws-lc remote add origin https://github.com/aws/aws-lc.git
+          git -C .arena-aws-lc fetch --depth 1 origin ec05f25ef5bcb1bf03d2e2f44ba57973a878e0ba
+          git -C .arena-aws-lc checkout --detach ec05f25ef5bcb1bf03d2e2f44ba57973a878e0ba
+          test "$(git -C .arena-aws-lc rev-parse HEAD)" = "ec05f25ef5bcb1bf03d2e2f44ba57973a878e0ba"
+
+      - name: Build pinned AWS-LC
+        run: |
+          cmake -S .arena-aws-lc -B .arena-aws-lc-build -GNinja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+          cmake --build .arena-aws-lc-build --parallel 2
+
+      - name: Compile AWS-LC adapter with strict warnings
+        run: |
+          cc -std=c11 -O3 -Wall -Wextra -Werror \
+            -I"$GITHUB_WORKSPACE/.arena-aws-lc/include" \
+            arena/adapters/aws-lc/runner.c \
+            -L"$GITHUB_WORKSPACE/.arena-aws-lc-build/crypto" \
+            -Wl,-rpath,"$GITHUB_WORKSPACE/.arena-aws-lc-build/crypto" \
+            -lcrypto -lm -o arena/results/v4-phase0/aws-lc-runner
+
+      - name: Run both harnesses with Phase 0 iteration policy and real host metadata
+        shell: bash
+        env:
+          AWSLC_VERSION: ec05f25
+        run: |
+          set -euo pipefail
+          NEXUSQ_RUN_ID="v4-phase0-${GITHUB_RUN_ID}" \
+          NEXUSQ_RUN_ORDER=nexusq-before-aws-lc \
+          NEXUSQ_CPU="$(cat arena/results/v4-phase0/cpu.txt)" \
+          NEXUSQ_CPU_FEATURES="$(tr ' ' ',' < arena/results/v4-phase0/cpu-features.txt)" \
+          NEXUSQ_RUSTC_VERBOSE="$(rustc --version --verbose | tr '\n' ';')" \
+          RUSTC_VERSION="$(rustc --version)" \
+          NEXUSQ_CARGO_LOCK_SHA256="$(sha256sum arena/runners/nexusq/Cargo.lock | cut -d' ' -f1)" \
+          NEXUSQ_OPT=release \
+          arena/runners/nexusq/target/release/nexusq-arena-runner \
+            | tee arena/results/v4-phase0/nexusq.jsonl
+          ARENA_CPU="$(cat arena/results/v4-phase0/cpu.txt)" \
+          ARENA_CPU_FEATURES="$(tr ' ' ',' < arena/results/v4-phase0/cpu-features.txt)" \
+          ARENA_RUN_ORDER=aws-lc-after-nexusq \
+          ARENA_TARGET=x86_64-linux-gnu ARENA_OS=Ubuntu ARENA_OPT=release \
+          arena/results/v4-phase0/aws-lc-runner \
+            | tee arena/results/v4-phase0/aws-lc.jsonl
+
+      - name: Validate schema, operation coverage, and configured counts
+        shell: bash
+        run: |
+          python3 -m pip install --disable-pip-version-check --no-input 'jsonschema==4.26.0'
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          import jsonschema
+
+          schema = json.loads(Path('arena/schemas/benchmark-result.schema.json').read_text())
+          validator = jsonschema.Draft202012Validator(schema)
+          root = Path('arena/results/v4-phase0')
+          expected_aws = {
+              ('ml-kem', '768', 'keygen'), ('ml-kem', '768', 'encaps'), ('ml-kem', '768', 'decaps'),
+              ('ml-kem', '1024', 'keygen'), ('ml-kem', '1024', 'encaps'), ('ml-kem', '1024', 'decaps'),
+              ('ml-dsa', '65', 'keygen'), ('ml-dsa', '65', 'sign'), ('ml-dsa', '65', 'verify'),
+          }
+          for name, implementation in [('nexusq.jsonl', 'nexusq'), ('aws-lc.jsonl', 'aws-lc')]:
+              rows = [json.loads(line) for line in (root / name).read_text().splitlines() if line.strip()]
+              assert rows, f'{name}: no records emitted'
+              for row in rows:
+                  validator.validate(row)
+                  assert row['implementation']['id'] == implementation, (name, row['implementation'])
+                  measurement = row['measurement']
+                  assert measurement['iterations'] >= 1000, (name, row['operation'], measurement['iterations'])
+                  assert measurement['warmups'] >= 100, (name, row['operation'], measurement['warmups'])
+                  samples = measurement.get('samples_ns', [])
+                  stats = measurement.get('statistics')
+                  assert len(samples) == measurement['iterations'], (name, row['operation'], len(samples))
+                  assert stats is not None, (name, row['operation'], 'missing statistics')
+                  assert stats.get('sample_count') == measurement['iterations'], (name, row['operation'], stats)
+                  assert stats['min_ns'] <= stats['median_ns'] <= stats['p95_ns'], (name, row['operation'], stats)
+                  assert measurement['latency_ns'] == stats['median_ns'], (name, row['operation'], measurement['latency_ns'], stats['median_ns'])
+              print(f'{name}: {len(rows)} schema-valid records with raw samples/statistics; counts meet configured thresholds')
+          aws_rows = [json.loads(line) for line in (root / 'aws-lc.jsonl').read_text().splitlines() if line.strip()]
+          actual_aws = {(r['algorithm']['id'], r['algorithm']['parameter_set'], r['operation']) for r in aws_rows}
+          assert len(aws_rows) == 9, f'expected nine AWS-LC records, got {len(aws_rows)}'
+          assert actual_aws == expected_aws, (actual_aws, expected_aws)
+          assert all('AWS-LC public EVP API' in r['measurement'].get('measurement_method', '') for r in aws_rows), (
+              'AWS-LC measurement records must identify the public EVP API layer')
+
+          from collections import Counter
+          nexus_rows = [json.loads(line) for line in (root / 'nexusq.jsonl').read_text().splitlines() if line.strip()]
+          expected_nexusq = {
+              ('ml-kem', '768', 'keygen'), ('ml-kem', '768', 'encaps'), ('ml-kem', '768', 'decaps'),
+              ('ml-kem', '1024', 'keygen'), ('ml-kem', '1024', 'encaps'), ('ml-kem', '1024', 'decaps'),
+              ('ml-dsa', '65', 'keygen'), ('ml-dsa', '65', 'sign'), ('ml-dsa', '65', 'verify'),
+          }
+          actual_nexusq = {(r['algorithm']['id'], r['algorithm']['parameter_set'], r['operation']) for r in nexus_rows}
+          assert actual_nexusq == expected_nexusq, (actual_nexusq, expected_nexusq)
+          expected_counts = {op: 1 for op in expected_nexusq}
+          expected_counts[('ml-dsa', '65', 'verify')] = 2  # conventional and cached verification remain distinct records
+          actual_counts = Counter((r['algorithm']['id'], r['algorithm']['parameter_set'], r['operation']) for r in nexus_rows)
+          assert actual_counts == Counter(expected_counts), (actual_counts, expected_counts)
+          assert len(nexus_rows) == 10, f'expected 10 NEXUS-Q records (nine operations plus separate cached verify), got {len(nexus_rows)}'
+          assert all('direct RustCrypto ml-kem API' in r['measurement'].get('measurement_method', '')
+                     for r in nexus_rows if r['algorithm']['id'] == 'ml-kem'), (
+              'NEXUS-Q ML-KEM records must identify the direct RustCrypto API layer')
+          assert all('nexusq-core ML-DSA wrapper' in r['measurement'].get('measurement_method', '')
+                     for r in nexus_rows if r['algorithm']['id'] == 'ml-dsa' and
+                     'cached' not in r['measurement'].get('measurement_method', '')), (
+              'NEXUS-Q ML-DSA records must identify the wrapper API layer')
+
+          nexus_env = nexus_rows[0]['environment']
+          aws_env = aws_rows[0]['environment']
+          assert nexus_env['cpu'] == aws_env['cpu'], (nexus_env['cpu'], aws_env['cpu'])
+          assert nexus_env.get('cpu_features') and nexus_env['cpu_features'] == aws_env.get('cpu_features'), (
+              nexus_env.get('cpu_features'), aws_env.get('cpu_features'))
+          assert nexus_env.get('optimization') == aws_env.get('optimization') == 'release', (
+              nexus_env.get('optimization'), aws_env.get('optimization'))
+          assert nexus_env.get('run_order') == 'nexusq-before-aws-lc', nexus_env.get('run_order')
+          assert aws_env.get('run_order') == 'aws-lc-after-nexusq', aws_env.get('run_order')
+          assert all(r['environment'].get('run_order') == nexus_env.get('run_order') for r in nexus_rows)
+          assert all(r['environment'].get('run_order') == aws_env.get('run_order') for r in aws_rows)
+          assert all(r['environment'].get('cpu') == nexus_env['cpu'] and
+                     r['environment'].get('cpu_features') == nexus_env['cpu_features'] for r in nexus_rows)
+          assert all(r['environment'].get('cpu') == aws_env['cpu'] and
+                     r['environment'].get('cpu_features') == aws_env['cpu_features'] for r in aws_rows)
+          print('NEXUS-Q operation coverage: OK (all nine operations; cached verify separate)')
+          print('Matched-host metadata: CPU, CPU feature set, and release profile agree across both runners')
+          print('AWS-LC and NEXUS-Q provide per-operation raw samples and median/p95/stddev statistics.')
+          print('NEXUS-Q and AWS-LC ML-KEM-768/1024 both pass pre-measurement encaps/decaps shared-secret self-checks.')
+          PY
+
+      - name: Archive measurement outputs in canonical artifact-archive/
+        if: always() && steps.checkout.outcome == 'success'
+        shell: bash
+        env:
+          HEAD_REF: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          destination="artifact-archive/v4-issue23-measurement/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -p "$destination"
+          if [[ -d arena/results/v4-phase0 ]]; then cp -a arena/results/v4-phase0/. "$destination/"; fi
+          cat > "$destination/README.txt" <<EOF
+          NEXUS-Q V4 measurement CI archive
+          workflow_run_id=${GITHUB_RUN_ID}
+          workflow_attempt=${GITHUB_RUN_ATTEMPT}
+          source_commit=$(git rev-parse HEAD)
+          source_ref=${GITHUB_REF}
+          workflow_url=https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          EOF
+          find "$destination" -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > "$destination/SHA256SUMS.txt"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$destination"
+          if git diff --cached --quiet; then
+            echo "No new measurement files to archive."
+            exit 0
+          fi
+          git commit -m "chore(artifacts): archive V4 measurement run ${GITHUB_RUN_ID}"
+          for attempt in 1 2 3; do
+            git fetch origin "$HEAD_REF"
+            git rebase FETCH_HEAD
+            if git push origin "HEAD:refs/heads/${HEAD_REF}"; then
+              echo "Archived measurement output in ${destination}"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Unable to push archived measurement output after retries" >&2
+          exit 1
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v4-issue23-measurement-${{ github.sha }}
+          path: arena/results/v4-phase0/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Publish V4 CI statuses on the current PR head
+        if: always()
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+          HEAD_REF: ${{ github.ref_name }}
+          JOB_RESULT: ${{ job.status }}
+          OWN_RUN_ID: ${{ github.run_id }}
+          OWN_WORKFLOW_PATH: '.github/workflows/v4-issue23-measurement.yml'
+        run: |
+          set -euo pipefail
+          # This workflow is scoped to the active PR head branch, never the base branch.
+          [[ "$HEAD_REF" == "v4/issue-23-kernel-work" ]] || exit 0
+          latest_sha="$(git ls-remote origin "refs/heads/$HEAD_REF" | awk 'NR == 1 {print $1}')"
+          [[ -n "$latest_sha" ]] || { echo 'Unable to resolve current PR head' >&2; exit 1; }
+          # Never mark newer code green from a run that tested an older source commit.
+          if [[ "$SOURCE_SHA" == "$latest_sha" ]]; then
+            compare_json='{"status":"identical","files":[]}'
+          else
+            compare_json="$(gh api "repos/$GITHUB_REPOSITORY/compare/$SOURCE_SHA...$latest_sha")"
+          fi
+          jq -e '(.status == "identical" and ((.files // []) | type == "array")) or (.status == "ahead" and (.files | type == "array"))' \
+            <<< "$compare_json" >/dev/null || {
+              echo 'Unable to prove the PR head differs only by archived evidence; refusing to publish statuses.' >&2
+              exit 1
+            }
+          if ! jq -e '[.files[].filename | select(startswith("artifact-archive/") | not)] | length == 0' \
+              <<< "$compare_json" >/dev/null; then
+            echo "PR head contains newer non-archive changes; leaving statuses to the newer CI run."
+            exit 0
+          fi
+          runs_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$SOURCE_SHA&per_page=100")"
+          phase_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/v4-issue23-phase0.yml" --jq '.id')"
+          measurement_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/v4-issue23-measurement.yml" --jq '.id')"
+          if [[ "$OWN_WORKFLOW_PATH" == ".github/workflows/v4-issue23-phase0.yml" ]]; then
+            OWN_WORKFLOW_ID="$phase_id"
+          else
+            OWN_WORKFLOW_ID="$measurement_id"
+          fi
+          publish_status() {
+            local context="$1" state="$2" target="$3" description="$4"
+            gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$latest_sha" \
+              -f state="$state" -f context="$context" -f target_url="$target" -f description="$description" >/dev/null
+            echo "Published $context=$state on $latest_sha"
+          }
+          map_state() {
+            case "$1" in
+              success) echo success ;;
+              failure|timed_out|action_required) echo failure ;;
+              *) echo error ;;
+            esac
+          }
+          own_state="$(map_state "$JOB_RESULT")"
+          own_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$OWN_RUN_ID"
+          description="Validated source ${{ github.sha }}; head differs only by archived evidence."
+          if [[ "$OWN_WORKFLOW_ID" == "$phase_id" ]]; then
+            publish_status 'NEXUS-Q V4 / Issue 23 / Phase 0' "$own_state" "$own_url" "$description"
+          else
+            publish_status 'NEXUS-Q V4 / Issue 23 / Measurement' "$own_state" "$own_url" "$description"
+          fi
+          for entry in "$phase_id:NEXUS-Q V4 / Issue 23 / Phase 0" "$measurement_id:NEXUS-Q V4 / Issue 23 / Measurement"; do
+            workflow_id="${entry%%:*}"
+            context="${entry#*:}"
+            [[ "$workflow_id" == "$OWN_WORKFLOW_ID" ]] && continue
+            other="$(jq -c --argjson id "$workflow_id" --arg sha "$SOURCE_SHA" \
+              '[.workflow_runs[] | select(.workflow_id == $id and .head_sha == $sha and .status == "completed")] | sort_by(.run_started_at) | last // empty' <<< "$runs_json")"
+            [[ -n "$other" && "$other" != "null" ]] || { echo "Counterpart $context has not completed yet; it will publish both statuses when it finishes."; continue; }
+            other_state="$(map_state "$(jq -r '.conclusion // "failure"' <<< "$other")")"
+            other_url="$(jq -r '.html_url' <<< "$other")"
+            publish_status "$context" "$other_state" "$other_url" "$description"
+          done

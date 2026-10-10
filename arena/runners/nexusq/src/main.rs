@@ -1,25 +1,72 @@
 use ml_kem::kem::{Decapsulate, Encapsulate, Kem};
-use ml_kem::{DecapsulationKey1024, EncapsulationKey1024, KeyExport, MlKem1024};
-use nexusq_core::crypto::{kem::ml_kem_768, pq_sign};
+use ml_kem::{
+    DecapsulationKey768, DecapsulationKey1024, EncapsulationKey768, EncapsulationKey1024,
+    KeyExport, MlKem768, MlKem1024,
+};
+use nexusq_core::crypto::pq_sign;
 use std::env;
 use std::hint::black_box;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-const ITERATIONS: usize = 50;
-const WARMUPS: usize = 10;
+const DEFAULT_ITERATIONS: usize = 50;
+const DEFAULT_WARMUPS: usize = 10;
+
+fn configured_count(name: &str, default: usize, minimum: usize) -> usize {
+    match env::var(name) {
+        Ok(value) => {
+            let parsed = value.parse::<usize>().unwrap_or_else(|_| {
+                eprintln!("{name} must be a positive integer; got {value:?}");
+                std::process::exit(2);
+            });
+            if parsed < minimum {
+                eprintln!("{name} must be at least {minimum}; got {parsed}");
+                std::process::exit(2);
+            }
+            parsed
+        }
+        Err(_) => default,
+    }
+}
+
+fn iterations() -> usize {
+    configured_count("NEXUSQ_ITERATIONS", DEFAULT_ITERATIONS, 1)
+}
+
+fn warmups() -> usize {
+    configured_count("NEXUSQ_WARMUPS", DEFAULT_WARMUPS, 0)
+}
 const ML_DSA_SIGN_SEEDS: usize = 64;
-const ML_DSA_SIGN_SAMPLES_PER_SEED: usize = 5;
+const DEFAULT_ML_DSA_SIGN_SAMPLES_PER_SEED: usize = 5;
+
+fn ml_dsa_sign_samples_per_seed() -> usize {
+    configured_count(
+        "NEXUSQ_SIGN_SAMPLES_PER_SEED",
+        DEFAULT_ML_DSA_SIGN_SAMPLES_PER_SEED,
+        1,
+    )
+}
 const MESSAGE: &[u8] = b"nexusq-pqc-arena-v1";
 const ML_KEM_768_SECRET_KEY_LEN: usize = 2400;
 const ML_KEM_1024_SECRET_KEY_LEN: usize = 3168;
 const ML_DSA_65_SECRET_KEY_LEN: usize = 4032;
 
-fn percentile(sorted: &[u128], percentile: f64) -> u128 {
+fn median(sorted: &[u128]) -> u128 {
+    let middle = sorted.len() / 2;
+    if sorted.len() % 2 == 0 {
+        let lower = sorted[middle - 1];
+        let upper = sorted[middle];
+        lower + (upper - lower) / 2
+    } else {
+        sorted[middle]
+    }
+}
+
+fn nearest_rank_percentile(sorted: &[u128], percentile: f64) -> u128 {
     if sorted.is_empty() {
         return 0;
     }
-    let index = ((sorted.len() - 1) as f64 * percentile).ceil() as usize;
-    sorted[index.min(sorted.len() - 1)]
+    let rank = ((sorted.len() as f64) * percentile).ceil() as usize;
+    sorted[rank.saturating_sub(1).min(sorted.len() - 1)]
 }
 
 fn summary(samples: &[u128]) -> serde_json::Value {
@@ -37,8 +84,8 @@ fn summary(samples: &[u128]) -> serde_json::Value {
     serde_json::json!({
         "sample_count": samples.len(),
         "min_ns": sorted.first().copied().unwrap_or_default(),
-        "median_ns": percentile(&sorted, 0.50),
-        "p95_ns": percentile(&sorted, 0.95),
+        "median_ns": median(&sorted),
+        "p95_ns": nearest_rank_percentile(&sorted, 0.95),
         "stddev_ns": variance.sqrt(),
     })
 }
@@ -79,10 +126,14 @@ fn emit_operation_samples(
             "optimization":env::var("NEXUSQ_OPT").unwrap_or_else(|_| "unknown".into()), "harness_version":"arena-v2-distribution"
         },
         "measurement": {
-            "iterations":samples.len(), "warmups":WARMUPS,
+            "iterations":samples.len(), "warmups":warmups(),
             "measurement_timestamp_unix_ns":timestamp, "latency_ns":latency_ns,
             "throughput_ops_s":1_000_000_000.0/latency_ns, "memory_bytes":null,
-            "measurement_method":"per-operation std::time::Instant; median latency",
+            "measurement_method":if algorithm == "ml-kem" {
+                "per-operation std::time::Instant; direct RustCrypto ml-kem API; median latency"
+            } else {
+                "per-operation std::time::Instant; nexusq-core ML-DSA wrapper; median latency"
+            },
             "samples_ns":samples, "statistics":stats
         },
         "sizes":sizes
@@ -116,7 +167,7 @@ fn emit_cached_verify_samples(samples: &[u128], public_key_len: usize, signature
             "optimization":env::var("NEXUSQ_OPT").unwrap_or_else(|_| "unknown".into()), "harness_version":"arena-v2-distribution"
         },
         "measurement": {
-            "iterations":samples.len(), "warmups":WARMUPS,
+            "iterations":samples.len(), "warmups":warmups(),
             "measurement_timestamp_unix_ns":timestamp, "latency_ns":latency_ns,
             "throughput_ops_s":1_000_000_000.0/latency_ns, "memory_bytes":null,
             "measurement_method":"per-operation std::time::Instant; cached MlDsa65VerifyingKey",
@@ -134,13 +185,13 @@ fn emit_ml_dsa_sign_distribution(
     signature_len: usize,
 ) {
     let mut per_seed = Vec::with_capacity(keys.len());
-    let mut all_samples = Vec::with_capacity(keys.len() * ML_DSA_SIGN_SAMPLES_PER_SEED);
+    let mut all_samples = Vec::with_capacity(keys.len() * ml_dsa_sign_samples_per_seed());
     for (key, seed_id) in keys.iter().zip(seed_ids) {
-        for _ in 0..WARMUPS {
+        for _ in 0..warmups() {
             black_box(key.sign(MESSAGE));
         }
-        let mut samples = Vec::with_capacity(ML_DSA_SIGN_SAMPLES_PER_SEED);
-        for _ in 0..ML_DSA_SIGN_SAMPLES_PER_SEED {
+        let mut samples = Vec::with_capacity(ml_dsa_sign_samples_per_seed());
+        for _ in 0..ml_dsa_sign_samples_per_seed() {
             let start = Instant::now();
             black_box(key.sign(MESSAGE));
             samples.push(start.elapsed().as_nanos());
@@ -160,7 +211,7 @@ fn emit_ml_dsa_sign_distribution(
         .as_nanos();
     let obj = serde_json::json!({
         "schema_version": 1,
-        "run_id": format!("{}-ml-dsa-65-sign-distribution-{}x{}", env::var("NEXUSQ_RUN_ID").unwrap_or_else(|_| "nexusq-local".into()), keys.len(), ML_DSA_SIGN_SAMPLES_PER_SEED),
+        "run_id": format!("{}-ml-dsa-65-sign-distribution-{}x{}", env::var("NEXUSQ_RUN_ID").unwrap_or_else(|_| "nexusq-local".into()), keys.len(), ml_dsa_sign_samples_per_seed()),
         "implementation": {"id":"nexusq","version":env!("CARGO_PKG_VERSION"),"commit":option_env!("NEXUSQ_COMMIT").or_else(|| Some("unknown"))},
         "algorithm": {"id":"ml-dsa","parameter_set":"65"},
         "operation": "sign",
@@ -181,17 +232,17 @@ fn emit_ml_dsa_sign_distribution(
         },
         "measurement": {
             "iterations":all_samples.len(),
-            "warmups":WARMUPS * keys.len(),
+            "warmups":warmups() * keys.len(),
             "measurement_timestamp_unix_ns":timestamp,
             "latency_ns":latency_ns,
             "throughput_ops_s":1_000_000_000.0 / latency_ns,
             "memory_bytes":null,
-            "measurement_method":"per-sign std::time::Instant; deterministic 64-key seed corpus; fixed message",
+            "measurement_method":"per-sign std::time::Instant; nexusq-core ML-DSA wrapper; deterministic 64-key seed corpus; fixed message",
             "samples_ns":all_samples,
             "statistics":overall,
             "seed_samples":per_seed,
             "seed_count":keys.len(),
-            "samples_per_seed":ML_DSA_SIGN_SAMPLES_PER_SEED
+            "samples_per_seed":ml_dsa_sign_samples_per_seed()
         },
         "sizes":{"public_key_bytes":public_key.len(),"secret_key_bytes":ML_DSA_65_SECRET_KEY_LEN,"ciphertext_bytes":null,"signature_bytes":signature_len}
     });
@@ -214,17 +265,46 @@ fn deterministic_seed(index: usize) -> [u8; 32] {
     seed
 }
 
-fn main() {
-    let p768 = ml_kem_768::generate();
-    let pk768 = ml_kem_768::public_key_bytes(&p768.1);
-    let sk768_len = ML_KEM_768_SECRET_KEY_LEN;
-    for _ in 0..WARMUPS {
-        black_box(ml_kem_768::generate());
+#[cfg(test)]
+mod statistics_tests {
+    use super::{median, nearest_rank_percentile};
+
+    #[test]
+    fn median_averages_the_middle_pair_for_even_sample_counts() {
+        assert_eq!(median(&[10, 20]), 15);
+        assert_eq!(median(&[10, 20, 30, 40]), 25);
     }
-    let mut samples = Vec::with_capacity(ITERATIONS);
-    for _ in 0..ITERATIONS {
+
+    #[test]
+    fn median_selects_the_middle_value_for_odd_sample_counts() {
+        assert_eq!(median(&[10, 20, 30]), 20);
+    }
+
+    #[test]
+    fn p95_uses_the_nearest_rank_definition_shared_with_aws_lc() {
+        let samples: Vec<u128> = (1..=1000).collect();
+        assert_eq!(nearest_rank_percentile(&samples, 0.95), 950);
+    }
+}
+
+fn main() {
+    let (sk768, pk768): (DecapsulationKey768, EncapsulationKey768) = MlKem768::generate_keypair();
+    let (check_ct768, check_ss768) = pk768.encapsulate();
+    let check_dec_ss768 = sk768.decapsulate(&check_ct768);
+    assert_eq!(
+        check_ss768.as_slice(),
+        check_dec_ss768.as_slice(),
+        "ML-KEM-768 self-check failed"
+    );
+    let pk768_bytes = pk768.to_bytes();
+    let sk768_len = ML_KEM_768_SECRET_KEY_LEN;
+    for _ in 0..warmups() {
+        black_box(MlKem768::generate_keypair());
+    }
+    let mut samples = Vec::with_capacity(iterations());
+    for _ in 0..iterations() {
         let start = Instant::now();
-        black_box(ml_kem_768::generate());
+        black_box(MlKem768::generate_keypair());
         samples.push(start.elapsed().as_nanos());
     }
     emit_operation_samples(
@@ -232,35 +312,41 @@ fn main() {
         "768",
         "keygen",
         &samples,
-        serde_json::json!({"public_key_bytes":pk768.len(),"secret_key_bytes":sk768_len,"ciphertext_bytes":ml_kem_768::CIPHERTEXT_LEN,"signature_bytes":null}),
+        serde_json::json!({"public_key_bytes":pk768_bytes.len(),"secret_key_bytes":sk768_len,"ciphertext_bytes":1088,"signature_bytes":null}),
     );
-    let mut ct = Vec::new();
-    for _ in 0..WARMUPS {
-        let (c, s) = ml_kem_768::encapsulate(&p768.1);
+    for _ in 0..warmups() {
+        let (c, s) = pk768.encapsulate();
         black_box((c, s));
     }
-    let mut samples = Vec::with_capacity(ITERATIONS);
-    for _ in 0..ITERATIONS {
+    let mut ct768_bytes = Vec::new();
+    let mut samples = Vec::with_capacity(iterations());
+    for _ in 0..iterations() {
         let start = Instant::now();
-        let (c, s) = ml_kem_768::encapsulate(&p768.1);
+        let (c, s) = pk768.encapsulate();
         black_box(s);
-        ct = c;
-        samples.push(start.elapsed().as_nanos());
+        let elapsed = start.elapsed().as_nanos();
+        // Keep ciphertext serialization/copying outside the timed primitive call.
+        ct768_bytes = c.as_slice().to_vec();
+        samples.push(elapsed);
     }
     emit_operation_samples(
         "ml-kem",
         "768",
         "encaps",
         &samples,
-        serde_json::json!({"public_key_bytes":pk768.len(),"secret_key_bytes":sk768_len,"ciphertext_bytes":ct.len(),"signature_bytes":null}),
+        serde_json::json!({"public_key_bytes":pk768_bytes.len(),"secret_key_bytes":sk768_len,"ciphertext_bytes":ct768_bytes.len(),"signature_bytes":null}),
     );
-    for _ in 0..WARMUPS {
-        black_box(ml_kem_768::decapsulate(&p768.0, &ct).unwrap());
+    let ct768: ml_kem::ml_kem_768::Ciphertext = ct768_bytes
+        .clone()
+        .try_into()
+        .expect("ML-KEM-768 ciphertext length");
+    for _ in 0..warmups() {
+        black_box(sk768.decapsulate(&ct768));
     }
-    let mut samples = Vec::with_capacity(ITERATIONS);
-    for _ in 0..ITERATIONS {
+    let mut samples = Vec::with_capacity(iterations());
+    for _ in 0..iterations() {
         let start = Instant::now();
-        black_box(ml_kem_768::decapsulate(&p768.0, &ct).unwrap());
+        black_box(sk768.decapsulate(&ct768));
         samples.push(start.elapsed().as_nanos());
     }
     emit_operation_samples(
@@ -268,18 +354,25 @@ fn main() {
         "768",
         "decaps",
         &samples,
-        serde_json::json!({"public_key_bytes":pk768.len(),"secret_key_bytes":sk768_len,"ciphertext_bytes":ct.len(),"signature_bytes":null}),
+        serde_json::json!({"public_key_bytes":pk768_bytes.len(),"secret_key_bytes":sk768_len,"ciphertext_bytes":ct768_bytes.len(),"signature_bytes":null}),
     );
 
     let (sk1024, pk1024): (DecapsulationKey1024, EncapsulationKey1024) =
         MlKem1024::generate_keypair();
+    let (check_ct1024, check_ss1024) = pk1024.encapsulate();
+    let check_dec_ss1024 = sk1024.decapsulate(&check_ct1024);
+    assert_eq!(
+        check_ss1024.as_slice(),
+        check_dec_ss1024.as_slice(),
+        "ML-KEM-1024 self-check failed"
+    );
     let pk1024_bytes = pk1024.to_bytes();
     let sk1024_bytes = ML_KEM_1024_SECRET_KEY_LEN;
-    for _ in 0..WARMUPS {
+    for _ in 0..warmups() {
         black_box(MlKem1024::generate_keypair());
     }
-    let mut samples = Vec::with_capacity(ITERATIONS);
-    for _ in 0..ITERATIONS {
+    let mut samples = Vec::with_capacity(iterations());
+    for _ in 0..iterations() {
         let start = Instant::now();
         black_box(MlKem1024::generate_keypair());
         samples.push(start.elapsed().as_nanos());
@@ -292,17 +385,19 @@ fn main() {
         serde_json::json!({"public_key_bytes":pk1024_bytes.len(),"secret_key_bytes":sk1024_bytes,"ciphertext_bytes":1568,"signature_bytes":null}),
     );
     let mut ct2 = Vec::new();
-    for _ in 0..WARMUPS {
+    for _ in 0..warmups() {
         let (c, s) = pk1024.encapsulate();
         black_box((c, s));
     }
-    let mut samples = Vec::with_capacity(ITERATIONS);
-    for _ in 0..ITERATIONS {
+    let mut samples = Vec::with_capacity(iterations());
+    for _ in 0..iterations() {
         let start = Instant::now();
         let (c, s) = pk1024.encapsulate();
         black_box(s);
+        let elapsed = start.elapsed().as_nanos();
+        // Keep serialization/copying the ciphertext outside the timed primitive call.
         ct2 = c.as_slice().to_vec();
-        samples.push(start.elapsed().as_nanos());
+        samples.push(elapsed);
     }
     emit_operation_samples(
         "ml-kem",
@@ -315,11 +410,11 @@ fn main() {
         .clone()
         .try_into()
         .expect("ML-KEM-1024 ciphertext length");
-    for _ in 0..WARMUPS {
+    for _ in 0..warmups() {
         black_box(sk1024.decapsulate(&ct1024));
     }
-    let mut samples = Vec::with_capacity(ITERATIONS);
-    for _ in 0..ITERATIONS {
+    let mut samples = Vec::with_capacity(iterations());
+    for _ in 0..iterations() {
         let start = Instant::now();
         black_box(sk1024.decapsulate(&ct1024));
         samples.push(start.elapsed().as_nanos());
@@ -335,11 +430,11 @@ fn main() {
     let dsa = pq_sign::MlDsa65KeyPair::generate();
     let pk = dsa.public_key();
     let sig = dsa.sign(MESSAGE);
-    for _ in 0..WARMUPS {
+    for _ in 0..warmups() {
         black_box(pq_sign::MlDsa65KeyPair::generate());
     }
-    let mut samples = Vec::with_capacity(ITERATIONS);
-    for _ in 0..ITERATIONS {
+    let mut samples = Vec::with_capacity(iterations());
+    for _ in 0..iterations() {
         let start = Instant::now();
         black_box(pq_sign::MlDsa65KeyPair::generate());
         samples.push(start.elapsed().as_nanos());
@@ -365,23 +460,23 @@ fn main() {
     {
         let cached_verifier = pq_sign::MlDsa65VerifyingKey::from_public_key(&pk)
             .expect("generated public key is valid");
-        for _ in 0..WARMUPS {
+        for _ in 0..warmups() {
             black_box(cached_verifier.verify(MESSAGE, &sig)).unwrap();
         }
-        let mut cached_verify_samples = Vec::with_capacity(ITERATIONS);
-        for _ in 0..ITERATIONS {
+        let mut cached_verify_samples = Vec::with_capacity(iterations());
+        for _ in 0..iterations() {
             let start = Instant::now();
             black_box(cached_verifier.verify(MESSAGE, &sig)).unwrap();
             cached_verify_samples.push(start.elapsed().as_nanos());
         }
         emit_cached_verify_samples(&cached_verify_samples, pk.len(), sig.len());
     }
-    for _ in 0..WARMUPS {
+    for _ in 0..warmups() {
         pq_sign::ml_dsa_65_verify(&pk, MESSAGE, &sig).unwrap();
         black_box(());
     }
-    let mut samples = Vec::with_capacity(ITERATIONS);
-    for _ in 0..ITERATIONS {
+    let mut samples = Vec::with_capacity(iterations());
+    for _ in 0..iterations() {
         let start = Instant::now();
         pq_sign::ml_dsa_65_verify(&pk, MESSAGE, &sig).unwrap();
         black_box(());

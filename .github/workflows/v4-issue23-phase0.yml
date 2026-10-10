@@ -1,31 +1,37 @@
 name: NEXUS-Q V4 — Issue 23 — Phase 0
 
 on:
-  pull_request:
+  push:
     branches:
-      - nexusqv4
+      - v4/issue-23-kernel-work
+    paths-ignore:
+      - 'artifact-archive/**'
   workflow_dispatch:
 
 permissions:
-  contents: read
+  actions: read
+  contents: write
+  statuses: write
 
 concurrency:
-  group: v4-issue23-phase0-${{ github.event.pull_request.number || github.ref }}
+  group: v4-issue23-phase0-${{ github.sha }}
   cancel-in-progress: true
 
 jobs:
   dependency-provenance:
     if: >-
       (github.event_name == 'workflow_dispatch' &&
-       (github.ref == 'refs/heads/nexusqv4' || github.ref == 'refs/heads/v4/issue-23-kernel-work')) ||
-      (github.event_name == 'pull_request' &&
-       github.base_ref == 'nexusqv4' && github.head_ref == 'v4/issue-23-kernel-work')
+       github.ref == 'refs/heads/v4/issue-23-kernel-work') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/v4/issue-23-kernel-work')
     name: V4 Phase 0 / dependency provenance
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Checkout V4 ref
+        id: checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
 
       - name: Install stable Rust
         uses: dtolnay/rust-toolchain@stable
@@ -35,7 +41,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p phase0-evidence
-          printf '%s\n' "$GITHUB_SHA" > phase0-evidence/commit.txt
+          printf '%s\n' "$(git rev-parse HEAD)" > phase0-evidence/commit.txt
           printf '%s\n' "$GITHUB_REF" > phase0-evidence/ref.txt
           rustc --version --verbose | tee phase0-evidence/rustc.txt
           cargo --version | tee phase0-evidence/cargo.txt
@@ -56,6 +62,14 @@ jobs:
             | tee phase0-evidence/tree-module-lattice.txt
           cargo tree --locked --manifest-path "$manifest" -i ml-dsa \
             | tee phase0-evidence/tree-ml-dsa.txt
+          grep -F 'vendor/ml-kem' phase0-evidence/tree-ml-kem.txt >/dev/null || {
+            echo 'ERROR: Arena ml-kem does not resolve to vendor/ml-kem' >&2
+            exit 1
+          }
+          grep -F 'vendor/module-lattice' phase0-evidence/tree-module-lattice.txt >/dev/null || {
+            echo 'ERROR: Arena module-lattice does not resolve to vendor/module-lattice' >&2
+            exit 1
+          }
           cargo metadata --locked --format-version 1 --manifest-path "$manifest" \
             > phase0-evidence/cargo-metadata.json
           sha256sum Cargo.toml Cargo.lock "$manifest" arena/runners/nexusq/Cargo.lock \
@@ -75,10 +89,124 @@ jobs:
               | tee phase0-evidence/kernel-crate-status.txt
           fi
 
+      - name: Archive Phase 0 evidence in canonical artifact-archive/
+        if: always() && steps.checkout.outcome == 'success'
+        shell: bash
+        env:
+          HEAD_REF: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          destination="artifact-archive/v4-issue23-phase0/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -p "$destination"
+          if [[ -d phase0-evidence ]]; then cp -a phase0-evidence/. "$destination/"; fi
+          cat > "$destination/README.txt" <<EOF
+          NEXUS-Q V4 Phase 0 provenance CI archive
+          workflow_run_id=${GITHUB_RUN_ID}
+          workflow_attempt=${GITHUB_RUN_ATTEMPT}
+          source_commit=$(git rev-parse HEAD)
+          source_ref=${GITHUB_REF}
+          workflow_url=https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          EOF
+          find "$destination" -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > "$destination/SHA256SUMS.txt"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$destination"
+          if git diff --cached --quiet; then
+            echo "No new Phase 0 files to archive."
+            exit 0
+          fi
+          git commit -m "chore(artifacts): archive V4 Phase 0 run ${GITHUB_RUN_ID}"
+          for attempt in 1 2 3; do
+            git fetch origin "$HEAD_REF"
+            git rebase FETCH_HEAD
+            if git push origin "HEAD:refs/heads/${HEAD_REF}"; then
+              echo "Archived Phase 0 output in ${destination}"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Unable to push archived Phase 0 output after retries" >&2
+          exit 1
+
       - name: Upload Phase 0 evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: v4-issue23-phase0-${{ github.sha }}
           path: phase0-evidence/
-          if-no-files-found: error
+          if-no-files-found: ignore
           retention-days: 30
+
+      - name: Publish V4 CI statuses on the current PR head
+        if: always()
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+          HEAD_REF: ${{ github.ref_name }}
+          JOB_RESULT: ${{ job.status }}
+          OWN_RUN_ID: ${{ github.run_id }}
+          OWN_WORKFLOW_PATH: '.github/workflows/v4-issue23-phase0.yml'
+        run: |
+          set -euo pipefail
+          # This workflow is scoped to the active PR head branch, never the base branch.
+          [[ "$HEAD_REF" == "v4/issue-23-kernel-work" ]] || exit 0
+          latest_sha="$(git ls-remote origin "refs/heads/$HEAD_REF" | awk 'NR == 1 {print $1}')"
+          [[ -n "$latest_sha" ]] || { echo 'Unable to resolve current PR head' >&2; exit 1; }
+          # Never mark newer code green from a run that tested an older source commit.
+          if [[ "$SOURCE_SHA" == "$latest_sha" ]]; then
+            compare_json='{"status":"identical","files":[]}'
+          else
+            compare_json="$(gh api "repos/$GITHUB_REPOSITORY/compare/$SOURCE_SHA...$latest_sha")"
+          fi
+          jq -e '(.status == "identical" and ((.files // []) | type == "array")) or (.status == "ahead" and (.files | type == "array"))' \
+            <<< "$compare_json" >/dev/null || {
+              echo 'Unable to prove the PR head differs only by archived evidence; refusing to publish statuses.' >&2
+              exit 1
+            }
+          if ! jq -e '[.files[].filename | select(startswith("artifact-archive/") | not)] | length == 0' \
+              <<< "$compare_json" >/dev/null; then
+            echo "PR head contains newer non-archive changes; leaving statuses to the newer CI run."
+            exit 0
+          fi
+          runs_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$SOURCE_SHA&per_page=100")"
+          phase_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/v4-issue23-phase0.yml" --jq '.id')"
+          measurement_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/v4-issue23-measurement.yml" --jq '.id')"
+          if [[ "$OWN_WORKFLOW_PATH" == ".github/workflows/v4-issue23-phase0.yml" ]]; then
+            OWN_WORKFLOW_ID="$phase_id"
+          else
+            OWN_WORKFLOW_ID="$measurement_id"
+          fi
+          publish_status() {
+            local context="$1" state="$2" target="$3" description="$4"
+            gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$latest_sha" \
+              -f state="$state" -f context="$context" -f target_url="$target" -f description="$description" >/dev/null
+            echo "Published $context=$state on $latest_sha"
+          }
+          map_state() {
+            case "$1" in
+              success) echo success ;;
+              failure|timed_out|action_required) echo failure ;;
+              *) echo error ;;
+            esac
+          }
+          own_state="$(map_state "$JOB_RESULT")"
+          own_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$OWN_RUN_ID"
+          description="Validated source ${{ github.sha }}; head differs only by archived evidence."
+          if [[ "$OWN_WORKFLOW_ID" == "$phase_id" ]]; then
+            publish_status 'NEXUS-Q V4 / Issue 23 / Phase 0' "$own_state" "$own_url" "$description"
+          else
+            publish_status 'NEXUS-Q V4 / Issue 23 / Measurement' "$own_state" "$own_url" "$description"
+          fi
+          for entry in "$phase_id:NEXUS-Q V4 / Issue 23 / Phase 0" "$measurement_id:NEXUS-Q V4 / Issue 23 / Measurement"; do
+            workflow_id="${entry%%:*}"
+            context="${entry#*:}"
+            [[ "$workflow_id" == "$OWN_WORKFLOW_ID" ]] && continue
+            other="$(jq -c --argjson id "$workflow_id" --arg sha "$SOURCE_SHA" \
+              '[.workflow_runs[] | select(.workflow_id == $id and .head_sha == $sha and .status == "completed")] | sort_by(.run_started_at) | last // empty' <<< "$runs_json")"
+            [[ -n "$other" && "$other" != "null" ]] || { echo "Counterpart $context has not completed yet; it will publish both statuses when it finishes."; continue; }
+            other_state="$(map_state "$(jq -r '.conclusion // "failure"' <<< "$other")")"
+            other_url="$(jq -r '.html_url' <<< "$other")"
+            publish_status "$context" "$other_state" "$other_url" "$description"
+          done
