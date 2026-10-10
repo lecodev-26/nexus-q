@@ -136,6 +136,7 @@ jobs:
           root = Path('arena/results/v4-phase0')
           expected_aws = {
               ('ml-kem', '768', 'keygen'), ('ml-kem', '768', 'encaps'), ('ml-kem', '768', 'decaps'),
+              ('ml-kem', '1024', 'keygen'), ('ml-kem', '1024', 'encaps'), ('ml-kem', '1024', 'decaps'),
               ('ml-dsa', '65', 'keygen'), ('ml-dsa', '65', 'sign'), ('ml-dsa', '65', 'verify'),
           }
           for name, implementation in [('nexusq.jsonl', 'nexusq'), ('aws-lc.jsonl', 'aws-lc')]:
@@ -157,7 +158,10 @@ jobs:
               print(f'{name}: {len(rows)} schema-valid records with raw samples/statistics; counts meet configured thresholds')
           aws_rows = [json.loads(line) for line in (root / 'aws-lc.jsonl').read_text().splitlines() if line.strip()]
           actual_aws = {(r['algorithm']['id'], r['algorithm']['parameter_set'], r['operation']) for r in aws_rows}
+          assert len(aws_rows) == 9, f'expected nine AWS-LC records, got {len(aws_rows)}'
           assert actual_aws == expected_aws, (actual_aws, expected_aws)
+          assert all('AWS-LC public EVP API' in r['measurement'].get('measurement_method', '') for r in aws_rows), (
+              'AWS-LC measurement records must identify the public EVP API layer')
 
           from collections import Counter
           nexus_rows = [json.loads(line) for line in (root / 'nexusq.jsonl').read_text().splitlines() if line.strip()]
@@ -173,6 +177,13 @@ jobs:
           actual_counts = Counter((r['algorithm']['id'], r['algorithm']['parameter_set'], r['operation']) for r in nexus_rows)
           assert actual_counts == Counter(expected_counts), (actual_counts, expected_counts)
           assert len(nexus_rows) == 10, f'expected 10 NEXUS-Q records (nine operations plus separate cached verify), got {len(nexus_rows)}'
+          assert all('direct RustCrypto ml-kem API' in r['measurement'].get('measurement_method', '')
+                     for r in nexus_rows if r['algorithm']['id'] == 'ml-kem'), (
+              'NEXUS-Q ML-KEM records must identify the direct RustCrypto API layer')
+          assert all('nexusq-core ML-DSA wrapper' in r['measurement'].get('measurement_method', '')
+                     for r in nexus_rows if r['algorithm']['id'] == 'ml-dsa' and
+                     'cached' not in r['measurement'].get('measurement_method', '')), (
+              'NEXUS-Q ML-DSA records must identify the wrapper API layer')
 
           nexus_env = nexus_rows[0]['environment']
           aws_env = aws_rows[0]['environment']
@@ -191,7 +202,8 @@ jobs:
                      r['environment'].get('cpu_features') == aws_env['cpu_features'] for r in aws_rows)
           print('NEXUS-Q operation coverage: OK (all nine operations; cached verify separate)')
           print('Matched-host metadata: CPU, CPU feature set, and release profile agree across both runners')
-          print('Both implementations provide per-operation raw samples and median/p95/stddev statistics.')
+          print('AWS-LC and NEXUS-Q provide per-operation raw samples and median/p95/stddev statistics.')
+          print('NEXUS-Q and AWS-LC ML-KEM-768/1024 both pass pre-measurement encaps/decaps shared-secret self-checks.')
           PY
 
       - name: Archive measurement outputs in canonical artifact-archive/

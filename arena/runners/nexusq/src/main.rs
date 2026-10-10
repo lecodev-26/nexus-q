@@ -1,6 +1,9 @@
 use ml_kem::kem::{Decapsulate, Encapsulate, Kem};
-use ml_kem::{DecapsulationKey1024, EncapsulationKey1024, KeyExport, MlKem1024};
-use nexusq_core::crypto::{kem::ml_kem_768, pq_sign};
+use ml_kem::{
+    DecapsulationKey768, DecapsulationKey1024, EncapsulationKey768, EncapsulationKey1024,
+    KeyExport, MlKem768, MlKem1024,
+};
+use nexusq_core::crypto::pq_sign;
 use std::env;
 use std::hint::black_box;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
@@ -126,7 +129,11 @@ fn emit_operation_samples(
             "iterations":samples.len(), "warmups":warmups(),
             "measurement_timestamp_unix_ns":timestamp, "latency_ns":latency_ns,
             "throughput_ops_s":1_000_000_000.0/latency_ns, "memory_bytes":null,
-            "measurement_method":"per-operation std::time::Instant; median latency",
+            "measurement_method":if algorithm == "ml-kem" {
+                "per-operation std::time::Instant; direct RustCrypto ml-kem API; median latency"
+            } else {
+                "per-operation std::time::Instant; nexusq-core ML-DSA wrapper; median latency"
+            },
             "samples_ns":samples, "statistics":stats
         },
         "sizes":sizes
@@ -281,16 +288,23 @@ mod statistics_tests {
 }
 
 fn main() {
-    let p768 = ml_kem_768::generate();
-    let pk768 = ml_kem_768::public_key_bytes(&p768.1);
+    let (sk768, pk768): (DecapsulationKey768, EncapsulationKey768) = MlKem768::generate_keypair();
+    let (check_ct768, check_ss768) = pk768.encapsulate();
+    let check_dec_ss768 = sk768.decapsulate(&check_ct768);
+    assert_eq!(
+        check_ss768.as_slice(),
+        check_dec_ss768.as_slice(),
+        "ML-KEM-768 self-check failed"
+    );
+    let pk768_bytes = pk768.to_bytes();
     let sk768_len = ML_KEM_768_SECRET_KEY_LEN;
     for _ in 0..warmups() {
-        black_box(ml_kem_768::generate());
+        black_box(MlKem768::generate_keypair());
     }
     let mut samples = Vec::with_capacity(iterations());
     for _ in 0..iterations() {
         let start = Instant::now();
-        black_box(ml_kem_768::generate());
+        black_box(MlKem768::generate_keypair());
         samples.push(start.elapsed().as_nanos());
     }
     emit_operation_samples(
@@ -298,35 +312,41 @@ fn main() {
         "768",
         "keygen",
         &samples,
-        serde_json::json!({"public_key_bytes":pk768.len(),"secret_key_bytes":sk768_len,"ciphertext_bytes":ml_kem_768::CIPHERTEXT_LEN,"signature_bytes":null}),
+        serde_json::json!({"public_key_bytes":pk768_bytes.len(),"secret_key_bytes":sk768_len,"ciphertext_bytes":1088,"signature_bytes":null}),
     );
-    let mut ct = Vec::new();
     for _ in 0..warmups() {
-        let (c, s) = ml_kem_768::encapsulate(&p768.1);
+        let (c, s) = pk768.encapsulate();
         black_box((c, s));
     }
+    let mut ct768_bytes = Vec::new();
     let mut samples = Vec::with_capacity(iterations());
     for _ in 0..iterations() {
         let start = Instant::now();
-        let (c, s) = ml_kem_768::encapsulate(&p768.1);
+        let (c, s) = pk768.encapsulate();
         black_box(s);
-        ct = c;
-        samples.push(start.elapsed().as_nanos());
+        let elapsed = start.elapsed().as_nanos();
+        // Keep ciphertext serialization/copying outside the timed primitive call.
+        ct768_bytes = c.as_slice().to_vec();
+        samples.push(elapsed);
     }
     emit_operation_samples(
         "ml-kem",
         "768",
         "encaps",
         &samples,
-        serde_json::json!({"public_key_bytes":pk768.len(),"secret_key_bytes":sk768_len,"ciphertext_bytes":ct.len(),"signature_bytes":null}),
+        serde_json::json!({"public_key_bytes":pk768_bytes.len(),"secret_key_bytes":sk768_len,"ciphertext_bytes":ct768_bytes.len(),"signature_bytes":null}),
     );
+    let ct768: ml_kem::ml_kem_768::Ciphertext = ct768_bytes
+        .clone()
+        .try_into()
+        .expect("ML-KEM-768 ciphertext length");
     for _ in 0..warmups() {
-        black_box(ml_kem_768::decapsulate(&p768.0, &ct).unwrap());
+        black_box(sk768.decapsulate(&ct768));
     }
     let mut samples = Vec::with_capacity(iterations());
     for _ in 0..iterations() {
         let start = Instant::now();
-        black_box(ml_kem_768::decapsulate(&p768.0, &ct).unwrap());
+        black_box(sk768.decapsulate(&ct768));
         samples.push(start.elapsed().as_nanos());
     }
     emit_operation_samples(
@@ -334,11 +354,18 @@ fn main() {
         "768",
         "decaps",
         &samples,
-        serde_json::json!({"public_key_bytes":pk768.len(),"secret_key_bytes":sk768_len,"ciphertext_bytes":ct.len(),"signature_bytes":null}),
+        serde_json::json!({"public_key_bytes":pk768_bytes.len(),"secret_key_bytes":sk768_len,"ciphertext_bytes":ct768_bytes.len(),"signature_bytes":null}),
     );
 
     let (sk1024, pk1024): (DecapsulationKey1024, EncapsulationKey1024) =
         MlKem1024::generate_keypair();
+    let (check_ct1024, check_ss1024) = pk1024.encapsulate();
+    let check_dec_ss1024 = sk1024.decapsulate(&check_ct1024);
+    assert_eq!(
+        check_ss1024.as_slice(),
+        check_dec_ss1024.as_slice(),
+        "ML-KEM-1024 self-check failed"
+    );
     let pk1024_bytes = pk1024.to_bytes();
     let sk1024_bytes = ML_KEM_1024_SECRET_KEY_LEN;
     for _ in 0..warmups() {
@@ -367,8 +394,10 @@ fn main() {
         let start = Instant::now();
         let (c, s) = pk1024.encapsulate();
         black_box(s);
+        let elapsed = start.elapsed().as_nanos();
+        // Keep serialization/copying the ciphertext outside the timed primitive call.
         ct2 = c.as_slice().to_vec();
-        samples.push(start.elapsed().as_nanos());
+        samples.push(elapsed);
     }
     emit_operation_samples(
         "ml-kem",

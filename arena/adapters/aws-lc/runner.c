@@ -197,7 +197,7 @@ static void emit(const char *algorithm, const char *parameter, const char *opera
            "\"measurement\":{\"iterations\":%d,\"warmups\":%d,"
            "\"measurement_timestamp_unix_ns\":%llu,\"latency_ns\":%llu,"
            "\"throughput_ops_s\":%.6f,\"memory_bytes\":null,"
-           "\"measurement_method\":\"per-operation clock_gettime(CLOCK_MONOTONIC); median of raw samples\","
+           "\"measurement_method\":\"per-operation clock_gettime(CLOCK_MONOTONIC); AWS-LC public EVP API with per-operation context creation; median of raw samples\","
            "\"samples_ns\":[",
            algorithm, parameter, operation, env_or("AWSLC_VERSION", "runtime"),
            algorithm, parameter, operation, target, os, cpu, features_json, __VERSION__,
@@ -218,10 +218,10 @@ static void emit(const char *algorithm, const char *parameter, const char *opera
            public_key_bytes, secret_key_bytes, ciphertext_json, signature_json);
 }
 
-static int generate_kem_key(EVP_PKEY **key) {
+static int generate_kem_key(EVP_PKEY **key, int parameter_nid) {
     EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_KEM, NULL);
     int ok = ctx && EVP_PKEY_keygen_init(ctx)
-          && EVP_PKEY_CTX_kem_set_params(ctx, NID_MLKEM768)
+          && EVP_PKEY_CTX_kem_set_params(ctx, parameter_nid)
           && EVP_PKEY_keygen(ctx, key);
     EVP_PKEY_CTX_free(ctx);
     return ok;
@@ -236,10 +236,14 @@ static int generate_dsa_key(EVP_PKEY **key) {
     return ok;
 }
 
-static int kem_keygen_once(void *unused) {
-    (void)unused;
+typedef struct {
+    int parameter_nid;
+} kem_keygen_context;
+
+static int kem_keygen_once(void *opaque) {
+    const kem_keygen_context *ctx = opaque;
     EVP_PKEY *key = NULL;
-    int ok = generate_kem_key(&key);
+    int ok = generate_kem_key(&key, ctx->parameter_nid);
     EVP_PKEY_free(key);
     return ok;
 }
@@ -248,8 +252,12 @@ typedef struct {
     EVP_PKEY *key;
     unsigned char *ciphertext;
     size_t ciphertext_capacity;
+    size_t ciphertext_len;
     unsigned char *secret;
     size_t secret_capacity;
+    size_t secret_len;
+    unsigned char *decapsulated_secret;
+    size_t decapsulated_secret_len;
 } kem_context;
 
 static int kem_encaps_once(void *opaque) {
@@ -260,6 +268,10 @@ static int kem_encaps_once(void *opaque) {
     int ok = op && EVP_PKEY_encapsulate(op, ctx->ciphertext, &ciphertext_len,
                                         ctx->secret, &secret_len);
     EVP_PKEY_CTX_free(op);
+    if (ok) {
+        ctx->ciphertext_len = ciphertext_len;
+        ctx->secret_len = secret_len;
+    }
     return ok;
 }
 
@@ -267,9 +279,10 @@ static int kem_decaps_once(void *opaque) {
     kem_context *ctx = opaque;
     EVP_PKEY_CTX *op = EVP_PKEY_CTX_new(ctx->key, NULL);
     size_t secret_len = ctx->secret_capacity;
-    int ok = op && EVP_PKEY_decapsulate(op, ctx->secret, &secret_len,
-                                        ctx->ciphertext, ctx->ciphertext_capacity);
+    int ok = op && EVP_PKEY_decapsulate(op, ctx->decapsulated_secret, &secret_len,
+                                        ctx->ciphertext, ctx->ciphertext_len);
     EVP_PKEY_CTX_free(op);
+    if (ok) ctx->decapsulated_secret_len = secret_len;
     return ok;
 }
 
@@ -312,58 +325,83 @@ static int dsa_verify_once(void *opaque) {
     return ok;
 }
 
-static int kem(void) {
+static int kem_parameter(const char *parameter, int parameter_nid,
+                         size_t public_key_bytes, size_t secret_key_bytes,
+                         size_t expected_ciphertext_bytes) {
     int count = iterations(), warmup_count = warmups();
     uint64_t *samples = calloc((size_t)count, sizeof(*samples));
     EVP_PKEY *key = NULL;
+    EVP_PKEY_CTX *size_ctx = NULL;
+    unsigned char *ciphertext = NULL;
+    unsigned char *secret = NULL;
+    unsigned char *decapsulated_secret = NULL;
+    kem_keygen_context keygen = {parameter_nid};
+    kem_context context = {0};
+    size_t ciphertext_len = 0, secret_len = 0;
+    int result = 1;
     if (!samples) return 1;
 
-    if (!run_samples(kem_keygen_once, NULL, samples, count, warmup_count)) goto fail;
-    emit("ml-kem", "768", "keygen", samples, count, warmup_count,
-         1184, 2400, 1088, 0, 1, 0);
+    if (!run_samples(kem_keygen_once, &keygen, samples, count, warmup_count)) goto cleanup;
+    emit("ml-kem", parameter, "keygen", samples, count, warmup_count,
+         public_key_bytes, secret_key_bytes, expected_ciphertext_bytes, 0, 1, 0);
 
-    if (!generate_kem_key(&key)) goto fail;
-    EVP_PKEY_CTX *size_ctx = EVP_PKEY_CTX_new(key, NULL);
-    size_t ciphertext_len = 0, secret_len = 0;
+    if (!generate_kem_key(&key, parameter_nid)) goto cleanup;
+    size_ctx = EVP_PKEY_CTX_new(key, NULL);
     if (!size_ctx || !EVP_PKEY_encapsulate(size_ctx, NULL, &ciphertext_len, NULL, &secret_len)) {
-        EVP_PKEY_CTX_free(size_ctx);
-        goto fail;
+        goto cleanup;
+    }
+    if (ciphertext_len != expected_ciphertext_bytes || secret_len == 0) {
+        fprintf(stderr, "AWS-LC ML-KEM-%s unexpected output sizes: ciphertext=%zu secret=%zu\n",
+                parameter, ciphertext_len, secret_len);
+        goto cleanup;
     }
     EVP_PKEY_CTX_free(size_ctx);
-    kem_context context = {0};
+    size_ctx = NULL;
+
+    ciphertext = OPENSSL_malloc(ciphertext_len);
+    secret = OPENSSL_malloc(secret_len);
+    decapsulated_secret = OPENSSL_malloc(secret_len);
+    if (!ciphertext || !secret || !decapsulated_secret) goto cleanup;
+
     context.key = key;
+    context.ciphertext = ciphertext;
     context.ciphertext_capacity = ciphertext_len;
+    context.secret = secret;
     context.secret_capacity = secret_len;
-    context.ciphertext = OPENSSL_malloc(ciphertext_len);
-    context.secret = OPENSSL_malloc(secret_len);
-    if (!context.ciphertext || !context.secret) {
-        OPENSSL_free(context.ciphertext);
-        OPENSSL_free(context.secret);
-        goto fail;
+    context.decapsulated_secret = decapsulated_secret;
+
+    /* Fail closed if this parameter set cannot complete a correct KEM round trip. */
+    if (!kem_encaps_once(&context) || context.ciphertext_len != ciphertext_len ||
+        context.secret_len != secret_len || !kem_decaps_once(&context) ||
+        context.decapsulated_secret_len != secret_len ||
+        memcmp(context.secret, context.decapsulated_secret, secret_len) != 0) {
+        fprintf(stderr, "AWS-LC ML-KEM-%s encapsulation/decapsulation self-check failed\n", parameter);
+        goto cleanup;
     }
 
-    if (!run_samples(kem_encaps_once, &context, samples, count, warmup_count)) {
-        OPENSSL_free(context.ciphertext); OPENSSL_free(context.secret); goto fail;
-    }
-    emit("ml-kem", "768", "encaps", samples, count, warmup_count,
-         1184, 2400, ciphertext_len, 0, 1, 0);
-    if (!run_samples(kem_decaps_once, &context, samples, count, warmup_count)) {
-        OPENSSL_free(context.ciphertext); OPENSSL_free(context.secret); goto fail;
-    }
-    emit("ml-kem", "768", "decaps", samples, count, warmup_count,
-         1184, 2400, ciphertext_len, 0, 1, 0);
+    if (!run_samples(kem_encaps_once, &context, samples, count, warmup_count)) goto cleanup;
+    emit("ml-kem", parameter, "encaps", samples, count, warmup_count,
+         public_key_bytes, secret_key_bytes, ciphertext_len, 0, 1, 0);
+    if (!run_samples(kem_decaps_once, &context, samples, count, warmup_count)) goto cleanup;
+    emit("ml-kem", parameter, "decaps", samples, count, warmup_count,
+         public_key_bytes, secret_key_bytes, ciphertext_len, 0, 1, 0);
 
-    OPENSSL_free(context.ciphertext);
-    OPENSSL_free(context.secret);
+    result = 0;
+cleanup:
+    EVP_PKEY_CTX_free(size_ctx);
+    OPENSSL_free(ciphertext);
+    OPENSSL_free(secret);
+    OPENSSL_free(decapsulated_secret);
     EVP_PKEY_free(key);
     free(samples);
+    if (result != 0) fprintf(stderr, "AWS-LC ML-KEM-%s benchmark failed\n", parameter);
+    return result;
+}
+
+static int kem(void) {
+    if (kem_parameter("768", NID_MLKEM768, 1184, 2400, 1088) != 0) return 1;
+    if (kem_parameter("1024", NID_MLKEM1024, 1568, 3168, 1568) != 0) return 1;
     return 0;
-
-fail:
-    EVP_PKEY_free(key);
-    free(samples);
-    fprintf(stderr, "AWS-LC ML-KEM benchmark failed\n");
-    return 1;
 }
 
 static int dsa(void) {
