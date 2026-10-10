@@ -1,0 +1,39 @@
+name: Envelope fuzz diagnostic
+
+on:
+  push:
+    branches: [tmp/fuzz-envelope-oom-diagnostic]
+    paths:
+      - 'fuzz/fuzz_targets/envelope_parse.rs'
+      - '.github/workflows/envelope-fuzz-diagnostic.yml'
+      - 'fuzz/**'
+      - 'crates/nexusq-core/src/vault/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  envelope-fuzz-diagnostic:
+    name: 4-hour envelope fuzz diagnostic
+    runs-on: ubuntu-latest
+    timeout-minutes: 250
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Build envelope fuzz target
+        run: cargo fuzz build envelope_parse
+        working-directory: fuzz
+      - name: Run envelope fuzz campaign
+        run: cargo fuzz run envelope_parse -- -max_total_time=14400 -print_final_stats=1
+        working-directory: fuzz
+      - name: Upload fuzz artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: envelope-fuzz-diagnostic-artifacts
+          path: fuzz/artifacts/envelope_parse/
+          if-no-files-found: warn
+          retention-days: 14

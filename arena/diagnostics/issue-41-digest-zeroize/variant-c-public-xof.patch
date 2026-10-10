@@ -1,0 +1,27 @@
+diff --git a/vendor/ml-kem/src/crypto.rs b/vendor/ml-kem/src/crypto.rs
+index 66aee40..7125e43 100644
+--- a/vendor/ml-kem/src/crypto.rs
++++ b/vendor/ml-kem/src/crypto.rs
+@@ -62,11 +62,21 @@ where
+     out
+ }
+ 
++/// Reader for the public-seed matrix expansion. `rho` is part of the public key,
++/// so zeroizing this XOF state on drop protects no secret.
++pub(crate) struct PublicXofReader(core::mem::ManuallyDrop<sha3::Shake128Reader>);
++
++impl XofReader for PublicXofReader {
++    fn read(&mut self, buffer: &mut [u8]) {
++        self.0.read(buffer)
++    }
++}
++
+ pub(crate) fn XOF(rho: &B32, i: u8, j: u8) -> impl XofReader {
+     let mut h = Shake128::default();
+     h.update(rho);
+     h.update(&[i, j]);
+-    h.finalize_xof()
++    PublicXofReader(core::mem::ManuallyDrop::new(h.finalize_xof()))
+ }
+ 
+ // // A Go script to generate the test vector outputs

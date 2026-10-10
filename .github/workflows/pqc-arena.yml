@@ -3,9 +3,9 @@ name: PQC Benchmark Arena
 on:
   workflow_dispatch:
   push:
-    branches: ["ci/benchmark-arena", "nexusqv2"]
+    branches: ["main", "ci/benchmark-arena", "nexusqv2", "nexusqv3"]
   pull_request:
-    branches: ["nexusqv2"]
+    branches: ["nexusqv2", "nexusqv3"]
 
 permissions:
   contents: read
@@ -66,28 +66,39 @@ jobs:
           PY
 
   reference-benchmarks:
-    name: V1/V2 reference benchmarks (single runner)
+    name: V1 / V1+zeroize / V3 controlled benchmarks
     runs-on: ubuntu-latest
     needs: validate-registry
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - name: Save current Arena runner harness
+      - name: Save V3 runner source
         run: cp arena/runners/nexusq/src/main.rs "${{ runner.temp }}/nexusq-arena-runner-main.rs"
-      - uses: actions/checkout@v4
-        with:
-          ref: v1.0.0
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.98.1
       - name: Capture benchmark environment
         id: env
         run: |
           echo "cpu=$(awk -F': ' '/model name|Hardware|Processor/{print $2; exit}' /proc/cpuinfo)" >> "$GITHUB_OUTPUT"
           echo "features=$(awk -F': ' '/^flags|^Features/{print $2; exit}' /proc/cpuinfo | tr ' ' ',')" >> "$GITHUB_OUTPUT"
           echo "rustc=$(rustc --version)" >> "$GITHUB_OUTPUT"
+          echo "rustc_verbose=$(rustc --version --verbose | tr '\n' ';')" >> "$GITHUB_OUTPUT"
+          echo "frequency=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq 2>/dev/null || true)" >> "$GITHUB_OUTPUT"
+          echo "governor=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || echo unknown)" >> "$GITHUB_OUTPUT"
           lscpu
           rustc --version --verbose
-      - name: Apply V2 crypto hardening to V1 reference
+      - name: Build unmodified V1 reference
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}/nexusq-arena-v1
+        run: |
+          git fetch --depth=1 origin refs/tags/v1.0.0:refs/tags/v1.0.0
+          git checkout v1.0.0
+          cp "${{ runner.temp }}/nexusq-arena-runner-main.rs" arena/runners/nexusq/src/main.rs
+          echo "$(sha256sum arena/runners/nexusq/Cargo.lock | cut -d' ' -f1)" > "${{ runner.temp }}/v1-lock-hash"
+          NEXUSQ_COMMIT="$(git rev-parse HEAD)" cargo build --locked --release --manifest-path arena/runners/nexusq/Cargo.toml
+      - name: Build V1 with zeroize hardening only
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}/nexusq-arena-v1-zeroize
         run: |
           python3 - <<'PY2'
           from pathlib import Path
@@ -95,60 +106,213 @@ jobs:
           s = p.read_text()
           old = 'ml-dsa = "0.1.1"'
           new = 'ml-dsa = { version = "0.1.1", features = ["zeroize"] }'
-          assert old in s
+          assert old in s, "expected unmodified V1 ml-dsa dependency declaration"
           p.write_text(s.replace(old, new, 1))
           PY2
-      - name: Use current Arena runner harness for V1 core
-        run: cp "${{ runner.temp }}/nexusq-arena-runner-main.rs" arena/runners/nexusq/src/main.rs
-      - name: Build V1 Arena reference runner
+          # Refresh only the runner lock after enabling the feature; the actual build is locked.
+          cargo check --offline --manifest-path arena/runners/nexusq/Cargo.toml
+          echo "$(sha256sum arena/runners/nexusq/Cargo.lock | cut -d' ' -f1)" > "${{ runner.temp }}/v1-zeroize-lock-hash"
+          NEXUSQ_COMMIT="$(git rev-parse HEAD)-zeroize-only" cargo build --locked --release --manifest-path arena/runners/nexusq/Cargo.toml
+      - name: Build current V3 runner
         env:
-          CARGO_TARGET_DIR: ${{ runner.temp }}/nexusq-arena-v1
-        run: cargo build --release --manifest-path arena/runners/nexusq/Cargo.toml
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - name: Build V2 Arena reference runner
+          CARGO_TARGET_DIR: ${{ runner.temp }}/nexusq-arena-v3
+        run: |
+          git reset --hard "${{ github.event.pull_request.head.sha || github.sha }}"
+          echo "$(sha256sum arena/runners/nexusq/Cargo.lock | cut -d' ' -f1)" > "${{ runner.temp }}/v3-lock-hash"
+          NEXUSQ_COMMIT="${{ github.event.pull_request.head.sha || github.sha }}" cargo build --locked --release --features cached-verifier --manifest-path arena/runners/nexusq/Cargo.toml
+      - name: Build diagnostic variant without SHA3 zeroize feature (non-production)
         env:
-          CARGO_TARGET_DIR: ${{ runner.temp }}/nexusq-arena-v2
-        run: cargo build --release --manifest-path arena/runners/nexusq/Cargo.toml
-      - name: Run alternating V1/V2 measurements
+          CARGO_TARGET_DIR: ${{ runner.temp }}/nexusq-arena-v3-sha3-zeroize-off
+        run: |
+          python3 - <<'PYDIAG'
+          from pathlib import Path
+          p = Path("Cargo.toml")
+          s = p.read_text()
+          old = 'sha3 = { version = "0.11.0-rc.5", features = ["zeroize"] }'
+          new = 'sha3 = "0.11.0-rc.5"'
+          assert old in s, "expected V3 SHA3 zeroize feature declaration"
+          p.write_text(s.replace(old, new, 1))
+          PYDIAG
+          # Diagnostic only: isolate SHA3 state zeroization cost. Never publish this variant.
+          cargo check --offline --manifest-path arena/runners/nexusq/Cargo.toml
+          echo "$(sha256sum arena/runners/nexusq/Cargo.lock | cut -d' ' -f1)" > "${{ runner.temp }}/v3-sha3-zeroize-off-lock-hash"
+          NEXUSQ_COMMIT="${{ github.event.pull_request.head.sha || github.sha }}-sha3-zeroize-off-diagnostic" cargo build --locked --release --features cached-verifier --manifest-path arena/runners/nexusq/Cargo.toml
+          git checkout -- Cargo.toml arena/runners/nexusq/Cargo.lock
+          git diff --exit-code -- Cargo.toml arena/runners/nexusq/Cargo.lock
+      - name: Assert Arena resolves the intended patched PQC sources
+        run: |
+          kem_tree="$(cargo tree --locked --manifest-path arena/runners/nexusq/Cargo.toml -i ml-kem)"
+          printf '%s\n' "$kem_tree"
+          printf '%s\n' "$kem_tree" | grep -F 'vendor/ml-kem' >/dev/null || {
+            echo 'ERROR: Arena ml-kem does not resolve to vendor/ml-kem' >&2
+            exit 1
+          }
+          lattice_tree="$(cargo tree --locked --manifest-path arena/runners/nexusq/Cargo.toml -i module-lattice)"
+          printf '%s\n' "$lattice_tree"
+          printf '%s\n' "$lattice_tree" | grep -F 'vendor/module-lattice' >/dev/null || {
+            echo 'ERROR: Arena module-lattice does not resolve to vendor/module-lattice' >&2
+            exit 1
+          }
+          echo 'Arena patched PQC source resolution: OK'
+      - name: Run 10 randomized alternating rounds
         env:
           CPU: ${{ steps.env.outputs.cpu }}
           FEATURES: ${{ steps.env.outputs.features }}
           RUSTC_VERSION: ${{ steps.env.outputs.rustc }}
+          RUSTC_VERBOSE: ${{ steps.env.outputs.rustc_verbose }}
+          CPU_FREQUENCY: ${{ steps.env.outputs.frequency }}
+          CPU_GOVERNOR: ${{ steps.env.outputs.governor }}
         run: |
           mkdir -p arena/results/ci
           : > arena/results/ci/v1-reference.jsonl
+          : > arena/results/ci/v1-zeroize-reference.jsonl
           : > arena/results/ci/nexusq-reference.jsonl
-          for round in 1 2 3 4 5; do
-            echo "=== Arena round $round: V1 ==="
-            NEXUSQ_CPU="$CPU" NEXUSQ_CPU_FEATURES="$FEATURES" RUSTC_VERSION="$RUSTC_VERSION" NEXUSQ_OPT=release NEXUSQ_RUN_ID="v1-round-$round" \
-              ${{ runner.temp }}/nexusq-arena-v1/release/nexusq-arena-runner >> arena/results/ci/v1-reference.jsonl
-            echo "=== Arena round $round: V2 ==="
-            NEXUSQ_CPU="$CPU" NEXUSQ_CPU_FEATURES="$FEATURES" RUSTC_VERSION="$RUSTC_VERSION" NEXUSQ_OPT=release NEXUSQ_RUN_ID="v2-round-$round" \
-              ${{ runner.temp }}/nexusq-arena-v2/release/nexusq-arena-runner >> arena/results/ci/nexusq-reference.jsonl
+          for round in $(seq 1 10); do
+            for variant in $(printf '%s\n' v1 v1-zeroize v3 | shuf); do
+              case "$variant" in
+                v1)
+                  binary="${{ runner.temp }}/nexusq-arena-v1/release/nexusq-arena-runner"
+                  lock_hash="$(cat '${{ runner.temp }}/v1-lock-hash')"
+                  output=arena/results/ci/v1-reference.jsonl ;;
+                v1-zeroize)
+                  binary="${{ runner.temp }}/nexusq-arena-v1-zeroize/release/nexusq-arena-runner"
+                  lock_hash="$(cat '${{ runner.temp }}/v1-zeroize-lock-hash')"
+                  output=arena/results/ci/v1-zeroize-reference.jsonl ;;
+                v3)
+                  binary="${{ runner.temp }}/nexusq-arena-v3/release/nexusq-arena-runner"
+                  lock_hash="$(cat '${{ runner.temp }}/v3-lock-hash')"
+                  output=arena/results/ci/nexusq-reference.jsonl ;;
+              esac
+              echo "=== Arena round $round: $variant ==="
+              NEXUSQ_CPU="$CPU" NEXUSQ_CPU_FEATURES="$FEATURES" RUSTC_VERSION="$RUSTC_VERSION" \
+              NEXUSQ_RUSTC_VERBOSE="$RUSTC_VERBOSE" NEXUSQ_CARGO_LOCK_SHA256="$lock_hash" \
+              NEXUSQ_CPU_FREQUENCY_KHZ="$CPU_FREQUENCY" NEXUSQ_CPU_GOVERNOR="$CPU_GOVERNOR" \
+              NEXUSQ_RUN_ORDER="round-$round-$variant" NEXUSQ_OPT=release NEXUSQ_RUN_ID="$variant-round-$round" \
+                "$binary" >> "$output"
+            done
           done
-      - name: Validate reference measurements
+          : > arena/results/ci/v3-sha3-zeroize-diagnostic.jsonl
+          for round in $(seq 1 10); do
+            for variant in $(printf '%s\n' v3-sha3-zeroize-on v3-sha3-zeroize-off | shuf); do
+              case "$variant" in
+                v3-sha3-zeroize-on)
+                  binary="${{ runner.temp }}/nexusq-arena-v3/release/nexusq-arena-runner"
+                  lock_hash="$(cat '${{ runner.temp }}/v3-lock-hash')" ;;
+                v3-sha3-zeroize-off)
+                  binary="${{ runner.temp }}/nexusq-arena-v3-sha3-zeroize-off/release/nexusq-arena-runner"
+                  lock_hash="$(cat '${{ runner.temp }}/v3-sha3-zeroize-off-lock-hash')" ;;
+              esac
+              echo "=== SHA3 zeroize diagnostic round $round: $variant ==="
+              NEXUSQ_CPU="$CPU" NEXUSQ_CPU_FEATURES="$FEATURES" RUSTC_VERSION="$RUSTC_VERSION" \
+              NEXUSQ_RUSTC_VERBOSE="$RUSTC_VERBOSE" NEXUSQ_CARGO_LOCK_SHA256="$lock_hash" \
+              NEXUSQ_CPU_FREQUENCY_KHZ="$CPU_FREQUENCY" NEXUSQ_CPU_GOVERNOR="$CPU_GOVERNOR" \
+              NEXUSQ_RUN_ORDER="round-$round-$variant" NEXUSQ_OPT=release NEXUSQ_RUN_ID="$variant-round-$round" \
+                "$binary" >> arena/results/ci/v3-sha3-zeroize-diagnostic.jsonl
+            done
+          done
+      - name: Validate samples, metadata and matched-seed comparisons
         run: |
+          python3 -m pip install --disable-pip-version-check --no-input 'jsonschema==4.26.0'
           python3 - <<'PY3'
           import json
           from pathlib import Path
-          for name in ("v1-reference.jsonl", "nexusq-reference.jsonl"):
-              rows=[json.loads(x) for x in Path("arena/results/ci",name).read_text().splitlines() if x.startswith("{")]
-              assert len(rows)==45, (name,len(rows))
-              assert {r["measurement"]["iterations"] for r in rows}=={50}
-              assert {r["measurement"]["warmups"] for r in rows}=={10}
-              assert len({r["environment"]["cpu"] for r in rows})==1
-              print(name, "reference measurements: OK", len(rows))
+          import jsonschema
+          schema=json.loads(Path("arena/schemas/benchmark-result.schema.json").read_text())
+          paths={
+            "v1":Path("arena/results/ci/v1-reference.jsonl"),
+            "v1-zeroize":Path("arena/results/ci/v1-zeroize-reference.jsonl"),
+            "v3":Path("arena/results/ci/nexusq-reference.jsonl"),
+          }
+          rows={}
+          for name,path in paths.items():
+            rows[name]=[json.loads(line) for line in path.read_text().splitlines() if line.startswith("{")]
+            expected=90 if name != "v3" else 100
+            assert len(rows[name])==expected, (name,len(rows[name]),expected)
+            for row in rows[name]: jsonschema.Draft202012Validator(schema).validate(row)
+            assert all(r["measurement"]["iterations"]==320 for r in rows[name] if r["operation"]=="sign")
+            assert all(len(r["measurement"].get("samples_ns",[]))==320 for r in rows[name] if r["operation"]=="sign")
+            assert all(len(r["measurement"].get("seed_samples",[]))==64 for r in rows[name] if r["operation"]=="sign")
+            if name == "v3":
+              for row in rows[name]:
+                measurement=row["measurement"]
+                if row["operation"] != "sign":
+                  assert measurement["iterations"]==50, (row["algorithm"],row["operation"],measurement["iterations"])
+                  assert len(measurement.get("samples_ns",[]))==50, (row["algorithm"],row["operation"],"missing individual samples")
+                  stats=measurement.get("statistics",{})
+                  assert all(key in stats for key in ("sample_count","min_ns","median_ns","p95_ns","stddev_ns")), (row["algorithm"],row["operation"],"missing summary stats")
+                  assert stats["sample_count"]==50
+            assert all(r["environment"].get("cargo_lock_sha256") for r in rows[name])
+            assert all(r["environment"].get("rustc_verbose") for r in rows[name])
+            assert len({r["environment"]["cpu"] for r in rows[name]})==1
+            print(name, "schema/metadata/sign-sample contract: OK", len(rows[name]), "records")
+          def sign_rows(name):
+            return [r for r in rows[name] if r["operation"]=="sign"]
+          from statistics import median
+          def aggregate_seed_medians(name):
+            rounds=sign_rows(name)
+            assert len(rounds)==10, (name,"expected ten sign rounds",len(rounds))
+            per_seed={}
+            expected_seed_ids=None
+            for row in rounds:
+              seed_values={s["seed_id"]:s["summary"]["median_ns"] for s in row["measurement"]["seed_samples"]}
+              assert len(seed_values)==64, (name,"seed count mismatch")
+              if expected_seed_ids is None: expected_seed_ids=set(seed_values)
+              assert set(seed_values)==expected_seed_ids, (name,"seed corpus changed between rounds")
+              for seed_id,value in seed_values.items(): per_seed.setdefault(seed_id,[]).append(value)
+            assert all(len(values)==10 for values in per_seed.values()), (name,"incomplete seed rounds")
+            return {seed_id:median(values) for seed_id,values in per_seed.items()}
+          baseline=aggregate_seed_medians("v1")
+          for name in ("v1-zeroize","v3"):
+            candidate=aggregate_seed_medians(name)
+            assert baseline.keys()==candidate.keys(), (name,"seed corpus mismatch")
+            ratios=sorted(candidate[k]/baseline[k] for k in baseline)
+            print(name, "matched-seed ratio across 10 rounds min/median/max:", round(ratios[0],4), round(ratios[len(ratios)//2],4), round(ratios[-1],4))
+          assert all(r["environment"]["run_order"]!="unknown" for group in rows.values() for r in group)
+          print("10 randomized rounds and identical 64-seed sign corpus: OK")
+          diagnostic_path=Path("arena/results/ci/v3-sha3-zeroize-diagnostic.jsonl")
+          diagnostic=[json.loads(line) for line in diagnostic_path.read_text().splitlines() if line.startswith("{")]
+          assert len(diagnostic)==200, ("sha3 zeroize diagnostic row count",len(diagnostic))
+          for row in diagnostic:
+            jsonschema.Draft202012Validator(schema).validate(row)
+            assert row["operation"] in {"keygen","encaps","decaps","sign","verify"}
+          from collections import defaultdict
+          grouped=defaultdict(dict)
+          for row in diagnostic:
+            order=row["environment"]["run_order"]
+            variant="off" if "zeroize-off" in order else "on"
+            round_id=order.split("-")[1]
+            key=(row["algorithm"]["id"],row["algorithm"]["parameter_set"],row["operation"])
+            grouped[key].setdefault(round_id,{})[variant]=row["measurement"]["statistics"]["median_ns"]
+          for key, rounds in sorted(grouped.items()):
+            if key[0] != "ml-kem":
+              continue
+            ratios=[pair["off"]/pair["on"] for pair in rounds.values() if set(pair)=={"on","off"}]
+            assert len(ratios)==10, (key,"expected ten paired rounds",len(ratios))
+            ratios.sort()
+            print("SHA3 zeroize diagnostic off/on median ratio",key,"min/median/max:",round(ratios[0],4),round(ratios[len(ratios)//2],4),round(ratios[-1],4))
+          assert all(len(rounds)==10 and all(set(pair)=={"on","off"} for pair in rounds.values()) for key,rounds in grouped.items() if key[0]=="ml-kem")
+          print("SHA3 zeroize diagnostic: 10 paired rounds per ML-KEM operation: OK")
           PY3
       - uses: actions/upload-artifact@v4
         with:
           name: pqc-arena-v1-reference
           path: arena/results/ci/v1-reference.jsonl
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pqc-arena-v1-zeroize-reference
+          path: arena/results/ci/v1-zeroize-reference.jsonl
+          retention-days: 14
       - uses: actions/upload-artifact@v4
         with:
           name: pqc-arena-nexusq-reference
           path: arena/results/ci/nexusq-reference.jsonl
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pqc-arena-v3-sha3-zeroize-diagnostic
+          path: arena/results/ci/v3-sha3-zeroize-diagnostic.jsonl
+          retention-days: 14
 
 # External implementations will be added only with pinned versions/commits,
 # semantically equivalent adapters, and recorded build/CPU feature metadata.
@@ -608,7 +772,9 @@ jobs:
           files = list(Path("arena/results/ci").rglob("*.jsonl"))
           assert files
           rows = [json.loads(x) for p in files for x in p.read_text().splitlines() if x.startswith("{")]
-          assert len(rows) == 138, len(rows)
+          # Ten-round V1 and V3 raw sample artifacts contain 90 and 100
+          # records respectively; external adapters contribute 48 more.
+          assert len(rows) == 238, len(rows)
           for row in rows:
               jsonschema.Draft202012Validator(schema).validate(row)
           matrix = {(r["algorithm"]["id"], r["algorithm"]["parameter_set"], r["operation"]) for r in rows}
@@ -625,8 +791,124 @@ jobs:
           PY
 
 
+  profile-diagnostic:
+    name: V3 LTO / codegen-units diagnostic
+    if: github.event_name == 'workflow_dispatch' || github.base_ref == 'nexusqv3' || github.ref == 'refs/heads/nexusqv3'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.98.1
+      - name: Capture profile diagnostic environment
+        run: |
+          mkdir -p arena/results/ci
+          rustc -vV > arena/results/ci/profile-diagnostic-rustc.txt
+          lscpu > arena/results/ci/profile-diagnostic-lscpu.txt
+          cargo tree --locked --manifest-path arena/runners/nexusq/Cargo.toml -i ml-kem > arena/results/ci/profile-diagnostic-ml-kem-tree.txt
+      - name: Build explicit production-equivalent and controlled profile variants
+        run: |
+          set -euo pipefail
+          # The Arena runner is an independent workspace, so the root Cargo.toml
+          # [profile.release] is NOT inherited. Pin every relevant setting explicitly.
+          # Match the repository release profile: opt=3, thin LTO, CGU=1,
+          # panic=abort, strip=symbols, debug=false.
+          printf '%s\n' \
+            'baseline: opt-level=3,lto=thin,codegen-units=1,panic=abort,strip=symbols,debug=false' \
+            'no-lto: opt-level=3,lto=false,codegen-units=1,panic=abort,strip=symbols,debug=false' \
+            'cgu16: opt-level=3,lto=thin,codegen-units=16,panic=abort,strip=symbols,debug=false' \
+            > arena/results/ci/profile-diagnostic-profiles.txt
+          CARGO_TARGET_DIR="$RUNNER_TEMP/nexusq-profile-baseline" cargo build --locked --release --features cached-verifier --config profile.release.opt-level=3 --config 'profile.release.lto="thin"' --config profile.release.codegen-units=1 --config 'profile.release.panic="abort"' --config 'profile.release.strip="symbols"' --config profile.release.debug=false --manifest-path arena/runners/nexusq/Cargo.toml
+          CARGO_TARGET_DIR="$RUNNER_TEMP/nexusq-profile-no-lto" cargo build --locked --release --features cached-verifier --config profile.release.opt-level=3 --config profile.release.lto=false --config profile.release.codegen-units=1 --config 'profile.release.panic="abort"' --config 'profile.release.strip="symbols"' --config profile.release.debug=false --manifest-path arena/runners/nexusq/Cargo.toml
+          CARGO_TARGET_DIR="$RUNNER_TEMP/nexusq-profile-cgu16" cargo build --locked --release --features cached-verifier --config profile.release.opt-level=3 --config 'profile.release.lto="thin"' --config profile.release.codegen-units=16 --config 'profile.release.panic="abort"' --config 'profile.release.strip="symbols"' --config profile.release.debug=false --manifest-path arena/runners/nexusq/Cargo.toml
+      - name: Run 10 randomized alternating rounds per profile
+        run: |
+          set -euo pipefail
+          : > arena/results/ci/profile-diagnostic.jsonl
+          cpu="$(lscpu | awk -F: '/Model name|Model:/ {sub(/^[ \t]+/, "", $2); print $2; exit}')"
+          # Linux reports x86 features as "flags" and ARM features as "Features";
+          # some virtualized runners may omit the field entirely. Never fail the
+          # diagnostic just because optional CPU metadata is unavailable.
+          features="$(python3 - <<'PYCPU'
+          from pathlib import Path
+          for line in Path('/proc/cpuinfo').read_text(errors='ignore').splitlines():
+              if ':' in line and line.split(':', 1)[0].strip().lower() in {'flags', 'features'}:
+                  print(' '.join(line.split(':', 1)[1].split()))
+                  break
+          PYCPU
+          )"
+          for round in $(seq 1 10); do
+            for variant in $(printf '%s\n' baseline no-lto cgu16 | shuf); do
+              case "$variant" in
+                baseline) binary="$RUNNER_TEMP/nexusq-profile-baseline/release/nexusq-arena-runner" ;;
+                no-lto) binary="$RUNNER_TEMP/nexusq-profile-no-lto/release/nexusq-arena-runner" ;;
+                cgu16) binary="$RUNNER_TEMP/nexusq-profile-cgu16/release/nexusq-arena-runner" ;;
+              esac
+              echo "=== profile round $round: $variant ==="
+              sample_file="$RUNNER_TEMP/profile-$variant-round-$round.jsonl"
+              : > "$sample_file"
+              NEXUSQ_CPU="$cpu" NEXUSQ_CPU_FEATURES="$features" RUSTC_VERSION="$(rustc --version --verbose | head -1)" NEXUSQ_OPT=release NEXUSQ_RUN_ID="profile-$variant-round-$round" \
+                "$binary" > "$sample_file"
+              sample_count="$(grep -c '^{"' "$sample_file" || true)"
+              echo "Profile $variant round $round emitted $sample_count JSON records"
+              if [[ "$sample_count" -ne 10 ]]; then
+                echo "Expected 10 records from one cached-verifier runner invocation; got $sample_count" >&2
+                cat "$sample_file" >&2
+                exit 1
+              fi
+              cat "$sample_file" >> arena/results/ci/profile-diagnostic.jsonl
+            done
+          done
+      - name: Validate profile samples and report descriptive medians
+        run: |
+          python3 - <<'PY'
+          import json, statistics
+          from pathlib import Path
+          p=Path('arena/results/ci/profile-diagnostic.jsonl')
+          rows=[json.loads(x) for x in p.read_text().splitlines() if x.strip()]
+          assert len(rows)==300, len(rows)
+          groups={}
+          for r in rows:
+            run=r['run_id']
+            variant=next(v for v in ('baseline','no-lto','cgu16') if f'profile-{v}-' in run)
+            # ML-DSA verify is emitted twice: cached-verifier and conventional
+            # verification. Include the method or these distinct measurements merge.
+            method=r['measurement']['measurement_method']
+            key=(r['algorithm']['id'],r['algorithm']['parameter_set'],r['operation'],method,variant)
+            groups.setdefault(key,[]).append(float(r['measurement']['latency_ns']))
+          assert len(groups)==30, len(groups)
+          assert all(len(v)==10 for v in groups.values()), {k:len(v) for k,v in groups.items() if len(v)!=10}
+          operations=sorted({k[:4] for k in groups})
+          assert len(operations)==10, operations
+          verify_methods={k[3] for k in operations if k[0]=='ml-dsa' and k[2]=='verify'}
+          assert verify_methods=={'per-operation std::time::Instant; median latency','per-operation std::time::Instant; cached MlDsa65VerifyingKey'}, verify_methods
+          for alg,param,op,method in operations:
+            baseline=statistics.median(groups[(alg,param,op,method,'baseline')])
+            ratios=[]
+            for variant in ('no-lto','cgu16'):
+              value=statistics.median(groups[(alg,param,op,method,variant)])
+              ratio=value/baseline
+              ratios.append((variant,value,ratio))
+            print(f'{alg}-{param} {op} [{method}]: baseline={baseline:.1f}ns ' + ' '.join(f'{v}={lat:.1f}ns ratio={ratio:.4f} ({(ratio-1)*100:+.2f}%)' for v,lat,ratio in ratios))
+          print('Profile diagnostic: 300 rows, 10 measurement-method/profile groups, 10 observations per group: OK')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pqc-arena-v3-profile-diagnostic
+          path: |
+            arena/results/ci/profile-diagnostic.jsonl
+            arena/results/ci/profile-diagnostic-rustc.txt
+            arena/results/ci/profile-diagnostic-lscpu.txt
+            arena/results/ci/profile-diagnostic-ml-kem-tree.txt
+            arena/results/ci/profile-diagnostic-profiles.txt
+          retention-days: 14
+
+
   v2-performance-gate:
     name: V2-10 performance evidence
+    # V2-10 is the frozen V2 release-line gate. V3 now uses a different
+    # ten-round benchmark schema and its own evidence checks; do not feed V3
+    # artifacts into the legacy five-round V2 evaluator.
+    if: github.ref == 'refs/heads/nexusqv2' || github.base_ref == 'nexusqv2'
     runs-on: ubuntu-latest
     needs: compare-schema
     steps:

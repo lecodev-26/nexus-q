@@ -105,6 +105,25 @@
         },
         "harness_version": {
           "type": "string"
+        },
+        "rustc_verbose": {
+          "type": "string"
+        },
+        "cargo_lock_sha256": {
+          "type": "string"
+        },
+        "cpu_frequency_khz": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "cpu_governor": {
+          "type": "string"
+        },
+        "run_order": {
+          "type": "string"
         }
       },
       "additionalProperties": false
@@ -153,6 +172,30 @@
             "string",
             "null"
           ]
+        },
+        "samples_ns": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "statistics": {
+          "$ref": "#/$defs/sampleStatistics"
+        },
+        "seed_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "samples_per_seed": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "seed_samples": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/seedSample"
+          }
         }
       },
       "additionalProperties": false
@@ -195,5 +238,66 @@
       "additionalProperties": false
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$defs": {
+    "sampleStatistics": {
+      "type": "object",
+      "required": [
+        "sample_count",
+        "min_ns",
+        "median_ns",
+        "p95_ns",
+        "stddev_ns"
+      ],
+      "properties": {
+        "sample_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "min_ns": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "median_ns": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "p95_ns": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "stddev_ns": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "seedSample": {
+      "type": "object",
+      "required": [
+        "seed_id",
+        "samples_ns",
+        "summary"
+      ],
+      "properties": {
+        "seed_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "samples_ns": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "summary": {
+          "$ref": "#/$defs/sampleStatistics"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
 }

@@ -1,0 +1,107 @@
+name: Diagnostic - digest zeroize A/B (issue 41)
+
+# Non-production diagnostic. Tests whether digest/block-buffer `zeroize`
+# (enabled in V3 through sha2, sha3, hmac, argon2, slh-dsa, aes-gcm and
+# chacha20poly1305, and NOT enabled in V1+ml-dsa-zeroize) explains the 3-5%
+# ML-KEM slowdown. Production code and zeroization settings are not changed.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["diag/issue-41-digest-zeroize-ab"]
+
+permissions:
+  contents: read
+
+jobs:
+  ab:
+    name: A (V3 as-is) vs B (no digest zeroize), default and production profile
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.98.1
+      - name: Build A and B variants
+        run: |
+          set -euo pipefail
+          T="$RUNNER_TEMP/ab"; mkdir -p "$T/meta"
+          MP=arena/runners/nexusq/Cargo.toml
+          { lscpu; rustc --version --verbose; } > "$T/meta/env.txt"
+          PROD=(--config profile.release.opt-level=3 --config 'profile.release.lto="thin"' --config profile.release.codegen-units=1 --config 'profile.release.panic="abort"' --config 'profile.release.strip="symbols"' --config profile.release.debug=false)
+          count_dz() { cargo tree -e features -i digest --manifest-path "$MP" | grep -c 'digest feature "zeroize"' || true; }
+
+          A_ON=$(count_dz); echo "A digest/zeroize edges: $A_ON" | tee "$T/meta/a-digest-zeroize.txt"
+          test "$A_ON" -ge 1
+          cargo tree -e features -i digest --manifest-path "$MP" > "$T/meta/a-tree.txt"
+          sha256sum "$MP" Cargo.toml arena/runners/nexusq/Cargo.lock > "$T/meta/a-hashes.txt"
+          echo "== build A_def"; CARGO_TARGET_DIR="$T/A_def" NEXUSQ_COMMIT="$(git rev-parse HEAD)-A" cargo build --locked --release --features cached-verifier --manifest-path "$MP"
+          echo "== build A_prod"; CARGO_TARGET_DIR="$T/A_prod" NEXUSQ_COMMIT="$(git rev-parse HEAD)-A" cargo build --locked --release --features cached-verifier "${PROD[@]}" --manifest-path "$MP"
+
+          python3 - <<'PY'
+          import re
+          t=open("Cargo.toml").read()
+          for c in ["sha2","sha3","argon2","hmac","slh-dsa","aes-gcm","chacha20poly1305"]:
+              t,n=re.subn(r'^(%s = \{[^\n]*?)(, )?"zeroize"(, )?([^\n]*)$'%re.escape(c),
+                          lambda m:(m.group(1)+(", " if m.group(2) and m.group(3) else "")+m.group(4)),t,flags=re.M)
+              assert n==1,(c,n)
+          open("Cargo.toml","w").write(t)
+          PY
+          git diff -- Cargo.toml > "$T/meta/b-cargo-toml.diff"
+          B_ON=$(count_dz); echo "B digest/zeroize edges: $B_ON" | tee "$T/meta/b-digest-zeroize.txt"
+          test "$B_ON" -eq 0
+          echo "== build B_def"; CARGO_TARGET_DIR="$T/B_def" NEXUSQ_COMMIT="$(git rev-parse HEAD)-B" cargo build --release --features cached-verifier --manifest-path "$MP"
+          cargo tree -e features -i digest --manifest-path "$MP" > "$T/meta/b-tree.txt"
+          sha256sum Cargo.toml arena/runners/nexusq/Cargo.lock > "$T/meta/b-hashes.txt"
+          echo "== build B_prod"; CARGO_TARGET_DIR="$T/B_prod" NEXUSQ_COMMIT="$(git rev-parse HEAD)-B" cargo build --release --features cached-verifier "${PROD[@]}" --manifest-path "$MP"
+          git checkout -- Cargo.toml Cargo.lock arena/runners/nexusq/Cargo.lock || true
+      - name: Run 10 randomized rounds
+        run: |
+          set -euo pipefail
+          T="$RUNNER_TEMP/ab"; R="$T/results"; mkdir -p "$R"
+          for round in $(seq 1 10); do
+            for v in $(printf '%s\n' A_def B_def A_prod B_prod | shuf); do
+              echo "=== round $round $v"
+              NEXUSQ_RUN_ID="ab-$v-$round" "$T/$v/release/nexusq-arena-runner" > "$R/$v.$round.jsonl"
+              echo "$round $v" >> "$T/meta/order.txt"
+            done
+          done
+      - name: Summarize paired ratios (B/A, below 1 means B faster)
+        run: |
+          python3 - <<'PY' | tee "$RUNNER_TEMP/ab/meta/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          import json,os,statistics as st,collections,glob
+          R=os.path.join(os.environ["RUNNER_TEMP"],"ab","results")
+          def inv(path):
+              d=collections.defaultdict(list)
+              for l in open(path):
+                  l=l.strip()
+                  if not l: continue
+                  r=json.loads(l); m=r["measurement"]
+                  k=r["algorithm"]["id"]+"-"+str(r["algorithm"]["parameter_set"])+" "+str(r.get("operation") or m.get("operation"))
+                  if "cached" in m.get("measurement_method",""): k+=" (cached)"
+                  d[k].append(m["latency_ns"])
+              return {k:st.median(v) for k,v in d.items()}
+          for prof in ("def","prod"):
+              rows=collections.defaultdict(lambda:{"A":[],"B":[],"r":[]})
+              for rd in range(1,11):
+                  a=inv(f"{R}/A_{prof}.{rd}.jsonl"); b=inv(f"{R}/B_{prof}.{rd}.jsonl")
+                  assert a and set(a)==set(b),(prof,rd)
+                  for k in a:
+                      rows[k]["A"].append(a[k]); rows[k]["B"].append(b[k]); rows[k]["r"].append(b[k]/a[k])
+              print(f"\n### Profile: {'standalone default (Arena as used so far)' if prof=='def' else 'production-equivalent (thin LTO, CGU1)'}\n")
+              print("| Operation | A median (ns) | B median (ns) | median B/A | min-max B/A |\n|---|---:|---:|---:|---:|")
+              for k in sorted(rows):
+                  x=rows[k]; r=sorted(x["r"])
+                  print(f"| {k} | {st.median(x['A']):,.0f} | {st.median(x['B']):,.0f} | {st.median(r):.4f} | {r[0]:.4f}-{r[-1]:.4f} |")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: digest-zeroize-ab
+          path: ${{ runner.temp }}/ab/results
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: digest-zeroize-ab-meta
+          path: ${{ runner.temp }}/ab/meta
+          retention-days: 30

@@ -1,0 +1,145 @@
+name: Diagnostic - public-XOF zeroize variant C (issue 41)
+
+# Non-production diagnostic. Variants:
+#   A = V3 as-is.
+#   B = A without zeroize on sha2/sha3/argon2/hmac/slh-dsa/aes-gcm/chacha20poly1305 (upper bound).
+#   C = A, but ML-KEM's matrix-expansion XOF (seeded with the PUBLIC rho) is not
+#       zeroized on drop. Every secret-bearing hasher (PRF, G, H, J) and every KDF keeps zeroize.
+# Production code and zeroization settings are not changed.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["diag/issue-41-digest-zeroize-ab"]
+    paths: [".github/workflows/diag-digest-zeroize-c.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  abc:
+    name: A vs B vs C, default and production profile
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.98.1
+      - name: Build variants
+        run: |
+          set -euo pipefail
+          T="$RUNNER_TEMP/abc"; mkdir -p "$T/meta"
+          MP=arena/runners/nexusq/Cargo.toml
+          { lscpu; rustc --version --verbose; } > "$T/meta/env.txt"
+          PROD=(--config profile.release.opt-level=3 --config 'profile.release.lto="thin"' --config profile.release.codegen-units=1 --config 'profile.release.panic="abort"' --config 'profile.release.strip="symbols"' --config profile.release.debug=false)
+          count_dz() { cargo tree -e features -i digest --manifest-path "$MP" | grep -c 'digest feature "zeroize"' || true; }
+          build() { # name, locked(0/1), profile(def|prod)
+            local args=(--release --features cached-verifier --manifest-path "$MP")
+            [ "$2" = 1 ] && args+=(--locked)
+            [ "$3" = prod ] && args+=("${PROD[@]}")
+            CARGO_TARGET_DIR="$T/$1_$3" NEXUSQ_COMMIT="$(git rev-parse HEAD)-$1" cargo build "${args[@]}"
+          }
+
+          test "$(count_dz)" -ge 1
+          echo "== A"; build A 1 def; build A 1 prod
+
+          python3 - <<'PY'
+          p="vendor/ml-kem/src/crypto.rs"; t=open(p).read()
+          old='''pub(crate) fn XOF(rho: &B32, i: u8, j: u8) -> impl XofReader {
+              let mut h = Shake128::default();
+              h.update(rho);
+              h.update(&[i, j]);
+              h.finalize_xof()
+          }'''
+          new='''/// Reader for the public-seed matrix expansion. `rho` is part of the public key,
+          /// so zeroizing this XOF state on drop protects no secret.
+          pub(crate) struct PublicXofReader(core::mem::ManuallyDrop<sha3::Shake128Reader>);
+
+          impl XofReader for PublicXofReader {
+              fn read(&mut self, buffer: &mut [u8]) {
+                  self.0.read(buffer)
+              }
+          }
+
+          pub(crate) fn XOF(rho: &B32, i: u8, j: u8) -> impl XofReader {
+              let mut h = Shake128::default();
+              h.update(rho);
+              h.update(&[i, j]);
+              PublicXofReader(core::mem::ManuallyDrop::new(h.finalize_xof()))
+          }'''
+          import textwrap
+          old=textwrap.dedent(old); new=textwrap.dedent(new)
+          assert old in t
+          open(p,"w").write(t.replace(old,new))
+          PY
+          grep -q PublicXofReader vendor/ml-kem/src/crypto.rs
+          git diff -- vendor/ml-kem/src/crypto.rs > "$T/meta/c-patch.diff"
+          test "$(count_dz)" -ge 1
+          echo "== C"; build C 1 def; build C 1 prod
+          git checkout -- vendor/ml-kem/src/crypto.rs
+
+          python3 - <<'PY'
+          import re
+          t=open("Cargo.toml").read()
+          for c in ["sha2","sha3","argon2","hmac","slh-dsa","aes-gcm","chacha20poly1305"]:
+              t,n=re.subn(r'^(%s = \{[^\n]*?)(, )?"zeroize"(, )?([^\n]*)$'%re.escape(c),
+                          lambda m:(m.group(1)+(", " if m.group(2) and m.group(3) else "")+m.group(4)),t,flags=re.M)
+              assert n==1,(c,n)
+          open("Cargo.toml","w").write(t)
+          PY
+          test "$(count_dz)" -eq 0
+          echo "== B"; build B 0 def; build B 0 prod
+          git checkout -- Cargo.toml Cargo.lock arena/runners/nexusq/Cargo.lock || true
+      - name: Run 15 randomized rounds
+        run: |
+          set -euo pipefail
+          T="$RUNNER_TEMP/abc"; R="$T/results"; mkdir -p "$R"
+          for round in $(seq 1 15); do
+            for v in $(printf '%s\n' A_def B_def C_def A_prod B_prod C_prod | shuf); do
+              NEXUSQ_RUN_ID="abc-$v-$round" "$T/$v/release/nexusq-arena-runner" > "$R/$v.$round.jsonl"
+              echo "$round $v" >> "$T/meta/order.txt"
+            done
+          done
+      - name: Summarize
+        run: |
+          python3 - <<'PY' | tee "$RUNNER_TEMP/abc/meta/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          import json,os,statistics as st,collections,math
+          R=os.path.join(os.environ["RUNNER_TEMP"],"abc","results"); N=15
+          def inv(path):
+              d=collections.defaultdict(list)
+              for l in open(path):
+                  l=l.strip()
+                  if not l: continue
+                  r=json.loads(l); m=r["measurement"]
+                  k=r["algorithm"]["id"]+"-"+str(r["algorithm"]["parameter_set"])+" "+str(r.get("operation") or m.get("operation"))
+                  if "cached" in m.get("measurement_method",""): k+=" (cached)"
+                  d[k].append(m["latency_ns"])
+              return {k:st.median(v) for k,v in d.items()}
+          for prof in ("def","prod"):
+              rows=collections.defaultdict(lambda:{v:[] for v in "ABC"}); gm={"B":[],"C":[]}
+              for rd in range(1,N+1):
+                  d={v:inv(f"{R}/{v}_{prof}.{rd}.jsonl") for v in "ABC"}
+                  assert d["A"] and set(d["A"])==set(d["B"])==set(d["C"]),(prof,rd)
+                  for k in d["A"]:
+                      for v in "ABC": rows[k][v].append(d[v][k])
+                  km=[k for k in d["A"] if k.startswith("ml-kem")]
+                  for v in "BC": gm[v].append(math.exp(sum(math.log(d[v][k]/d["A"][k]) for k in km)/len(km)))
+              print(f"\n### Profile: {'standalone default' if prof=='def' else 'production-equivalent (thin LTO, CGU1)'}\n")
+              print("| Operation | A (ns) | B/A median | B/A min-max | C/A median | C/A min-max |\n|---|---:|---:|---:|---:|---:|")
+              for k in sorted(rows):
+                  x=rows[k]; b=sorted(y/a for y,a in zip(x["B"],x["A"])); c=sorted(y/a for y,a in zip(x["C"],x["A"]))
+                  print(f"| {k} | {st.median(x['A']):,.0f} | {st.median(b):.4f} | {b[0]:.3f}-{b[-1]:.3f} | {st.median(c):.4f} | {c[0]:.3f}-{c[-1]:.3f} |")
+              for v in "BC":
+                  print(f"\nML-KEM geomean {v}/A per round, median {st.median(gm[v]):.4f}; {v} faster in {sum(x<1 for x in gm[v])}/{N} rounds")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: abc-results
+          path: ${{ runner.temp }}/abc/results
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: abc-meta
+          path: ${{ runner.temp }}/abc/meta
+          retention-days: 30

@@ -207,4 +207,4 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --title "NEXUS-Q v2.0.0" \
             --notes-file docs/V2_RELEASE.md \
-            release/*.tar.gz release/*.tar.gz.sha256 release/SHA256SUMS release/*.cdx.json release/*-provenance.json
+            release/*.tar.gz release/SHA256SUMS release/*.cdx.json release/*-provenance.json

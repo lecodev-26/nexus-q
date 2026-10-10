@@ -58,6 +58,30 @@ These numbers are the **v1 optimization baseline**, not a claim of superiority. 
 
 The full raw measurements remain available as CI artifacts from the final Arena run.
 
+## V3 controlled V1/V3 comparison (hosted CI, 2026-10-09)
+
+Source: archived raw Arena JSONL from run [37918298351](https://github.com/lecodev-26/nexus-q/actions/runs/37918298351) and paired forensic analysis in [`arena/results/issue-41-v1-v3-latency-root-cause.md`](arena/results/issue-41-v1-v3-latency-root-cause.md). The controlled comparison used 10 randomized alternating rounds for the common operations. Values below are median paired percentage changes (V3 relative to V1), not absolute latency claims.
+
+| Operation | Median paired change | Observed per-round range |
+| --- | ---: | ---: |
+| ML-KEM-768 keygen | +4.70% | +1.91% to +7.81% |
+| ML-KEM-768 encaps | +4.52% | +0.74% to +8.16% |
+| ML-KEM-768 decaps | +2.70% | +0.55% to +8.35% |
+| ML-KEM-1024 keygen | +3.91% | +1.37% to +12.52% |
+| ML-KEM-1024 encaps | +6.33% | +0.70% to +14.52% |
+| ML-KEM-1024 decaps | +5.03% | +1.26% to +12.08% |
+| ML-DSA-65 keygen | +6.82% | +2.56% to +10.89% |
+| ML-DSA-65 sign (fixed 64-seed corpus) | -0.76% | -15.43% to -0.03% |
+| ML-DSA-65 conventional verify | +6.40% | +3.80% to +7.14% |
+
+The range is the minimum/maximum observed ratio across 10 paired rounds; it is not a 95% confidence interval. These data come from one hosted runner and do not establish a universal regression or causal attribution. The separate cached-verifier path is not like-for-like with conventional verification and must be reported separately. The ML-DSA-only zeroize control does not prove SHA3/SHAKE zeroization caused the ML-KEM deltas. Project decision: retain zeroization/security hardening and accept the observed cost for V3; do not weaken secret cleanup to chase latency.
+
+The archived V3 reference runner reports 50 timed iterations after 10 warmups for each ordinary operation and 320 signing samples across a deterministic 64-seed corpus (5 samples/seed). Per-operation medians, p95 and raw samples are in the JSONL archive. Signing distributions are multimodal across seed-dependent workload costs, so the aggregate p95 is not directly interchangeable with per-seed medians.
+
+## Current CI evidence and fuzz status
+
+V3 Incremental CI run [37922314431](https://github.com/lecodev-26/nexus-q/actions/runs/37922314431) and PQC Benchmark Arena run [37922314224](https://github.com/lecodev-26/nexus-q/actions/runs/37922314224) completed successfully for commit `1b03d682cdc63a2e80e1204241789e31014f44c6`. The post-merge `main` CI runs the security gates, SDK CI and four-hour vault/envelope fuzz soaks separately. A queued, running, or skipped soak is not a successful completed soak; wait for the exact run conclusions before treating the fuzz gate as passed.
+
 ## CI matrix
 
 `.github/workflows/benchmarks.yml` runs the same benchmark on x86_64 Linux and ARM64 Linux and archives toolchain/metadata. RISC-V and embedded execution require dedicated runners or hardware; those are release/audit gates, not simulated by cross compilation.

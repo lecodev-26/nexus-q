@@ -3,6 +3,15 @@
 All notable changes are recorded here. The project remains in engineering/release preparation; entries before a stable public
 release describe the repository state rather than a promise of API stability.
 
+## v3.0.0 — engineering release (2026-10-09)
+
+- Integrated the consolidated `nexusqv3` implementation into `main` via [PR #45](https://github.com/lecodev-26/nexus-q/pull/45).
+- V3 Incremental CI and PQC Benchmark Arena passed on commit `1b03d682cdc63a2e80e1204241789e31014f44c6`.
+- Improved Arena reproducibility, per-operation sampling and normalized evidence metadata; corrected profile/LTO diagnostics and the V2 release checksum asset glob.
+- Preserved raw benchmark, security-diagnostic and environment artifacts with SHA-256 checksums.
+- Recorded the V1/V3 latency observations and the project decision to retain zeroization/security hardening while accepting the measured performance tradeoff. Causal attribution to SHA3/SHAKE zeroization is not established.
+- **Validation caveat:** post-merge `main` CI and its four-hour vault/envelope fuzz soaks are a separate gate and must be reviewed after completion. This engineering release is not an independent audit, certification, production-readiness claim, or registry publication.
+
 ## v2.0.0 — final engineering line
 
 - Completed the V2-10 PQC Benchmark Arena performance gate.
