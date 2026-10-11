@@ -9,8 +9,8 @@ This checklist mirrors the phases and acceptance criteria in Issue #23. Keep it 
 
 ## Phase 0 — Trustworthy measurement (blocking)
 
-- [ ] Make `arena/runners/nexusq` resolve the exact local kernel/backend source under development; prove it with `cargo tree -i ml-kem` (or the corresponding resolved dependency tree).
-- [ ] Commit required vendored sources and patch configuration, or remove them; no untracked vendor/patch dependency.
+- [x] Make `arena/runners/nexusq` resolve the exact local kernel/backend source under development; prove it with `cargo tree -i ml-kem` (or the corresponding resolved dependency tree). _Evidence: `[patch.crates-io]` in `arena/runners/nexusq/Cargo.toml`; Phase 0 CI enforces vendor resolution (run 38123650717)._
+- [x] Commit required vendored sources and patch configuration, or remove them; no untracked vendor/patch dependency. _Evidence: `vendor/ml-kem` and `vendor/module-lattice` are tracked together with the patch configuration._
 - [ ] Benchmark all nine operations through the same primitive layer: ML-KEM-768/1024 keygen, encaps, decaps; ML-DSA-65 keygen, sign, verify. See [V4 Arena baseline audit](V4_ARENA_BASELINE_AUDIT.md) for the archived-result limitations.
 - [ ] Use at least 1,000 measured iterations and 100 warmups; `black_box` inputs and outputs; report median, p95, and standard deviation.
 - [ ] Record CPU model/features, governor, toolchain, build/profile and environment metadata in JSONL; compare implementations in the same CI job.
@@ -21,8 +21,8 @@ This checklist mirrors the phases and acceptance criteria in Issue #23. Keep it 
 
 > Initial progress: crates/nexusq-kernels contains safe scalar Keccak-f[1600]/SHAKE128/SHAKE256 with known-answer tests and a canonical-range ML-KEM NTT/inverse-NTT reference with round-trip tests. The NTT tests are local source-level coverage pending CI confirmation. Runtime SIMD dispatch, the remaining scalar kernels, differential coverage, and the unsafe-code audit are not complete.
 
-- [ ] Add `crates/nexusq-kernels`; it is the only crate permitted to contain `unsafe` code.
-- [ ] Implement portable scalar reference kernels for NTT, inverse NTT, basemul/pointwise, reduce/freeze, compression/decompression, pack/unpack, CBD, rejection samplers, and Keccak-f[1600].
+- [x] Add `crates/nexusq-kernels`; it is the only crate permitted to contain `unsafe` code. _Evidence: crate present in the workspace; fmt and clippy (-D warnings) clean at this commit._
+- [ ] _(partial: Keccak-f[1600]/SHAKE128/SHAKE256 and ML-KEM NTT/inverse NTT done; the rest pending)_ Implement portable scalar reference kernels for NTT, inverse NTT, basemul/pointwise, reduce/freeze, compression/decompression, pack/unpack, CBD, rejection samplers, and Keccak-f[1600].
 - [ ] Add explicit target-feature detection/dispatch resolved once, plus `NEXUSQ_FORCE_SCALAR` test override.
 - [ ] Differential tests compare every optimized kernel to scalar on random and edge/boundary inputs, bit-exactly.
 - [ ] Every `unsafe` block in the optimized-kernel surface has a `// SAFETY:` justification; add CI auditing (`cargo geiger` and/or a repository gate). `nexusq-core` remains `forbid(unsafe_code)`. The existing `nexusq-c` crate is a narrow C-ABI boundary and necessarily contains raw-pointer/FFI unsafe; audit that boundary separately, but do not put SIMD, assembly, or cryptographic kernel logic there.
