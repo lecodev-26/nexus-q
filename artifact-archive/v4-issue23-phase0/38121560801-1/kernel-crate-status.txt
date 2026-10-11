@@ -1,0 +1,1 @@
+nexusq-kernels manifest exists
