@@ -1,17 +1,14 @@
 name: NEXUS-Q V4 — Issue 23 — Measurement harness
 
 on:
-  push:
-    branches:
-      - v4/issue-23-kernel-work
-    paths-ignore:
-      - 'artifact-archive/**'
+  # Called by v4-pr-ci.yml (the single CI for the V4 PR branch). Archiving and
+  # status publishing are done once, after every gate is green, by that workflow.
+  workflow_call:
   workflow_dispatch:
 
 permissions:
   actions: read
-  contents: write
-  statuses: write
+  contents: read
 
 concurrency:
   group: v4-issue23-measurement-${{ github.sha }}
@@ -206,45 +203,6 @@ jobs:
           print('NEXUS-Q and AWS-LC ML-KEM-768/1024 both pass pre-measurement encaps/decaps shared-secret self-checks.')
           PY
 
-      - name: Archive measurement outputs in canonical artifact-archive/
-        if: always() && steps.checkout.outcome == 'success'
-        shell: bash
-        env:
-          HEAD_REF: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          destination="artifact-archive/v4-issue23-measurement/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          mkdir -p "$destination"
-          if [[ -d arena/results/v4-phase0 ]]; then cp -a arena/results/v4-phase0/. "$destination/"; fi
-          cat > "$destination/README.txt" <<EOF
-          NEXUS-Q V4 measurement CI archive
-          workflow_run_id=${GITHUB_RUN_ID}
-          workflow_attempt=${GITHUB_RUN_ATTEMPT}
-          source_commit=$(git rev-parse HEAD)
-          source_ref=${GITHUB_REF}
-          workflow_url=https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
-          EOF
-          find "$destination" -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > "$destination/SHA256SUMS.txt"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "$destination"
-          if git diff --cached --quiet; then
-            echo "No new measurement files to archive."
-            exit 0
-          fi
-          git commit -m "chore(artifacts): archive V4 measurement run ${GITHUB_RUN_ID}"
-          for attempt in 1 2 3; do
-            git fetch origin "$HEAD_REF"
-            git rebase FETCH_HEAD
-            if git push origin "HEAD:refs/heads/${HEAD_REF}"; then
-              echo "Archived measurement output in ${destination}"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "Unable to push archived measurement output after retries" >&2
-          exit 1
-
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -252,77 +210,3 @@ jobs:
           path: arena/results/v4-phase0/
           if-no-files-found: ignore
           retention-days: 30
-
-      - name: Publish V4 CI statuses on the current PR head
-        if: always()
-        continue-on-error: true
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SOURCE_SHA: ${{ github.sha }}
-          HEAD_REF: ${{ github.ref_name }}
-          JOB_RESULT: ${{ job.status }}
-          OWN_RUN_ID: ${{ github.run_id }}
-          OWN_WORKFLOW_PATH: '.github/workflows/v4-issue23-measurement.yml'
-        run: |
-          set -euo pipefail
-          # This workflow is scoped to the active PR head branch, never the base branch.
-          [[ "$HEAD_REF" == "v4/issue-23-kernel-work" ]] || exit 0
-          latest_sha="$(git ls-remote origin "refs/heads/$HEAD_REF" | awk 'NR == 1 {print $1}')"
-          [[ -n "$latest_sha" ]] || { echo 'Unable to resolve current PR head' >&2; exit 1; }
-          # Never mark newer code green from a run that tested an older source commit.
-          if [[ "$SOURCE_SHA" == "$latest_sha" ]]; then
-            compare_json='{"status":"identical","files":[]}'
-          else
-            compare_json="$(gh api "repos/$GITHUB_REPOSITORY/compare/$SOURCE_SHA...$latest_sha")"
-          fi
-          jq -e '(.status == "identical" and ((.files // []) | type == "array")) or (.status == "ahead" and (.files | type == "array"))' \
-            <<< "$compare_json" >/dev/null || {
-              echo 'Unable to prove the PR head differs only by archived evidence; refusing to publish statuses.' >&2
-              exit 1
-            }
-          if ! jq -e '[.files[].filename | select(startswith("artifact-archive/") | not)] | length == 0' \
-              <<< "$compare_json" >/dev/null; then
-            echo "PR head contains newer non-archive changes; leaving statuses to the newer CI run."
-            exit 0
-          fi
-          runs_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$SOURCE_SHA&per_page=100")"
-          phase_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/v4-issue23-phase0.yml" --jq '.id')"
-          measurement_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/v4-issue23-measurement.yml" --jq '.id')"
-          if [[ "$OWN_WORKFLOW_PATH" == ".github/workflows/v4-issue23-phase0.yml" ]]; then
-            OWN_WORKFLOW_ID="$phase_id"
-          else
-            OWN_WORKFLOW_ID="$measurement_id"
-          fi
-          publish_status() {
-            local context="$1" state="$2" target="$3" description="$4"
-            gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$latest_sha" \
-              -f state="$state" -f context="$context" -f target_url="$target" -f description="$description" >/dev/null
-            echo "Published $context=$state on $latest_sha"
-          }
-          map_state() {
-            case "$1" in
-              success) echo success ;;
-              failure|timed_out|action_required) echo failure ;;
-              *) echo error ;;
-            esac
-          }
-          own_state="$(map_state "$JOB_RESULT")"
-          own_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$OWN_RUN_ID"
-          description="Validated source ${{ github.sha }}; head differs only by archived evidence."
-          if [[ "$OWN_WORKFLOW_ID" == "$phase_id" ]]; then
-            publish_status 'NEXUS-Q V4 / Issue 23 / Phase 0' "$own_state" "$own_url" "$description"
-          else
-            publish_status 'NEXUS-Q V4 / Issue 23 / Measurement' "$own_state" "$own_url" "$description"
-          fi
-          for entry in "$phase_id:NEXUS-Q V4 / Issue 23 / Phase 0" "$measurement_id:NEXUS-Q V4 / Issue 23 / Measurement"; do
-            workflow_id="${entry%%:*}"
-            context="${entry#*:}"
-            [[ "$workflow_id" == "$OWN_WORKFLOW_ID" ]] && continue
-            other="$(jq -c --argjson id "$workflow_id" --arg sha "$SOURCE_SHA" \
-              '[.workflow_runs[] | select(.workflow_id == $id and .head_sha == $sha and .status == "completed")] | sort_by(.run_started_at) | last // empty' <<< "$runs_json")"
-            [[ -n "$other" && "$other" != "null" ]] || { echo "Counterpart $context has not completed yet; it will publish both statuses when it finishes."; continue; }
-            other_state="$(map_state "$(jq -r '.conclusion // "failure"' <<< "$other")")"
-            other_url="$(jq -r '.html_url' <<< "$other")"
-            publish_status "$context" "$other_state" "$other_url" "$description"
-          done

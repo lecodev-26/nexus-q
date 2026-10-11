@@ -1,0 +1,10 @@
+title = "NEXUS-Q gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Public ML-KEM test vectors shipped by the vendored RustCrypto ml-kem 0.3.2 crate (not secrets)."
+paths = [
+  '''vendor/ml-kem/tests/examples/.*\.priv''',
+]

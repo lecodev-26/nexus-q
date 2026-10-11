@@ -1,17 +1,14 @@
 name: Security and Release Gates
 
 on:
-  # Run the full Rust security gates for main and V4 PRs targeting nexusqv4.
-  # Fuzz harness builds and long fuzz soaks remain release-gated on main.
+  # main: pushes and PRs. The V4 work branch is gated by v4-pr-ci.yml, which
+  # calls this workflow once per commit (workflow_call) so there is a single CI.
   push:
     branches: [main]
   pull_request:
-    branches: [main, nexusqv4]
-    # Evidence-only commits pushed by the archive bot must not re-trigger
-    # these gates (they would sit in action_required waiting for approval).
-    paths-ignore:
-      - 'artifact-archive/**'
+    branches: [main]
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
