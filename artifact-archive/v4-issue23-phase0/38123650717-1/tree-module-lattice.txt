@@ -1,0 +1,7 @@
+module-lattice v0.2.3 (/home/runner/work/nexus-q/nexus-q/vendor/module-lattice)
+[2m├──[0m ml-dsa v0.1.1
+[2m│[0m   [2m└──[0m nexusq-core v2.0.0 (/home/runner/work/nexus-q/nexus-q/crates/nexusq-core)
+[2m│[0m   [2m [0m   [2m└──[0m nexusq-arena-runner v0.1.0 (/home/runner/work/nexus-q/nexus-q/arena/runners/nexusq)
+[2m└──[0m ml-kem v0.3.2 (/home/runner/work/nexus-q/nexus-q/vendor/ml-kem)
+[2m [0m   [2m├──[0m nexusq-arena-runner v0.1.0 (/home/runner/work/nexus-q/nexus-q/arena/runners/nexusq)
+[2m [0m   [2m└──[0m nexusq-core v2.0.0 (/home/runner/work/nexus-q/nexus-q/crates/nexusq-core) [33m[2m(*)[39m[22m
