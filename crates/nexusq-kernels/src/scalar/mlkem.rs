@@ -125,7 +125,8 @@ mod tests {
         let mut polynomial = [0_i16; N];
         polynomial[0] = 1;
         ntt(&mut polynomial);
-        assert_eq!(polynomial, [1_i16; N]);
+        let expected = core::array::from_fn(|index| if index % 2 == 0 { 1_i16 } else { 0_i16 });
+        assert_eq!(polynomial, expected);
     }
 
     #[test]
