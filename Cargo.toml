@@ -3,6 +3,7 @@ resolver = "3"
 exclude = ["arena/runners/nexusq"]
 members = [
     "crates/nexusq-core",
+    "crates/nexusq-kernels",
     "crates/nexusq-cli",
     "crates/nexusq-server",
     "crates/nexusq-c",
