@@ -125,10 +125,7 @@ mod tests {
         let mut polynomial = [0_i16; N];
         polynomial[0] = 1;
         ntt(&mut polynomial);
-        assert_eq!(
-            polynomial,
-            core::array::from_fn(|index| if index % 2 == 0 { 1 } else { 0 })
-        );
+        assert_eq!(polynomial, [1_i16; N]);
     }
 
     #[test]
@@ -139,11 +136,11 @@ mod tests {
         let mut dense = sample_polynomial();
 
         for polynomial in [&mut edge, &mut dense] {
-            let expected = **polynomial;
+            let expected = *polynomial;
             ntt(polynomial);
             assert!(polynomial.iter().all(|value| (0..Q).contains(value)));
             inverse_ntt(polynomial);
-            assert_eq!(**polynomial, expected);
+            assert_eq!(*polynomial, expected);
         }
     }
 
