@@ -3,7 +3,7 @@
 **Source of truth:** [Issue #23](https://github.com/lecodev-26/nexus-q/issues/23)  
 **Working PR:** V4 implementation work targeting `nexusqv4`  
 **Baseline:** `nexusqv4`, based on the reviewed V3 snapshot  
-**Status:** Phase 0 measurement harness passes on commit 5265a2b; archived measurement and Phase 0 SHA-256 manifests were verified on the branch head. Phase 1 has started with the nexusq-kernels crate scaffold and a scalar Keccak/SHAKE reference; the remaining phase criteria are still open.
+**Status:** Phase 0 measurement harness passes on commit 5265a2b; archived measurement and Phase 0 SHA-256 manifests were verified on the branch head. Phase 1 has started with the nexusq-kernels crate scaffold, scalar Keccak/SHAKE, and a scalar ML-KEM NTT/inverse-NTT reference; CI validation and the remaining phase criteria are still open.
 
 This checklist mirrors the phases and acceptance criteria in Issue #23. Keep it updated in the working PR with links to commits, CI runs, benchmark artifacts, test evidence, and security review. Do not check an item merely because code exists; check it only after the evidence has been reviewed. Issue #23 remains open until its complete definition of done is met.
 
@@ -19,7 +19,7 @@ This checklist mirrors the phases and acceptance criteria in Issue #23. Keep it 
 
 ## Phase 1 — Kernel crate skeleton
 
-> Initial progress: crates/nexusq-kernels now contains a safe scalar Keccak-f[1600]/SHAKE128/SHAKE256 reference with known-answer tests. Runtime SIMD dispatch, the remaining scalar kernels, differential coverage, and the unsafe-code audit are not complete.
+> Initial progress: crates/nexusq-kernels contains safe scalar Keccak-f[1600]/SHAKE128/SHAKE256 with known-answer tests and a canonical-range ML-KEM NTT/inverse-NTT reference with round-trip tests. The NTT tests are local source-level coverage pending CI confirmation. Runtime SIMD dispatch, the remaining scalar kernels, differential coverage, and the unsafe-code audit are not complete.
 
 - [ ] Add `crates/nexusq-kernels`; it is the only crate permitted to contain `unsafe` code.
 - [ ] Implement portable scalar reference kernels for NTT, inverse NTT, basemul/pointwise, reduce/freeze, compression/decompression, pack/unpack, CBD, rejection samplers, and Keccak-f[1600].
