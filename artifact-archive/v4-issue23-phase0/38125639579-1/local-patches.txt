@@ -1,0 +1,2 @@
+19:ml-kem = { path = "../../../vendor/ml-kem" }
+20:module-lattice = { path = "../../../vendor/module-lattice" }
