@@ -32,6 +32,7 @@ jobs:
       ARENA_OPT: release
       ARENA_TARGET: x86_64-linux-gnu
       ARENA_OS: Ubuntu
+      NEXUSQ_MAX_RATIO: "1.5"
     steps:
       - uses: actions/checkout@v4
         id: checkout
@@ -172,6 +173,7 @@ jobs:
                       'nexusq_core_ml_dsa_wrapper_operation',
                       'cached_ml_dsa_verifier_operation',
                       'aws_lc_evp_operation_including_per_sample_context_setup',
+                      'aws_lc_evp_primitive_operation',
                   }
                   assert scope in expected_scopes, (name, row['operation'], scope)
                   assert row['environment'].get('cpu_frequency_khz') is None or row['environment']['cpu_frequency_khz'] >= 0, (name, row['operation'], 'invalid CPU frequency')
@@ -187,10 +189,12 @@ jobs:
           actual_aws = {(r['algorithm']['id'], r['algorithm']['parameter_set'], r['operation']) for r in aws_rows}
           assert len(aws_rows) == 9, f'expected nine AWS-LC records, got {len(aws_rows)}'
           assert actual_aws == expected_aws, (actual_aws, expected_aws)
-          assert all('AWS-LC public EVP API' in r['measurement'].get('measurement_method', '') for r in aws_rows), (
+          assert all('AWS-LC public EVP primitive call' in r['measurement'].get('measurement_method', '') for r in aws_rows), (
               'AWS-LC measurement records must identify the public EVP API layer')
-          assert all(r['measurement']['measurement_scope'] == 'aws_lc_evp_operation_including_per_sample_context_setup'
-                     for r in aws_rows), 'AWS-LC scope must include per-sample EVP context setup'
+          assert all(r['measurement']['measurement_scope'] == 'aws_lc_evp_primitive_operation'
+                     for r in aws_rows), 'AWS-LC scope must exclude reusable context construction from timed samples'
+          assert all(r['measurement'].get('comparison_contract') == 'fips_operation_v1' for r in aws_rows), (
+              'AWS-LC operation contract must be explicit')
 
           from collections import Counter
           nexus_rows = [json.loads(line) for line in (root / 'nexusq.jsonl').read_text().splitlines() if line.strip()]
@@ -207,15 +211,18 @@ jobs:
           assert actual_counts == Counter(expected_counts), (actual_counts, expected_counts)
           assert len(nexus_rows) == 10, f'expected 10 NEXUS-Q records (nine operations plus separate cached verify), got {len(nexus_rows)}'
           assert all('direct RustCrypto ml-kem API' in r['measurement'].get('measurement_method', '') and
-                     r['measurement']['measurement_scope'] == 'rustcrypto_ml_kem_operation'
+                     r['measurement']['measurement_scope'] == 'rustcrypto_ml_kem_operation' and
+                     r['measurement'].get('comparison_contract') == 'fips_operation_v1'
                      for r in nexus_rows if r['algorithm']['id'] == 'ml-kem'), (
               'NEXUS-Q ML-KEM records must identify the direct RustCrypto API layer and scope')
           assert all('nexusq-core ML-DSA wrapper' in r['measurement'].get('measurement_method', '') and
-                     r['measurement']['measurement_scope'] == 'nexusq_core_ml_dsa_wrapper_operation'
+                     r['measurement']['measurement_scope'] == 'nexusq_core_ml_dsa_wrapper_operation' and
+                     r['measurement'].get('comparison_contract') == 'fips_operation_v1'
                      for r in nexus_rows if r['algorithm']['id'] == 'ml-dsa' and
                      'cached' not in r['measurement'].get('measurement_method', '')), (
               'NEXUS-Q ML-DSA records must identify the wrapper API layer and scope')
-          assert all(r['measurement']['measurement_scope'] == 'cached_ml_dsa_verifier_operation'
+          assert all(r['measurement']['measurement_scope'] == 'cached_ml_dsa_verifier_operation' and
+                     r['measurement'].get('comparison_contract') == 'cached_verification_diagnostic_v1'
                      for r in nexus_rows if 'cached' in r['measurement'].get('measurement_method', '').lower()), (
               'cached ML-DSA verification must have a distinct scope')
 
@@ -239,8 +246,8 @@ jobs:
           print('AWS-LC and NEXUS-Q provide per-operation raw samples and median/p95/stddev statistics.')
           print('NEXUS-Q and AWS-LC ML-KEM-768/1024 both pass pre-measurement encaps/decaps shared-secret self-checks.')
 
-          # Emit a diagnostic ratio report, but do not call unlike API layers a
-          # valid performance gate. Keep missing comparator coverage explicit.
+          # Emit the operation-level report and enforce the configured same-run ratio gate.
+          # Keep implementation-specific measurement scopes visible for review.
           nexus_by_key = {}
           for row in nexus_rows:
               key = (row['algorithm']['id'], row['algorithm']['parameter_set'], row['operation'])
@@ -253,15 +260,20 @@ jobs:
               for row in aws_rows
           }
           report = [
-              '# Issue #23 — diagnostic operation ratios', '',
-              '**Status: NOT A PERFORMANCE GATE.** NEXUS-Q and AWS-LC currently measure different API layers; these ratios are descriptive only and must not be used to accept/reject a milestone or claim speed leadership.', '',
+              '# Issue #23 — operation-level comparison and regression gate', '',
+              '**Status: ENFORCED CI GATE.** Ratios use the shared FIPS operation contract and the pinned AWS-LC comparator from the same host/run. API-specific scopes remain visible; passing the gate is not a public speed-leadership claim.', '',
               '| Algorithm | Parameter | Operation | NEXUS-Q scope | AWS-LC scope | NEXUS-Q median (ns) | AWS-LC median (ns) | Median ratio | NEXUS-Q p95 (ns) | AWS-LC p95 (ns) | p95 ratio | Comparability |',
               '|---|---:|---|---|---|---:|---:|---:|---:|---:|---:|---|'
           ]
+          max_ratio = float(__import__('os').environ.get('NEXUSQ_MAX_RATIO', '1.5'))
+          if max_ratio <= 0:
+              raise SystemExit(f'NEXUSQ_MAX_RATIO must be positive, got {max_ratio}')
+          gate_failures = []
           all_keys = sorted(set(nexus_by_key) | set(aws_by_key))
           for key in all_keys:
               nrow, arow = nexus_by_key.get(key), aws_by_key.get(key)
               if nrow is None or arow is None:
+                  gate_failures.append(f'{key}: missing comparator coverage')
                   report.append(f'| {key[0]} | {key[1]} | {key[2]} | ' +
                                 f"{nrow['measurement'].get('measurement_scope', '—') if nrow else '—'} | " +
                                 f"{arow['measurement'].get('measurement_scope', '—') if arow else '—'} | " +
@@ -278,15 +290,38 @@ jobs:
               np95 = nrow['measurement']['statistics']['p95_ns']
               ap95 = arow['measurement']['statistics']['p95_ns']
               p95_ratio = np95 / ap95
-              comparability = 'SCOPE MATCH — REVIEW SEMANTICS' if nscope == ascope else 'INCOMPARABLE — SCOPE MISMATCH'
+              ncontract = nrow['measurement'].get('comparison_contract')
+              acontract = arow['measurement'].get('comparison_contract')
+              comparability = 'CONTRACT MATCH — REVIEW IMPLEMENTATION DETAILS' if ncontract == acontract == 'fips_operation_v1' else 'INCOMPARABLE — CONTRACT MISMATCH'
               report.append(f'| {key[0]} | {key[1]} | {key[2]} | {nscope} | {ascope} | {nmedian} | {amedian} | {ratio:.3f}x | {np95} | {ap95} | {p95_ratio:.3f}x | {comparability} |')
+              if ncontract != 'fips_operation_v1' or acontract != 'fips_operation_v1':
+                  gate_failures.append(f'{key}: incompatible operation contract NEXUS-Q={ncontract!r}, AWS-LC={acontract!r}')
+              else:
+                  if ratio > max_ratio:
+                      gate_failures.append(f'{key}: median ratio {ratio:.3f}x exceeds {max_ratio:.3f}x')
+                  if p95_ratio > max_ratio:
+                      gate_failures.append(f'{key}: p95 ratio {p95_ratio:.3f}x exceeds {max_ratio:.3f}x')
           report += ['', '## Blocking gaps', '',
                      '- `measurement_scope` is machine-readable and validated for every record; ratios explicitly flag scope mismatches rather than relying on prose alone.',
-                     '- The runner API layers are not yet equivalent: NEXUS-Q uses direct RustCrypto ML-KEM and an `nexusq-core` ML-DSA wrapper; AWS-LC uses the public EVP API and creates operation contexts per sample.',
+                     '- The shared `fips_operation_v1` contract compares the same FIPS algorithm/parameter/operation at the public primitive-call boundary. NEXUS-Q uses RustCrypto/nexusq-core APIs and AWS-LC uses EVP; implementation-specific wrapper and required per-call initialization costs remain part of the measured call and must be reviewed before interpreting ratios.',
                      '- Comparator coverage is asserted against all nine AWS-LC operations, including ML-KEM-1024; any missing record fails the workflow rather than being inferred.',
-                     '- No 1.5x/1.2x/1.05x/1.00x milestone is evaluated until operation semantics/layers and comparator coverage are reviewed as equivalent.', '']
+                     '- The milestone gate uses the explicit shared operation contract and complete same-run comparator coverage; a contract mismatch or missing comparator is a hard failure. The report still documents API-layer differences and does not itself claim a speed win.', '']
+          report += ['', '## Enforced per-operation regression gate', '',
+                     f'- Active maximum ratio: **{max_ratio:.3f}x** for both median and p95.',
+                     '- Gate comparator: AWS-LC pinned revision measured in the same job/host.',
+                     '- Cached ML-DSA verification is diagnostic only and is excluded from this gate.',
+                     '- A missing operation, contract mismatch, or median/p95 ratio above the threshold fails the job.', '']
+          if gate_failures:
+              report += ['**RESULT: FAIL**', ''] + [f'- {failure}' for failure in gate_failures] + ['']
+          else:
+              report += ['**RESULT: PASS** — all nine operations satisfy the configured threshold.', '']
           (root / 'comparison-report.md').write_text('\n'.join(report))
-          print('Wrote comparison-report.md: diagnostic ratios only; performance gate remains blocked on equivalence review.')
+          if gate_failures:
+              print('Per-operation regression gate FAILED:')
+              for failure in gate_failures:
+                  print(f' - {failure}')
+              raise SystemExit(1)
+          print(f'Per-operation regression gate PASSED at {max_ratio:.3f}x for all nine operations.')
           PY
 
       - uses: actions/upload-artifact@v4
