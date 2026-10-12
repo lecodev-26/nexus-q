@@ -303,7 +303,7 @@ jobs:
                   if p95_ratio > max_ratio:
                       gate_failures.append(f'{key}: p95 ratio {p95_ratio:.3f}x exceeds {max_ratio:.3f}x')
           report += ['', '## Blocking gaps', '',
-                     '- `measurement_scope` is machine-readable and validated for every record; ratios explicitly flag scope mismatches rather than relying on prose alone.',
+                     '- `measurement_scope` is machine-readable and validated for every record; the report keeps implementation-specific scopes visible and the gate checks the separate shared `comparison_contract`.',
                      '- The shared `fips_operation_v1` contract compares the same FIPS algorithm/parameter/operation at the public primitive-call boundary. NEXUS-Q uses RustCrypto/nexusq-core APIs and AWS-LC uses EVP; implementation-specific wrapper and required per-call initialization costs remain part of the measured call and must be reviewed before interpreting ratios.',
                      '- Comparator coverage is asserted against all nine AWS-LC operations, including ML-KEM-1024; any missing record fails the workflow rather than being inferred.',
                      '- The milestone gate uses the explicit shared operation contract and complete same-run comparator coverage; a contract mismatch or missing comparator is a hard failure. The report still documents API-layer differences and does not itself claim a speed win.', '']
