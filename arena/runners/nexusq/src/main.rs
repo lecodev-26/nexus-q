@@ -8,8 +8,8 @@ use std::env;
 use std::hint::black_box;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-const DEFAULT_ITERATIONS: usize = 50;
-const DEFAULT_WARMUPS: usize = 10;
+const DEFAULT_ITERATIONS: usize = 1_000;
+const DEFAULT_WARMUPS: usize = 100;
 
 fn configured_count(name: &str, default: usize, minimum: usize) -> usize {
     match env::var(name) {
@@ -36,7 +36,7 @@ fn warmups() -> usize {
     configured_count("NEXUSQ_WARMUPS", DEFAULT_WARMUPS, 0)
 }
 const ML_DSA_SIGN_SEEDS: usize = 64;
-const DEFAULT_ML_DSA_SIGN_SAMPLES_PER_SEED: usize = 5;
+const DEFAULT_ML_DSA_SIGN_SAMPLES_PER_SEED: usize = 16;
 
 fn ml_dsa_sign_samples_per_seed() -> usize {
     configured_count(
@@ -188,12 +188,12 @@ fn emit_ml_dsa_sign_distribution(
     let mut all_samples = Vec::with_capacity(keys.len() * ml_dsa_sign_samples_per_seed());
     for (key, seed_id) in keys.iter().zip(seed_ids) {
         for _ in 0..warmups() {
-            black_box(key.sign(MESSAGE));
+            black_box(black_box(key).sign(black_box(MESSAGE)));
         }
         let mut samples = Vec::with_capacity(ml_dsa_sign_samples_per_seed());
         for _ in 0..ml_dsa_sign_samples_per_seed() {
             let start = Instant::now();
-            black_box(key.sign(MESSAGE));
+            black_box(black_box(key).sign(black_box(MESSAGE)));
             samples.push(start.elapsed().as_nanos());
         }
         all_samples.extend_from_slice(&samples);
@@ -315,14 +315,14 @@ fn main() {
         serde_json::json!({"public_key_bytes":pk768_bytes.len(),"secret_key_bytes":sk768_len,"ciphertext_bytes":1088,"signature_bytes":null}),
     );
     for _ in 0..warmups() {
-        let (c, s) = pk768.encapsulate();
+        let (c, s) = black_box(&pk768).encapsulate();
         black_box((c, s));
     }
     let mut ct768_bytes = Vec::new();
     let mut samples = Vec::with_capacity(iterations());
     for _ in 0..iterations() {
         let start = Instant::now();
-        let (c, s) = pk768.encapsulate();
+        let (c, s) = black_box(&pk768).encapsulate();
         black_box(s);
         let elapsed = start.elapsed().as_nanos();
         // Keep ciphertext serialization/copying outside the timed primitive call.
@@ -341,12 +341,12 @@ fn main() {
         .try_into()
         .expect("ML-KEM-768 ciphertext length");
     for _ in 0..warmups() {
-        black_box(sk768.decapsulate(&ct768));
+        black_box(black_box(&sk768).decapsulate(black_box(&ct768)));
     }
     let mut samples = Vec::with_capacity(iterations());
     for _ in 0..iterations() {
         let start = Instant::now();
-        black_box(sk768.decapsulate(&ct768));
+        black_box(black_box(&sk768).decapsulate(black_box(&ct768)));
         samples.push(start.elapsed().as_nanos());
     }
     emit_operation_samples(
@@ -386,13 +386,13 @@ fn main() {
     );
     let mut ct2 = Vec::new();
     for _ in 0..warmups() {
-        let (c, s) = pk1024.encapsulate();
+        let (c, s) = black_box(&pk1024).encapsulate();
         black_box((c, s));
     }
     let mut samples = Vec::with_capacity(iterations());
     for _ in 0..iterations() {
         let start = Instant::now();
-        let (c, s) = pk1024.encapsulate();
+        let (c, s) = black_box(&pk1024).encapsulate();
         black_box(s);
         let elapsed = start.elapsed().as_nanos();
         // Keep serialization/copying the ciphertext outside the timed primitive call.
@@ -411,12 +411,12 @@ fn main() {
         .try_into()
         .expect("ML-KEM-1024 ciphertext length");
     for _ in 0..warmups() {
-        black_box(sk1024.decapsulate(&ct1024));
+        black_box(black_box(&sk1024).decapsulate(black_box(&ct1024)));
     }
     let mut samples = Vec::with_capacity(iterations());
     for _ in 0..iterations() {
         let start = Instant::now();
-        black_box(sk1024.decapsulate(&ct1024));
+        black_box(black_box(&sk1024).decapsulate(black_box(&ct1024)));
         samples.push(start.elapsed().as_nanos());
     }
     emit_operation_samples(
@@ -461,24 +461,24 @@ fn main() {
         let cached_verifier = pq_sign::MlDsa65VerifyingKey::from_public_key(&pk)
             .expect("generated public key is valid");
         for _ in 0..warmups() {
-            black_box(cached_verifier.verify(MESSAGE, &sig)).unwrap();
+            black_box(black_box(&cached_verifier).verify(black_box(MESSAGE), black_box(&sig))).unwrap();
         }
         let mut cached_verify_samples = Vec::with_capacity(iterations());
         for _ in 0..iterations() {
             let start = Instant::now();
-            black_box(cached_verifier.verify(MESSAGE, &sig)).unwrap();
+            black_box(black_box(&cached_verifier).verify(black_box(MESSAGE), black_box(&sig))).unwrap();
             cached_verify_samples.push(start.elapsed().as_nanos());
         }
         emit_cached_verify_samples(&cached_verify_samples, pk.len(), sig.len());
     }
     for _ in 0..warmups() {
-        pq_sign::ml_dsa_65_verify(&pk, MESSAGE, &sig).unwrap();
+        black_box(pq_sign::ml_dsa_65_verify(black_box(&pk), black_box(MESSAGE), black_box(&sig))).unwrap();
         black_box(());
     }
     let mut samples = Vec::with_capacity(iterations());
     for _ in 0..iterations() {
         let start = Instant::now();
-        pq_sign::ml_dsa_65_verify(&pk, MESSAGE, &sig).unwrap();
+        black_box(pq_sign::ml_dsa_65_verify(black_box(&pk), black_box(MESSAGE), black_box(&sig))).unwrap();
         black_box(());
         samples.push(start.elapsed().as_nanos());
     }

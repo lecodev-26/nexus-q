@@ -229,18 +229,19 @@ jobs:
             expected=90 if name != "v3" else 100
             assert len(rows[name])==expected, (name,len(rows[name]),expected)
             for row in rows[name]: jsonschema.Draft202012Validator(schema).validate(row)
-            assert all(r["measurement"]["iterations"]==320 for r in rows[name] if r["operation"]=="sign")
-            assert all(len(r["measurement"].get("samples_ns",[]))==320 for r in rows[name] if r["operation"]=="sign")
+            assert all(r["measurement"]["iterations"]>=1000 for r in rows[name] if r["operation"]=="sign")
+            assert all(len(r["measurement"].get("samples_ns",[]))>=1000 for r in rows[name] if r["operation"]=="sign")
             assert all(len(r["measurement"].get("seed_samples",[]))==64 for r in rows[name] if r["operation"]=="sign")
+            assert all(r["measurement"].get("samples_per_seed", 0) * r["measurement"].get("seed_count", 0) >= 1000 for r in rows[name] if r["operation"]=="sign")
             if name == "v3":
               for row in rows[name]:
                 measurement=row["measurement"]
                 if row["operation"] != "sign":
-                  assert measurement["iterations"]==50, (row["algorithm"],row["operation"],measurement["iterations"])
-                  assert len(measurement.get("samples_ns",[]))==50, (row["algorithm"],row["operation"],"missing individual samples")
+                  assert measurement["iterations"]>=1000, (row["algorithm"],row["operation"],measurement["iterations"])
+                  assert len(measurement.get("samples_ns",[]))>=1000, (row["algorithm"],row["operation"],"missing 1,000 individual samples")
                   stats=measurement.get("statistics",{})
                   assert all(key in stats for key in ("sample_count","min_ns","median_ns","p95_ns","stddev_ns")), (row["algorithm"],row["operation"],"missing summary stats")
-                  assert stats["sample_count"]==50
+                  assert stats["sample_count"]>=1000
             assert all(r["environment"].get("cargo_lock_sha256") for r in rows[name])
             assert all(r["environment"].get("rustc_verbose") for r in rows[name])
             assert len({r["environment"]["cpu"] for r in rows[name]})==1
