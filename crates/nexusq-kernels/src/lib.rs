@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+pub mod api;
 pub mod backend;
 pub mod dispatch;
 pub mod scalar;

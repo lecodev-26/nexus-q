@@ -88,3 +88,21 @@ ScalarBackend::keccak_f1600(&mut state);
 The backend contract tests compare wrapper calls to the scalar functions. They are
 source-level test coverage only until the project's CI runs them; local Cargo checks
 are intentionally deferred to the GitHub Actions phase.
+
+## Routed kernel API
+
+Use `api` for operations that should follow runtime dispatch rather than binding
+directly to a concrete backend. Today every routed operation resolves to
+`ScalarBackend`; the match boundary is where a future eligible backend can be
+introduced without making CPU feature detection itself an authorization to execute
+optimized code.
+
+```rust
+use nexusq_kernels::api;
+
+let mut state = [0_u64; 25];
+api::keccak_f1600(&mut state);
+```
+
+Routed API tests compare Keccak/SHAKE and ML-KEM primitive outputs with the scalar
+reference. These tests have not been run locally; they are intended for GitHub CI.
