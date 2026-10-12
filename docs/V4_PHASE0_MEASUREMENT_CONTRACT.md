@@ -1,6 +1,6 @@
 # V4 Phase 0 — Measurement contract
 
-**Status:** implemented in the local working branch; pending real CI validation. This document defines the intended comparison boundary and does not certify measured performance.
+**Status (source audit 2026-10-12):** the measurement contract and gate are present in the active V4 PR source. Acceptance of the current head remains pending review of its exact CI artifacts and comparison report. This document defines the comparison boundary; it does not certify measured performance or imply that the threshold passed.
 
 ## Conventional operation set
 

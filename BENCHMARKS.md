@@ -1,6 +1,6 @@
 # Benchmarking
 
-Phase 17 records measured performance without making platform claims that have not been executed.
+Phase 17 and the tables below are historical V1–V3 benchmark records; they are not measurements of the active V4 kernel branch. As of 2026-10-12, V4 has scalar reference kernels and measurement-gate infrastructure, but no selectable optimized SIMD/assembly backend or accepted V4 performance result. Follow [`docs/V4_ISSUE_23_EXECUTION.md`](docs/V4_ISSUE_23_EXECUTION.md) and [`docs/V4_PHASE0_MEASUREMENT_CONTRACT.md`](docs/V4_PHASE0_MEASUREMENT_CONTRACT.md) for current status. Historical performance numbers are retained without extrapolating them to the current source.
 
 ## Android/Termux baseline (measured locally)
 

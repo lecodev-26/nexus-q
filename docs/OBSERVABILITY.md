@@ -94,6 +94,8 @@ requirements.
 
 ## Validation
 
+The following is the historical Phase 18 validation record for the earlier delivery line. It is not a statement that these commands or tests were run during the 2026-10-12 documentation audit or against the current V4 PR head. Current validation status must be established from evidence tied to the relevant source revision.
+
 Phase 18 validation performed locally includes:
 
 - cargo fmt --all;

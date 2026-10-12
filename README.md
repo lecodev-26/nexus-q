@@ -12,11 +12,11 @@
 
 </div>
 
-> **Version status (2026-10-09):** V1 is the frozen baseline (`v1.0.0`); V2 is frozen on `nexusqv2` (`v2.0.0`); V3 has been integrated into `main` by [PR #45](https://github.com/lecodev-26/nexus-q/pull/45), with V3 Incremental CI and PQC Benchmark Arena evidence retained. The release includes a downloadable evidence archive and SHA-256 manifest. Post-release `main` CI and four-hour fuzz soaks are tracked separately; see the linked Actions runs for their current status. V4 is the planned architecture-specific performance-kernel line tracked by [Issue #23](https://github.com/lecodev-26/nexus-q/issues/23). **No independent audit, certification, or downstream registry publication is implied.**
+> **Version status (updated 2026-10-12):** V1 (`v1.0.0`) and V2 (`v2.0.0`) are frozen engineering baselines. V3 is integrated into `main` by [PR #45](https://github.com/lecodev-26/nexus-q/pull/45), with benchmark and security evidence retained in the artifact archive. V4 is now **active development** on [PR #46](https://github.com/lecodev-26/nexus-q/pull/46), targeting `nexusqv4` for [Issue #23](https://github.com/lecodev-26/nexus-q/issues/23). The `nexusq-kernels` crate currently provides scalar reference operations and a dispatch/API boundary; optimized AVX2/NEON/assembly kernels and Issue #23 acceptance evidence are not complete. A green measurement/infrastructure gate alone is not a performance or security certification. **No independent audit, certification, or downstream registry publication is implied.**
 
 <div align="center">
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/dark/stats.svg"><img src="assets/light/stats.svg" alt="5 Rust crates, 5 SDK languages, 8 Arena implementations, 57 measurements" width="100%"></picture>
+**Repository snapshot:** 6 Rust workspace crates · 6 SDK/binding surfaces · 8 Arena implementations listed · 57 historical V1 measurements
 
 </div>
 
@@ -186,7 +186,7 @@ The ML-DSA-only zeroize control does not prove SHA3/SHAKE zeroization is the cau
 
 <div align="center">
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/dark/versions.svg"><img src="assets/light/versions.svg" alt="V1 frozen baseline, V2 frozen, V3 current release, V4 planned" width="100%"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/dark/versions.svg"><img src="assets/light/versions.svg" alt="V1 and V2 frozen baselines, V3 integrated, V4 active development with optimized kernels pending" width="100%"></picture>
 
 </div>
 
@@ -195,7 +195,7 @@ The ML-DSA-only zeroize control does not prove SHA3/SHAKE zeroization is the cau
 
 V3 consolidates the hardened implementation, the reproducible PQC Benchmark Arena, dependency/profile diagnostics, corrected benchmark sampling and archived evidence. The V3 GitHub release is an engineering release, not a claim of independent audit, certification, or registry publication. The four-hour fuzz soaks are tracked separately in `main` CI. The latest recovered V1/V2/V3 artifacts and checksums are tracked in [`artifact-archive/README.md`](artifact-archive/README.md).
 
-V4 is a **planned development line**, not a release. Its performance work is tracked by [Issue #23](https://github.com/lecodev-26/nexus-q/issues/23). The plan is to prototype AVX2/NEON kernels behind explicit feature dispatch, retain a portable fallback, and require differential tests, cryptographic test vectors, fuzzing, constant-time review, and repeatable same-hardware benchmarks before enabling optimized paths by default. Security zeroization must not be removed as a shortcut to improve latency. See [`docs/V3_V4_ROADMAP.md`](docs/V3_V4_ROADMAP.md).
+V4 is an **active development line**, not a release. Work is in [PR #46](https://github.com/lecodev-26/nexus-q/pull/46) for [Issue #23](https://github.com/lecodev-26/nexus-q/issues/23). The `nexusq-kernels` crate now contains scalar reference kernels, a backend contract, routed API, and CPU-capability reporting; only the scalar backend is selectable. AVX2/NEON/assembly acceleration, independent differential/KAT evidence, the complete security gates, and the final per-operation performance target remain unfinished. Optimized paths must not become default until correctness, constant-time/security review, zeroization, fuzzing, and repeatable same-hardware benchmarks support them. See [`docs/V3_V4_ROADMAP.md`](docs/V3_V4_ROADMAP.md).
 
 </details>
 
@@ -248,7 +248,7 @@ The generated archive contains the CLI, server, non-secret configuration example
 
 </div>
 
-User-facing documentation starts at [`docs/user/README.md`](docs/user/README.md). Technical and reference documentation lives in `docs/`:
+User-facing documentation starts at [`docs/user/README.md`](docs/user/README.md). The latest documentation review is [`docs/DOCUMENTATION_AUDIT_2026-10-12.md`](docs/DOCUMENTATION_AUDIT_2026-10-12.md). Technical and reference documentation lives in `docs/`:
 
 | Document | Covers |
 |---|---|

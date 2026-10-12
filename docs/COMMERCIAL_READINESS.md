@@ -1,5 +1,7 @@
 # NEXUS-Q Commercial Readiness & Due Diligence
 
+**Status note (2026-10-12):** V3 is the engineering line integrated into `main`; V4 Issue #23 is active in PR #46 and is not a release. This document records commercial blockers, not a claim that the V4 implementation or final NEXUS-Q v1.0 release candidate is complete.
+
 This document is the evidence-oriented companion to GitHub Issue #21. It
 separates **implemented evidence** from **remaining gates** so commercial
 materials never turn engineering intent into an unsupported security claim.
@@ -95,7 +97,7 @@ unredacted vulnerability details in the public repository.
 Commercial readiness does not bypass the engineering roadmap. The intended
 sequence is:
 
-1. finish V2 engineering gates;
+1. complete the active engineering line and its correctness, security, and release gates (currently V4 Issue #23);
 2. complete release candidate and final audit/review work;
 3. run the real release CI and fix failures until green;
 4. publish only the explicitly supported crates/bindings/artifacts;

@@ -3,6 +3,12 @@
 All notable changes are recorded here. The project remains in engineering/release preparation; entries before a stable public
 release describe the repository state rather than a promise of API stability.
 
+## Unreleased — V4 Issue #23 development (2026-10-12)
+
+- Added the `nexusq-kernels` crate with safe scalar Keccak-f[1600]/SHAKE and ML-KEM polynomial/reference operations, plus backend and runtime-dispatch boundaries. Only the scalar backend is selectable; no optimized SIMD/assembly backend is enabled.
+- Continued Phase 0 measurement-contract and Arena harness work. This entry makes no claim about the latest CI conclusion, measured performance improvement, or Issue #23 acceptance.
+- Audited project documentation for stale V4 status, measurement-protocol drift, and historical audit statements; see `docs/DOCUMENTATION_AUDIT_2026-10-12.md`.
+
 ## v3.0.0 — engineering release (2026-10-09)
 
 - Integrated the consolidated `nexusqv3` implementation into `main` via [PR #45](https://github.com/lecodev-26/nexus-q/pull/45).

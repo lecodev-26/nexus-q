@@ -4,6 +4,10 @@
 
 This audit covers the checked-out repository, the five GitHub branch refs visible during the audit, local Git worktrees, all 18 GitHub Actions workflow YAML files, V4 benchmark/provenance workflows, the standalone Arena runner and AWS-LC adapter, the C ABI boundary, artifact manifests, and the PR #46 relationship to its base. It uses static inspection and lightweight validation; heavy builds/tests are delegated to GitHub Actions, not Termux.
 
+## Current-state note — 2026-10-12
+
+This is a dated audit snapshot, not a live inventory. Its counts, branch observations, and statements about files that were absent are specific to 2026-10-10. Since then, the active PR branch has progressed: `crates/nexusq-kernels` exists with scalar reference operations and scalar-only dispatch, and the current workflow inventory is the four files under `.github/workflows/` (`ci.yml`, `sdk-ci.yml`, `benchmarks.yml`, and `pqc-arena.yml`). Do not use this report alone to infer the current CI conclusion or current branch/worktree state. The live V4 status is tracked in [`V4_ISSUE_23_EXECUTION.md`](V4_ISSUE_23_EXECUTION.md).
+
 ## Findings fixed on the V4 PR branch
 
 1. **PR merge conflict.** The base `nexusqv4` and PR head independently added `.github/workflows/v4-issue23-phase0.yml`, leaving PR #46 in GitHub's `DIRTY` state. The base branch has been merged into the PR branch and the enhanced head workflow retained as the conflict resolution.

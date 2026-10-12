@@ -2,9 +2,7 @@
 
 ## Supported security line
 
-The `main` branch is the engineering baseline. Until an explicitly published
-release exists, security fixes are developed against the active release branch
-and backported only when maintainers judge the change safe and applicable.
+V3 is the engineering line integrated into `main`; V4 kernel work is in the separate active PR #46 targeting `nexusqv4`. GitHub engineering releases do not imply publication to crates.io, PyPI, or other SDK registries. Security fixes should be developed against the active branch for the affected line and backported only when maintainers judge the change safe and applicable.
 
 NEXUS-Q does **not** claim FIPS validation, Common Criteria certification,
 formal verification, or completion of an independent external security audit
@@ -48,11 +46,7 @@ recorded internally.
 
 ## Security gates
 
-Changes are expected to preserve the repository security gates, including
-formatting, linting, tests, dependency auditing/denial checks, secret scanning,
-and the configured fuzzing gates. Main-branch fuzz soak is configured for
-45 minutes per designated parser target; V2 development PRs use the shorter
-5-minute smoke gate.
+Changes are expected to preserve the repository security gates, including formatting, linting, tests, dependency auditing/denial checks, secret scanning, and the configured fuzzing gates. The authoritative workflow is `.github/workflows/ci.yml`, with separate SDK/benchmark workflows. Iterative `v4/**` PR runs intentionally omit the long fuzz soaks; those remain a later release/security gate and must not be claimed as passed for a V4 commit unless evidence for the relevant source SHA is linked. Workflow scopes and durations can change, so use the workflow and its exact run artifacts rather than treating historical V1/V2 timings as current policy.
 
 ## Scope and limitations
 

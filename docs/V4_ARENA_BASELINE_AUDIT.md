@@ -2,6 +2,10 @@
 
 **Scope:** inspect the benchmark documentation and archived Arena artifacts before optimizing kernels for Issue #23. This is a measurement-quality audit, not a new benchmark run and not a claim that the current V4 branch has improved performance.
 
+## Current-state correction — 2026-10-12
+
+This report contains dated historical findings from 2026-10-09/10. Some statements below that say the kernel crate is absent or that the runner cannot exercise it describe the repository at that earlier audit point and are no longer current. The active PR now contains `crates/nexusq-kernels` with scalar reference operations, a backend contract, routed API, and scalar-only runtime selection. No AVX2/NEON/assembly backend is selectable. The Phase 0 harness/gate is present in source, but the exact current PR-head CI evidence and per-operation report must be reviewed before acceptance; this note does not assert the latest CI outcome or any performance win. See [`V4_ISSUE_23_EXECUTION.md`](V4_ISSUE_23_EXECUTION.md) for the live source-level tracker.
+
 ## Published baseline
 
 `BENCHMARKS.md` records the 2026-10-05 Arena baseline as NEXUS-Q roughly 2.03×–4.46× slower than the best measured comparator across the nine ML-KEM/ML-DSA operations. ML-DSA signing and verification are particularly important targets; the documented largest ratio is ML-DSA-65 signing at 4.46×. These figures are useful as historical prioritization signals, not proof of the exact current gap until the raw artifacts and harness equivalence are revalidated.
