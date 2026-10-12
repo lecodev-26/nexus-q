@@ -236,8 +236,9 @@ static void emit(const char *algorithm, const char *parameter, const char *opera
            "\"measurement\":{\"iterations\":%d,\"warmups\":%d,"
            "\"measurement_timestamp_unix_ns\":%llu,\"latency_ns\":%llu,"
            "\"throughput_ops_s\":%.6f,\"memory_bytes\":null,"
-           "\"measurement_method\":\"per-operation clock_gettime(CLOCK_MONOTONIC); AWS-LC public EVP API with per-operation context creation; median of raw samples\","
-           "\"measurement_scope\":\"aws_lc_evp_operation_including_per_sample_context_setup\","
+           "\"measurement_method\":\"per-operation clock_gettime(CLOCK_MONOTONIC); AWS-LC public EVP primitive call; reusable context allocation outside timed samples; per-call sign/verify initialization retained; median of raw samples\", "
+           "\"measurement_scope\":\"aws_lc_evp_primitive_operation\", "
+           "\"comparison_contract\":\"fips_operation_v1\", "
            "\"cycle_counter_source\":\"%s\",\"samples_ns\":[",
            algorithm, parameter, operation, env_or("AWSLC_VERSION", "runtime"),
            algorithm, parameter, operation, target, os, cpu, features_json, __VERSION__,
@@ -263,38 +264,54 @@ static void emit(const char *algorithm, const char *parameter, const char *opera
            public_key_bytes, secret_key_bytes, ciphertext_json, signature_json);
 }
 
-static int generate_kem_key(EVP_PKEY **key, int parameter_nid) {
+static EVP_PKEY_CTX *new_kem_keygen_context(int parameter_nid) {
     EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_KEM, NULL);
-    int ok = ctx && EVP_PKEY_keygen_init(ctx)
-          && EVP_PKEY_CTX_kem_set_params(ctx, parameter_nid)
-          && EVP_PKEY_keygen(ctx, key);
+    if (!ctx || !EVP_PKEY_keygen_init(ctx) || !EVP_PKEY_CTX_kem_set_params(ctx, parameter_nid)) {
+        EVP_PKEY_CTX_free(ctx);
+        return NULL;
+    }
+    return ctx;
+}
+
+static EVP_PKEY_CTX *new_dsa_keygen_context(void) {
+    EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_PQDSA, NULL);
+    if (!ctx || !EVP_PKEY_keygen_init(ctx) || !EVP_PKEY_CTX_pqdsa_set_params(ctx, NID_MLDSA65)) {
+        EVP_PKEY_CTX_free(ctx);
+        return NULL;
+    }
+    return ctx;
+}
+
+static int generate_kem_key(EVP_PKEY **key, int parameter_nid) {
+    EVP_PKEY_CTX *ctx = new_kem_keygen_context(parameter_nid);
+    int ok = ctx && EVP_PKEY_keygen(ctx, key);
     EVP_PKEY_CTX_free(ctx);
     return ok;
 }
 
 static int generate_dsa_key(EVP_PKEY **key) {
-    EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_PQDSA, NULL);
-    int ok = ctx && EVP_PKEY_keygen_init(ctx)
-          && EVP_PKEY_CTX_pqdsa_set_params(ctx, NID_MLDSA65)
-          && EVP_PKEY_keygen(ctx, key);
+    EVP_PKEY_CTX *ctx = new_dsa_keygen_context();
+    int ok = ctx && EVP_PKEY_keygen(ctx, key);
     EVP_PKEY_CTX_free(ctx);
     return ok;
 }
 
 typedef struct {
-    int parameter_nid;
+    EVP_PKEY_CTX *ctx;
 } kem_keygen_context;
 
 static int kem_keygen_once(void *opaque) {
     const kem_keygen_context *ctx = opaque;
     EVP_PKEY *key = NULL;
-    int ok = generate_kem_key(&key, ctx->parameter_nid);
+    int ok = EVP_PKEY_keygen(ctx->ctx, &key);
     EVP_PKEY_free(key);
     return ok;
 }
 
 typedef struct {
     EVP_PKEY *key;
+    EVP_PKEY_CTX *encaps_ctx;
+    EVP_PKEY_CTX *decaps_ctx;
     unsigned char *ciphertext;
     size_t ciphertext_capacity;
     size_t ciphertext_len;
@@ -307,12 +324,10 @@ typedef struct {
 
 static int kem_encaps_once(void *opaque) {
     kem_context *ctx = opaque;
-    EVP_PKEY_CTX *op = EVP_PKEY_CTX_new(ctx->key, NULL);
     size_t ciphertext_len = ctx->ciphertext_capacity;
     size_t secret_len = ctx->secret_capacity;
-    int ok = op && EVP_PKEY_encapsulate(op, ctx->ciphertext, &ciphertext_len,
-                                        ctx->secret, &secret_len);
-    EVP_PKEY_CTX_free(op);
+    int ok = ctx->encaps_ctx && EVP_PKEY_encapsulate(ctx->encaps_ctx, ctx->ciphertext, &ciphertext_len,
+                                                     ctx->secret, &secret_len);
     if (ok) {
         ctx->ciphertext_len = ciphertext_len;
         ctx->secret_len = secret_len;
@@ -322,25 +337,25 @@ static int kem_encaps_once(void *opaque) {
 
 static int kem_decaps_once(void *opaque) {
     kem_context *ctx = opaque;
-    EVP_PKEY_CTX *op = EVP_PKEY_CTX_new(ctx->key, NULL);
     size_t secret_len = ctx->secret_capacity;
-    int ok = op && EVP_PKEY_decapsulate(op, ctx->decapsulated_secret, &secret_len,
-                                        ctx->ciphertext, ctx->ciphertext_len);
-    EVP_PKEY_CTX_free(op);
+    int ok = ctx->decaps_ctx && EVP_PKEY_decapsulate(ctx->decaps_ctx, ctx->decapsulated_secret, &secret_len,
+                                                     ctx->ciphertext, ctx->ciphertext_len);
     if (ok) ctx->decapsulated_secret_len = secret_len;
     return ok;
 }
 
-static int dsa_keygen_once(void *unused) {
-    (void)unused;
+static int dsa_keygen_once(void *opaque) {
+    EVP_PKEY_CTX *ctx = opaque;
     EVP_PKEY *key = NULL;
-    int ok = generate_dsa_key(&key);
+    int ok = ctx && EVP_PKEY_keygen(ctx, &key);
     EVP_PKEY_free(key);
     return ok;
 }
 
 typedef struct {
     EVP_PKEY *key;
+    EVP_MD_CTX *sign_ctx;
+    EVP_MD_CTX *verify_ctx;
     const unsigned char *message;
     size_t message_len;
     unsigned char *signature;
@@ -350,23 +365,19 @@ typedef struct {
 
 static int dsa_sign_once(void *opaque) {
     dsa_context *ctx = opaque;
-    EVP_MD_CTX *md = EVP_MD_CTX_new();
     size_t signature_len = ctx->signature_capacity;
-    int ok = md && EVP_DigestSignInit(md, NULL, NULL, NULL, ctx->key)
-          && EVP_DigestSign(md, ctx->signature, &signature_len,
-                            ctx->message, ctx->message_len);
-    EVP_MD_CTX_free(md);
+    int ok = ctx->sign_ctx && EVP_DigestSignInit(ctx->sign_ctx, NULL, NULL, NULL, ctx->key)
+          && EVP_DigestSign(ctx->sign_ctx, ctx->signature, &signature_len,
+                                             ctx->message, ctx->message_len);
     if (ok) ctx->signature_len = signature_len;
     return ok;
 }
 
 static int dsa_verify_once(void *opaque) {
     dsa_context *ctx = opaque;
-    EVP_MD_CTX *md = EVP_MD_CTX_new();
-    int ok = md && EVP_DigestVerifyInit(md, NULL, NULL, NULL, ctx->key)
-          && EVP_DigestVerify(md, ctx->signature, ctx->signature_len,
-                              ctx->message, ctx->message_len) == 1;
-    EVP_MD_CTX_free(md);
+    int ok = ctx->verify_ctx && EVP_DigestVerifyInit(ctx->verify_ctx, NULL, NULL, NULL, ctx->key)
+          && EVP_DigestVerify(ctx->verify_ctx, ctx->signature, ctx->signature_len,
+                                                ctx->message, ctx->message_len) == 1;
     return ok;
 }
 
@@ -382,11 +393,11 @@ static int kem_parameter(const char *parameter, int parameter_nid,
     unsigned char *ciphertext = NULL;
     unsigned char *secret = NULL;
     unsigned char *decapsulated_secret = NULL;
-    kem_keygen_context keygen = {parameter_nid};
+    kem_keygen_context keygen = {new_kem_keygen_context(parameter_nid)};
     kem_context context = {0};
     size_t ciphertext_len = 0, secret_len = 0;
     int result = 1;
-    if (!samples || !cycle_samples) { free(samples); free(cycle_samples); return 1; }
+    if (!samples || !cycle_samples || !keygen.ctx) { free(samples); free(cycle_samples); EVP_PKEY_CTX_free(keygen.ctx); return 1; }
 
     if (!run_samples(kem_keygen_once, &keygen, samples, count, warmup_count)) goto cleanup;
     emit("ml-kem", parameter, "keygen", samples, count, warmup_count,
@@ -394,7 +405,8 @@ static int kem_parameter(const char *parameter, int parameter_nid,
 
     if (!generate_kem_key(&key, parameter_nid)) goto cleanup;
     size_ctx = EVP_PKEY_CTX_new(key, NULL);
-    if (!size_ctx || !EVP_PKEY_encapsulate(size_ctx, NULL, &ciphertext_len, NULL, &secret_len)) {
+    if (!size_ctx || !EVP_PKEY_encapsulate_init(size_ctx, NULL) ||
+        !EVP_PKEY_encapsulate(size_ctx, NULL, &ciphertext_len, NULL, &secret_len)) {
         goto cleanup;
     }
     if (ciphertext_len != expected_ciphertext_bytes || secret_len == 0) {
@@ -411,6 +423,11 @@ static int kem_parameter(const char *parameter, int parameter_nid,
     if (!ciphertext || !secret || !decapsulated_secret) goto cleanup;
 
     context.key = key;
+    context.encaps_ctx = EVP_PKEY_CTX_new(key, NULL);
+    context.decaps_ctx = EVP_PKEY_CTX_new(key, NULL);
+    if (!context.encaps_ctx || !context.decaps_ctx ||
+        !EVP_PKEY_encapsulate_init(context.encaps_ctx, NULL) ||
+        !EVP_PKEY_decapsulate_init(context.decaps_ctx, NULL)) goto cleanup;
     context.ciphertext = ciphertext;
     context.ciphertext_capacity = ciphertext_len;
     context.secret = secret;
@@ -436,6 +453,9 @@ static int kem_parameter(const char *parameter, int parameter_nid,
     result = 0;
 cleanup:
     EVP_PKEY_CTX_free(size_ctx);
+    EVP_PKEY_CTX_free(context.encaps_ctx);
+    EVP_PKEY_CTX_free(context.decaps_ctx);
+    EVP_PKEY_CTX_free(keygen.ctx);
     OPENSSL_free(ciphertext);
     OPENSSL_free(secret);
     OPENSSL_free(decapsulated_secret);
@@ -459,19 +479,32 @@ static int dsa(void) {
     uint64_t *cycle_samples = calloc((size_t)count, sizeof(*cycle_samples));
     active_cycle_samples = cycle_samples;
     EVP_PKEY *key = NULL;
+    dsa_context context = {0};
     const unsigned char message[] = MESSAGE;
     const size_t signature_capacity = 4096;
     unsigned char *signature = OPENSSL_malloc(signature_capacity);
     if (!samples || !cycle_samples || !signature) { free(samples); free(cycle_samples); OPENSSL_free(signature); return 1; }
 
-    if (!run_samples(dsa_keygen_once, NULL, samples, count, warmup_count)) goto fail;
+    EVP_PKEY_CTX *dsa_keygen_ctx = new_dsa_keygen_context();
+    if (!dsa_keygen_ctx || !run_samples(dsa_keygen_once, dsa_keygen_ctx, samples, count, warmup_count)) {
+        EVP_PKEY_CTX_free(dsa_keygen_ctx);
+        goto fail;
+    }
+    EVP_PKEY_CTX_free(dsa_keygen_ctx);
     emit("ml-dsa", "65", "keygen", samples, count, warmup_count,
          1952, 4032, 0, 3309, 0, 1);
 
     if (!generate_dsa_key(&key)) goto fail;
-    dsa_context context = {key, message, sizeof(message) - 1,
-                           signature, signature_capacity, 0};
-    if (!dsa_sign_once(&context)) goto fail;
+    context.key = key;
+    context.sign_ctx = EVP_MD_CTX_new();
+    context.verify_ctx = EVP_MD_CTX_new();
+    context.message = message;
+    context.message_len = sizeof(message) - 1;
+    context.signature = signature;
+    context.signature_capacity = signature_capacity;
+    if (!context.sign_ctx || !context.verify_ctx || !dsa_sign_once(&context)) {
+        goto fail;
+    }
     if (!run_samples(dsa_sign_once, &context, samples, count, warmup_count)) goto fail;
     emit("ml-dsa", "65", "sign", samples, count, warmup_count,
          1952, 4032, 0, context.signature_len, 0, 1);
@@ -479,6 +512,8 @@ static int dsa(void) {
     emit("ml-dsa", "65", "verify", samples, count, warmup_count,
          1952, 4032, 0, context.signature_len, 0, 1);
 
+    EVP_MD_CTX_free(context.sign_ctx);
+    EVP_MD_CTX_free(context.verify_ctx);
     EVP_PKEY_free(key);
     OPENSSL_free(signature);
     free(samples);
@@ -487,6 +522,8 @@ static int dsa(void) {
     return 0;
 
 fail:
+    EVP_MD_CTX_free(context.sign_ctx);
+    EVP_MD_CTX_free(context.verify_ctx);
     EVP_PKEY_free(key);
     OPENSSL_free(signature);
     free(samples);

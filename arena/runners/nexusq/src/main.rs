@@ -202,6 +202,7 @@ fn emit_operation_samples(
             } else {
                 "per-operation std::time::Instant; nexusq-core ML-DSA wrapper; median latency"
             },
+            "comparison_contract":"fips_operation_v1",
             "measurement_scope":if algorithm == "ml-kem" {
                 "rustcrypto_ml_kem_operation"
             } else {
@@ -246,6 +247,7 @@ fn emit_cached_verify_samples(samples: &[u128], public_key_len: usize, signature
             "measurement_timestamp_unix_ns":timestamp, "latency_ns":latency_ns,
             "throughput_ops_s":1_000_000_000.0/latency_ns, "memory_bytes":null,
             "measurement_method":"per-operation std::time::Instant; cached MlDsa65VerifyingKey",
+            "comparison_contract":"cached_verification_diagnostic_v1",
             "measurement_scope":"cached_ml_dsa_verifier_operation",
             "samples_ns":samples, "statistics":stats,
             "cycle_counter_source":cycles::source(), "samples_cycles":cycle_samples
@@ -320,6 +322,7 @@ fn emit_ml_dsa_sign_distribution(
             "throughput_ops_s":1_000_000_000.0 / latency_ns,
             "memory_bytes":null,
             "measurement_method":"per-sign std::time::Instant; nexusq-core ML-DSA wrapper; deterministic 64-key seed corpus; fixed message",
+            "comparison_contract":"fips_operation_v1",
             "measurement_scope":"nexusq_core_ml_dsa_wrapper_operation",
             "samples_ns":all_samples,
             "statistics":overall,

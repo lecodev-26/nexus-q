@@ -135,7 +135,8 @@
         "warmups",
         "latency_ns",
         "measurement_timestamp_unix_ns",
-        "measurement_scope"
+        "measurement_scope",
+        "comparison_contract"
       ],
       "properties": {
         "iterations": {
@@ -215,7 +216,15 @@
             "rustcrypto_ml_kem_operation",
             "nexusq_core_ml_dsa_wrapper_operation",
             "cached_ml_dsa_verifier_operation",
-            "aws_lc_evp_operation_including_per_sample_context_setup"
+            "aws_lc_evp_operation_including_per_sample_context_setup",
+            "aws_lc_evp_primitive_operation"
+          ]
+        },
+        "comparison_contract": {
+          "type": "string",
+          "enum": [
+            "fips_operation_v1",
+            "cached_verification_diagnostic_v1"
           ]
         }
       },
