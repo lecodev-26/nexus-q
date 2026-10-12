@@ -8,7 +8,7 @@ use crate::backend::{KernelBackend, ScalarBackend};
 use crate::dispatch::{Backend, selected_backend};
 use crate::scalar::mlkem::Polynomial;
 
-/// Apply the selected Keccak-f[1600] implementation to a 25-lane state.
+/// Apply the selected `Keccak-f[1600]` implementation to a 25-lane state.
 #[inline]
 pub fn keccak_f1600(state: &mut [u64; 25]) {
     match selected_backend() {
