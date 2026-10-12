@@ -223,8 +223,8 @@ jobs:
           report = [
               '# Issue #23 — diagnostic operation ratios', '',
               '**Status: NOT A PERFORMANCE GATE.** NEXUS-Q and AWS-LC currently measure different API layers; these ratios are descriptive only and must not be used to accept/reject a milestone or claim speed leadership.', '',
-              '| Algorithm | Parameter | Operation | NEXUS-Q median (ns) | AWS-LC median (ns) | NEXUS-Q / AWS-LC | Comparability |',
-              '|---|---:|---|---:|---:|---:|---|'
+              '| Algorithm | Parameter | Operation | NEXUS-Q median (ns) | AWS-LC median (ns) | Median ratio | NEXUS-Q p95 (ns) | AWS-LC p95 (ns) | p95 ratio | Comparability |',
+              '|---|---:|---|---:|---:|---:|---:|---:|---:|---|'
           ]
           all_keys = sorted(set(nexus_by_key) | set(aws_by_key))
           for key in all_keys:
@@ -232,15 +232,20 @@ jobs:
               if nrow is None or arow is None:
                   report.append(f'| {key[0]} | {key[1]} | {key[2]} | ' +
                                 f"{nrow['measurement']['statistics']['median_ns'] if nrow else '—'} | " +
-                                f"{arow['measurement']['statistics']['median_ns'] if arow else '—'} | — | NO MATCHED COMPARATOR |")
+                                f"{arow['measurement']['statistics']['median_ns'] if arow else '—'} | — | " +
+                                f"{nrow['measurement']['statistics']['p95_ns'] if nrow else '—'} | " +
+                                f"{arow['measurement']['statistics']['p95_ns'] if arow else '—'} | — | NO MATCHED COMPARATOR |")
                   continue
               nmedian = nrow['measurement']['statistics']['median_ns']
               amedian = arow['measurement']['statistics']['median_ns']
               ratio = nmedian / amedian
-              report.append(f'| {key[0]} | {key[1]} | {key[2]} | {nmedian} | {amedian} | {ratio:.3f}x | DIAGNOSTIC ONLY — API layers differ |')
+              np95 = nrow['measurement']['statistics']['p95_ns']
+              ap95 = arow['measurement']['statistics']['p95_ns']
+              p95_ratio = np95 / ap95
+              report.append(f'| {key[0]} | {key[1]} | {key[2]} | {nmedian} | {amedian} | {ratio:.3f}x | {np95} | {ap95} | {p95_ratio:.3f}x | DIAGNOSTIC ONLY — API layers differ |')
           report += ['', '## Blocking gaps', '',
                      '- The runner API layers are not yet equivalent: NEXUS-Q uses direct RustCrypto ML-KEM and an `nexusq-core` ML-DSA wrapper; AWS-LC uses the public EVP API and creates operation contexts per sample.',
-                     '- AWS-LC comparator coverage for ML-KEM-1024 must be confirmed from emitted records; missing operations are listed above, never inferred.',
+                     '- Comparator coverage is asserted against all nine AWS-LC operations, including ML-KEM-1024; any missing record fails the workflow rather than being inferred.',
                      '- No 1.5x/1.2x/1.05x/1.00x milestone is evaluated until operation semantics/layers and comparator coverage are reviewed as equivalent.', '']
           (root / 'comparison-report.md').write_text('\n'.join(report))
           print('Wrote comparison-report.md: diagnostic ratios only; performance gate remains blocked on equivalence review.')
