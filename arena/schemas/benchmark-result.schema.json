@@ -134,7 +134,8 @@
         "iterations",
         "warmups",
         "latency_ns",
-        "measurement_timestamp_unix_ns"
+        "measurement_timestamp_unix_ns",
+        "measurement_scope"
       ],
       "properties": {
         "iterations": {
