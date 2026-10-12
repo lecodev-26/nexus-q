@@ -335,6 +335,8 @@ pub fn sample_ntt_from_bytes(input: &[u8]) -> Option<Polynomial> {
 
 #[cfg(test)]
 mod tests {
+    module_lattice::define_field!(ReferenceField, u16, u32, u64, 3329);
+
     use super::{
         N, Polynomial, Q, basemul, compress_coefficient, decode_compressed_polynomial,
         decode_polynomial_12, decompress_coefficient, encode_compressed_polynomial,
@@ -344,6 +346,45 @@ mod tests {
 
     fn sample_polynomial() -> Polynomial {
         core::array::from_fn(|index| ((index * 97 + index * index * 13 + 5) % Q as usize) as i16)
+    }
+
+    #[test]
+    fn twelve_bit_encoding_matches_independent_module_lattice_reference() {
+        use hybrid_array::{Array, typenum::U12};
+        use module_lattice::{Elem as ReferenceElem, Encode, Polynomial as ReferencePolynomial};
+
+        let polynomials = [
+            [0_i16; N],
+            core::array::from_fn(|index| (index as i16 * 13 + 7).rem_euclid(Q)),
+            core::array::from_fn(|index| {
+                if index % 3 == 0 {
+                    Q - 1
+                } else if index % 3 == 1 {
+                    0
+                } else {
+                    1
+                }
+            }),
+        ];
+
+        for polynomial in polynomials {
+            let reference = ReferencePolynomial::<ReferenceField>::new(Array::from_fn(|index| {
+                ReferenceElem::new(polynomial[index].rem_euclid(Q) as u16)
+            }));
+            let reference_bytes =
+                <ReferencePolynomial<ReferenceField> as Encode<U12>>::encode(&reference);
+            let expected: Vec<u8> = reference_bytes.iter().copied().collect();
+            assert_eq!(encode_polynomial_12(&polynomial), expected);
+
+            let decoded =
+                <ReferencePolynomial<ReferenceField> as Encode<U12>>::decode(&reference_bytes);
+            let decoded_coefficients: Vec<i16> =
+                decoded.0.iter().map(|value| value.0 as i16).collect();
+            assert_eq!(
+                decode_polynomial_12(&expected),
+                core::array::from_fn(|i| decoded_coefficients[i])
+            );
+        }
     }
 
     fn naive_negacyclic_product(lhs: &Polynomial, rhs: &Polynomial) -> Polynomial {
@@ -360,6 +401,24 @@ mod tests {
             }
         }
         core::array::from_fn(|i| out[i].rem_euclid(i64::from(Q)) as i16)
+    }
+
+    #[test]
+    fn twelve_bit_decoder_matches_independent_reference_for_all_bit_patterns() {
+        use hybrid_array::{Array, typenum::U12};
+        use module_lattice::{Encode, Polynomial as ReferencePolynomial};
+
+        // Include the full 12-bit domain, including non-canonical values >= Q.
+        let values: Vec<u16> = (0..N)
+            .map(|index| ((index * 37 + 3320) % 4096) as u16)
+            .collect();
+        let bytes = pack_coefficients(&values, 12);
+        let reference_bytes = Array::from_fn(|index| bytes[index]);
+        let reference =
+            <ReferencePolynomial<ReferenceField> as Encode<U12>>::decode(&reference_bytes);
+        let expected: Polynomial = core::array::from_fn(|index| reference.0[index].0 as i16);
+
+        assert_eq!(decode_polynomial_12(&bytes), expected);
     }
 
     #[test]

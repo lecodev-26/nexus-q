@@ -1,15 +1,16 @@
 name: NEXUS-Q V4 — PR CI
 
-# One CI per commit on the V4 PR branch: security gates, Phase 0 provenance and
-# the matched-host measurement run in parallel. Only when ALL of them pass does
-# the archive job (the bot) store the evidence in artifact-archive/. The bot
-# commit carries [skip ci], so it never starts another CI run or approval prompt.
+# All Rust validation runs on GitHub-hosted runners. Do not build, lint, or test locally.
+# The evidence archive is written only after every validation gate succeeds.
 on:
   push:
     branches:
       - v4/issue-23-kernel-work
     paths-ignore:
       - 'artifact-archive/**'
+  pull_request:
+    branches:
+      - nexusqv4
   workflow_dispatch:
 
 permissions:
@@ -21,6 +22,48 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  rust-validation:
+    name: Rust / fmt, check, clippy, test, build, docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust with CI components
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust dependencies and build outputs
+        uses: Swatinem/rust-cache@v2
+
+      - name: Record toolchain and tested revision
+        run: |
+          rustc -Vv
+          cargo -V
+          git rev-parse HEAD
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Check workspace and all targets
+        run: cargo check --workspace --all-targets --locked
+
+      - name: Run Clippy on workspace and all targets
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Run workspace tests
+        run: cargo test --workspace --locked
+
+      - name: Build workspace and all targets
+        run: cargo build --workspace --all-targets --locked
+
+      - name: Build public documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --workspace --no-deps --locked
+
   security:
     uses: ./.github/workflows/security-ci.yml
     permissions:
@@ -40,7 +83,7 @@ jobs:
 
   archive:
     name: Archive evidence (only after every gate passed)
-    needs: [security, phase0, measurement]
+    needs: [rust-validation, security, phase0, measurement]
     if: github.ref == 'refs/heads/v4/issue-23-kernel-work'
     runs-on: ubuntu-latest
     timeout-minutes: 15

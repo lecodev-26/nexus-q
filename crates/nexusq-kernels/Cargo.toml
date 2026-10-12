@@ -8,5 +8,9 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[dev-dependencies]
+module-lattice = { workspace = true }
+hybrid-array = { workspace = true }
+
 [lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
