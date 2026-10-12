@@ -244,9 +244,9 @@ static void emit(const char *algorithm, const char *parameter, const char *opera
            algorithm, parameter, operation, target, os, cpu, features_json, __VERSION__,
            env_numeric_or_null("ARENA_CPU_FREQUENCY_KHZ"), env_or("ARENA_CPU_GOVERNOR", "unknown"),
            env_or("ARENA_OPT", "release"), env_or("ARENA_RUN_ORDER", "unknown"),
-           cycle_counter_source(), count, warmup_count, timestamp,
+           count, warmup_count, timestamp,
            (unsigned long long)stats.median_ns,
-           1e9 / (double)stats.median_ns);
+           1e9 / (double)stats.median_ns, cycle_counter_source());
 
     for (int i = 0; i < count; ++i) {
         printf("%s%llu", i ? "," : "", (unsigned long long)samples[i]);
@@ -405,8 +405,9 @@ static int kem_parameter(const char *parameter, int parameter_nid,
 
     if (!generate_kem_key(&key, parameter_nid)) goto cleanup;
     size_ctx = EVP_PKEY_CTX_new(key, NULL);
-    if (!size_ctx || !EVP_PKEY_encapsulate_init(size_ctx, NULL) ||
-        !EVP_PKEY_encapsulate(size_ctx, NULL, &ciphertext_len, NULL, &secret_len)) {
+    /* AWS-LC's EVP KEM API initializes the operation through the key context;
+     * unlike OpenSSL, this pinned revision has no encapsulate_init entry point. */
+    if (!size_ctx || !EVP_PKEY_encapsulate(size_ctx, NULL, &ciphertext_len, NULL, &secret_len)) {
         goto cleanup;
     }
     if (ciphertext_len != expected_ciphertext_bytes || secret_len == 0) {
@@ -425,9 +426,7 @@ static int kem_parameter(const char *parameter, int parameter_nid,
     context.key = key;
     context.encaps_ctx = EVP_PKEY_CTX_new(key, NULL);
     context.decaps_ctx = EVP_PKEY_CTX_new(key, NULL);
-    if (!context.encaps_ctx || !context.decaps_ctx ||
-        !EVP_PKEY_encapsulate_init(context.encaps_ctx, NULL) ||
-        !EVP_PKEY_decapsulate_init(context.decaps_ctx, NULL)) goto cleanup;
+    if (!context.encaps_ctx || !context.decaps_ctx) goto cleanup;
     context.ciphertext = ciphertext;
     context.ciphertext_capacity = ciphertext_len;
     context.secret = secret;

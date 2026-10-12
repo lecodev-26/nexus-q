@@ -116,6 +116,9 @@ mod tests {
         let rhs = [7_i16; mlkem::N];
         assert_eq!(basemul(&lhs, &rhs), mlkem::basemul(&lhs, &rhs));
         assert_eq!(reduce(-12345), mlkem::reduce(-12345));
-        assert_eq!(freeze(mlkem::Q as i32 + 19), mlkem::freeze(mlkem::Q as i32 + 19));
+        assert_eq!(
+            freeze(mlkem::Q as i32 + 19),
+            mlkem::freeze(mlkem::Q as i32 + 19)
+        );
     }
 }

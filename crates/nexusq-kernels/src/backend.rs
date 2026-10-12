@@ -114,6 +114,9 @@ mod tests {
         ScalarBackend::ntt(&mut through_backend);
         assert_eq!(through_backend, direct);
         assert_eq!(ScalarBackend::reduce(-17), mlkem::reduce(-17));
-        assert_eq!(ScalarBackend::freeze(mlkem::Q as i32 + 3), mlkem::freeze(mlkem::Q as i32 + 3));
+        assert_eq!(
+            ScalarBackend::freeze(mlkem::Q as i32 + 3),
+            mlkem::freeze(mlkem::Q as i32 + 3)
+        );
     }
 }

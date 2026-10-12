@@ -84,7 +84,10 @@ fn resolve_dispatch() -> DispatchInfo {
 }
 
 fn is_truthy(value: &str) -> bool {
-    matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on")
+    matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "1" | "true" | "yes" | "on"
+    )
 }
 
 fn detect_cpu_features() -> CpuFeatures {
