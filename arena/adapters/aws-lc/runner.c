@@ -227,6 +227,7 @@ static void emit(const char *algorithm, const char *parameter, const char *opera
            "\"measurement_timestamp_unix_ns\":%llu,\"latency_ns\":%llu,"
            "\"throughput_ops_s\":%.6f,\"memory_bytes\":null,"
            "\"measurement_method\":\"per-operation clock_gettime(CLOCK_MONOTONIC); AWS-LC public EVP API with per-operation context creation; median of raw samples\","
+           "\"measurement_scope\":\"aws_lc_evp_operation_including_per_sample_context_setup\","
            "\"cycle_counter_source\":\"%s\",\"samples_ns\":[",
            algorithm, parameter, operation, env_or("AWSLC_VERSION", "runtime"),
            algorithm, parameter, operation, target, os, cpu, features_json, __VERSION__,

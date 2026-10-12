@@ -154,6 +154,14 @@ jobs:
                   assert measurement['latency_ns'] == stats['median_ns'], (name, row['operation'], measurement['latency_ns'], stats['median_ns'])
                   counter_source = measurement.get('cycle_counter_source')
                   assert counter_source in {'x86_64_tsc_ticks', 'aarch64_cntvct_ticks', 'unavailable'}, (name, row['operation'], counter_source)
+                  scope = measurement.get('measurement_scope')
+                  expected_scopes = {
+                      'rustcrypto_ml_kem_operation',
+                      'nexusq_core_ml_dsa_wrapper_operation',
+                      'cached_ml_dsa_verifier_operation',
+                      'aws_lc_evp_operation_including_per_sample_context_setup',
+                  }
+                  assert scope in expected_scopes, (name, row['operation'], scope)
                   cycle_samples = measurement.get('samples_cycles', [])
                   if counter_source != 'unavailable':
                       assert len(cycle_samples) == measurement['iterations'], (name, row['operation'], len(cycle_samples), measurement['iterations'])
@@ -164,6 +172,8 @@ jobs:
           assert actual_aws == expected_aws, (actual_aws, expected_aws)
           assert all('AWS-LC public EVP API' in r['measurement'].get('measurement_method', '') for r in aws_rows), (
               'AWS-LC measurement records must identify the public EVP API layer')
+          assert all(r['measurement']['measurement_scope'] == 'aws_lc_evp_operation_including_per_sample_context_setup'
+                     for r in aws_rows), 'AWS-LC scope must include per-sample EVP context setup'
 
           from collections import Counter
           nexus_rows = [json.loads(line) for line in (root / 'nexusq.jsonl').read_text().splitlines() if line.strip()]
@@ -179,13 +189,18 @@ jobs:
           actual_counts = Counter((r['algorithm']['id'], r['algorithm']['parameter_set'], r['operation']) for r in nexus_rows)
           assert actual_counts == Counter(expected_counts), (actual_counts, expected_counts)
           assert len(nexus_rows) == 10, f'expected 10 NEXUS-Q records (nine operations plus separate cached verify), got {len(nexus_rows)}'
-          assert all('direct RustCrypto ml-kem API' in r['measurement'].get('measurement_method', '')
+          assert all('direct RustCrypto ml-kem API' in r['measurement'].get('measurement_method', '') and
+                     r['measurement']['measurement_scope'] == 'rustcrypto_ml_kem_operation'
                      for r in nexus_rows if r['algorithm']['id'] == 'ml-kem'), (
-              'NEXUS-Q ML-KEM records must identify the direct RustCrypto API layer')
-          assert all('nexusq-core ML-DSA wrapper' in r['measurement'].get('measurement_method', '')
+              'NEXUS-Q ML-KEM records must identify the direct RustCrypto API layer and scope')
+          assert all('nexusq-core ML-DSA wrapper' in r['measurement'].get('measurement_method', '') and
+                     r['measurement']['measurement_scope'] == 'nexusq_core_ml_dsa_wrapper_operation'
                      for r in nexus_rows if r['algorithm']['id'] == 'ml-dsa' and
                      'cached' not in r['measurement'].get('measurement_method', '')), (
-              'NEXUS-Q ML-DSA records must identify the wrapper API layer')
+              'NEXUS-Q ML-DSA records must identify the wrapper API layer and scope')
+          assert all(r['measurement']['measurement_scope'] == 'cached_ml_dsa_verifier_operation'
+                     for r in nexus_rows if 'cached' in r['measurement'].get('measurement_method', '').lower()), (
+              'cached ML-DSA verification must have a distinct scope')
 
           nexus_env = nexus_rows[0]['environment']
           aws_env = aws_rows[0]['environment']
@@ -223,14 +238,16 @@ jobs:
           report = [
               '# Issue #23 — diagnostic operation ratios', '',
               '**Status: NOT A PERFORMANCE GATE.** NEXUS-Q and AWS-LC currently measure different API layers; these ratios are descriptive only and must not be used to accept/reject a milestone or claim speed leadership.', '',
-              '| Algorithm | Parameter | Operation | NEXUS-Q median (ns) | AWS-LC median (ns) | Median ratio | NEXUS-Q p95 (ns) | AWS-LC p95 (ns) | p95 ratio | Comparability |',
-              '|---|---:|---|---:|---:|---:|---:|---:|---:|---|'
+              '| Algorithm | Parameter | Operation | NEXUS-Q scope | AWS-LC scope | NEXUS-Q median (ns) | AWS-LC median (ns) | Median ratio | NEXUS-Q p95 (ns) | AWS-LC p95 (ns) | p95 ratio | Comparability |',
+              '|---|---:|---|---|---|---:|---:|---:|---:|---:|---:|---|'
           ]
           all_keys = sorted(set(nexus_by_key) | set(aws_by_key))
           for key in all_keys:
               nrow, arow = nexus_by_key.get(key), aws_by_key.get(key)
               if nrow is None or arow is None:
                   report.append(f'| {key[0]} | {key[1]} | {key[2]} | ' +
+                                f"{nrow['measurement'].get('measurement_scope', '—') if nrow else '—'} | " +
+                                f"{arow['measurement'].get('measurement_scope', '—') if arow else '—'} | " +
                                 f"{nrow['measurement']['statistics']['median_ns'] if nrow else '—'} | " +
                                 f"{arow['measurement']['statistics']['median_ns'] if arow else '—'} | — | " +
                                 f"{nrow['measurement']['statistics']['p95_ns'] if nrow else '—'} | " +
@@ -238,12 +255,16 @@ jobs:
                   continue
               nmedian = nrow['measurement']['statistics']['median_ns']
               amedian = arow['measurement']['statistics']['median_ns']
+              nscope = nrow['measurement']['measurement_scope']
+              ascope = arow['measurement']['measurement_scope']
               ratio = nmedian / amedian
               np95 = nrow['measurement']['statistics']['p95_ns']
               ap95 = arow['measurement']['statistics']['p95_ns']
               p95_ratio = np95 / ap95
-              report.append(f'| {key[0]} | {key[1]} | {key[2]} | {nmedian} | {amedian} | {ratio:.3f}x | {np95} | {ap95} | {p95_ratio:.3f}x | DIAGNOSTIC ONLY — API layers differ |')
+              comparability = 'SCOPE MATCH — REVIEW SEMANTICS' if nscope == ascope else 'INCOMPARABLE — SCOPE MISMATCH'
+              report.append(f'| {key[0]} | {key[1]} | {key[2]} | {nscope} | {ascope} | {nmedian} | {amedian} | {ratio:.3f}x | {np95} | {ap95} | {p95_ratio:.3f}x | {comparability} |')
           report += ['', '## Blocking gaps', '',
+                     '- `measurement_scope` is machine-readable and validated for every record; ratios explicitly flag scope mismatches rather than relying on prose alone.',
                      '- The runner API layers are not yet equivalent: NEXUS-Q uses direct RustCrypto ML-KEM and an `nexusq-core` ML-DSA wrapper; AWS-LC uses the public EVP API and creates operation contexts per sample.',
                      '- Comparator coverage is asserted against all nine AWS-LC operations, including ML-KEM-1024; any missing record fails the workflow rather than being inferred.',
                      '- No 1.5x/1.2x/1.05x/1.00x milestone is evaluated until operation semantics/layers and comparator coverage are reviewed as equivalent.', '']
