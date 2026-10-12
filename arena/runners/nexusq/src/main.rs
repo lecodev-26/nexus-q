@@ -57,10 +57,15 @@ mod cycles {
 static CYCLE_SAMPLES: Mutex<Vec<u64>> = Mutex::new(Vec::new());
 
 #[inline]
-fn record_cycles(start: Option<u64>) {
-    if let (Some(start), Some(end)) = (start, cycles::read()) {
+fn cycle_delta(start: Option<u64>) -> Option<u64> {
+    start.zip(cycles::read()).map(|(start, end)| end.wrapping_sub(start))
+}
+
+#[inline]
+fn record_cycles(sample: Option<u64>) {
+    if let Some(sample) = sample {
         if let Ok(mut samples) = CYCLE_SAMPLES.lock() {
-            samples.push(end.wrapping_sub(start));
+            samples.push(sample);
         }
     }
 }
@@ -261,8 +266,10 @@ fn emit_ml_dsa_sign_distribution(
             let cycle_start = cycles::read();
             let start = Instant::now();
             black_box(black_box(key).sign(black_box(MESSAGE)));
-            record_cycles(cycle_start);
-            samples.push(start.elapsed().as_nanos());
+            let cycle_sample = cycle_delta(cycle_start);
+            let elapsed = start.elapsed().as_nanos();
+            record_cycles(cycle_sample);
+            samples.push(elapsed);
         }
         all_samples.extend_from_slice(&samples);
         per_seed.push(serde_json::json!({
@@ -377,8 +384,10 @@ fn main() {
         let cycle_start = cycles::read();
         let start = Instant::now();
         black_box(MlKem768::generate_keypair());
-        record_cycles(cycle_start);
-        samples.push(start.elapsed().as_nanos());
+        let cycle_sample = cycle_delta(cycle_start);
+        let elapsed = start.elapsed().as_nanos();
+        record_cycles(cycle_sample);
+        samples.push(elapsed);
     }
     emit_operation_samples(
         "ml-kem",
@@ -398,8 +407,9 @@ fn main() {
         let start = Instant::now();
         let (c, s) = black_box(&pk768).encapsulate();
         black_box(s);
-        record_cycles(cycle_start);
+        let cycle_sample = cycle_delta(cycle_start);
         let elapsed = start.elapsed().as_nanos();
+        record_cycles(cycle_sample);
         // Keep ciphertext serialization/copying outside the timed primitive call.
         ct768_bytes = c.as_slice().to_vec();
         samples.push(elapsed);
@@ -423,8 +433,10 @@ fn main() {
         let cycle_start = cycles::read();
         let start = Instant::now();
         black_box(black_box(&sk768).decapsulate(black_box(&ct768)));
-        record_cycles(cycle_start);
-        samples.push(start.elapsed().as_nanos());
+        let cycle_sample = cycle_delta(cycle_start);
+        let elapsed = start.elapsed().as_nanos();
+        record_cycles(cycle_sample);
+        samples.push(elapsed);
     }
     emit_operation_samples(
         "ml-kem",
@@ -453,8 +465,10 @@ fn main() {
         let cycle_start = cycles::read();
         let start = Instant::now();
         black_box(MlKem1024::generate_keypair());
-        record_cycles(cycle_start);
-        samples.push(start.elapsed().as_nanos());
+        let cycle_sample = cycle_delta(cycle_start);
+        let elapsed = start.elapsed().as_nanos();
+        record_cycles(cycle_sample);
+        samples.push(elapsed);
     }
     emit_operation_samples(
         "ml-kem",
@@ -474,8 +488,9 @@ fn main() {
         let start = Instant::now();
         let (c, s) = black_box(&pk1024).encapsulate();
         black_box(s);
-        record_cycles(cycle_start);
+        let cycle_sample = cycle_delta(cycle_start);
         let elapsed = start.elapsed().as_nanos();
+        record_cycles(cycle_sample);
         // Keep serialization/copying the ciphertext outside the timed primitive call.
         ct2 = c.as_slice().to_vec();
         samples.push(elapsed);
@@ -499,8 +514,10 @@ fn main() {
         let cycle_start = cycles::read();
         let start = Instant::now();
         black_box(black_box(&sk1024).decapsulate(black_box(&ct1024)));
-        record_cycles(cycle_start);
-        samples.push(start.elapsed().as_nanos());
+        let cycle_sample = cycle_delta(cycle_start);
+        let elapsed = start.elapsed().as_nanos();
+        record_cycles(cycle_sample);
+        samples.push(elapsed);
     }
     emit_operation_samples(
         "ml-kem",
@@ -521,8 +538,10 @@ fn main() {
         let cycle_start = cycles::read();
         let start = Instant::now();
         black_box(pq_sign::MlDsa65KeyPair::generate());
-        record_cycles(cycle_start);
-        samples.push(start.elapsed().as_nanos());
+        let cycle_sample = cycle_delta(cycle_start);
+        let elapsed = start.elapsed().as_nanos();
+        record_cycles(cycle_sample);
+        samples.push(elapsed);
     }
     emit_operation_samples(
         "ml-dsa",
@@ -553,8 +572,10 @@ fn main() {
             let cycle_start = cycles::read();
             let start = Instant::now();
             black_box(black_box(&cached_verifier).verify(black_box(MESSAGE), black_box(&sig))).unwrap();
-            record_cycles(cycle_start);
-            cached_verify_samples.push(start.elapsed().as_nanos());
+            let cycle_sample = cycle_delta(cycle_start);
+            let elapsed = start.elapsed().as_nanos();
+            record_cycles(cycle_sample);
+            cached_verify_samples.push(elapsed);
         }
         emit_cached_verify_samples(&cached_verify_samples, pk.len(), sig.len());
     }
@@ -568,8 +589,10 @@ fn main() {
         let start = Instant::now();
         black_box(pq_sign::ml_dsa_65_verify(black_box(&pk), black_box(MESSAGE), black_box(&sig))).unwrap();
         black_box(());
-        record_cycles(cycle_start);
-        samples.push(start.elapsed().as_nanos());
+        let cycle_sample = cycle_delta(cycle_start);
+        let elapsed = start.elapsed().as_nanos();
+        record_cycles(cycle_sample);
+        samples.push(elapsed);
     }
     emit_operation_samples(
         "ml-dsa",
