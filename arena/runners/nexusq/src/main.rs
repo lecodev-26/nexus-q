@@ -191,7 +191,7 @@ fn emit_operation_samples(
             "cpu_frequency_khz":env::var("NEXUSQ_CPU_FREQUENCY_KHZ").ok().and_then(|x| x.parse::<u64>().ok()),
             "cpu_governor":env::var("NEXUSQ_CPU_GOVERNOR").unwrap_or_else(|_| "unknown".into()),
             "run_order":env::var("NEXUSQ_RUN_ORDER").unwrap_or_else(|_| "unknown".into()),
-            "optimization":env::var("NEXUSQ_OPT").unwrap_or_else(|_| "unknown".into()), "harness_version":"arena-v2-distribution"
+            "optimization":env::var("NEXUSQ_OPT").unwrap_or_else(|_| "unknown".into()), "harness_version":"arena-v4-cycle-counter"
         },
         "measurement": {
             "iterations":samples.len(), "warmups":warmups(),
@@ -234,7 +234,7 @@ fn emit_cached_verify_samples(samples: &[u128], public_key_len: usize, signature
             "cpu_frequency_khz":env::var("NEXUSQ_CPU_FREQUENCY_KHZ").ok().and_then(|x| x.parse::<u64>().ok()),
             "cpu_governor":env::var("NEXUSQ_CPU_GOVERNOR").unwrap_or_else(|_| "unknown".into()),
             "run_order":env::var("NEXUSQ_RUN_ORDER").unwrap_or_else(|_| "unknown".into()),
-            "optimization":env::var("NEXUSQ_OPT").unwrap_or_else(|_| "unknown".into()), "harness_version":"arena-v2-distribution"
+            "optimization":env::var("NEXUSQ_OPT").unwrap_or_else(|_| "unknown".into()), "harness_version":"arena-v4-cycle-counter"
         },
         "measurement": {
             "iterations":samples.len(), "warmups":warmups(),
@@ -304,7 +304,7 @@ fn emit_ml_dsa_sign_distribution(
             "cpu_governor":env::var("NEXUSQ_CPU_GOVERNOR").unwrap_or_else(|_| "unknown".into()),
             "run_order":env::var("NEXUSQ_RUN_ORDER").unwrap_or_else(|_| "unknown".into()),
             "optimization":env::var("NEXUSQ_OPT").unwrap_or_else(|_| "unknown".into()),
-            "harness_version":"arena-v2-distribution"
+            "harness_version":"arena-v4-cycle-counter"
         },
         "measurement": {
             "iterations":all_samples.len(),

@@ -152,6 +152,11 @@ jobs:
                   assert stats.get('sample_count') == measurement['iterations'], (name, row['operation'], stats)
                   assert stats['min_ns'] <= stats['median_ns'] <= stats['p95_ns'], (name, row['operation'], stats)
                   assert measurement['latency_ns'] == stats['median_ns'], (name, row['operation'], measurement['latency_ns'], stats['median_ns'])
+                  counter_source = measurement.get('cycle_counter_source')
+                  assert counter_source in {'x86_64_tsc_ticks', 'aarch64_cntvct_ticks', 'unavailable'}, (name, row['operation'], counter_source)
+                  cycle_samples = measurement.get('samples_cycles', [])
+                  if counter_source != 'unavailable':
+                      assert len(cycle_samples) == measurement['iterations'], (name, row['operation'], len(cycle_samples), measurement['iterations'])
               print(f'{name}: {len(rows)} schema-valid records with raw samples/statistics; counts meet configured thresholds')
           aws_rows = [json.loads(line) for line in (root / 'aws-lc.jsonl').read_text().splitlines() if line.strip()]
           actual_aws = {(r['algorithm']['id'], r['algorithm']['parameter_set'], r['operation']) for r in aws_rows}

@@ -17,6 +17,32 @@
 
 typedef int (*operation_fn)(void *);
 
+static uint64_t *active_cycle_samples;
+
+static uint64_t read_cycle_counter(void) {
+#if defined(__x86_64__)
+    uint32_t low, high;
+    __asm__ __volatile__("lfence\n\trdtsc\n\tlfence" : "=a"(low), "=d"(high) :: "memory");
+    return ((uint64_t)high << 32) | low;
+#elif defined(__aarch64__)
+    uint64_t counter;
+    __asm__ __volatile__("isb\n\tmrs %0, cntvct_el0" : "=r"(counter) :: "memory");
+    return counter;
+#else
+    return 0;
+#endif
+}
+
+static const char *cycle_counter_source(void) {
+#if defined(__x86_64__)
+    return "x86_64_tsc_ticks";
+#elif defined(__aarch64__)
+    return "aarch64_cntvct_ticks";
+#else
+    return "unavailable";
+#endif
+}
+
 static double elapsed_ns(struct timespec a, struct timespec b) {
     return (double)(b.tv_sec - a.tv_sec) * 1e9 + (double)(b.tv_nsec - a.tv_nsec);
 }
@@ -156,14 +182,17 @@ static int run_samples(operation_fn operation, void *context, uint64_t *samples,
     }
     for (int i = 0; i < sample_count; ++i) {
         struct timespec start, end;
+        uint64_t cycle_start = read_cycle_counter();
         if (clock_gettime(CLOCK_MONOTONIC, &start) != 0) return 0;
         if (!operation(context)) {
             fprintf(stderr, "AWS-LC measured operation failed at sample %d\n", i);
             return 0;
         }
+        uint64_t cycle_end = read_cycle_counter();
         if (clock_gettime(CLOCK_MONOTONIC, &end) != 0) return 0;
         double elapsed = elapsed_ns(start, end);
         samples[i] = elapsed < 1.0 ? 1 : (uint64_t)(elapsed + 0.5);
+        if (active_cycle_samples != NULL) active_cycle_samples[i] = cycle_end - cycle_start;
     }
     return 1;
 }
@@ -193,21 +222,25 @@ static void emit(const char *algorithm, const char *parameter, const char *opera
            "\"algorithm\":{\"id\":\"%s\",\"parameter_set\":\"%s\"},\"operation\":\"%s\","
            "\"environment\":{\"target\":\"%s\",\"os\":\"%s\",\"cpu\":\"%s\","
            "\"cpu_features\":%s,\"compiler\":\"cc\",\"compiler_version\":\"%s\","
-           "\"optimization\":\"%s\",\"run_order\":\"%s\",\"harness_version\":\"arena-v2-distribution\"},"
+           "\"optimization\":\"%s\",\"run_order\":\"%s\",\"harness_version\":\"arena-v4-cycle-counter\"},"
            "\"measurement\":{\"iterations\":%d,\"warmups\":%d,"
            "\"measurement_timestamp_unix_ns\":%llu,\"latency_ns\":%llu,"
            "\"throughput_ops_s\":%.6f,\"memory_bytes\":null,"
            "\"measurement_method\":\"per-operation clock_gettime(CLOCK_MONOTONIC); AWS-LC public EVP API with per-operation context creation; median of raw samples\","
-           "\"samples_ns\":[",
+           "\"cycle_counter_source\":\"%s\",\"samples_ns\":[",
            algorithm, parameter, operation, env_or("AWSLC_VERSION", "runtime"),
            algorithm, parameter, operation, target, os, cpu, features_json, __VERSION__,
            env_or("ARENA_OPT", "release"), env_or("ARENA_RUN_ORDER", "unknown"),
-           count, warmup_count, timestamp,
+           cycle_counter_source(), count, warmup_count, timestamp,
            (unsigned long long)stats.median_ns,
            1e9 / (double)stats.median_ns);
 
     for (int i = 0; i < count; ++i) {
         printf("%s%llu", i ? "," : "", (unsigned long long)samples[i]);
+    }
+    printf("],\"samples_cycles\":[");
+    for (int i = 0; i < count; ++i) {
+        printf("%s%llu", i ? "," : "", (unsigned long long)(active_cycle_samples ? active_cycle_samples[i] : 0));
     }
     printf("],\"statistics\":{\"sample_count\":%d,\"min_ns\":%llu,\"median_ns\":%llu,"
            "\"p95_ns\":%llu,\"stddev_ns\":%.3f}},"
@@ -330,6 +363,8 @@ static int kem_parameter(const char *parameter, int parameter_nid,
                          size_t expected_ciphertext_bytes) {
     int count = iterations(), warmup_count = warmups();
     uint64_t *samples = calloc((size_t)count, sizeof(*samples));
+    uint64_t *cycle_samples = calloc((size_t)count, sizeof(*cycle_samples));
+    active_cycle_samples = cycle_samples;
     EVP_PKEY *key = NULL;
     EVP_PKEY_CTX *size_ctx = NULL;
     unsigned char *ciphertext = NULL;
@@ -339,7 +374,7 @@ static int kem_parameter(const char *parameter, int parameter_nid,
     kem_context context = {0};
     size_t ciphertext_len = 0, secret_len = 0;
     int result = 1;
-    if (!samples) return 1;
+    if (!samples || !cycle_samples) { free(samples); free(cycle_samples); return 1; }
 
     if (!run_samples(kem_keygen_once, &keygen, samples, count, warmup_count)) goto cleanup;
     emit("ml-kem", parameter, "keygen", samples, count, warmup_count,
@@ -394,6 +429,8 @@ cleanup:
     OPENSSL_free(decapsulated_secret);
     EVP_PKEY_free(key);
     free(samples);
+    free(cycle_samples);
+    active_cycle_samples = NULL;
     if (result != 0) fprintf(stderr, "AWS-LC ML-KEM-%s benchmark failed\n", parameter);
     return result;
 }
@@ -407,11 +444,13 @@ static int kem(void) {
 static int dsa(void) {
     int count = iterations(), warmup_count = warmups();
     uint64_t *samples = calloc((size_t)count, sizeof(*samples));
+    uint64_t *cycle_samples = calloc((size_t)count, sizeof(*cycle_samples));
+    active_cycle_samples = cycle_samples;
     EVP_PKEY *key = NULL;
     const unsigned char message[] = MESSAGE;
     const size_t signature_capacity = 4096;
     unsigned char *signature = OPENSSL_malloc(signature_capacity);
-    if (!samples || !signature) { free(samples); OPENSSL_free(signature); return 1; }
+    if (!samples || !cycle_samples || !signature) { free(samples); free(cycle_samples); OPENSSL_free(signature); return 1; }
 
     if (!run_samples(dsa_keygen_once, NULL, samples, count, warmup_count)) goto fail;
     emit("ml-dsa", "65", "keygen", samples, count, warmup_count,
@@ -431,12 +470,16 @@ static int dsa(void) {
     EVP_PKEY_free(key);
     OPENSSL_free(signature);
     free(samples);
+    free(cycle_samples);
+    active_cycle_samples = NULL;
     return 0;
 
 fail:
     EVP_PKEY_free(key);
     OPENSSL_free(signature);
     free(samples);
+    free(cycle_samples);
+    active_cycle_samples = NULL;
     fprintf(stderr, "AWS-LC ML-DSA benchmark failed\n");
     return 1;
 }
