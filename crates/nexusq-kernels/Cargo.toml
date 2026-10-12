@@ -8,6 +8,10 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[features]
+default = []
+force-scalar = []
+
 [dev-dependencies]
 module-lattice = { workspace = true }
 hybrid-array = { workspace = true }
