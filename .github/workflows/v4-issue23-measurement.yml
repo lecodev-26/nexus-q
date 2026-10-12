@@ -19,7 +19,9 @@ jobs:
     if: >-
       (github.event_name == 'workflow_dispatch' &&
        github.ref == 'refs/heads/v4/issue-23-kernel-work') ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/v4/issue-23-kernel-work')
+      (github.event_name == 'push' && github.ref == 'refs/heads/v4/issue-23-kernel-work') ||
+      (github.event_name == 'pull_request' &&
+       github.head_ref == 'v4/issue-23-kernel-work' && github.base_ref == 'nexusqv4')
     name: Build and exercise Rust/AWS-LC on one host
     runs-on: ubuntu-latest
     timeout-minutes: 45

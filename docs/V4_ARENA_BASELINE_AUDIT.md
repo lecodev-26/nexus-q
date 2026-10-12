@@ -85,13 +85,13 @@ The measurement job runs the Rust and pinned AWS-LC harnesses in the same GitHub
 
 The 2026-10-10 audit found and addressed a merge conflict, fail-open status-publishing behavior, missing local dependency-source assertions, incomplete NEXUS-Q operation-coverage assertions, missing AWS-LC CPU-feature metadata, inconsistent median/p95 conventions, a raw-pointer helper returning an unconstrained Rust lifetime, and a missing security-CI trigger for the V4 PR base. Formatting checks and workflow YAML/shell syntax checks passed after these fixes. The exact audit findings and repository-level caveats are recorded in `docs/REPOSITORY_AUDIT_2026-10-10.md`.
 
-Phase 0 remains **incomplete**. The current measurement workflow is still a matched-host harness smoke test, not a valid all-operation speed comparison or regression gate. Open requirements include:
+Phase 0 remains **pending CI validation**. The local branch now contains the nine-operation matched-host harness, explicit operation-contract metadata, cycle samples where supported, and an enforced per-operation median/p95 gate at the current 1.5x milestone. The remaining Phase 0 acceptance work is evidence-driven:
 
-- A valid comparator for ML-KEM-1024 (AWS-LC currently emits only ML-KEM-768 and ML-DSA-65 operations).
-- Fully equivalent primitive semantics and measurement layers for all nine operations; ML-KEM-768/ML-DSA still go through `nexusq-core` wrappers while ML-KEM-1024 uses the raw `ml-kem` API.
-- Reliable benchmark-record metadata for CPU frequency/governor and cycle counts where supported; unknown/unavailable values must remain explicit rather than fabricated.
-- A reviewed per-operation baseline/ratio gate against the best valid comparator from the same run, followed by at least three reproducible runs before any performance-leadership claim.
-- The `crates/nexusq-kernels` implementation and all correctness/security gates remain future phases; the presence of a green Phase 0 workflow does not mean a kernel exists or that Issue #23 is complete.
+- Run the workflow on the exact current commit and review the generated JSONL, schema checks, self-checks, and comparison report. The gate may fail honestly if any operation exceeds 1.5x; do not suppress that result.
+- Review the implementation-specific timing scopes (RustCrypto/nexusq-core versus AWS-LC EVP) in the actual artifact and confirm the operation-contract assumptions.
+- If CI finds a code or measurement defect, fix it locally, commit, and only then request the next CI run.
+- Require reproducible runs before any performance-leadership claim.
+- The `crates/nexusq-kernels` implementation and all correctness/security gates remain future phases; a green Phase 0 workflow does not mean a kernel exists or that Issue #23 is complete.
 
 Do not use current smoke-run timings as an optimization result or mark Phase 0 complete. The latest archived evidence is tied to the exact run IDs and source SHA recorded in each run-local README and SHA-256 manifest.
 
@@ -99,7 +99,7 @@ Do not use current smoke-run timings as an optimization result or mark Phase 0 c
 
 - [x] Read the documented baseline and inspect the archived 2026-10-09 Arena records.
 - [x] Identify the current artifacts' comparability limitations.
-- [ ] Repair/prove measurement equivalence and local-source resolution in Phase 0.
+- [ ] Review the explicit operation contract and measurement scopes against a real matched-host CI artifact.
 - [x] Add a V4-only Phase 0 provenance workflow and collect its first artifact: [run 38037011873](https://github.com/lecodev-26/nexus-q/actions/runs/38037011873).
 - [x] Update AWS-LC to emit per-operation raw samples/statistics and verify them in matched-host CI: [commit 9bb8c81](https://github.com/lecodev-26/nexus-q/commit/9bb8c813889ba1b6716bdbf4948aa31a0576fdfb), [run 38066533898](https://github.com/lecodev-26/nexus-q/actions/runs/38066533898).
-- [ ] Re-run/review a fair baseline before using any ratios as optimization gates.
+- [ ] Obtain real CI evidence for the new per-operation 1.5x median/p95 gate and review every reported ratio.
