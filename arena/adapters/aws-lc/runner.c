@@ -67,6 +67,15 @@ static const char *env_or(const char *name, const char *fallback) {
     return value && *value ? value : fallback;
 }
 
+static const char *env_numeric_or_null(const char *name) {
+    const char *value = getenv(name);
+    if (value == NULL || value[0] == '\0') return "null";
+    for (const char *p = value; *p != '\0'; ++p) {
+        if (*p < '0' || *p > '9') return "null";
+    }
+    return value;
+}
+
 static void format_cpu_features(char *output, size_t output_len) {
     if (output_len < 3) return;
     snprintf(output, output_len, "[]");
@@ -222,6 +231,7 @@ static void emit(const char *algorithm, const char *parameter, const char *opera
            "\"algorithm\":{\"id\":\"%s\",\"parameter_set\":\"%s\"},\"operation\":\"%s\","
            "\"environment\":{\"target\":\"%s\",\"os\":\"%s\",\"cpu\":\"%s\","
            "\"cpu_features\":%s,\"compiler\":\"cc\",\"compiler_version\":\"%s\","
+           "\"cpu_frequency_khz\":%s,\"cpu_governor\":\"%s\","
            "\"optimization\":\"%s\",\"run_order\":\"%s\",\"harness_version\":\"arena-v4-cycle-counter\"},"
            "\"measurement\":{\"iterations\":%d,\"warmups\":%d,"
            "\"measurement_timestamp_unix_ns\":%llu,\"latency_ns\":%llu,"
@@ -231,6 +241,7 @@ static void emit(const char *algorithm, const char *parameter, const char *opera
            "\"cycle_counter_source\":\"%s\",\"samples_ns\":[",
            algorithm, parameter, operation, env_or("AWSLC_VERSION", "runtime"),
            algorithm, parameter, operation, target, os, cpu, features_json, __VERSION__,
+           env_numeric_or_null("ARENA_CPU_FREQUENCY_KHZ"), env_or("ARENA_CPU_GOVERNOR", "unknown"),
            env_or("ARENA_OPT", "release"), env_or("ARENA_RUN_ORDER", "unknown"),
            cycle_counter_source(), count, warmup_count, timestamp,
            (unsigned long long)stats.median_ns,

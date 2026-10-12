@@ -53,6 +53,12 @@ jobs:
           cc --version | head -1 | tee arena/results/v4-phase0/cc.txt
           awk -F': ' '/model name|Hardware|Processor/{print $2; exit}' /proc/cpuinfo | tee arena/results/v4-phase0/cpu.txt
           awk -F': ' '/^flags|^Features/{print $2; exit}' /proc/cpuinfo | tee arena/results/v4-phase0/cpu-features.txt
+          CPU_FREQ_KHZ="$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq 2>/dev/null || true)"
+          [[ "$CPU_FREQ_KHZ" =~ ^[0-9]+$ ]] || CPU_FREQ_KHZ=""
+          CPU_GOVERNOR="$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || true)"
+          [[ -n "$CPU_GOVERNOR" ]] || CPU_GOVERNOR="unknown"
+          printf '%s\n' "${CPU_FREQ_KHZ:-unavailable}" | tee arena/results/v4-phase0/cpu-frequency-khz.txt
+          printf '%s\n' "$CPU_GOVERNOR" | tee arena/results/v4-phase0/cpu-governor.txt
           printf 'NEXUSQ_ITERATIONS=%s\nNEXUSQ_WARMUPS=%s\nNEXUSQ_SIGN_SAMPLES_PER_SEED=%s\nAWSLC_ITERATIONS=%s\nAWSLC_WARMUPS=%s\n' \
             "$NEXUSQ_ITERATIONS" "$NEXUSQ_WARMUPS" "$NEXUSQ_SIGN_SAMPLES_PER_SEED" "$AWSLC_ITERATIONS" "$AWSLC_WARMUPS" \
             | tee arena/results/v4-phase0/measurement-policy.txt
@@ -70,6 +76,8 @@ jobs:
           NEXUSQ_RUSTC_VERBOSE="$(rustc --version --verbose | tr '\n' ';')" \
           RUSTC_VERSION="$(rustc --version)" \
           NEXUSQ_CARGO_LOCK_SHA256="$(sha256sum arena/runners/nexusq/Cargo.lock | cut -d' ' -f1)" \
+          NEXUSQ_CPU_FREQUENCY_KHZ="$(cat arena/results/v4-phase0/cpu-frequency-khz.txt | grep -E '^[0-9]+$' || true)" \
+          NEXUSQ_CPU_GOVERNOR="$(cat arena/results/v4-phase0/cpu-governor.txt)" \
           NEXUSQ_OPT=release \
           cargo build --locked --release --features cached-verifier --manifest-path arena/runners/nexusq/Cargo.toml
           cp arena/runners/nexusq/target/release/nexusq-arena-runner arena/results/v4-phase0/nexusq-arena-runner
@@ -109,12 +117,16 @@ jobs:
           NEXUSQ_RUSTC_VERBOSE="$(rustc --version --verbose | tr '\n' ';')" \
           RUSTC_VERSION="$(rustc --version)" \
           NEXUSQ_CARGO_LOCK_SHA256="$(sha256sum arena/runners/nexusq/Cargo.lock | cut -d' ' -f1)" \
+          NEXUSQ_CPU_FREQUENCY_KHZ="$(cat arena/results/v4-phase0/cpu-frequency-khz.txt | grep -E '^[0-9]+$' || true)" \
+          NEXUSQ_CPU_GOVERNOR="$(cat arena/results/v4-phase0/cpu-governor.txt)" \
           NEXUSQ_OPT=release \
           arena/runners/nexusq/target/release/nexusq-arena-runner \
             | tee arena/results/v4-phase0/nexusq.jsonl
           ARENA_CPU="$(cat arena/results/v4-phase0/cpu.txt)" \
           ARENA_CPU_FEATURES="$(tr ' ' ',' < arena/results/v4-phase0/cpu-features.txt)" \
           ARENA_RUN_ORDER=aws-lc-after-nexusq \
+          ARENA_CPU_FREQUENCY_KHZ="$(cat arena/results/v4-phase0/cpu-frequency-khz.txt | grep -E '^[0-9]+$' || true)" \
+          ARENA_CPU_GOVERNOR="$(cat arena/results/v4-phase0/cpu-governor.txt)" \
           ARENA_TARGET=x86_64-linux-gnu ARENA_OS=Ubuntu ARENA_OPT=release \
           arena/results/v4-phase0/aws-lc-runner \
             | tee arena/results/v4-phase0/aws-lc.jsonl
@@ -162,6 +174,11 @@ jobs:
                       'aws_lc_evp_operation_including_per_sample_context_setup',
                   }
                   assert scope in expected_scopes, (name, row['operation'], scope)
+                  assert row['environment'].get('cpu_frequency_khz') is None or row['environment']['cpu_frequency_khz'] >= 0, (name, row['operation'], 'invalid CPU frequency')
+                  assert row['environment'].get('cpu_governor') not in (None, ''), (name, row['operation'], 'missing CPU governor or explicit unknown')
+                  if name == 'nexusq':
+                      assert row['environment'].get('rustc_verbose') not in (None, '', 'unknown'), (name, row['operation'], 'missing Rust toolchain provenance')
+                      assert len(row['environment'].get('cargo_lock_sha256', '')) == 64, (name, row['operation'], 'missing Cargo.lock SHA-256')
                   cycle_samples = measurement.get('samples_cycles', [])
                   if counter_source != 'unavailable':
                       assert len(cycle_samples) == measurement['iterations'], (name, row['operation'], len(cycle_samples), measurement['iterations'])
