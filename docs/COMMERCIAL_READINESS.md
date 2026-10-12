@@ -23,9 +23,9 @@ commercial terms and customer validation.
 | Security model | `docs/SECURITY_MODEL.md` | Present |
 | Cryptography claims | `docs/CRYPTOGRAPHY.md` | Present; claims constrained to evidence |
 | Audit logging | `docs/OBSERVABILITY.md`, audit implementation | Present |
-| Security CI | `.github/workflows/security-ci.yml` | Present |
-| V2 security/fuzz gate | `.github/workflows/v2-security-fuzz.yml` | Present |
-| Correctness/interoperability | V2-08 workflow and docs | Present |
+| Security CI | `.github/workflows/ci.yml` | Present |
+| V2 security/fuzz gate | `.github/workflows/ci.yml` (fuzz build/soaks on `main`) | Present |
+| Correctness/interoperability | V2-08 docs; its workflow lives on the `nexusqv2` branch | Present |
 | Benchmark baseline | `docs/V2_BENCHMARK_BASELINE.md` | Present |
 | V2 profiling | `docs/V2_PROFILE.md` | Present |
 | Backend strategy | `docs/V2_BACKEND_STRATEGY.md` | Present |

@@ -1,9 +1,28 @@
-name: NEXUS-Q V4 — Issue 23 — Measurement harness
+name: NEXUS-Q CI
 
+# The single CI workflow of the repository.
+#
+# V4 work branches (v4/**, e.g. v4/issue-23-kernel-work): one run per push. The push run
+# validates the head commit of the open PR (-> nexusqv4), so no separate pull_request
+# trigger exists for them (it would only run every gate twice).
+# Gates: Rust validation, security (audit/deny/SBOM), secret scan, Phase 0 provenance and
+# the matched-host measurement. The evidence archive + the `NEXUS-Q V4 / PR CI` status are
+# written once, only after every gate is green.
+#
+# main: pushes and PRs run Rust validation, security and secret scan; fuzz harness build on
+# PRs to main; the 4-hour fuzz soaks only on pushes to main (release/security gate).
+#
+# All Rust validation runs on GitHub-hosted runners. Do not build, lint, or test locally.
 on:
-  # Called by v4-pr-ci.yml (the single CI for the V4 PR branch). Archiving and
-  # status publishing are done once, after every gate is green, by that workflow.
-  workflow_call:
+  push:
+    branches:
+      - 'v4/**'
+      - main
+    paths-ignore:
+      - 'artifact-archive/**'
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -11,17 +30,209 @@ permissions:
   contents: read
 
 concurrency:
-  group: v4-issue23-measurement-${{ github.sha }}
-  cancel-in-progress: true
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  matched-host-smoke:
-    if: >-
-      (github.event_name == 'workflow_dispatch' &&
-       github.ref == 'refs/heads/v4/issue-23-kernel-work') ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/v4/issue-23-kernel-work') ||
-      (github.event_name == 'pull_request' &&
-       github.head_ref == 'v4/issue-23-kernel-work' && github.base_ref == 'nexusqv4')
+  rust-validation:
+    name: Rust / fmt, check, clippy, test, build, docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust with CI components
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust dependencies and build outputs
+        uses: Swatinem/rust-cache@v2
+
+      - name: Record toolchain and tested revision
+        run: |
+          rustc -Vv
+          cargo -V
+          git rev-parse HEAD
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Check workspace and all targets
+        run: cargo check --workspace --all-targets --locked
+
+      - name: Run Clippy on workspace and all targets
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Run workspace tests
+        run: cargo test --workspace --locked
+
+      - name: Build workspace and all targets
+        run: cargo build --workspace --all-targets --locked
+
+      - name: Build public documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --workspace --no-deps --locked
+
+  security:
+    name: Security / cargo-audit, cargo-deny, SBOM input
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install security tooling
+        run: |
+          cargo install cargo-audit --locked
+          cargo install cargo-deny --locked
+      - name: Cargo audit
+        run: cargo audit
+      - name: Cargo deny
+        run: cargo deny check
+      - name: Metadata / SBOM input
+        run: cargo metadata --format-version 1 --locked > cargo-metadata.json
+      - name: Upload dependency metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-metadata
+          path: cargo-metadata.json
+
+  secret-scan:
+    name: Secret scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan repository
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Fuzzing is deliberately skipped on V4 work branches (never runs on v4/**).
+  # Full campaigns stay enabled on main as the release/security gate.
+  fuzz-build:
+    name: Fuzz harness build
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Build fuzz targets
+        run: cargo fuzz build
+        working-directory: fuzz
+
+  fuzz-soak-vault:
+    name: 4-hour fuzz soak - vault parser
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 250
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Fuzz vault parser
+        run: cargo fuzz run vault_parse -- -max_total_time=14400
+        working-directory: fuzz
+
+  fuzz-soak-envelope:
+    name: 4-hour fuzz soak - envelope parser
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 250
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Fuzz envelope parser
+        run: cargo fuzz run envelope_parse -- -max_total_time=14400
+        working-directory: fuzz
+
+  phase0:
+    if: github.event_name != 'pull_request' && startsWith(github.ref, 'refs/heads/v4/')
+    name: V4 Phase 0 / dependency provenance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout V4 ref
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Capture toolchain and runner identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p phase0-evidence
+          printf '%s\n' "$(git rev-parse HEAD)" > phase0-evidence/commit.txt
+          printf '%s\n' "$GITHUB_REF" > phase0-evidence/ref.txt
+          rustc --version --verbose | tee phase0-evidence/rustc.txt
+          cargo --version | tee phase0-evidence/cargo.txt
+          uname -a | tee phase0-evidence/uname.txt
+          if command -v lscpu >/dev/null 2>&1; then
+            lscpu | tee phase0-evidence/lscpu.txt
+          fi
+          git status --short | tee phase0-evidence/git-status.txt
+
+      - name: Prove locked Arena dependency sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest=arena/runners/nexusq/Cargo.toml
+          cargo tree --locked --manifest-path "$manifest" -i ml-kem \
+            | tee phase0-evidence/tree-ml-kem.txt
+          cargo tree --locked --manifest-path "$manifest" -i module-lattice \
+            | tee phase0-evidence/tree-module-lattice.txt
+          cargo tree --locked --manifest-path "$manifest" -i ml-dsa \
+            | tee phase0-evidence/tree-ml-dsa.txt
+          grep -F 'vendor/ml-kem' phase0-evidence/tree-ml-kem.txt >/dev/null || {
+            echo 'ERROR: Arena ml-kem does not resolve to vendor/ml-kem' >&2
+            exit 1
+          }
+          grep -F 'vendor/module-lattice' phase0-evidence/tree-module-lattice.txt >/dev/null || {
+            echo 'ERROR: Arena module-lattice does not resolve to vendor/module-lattice' >&2
+            exit 1
+          }
+          cargo metadata --locked --format-version 1 --manifest-path "$manifest" \
+            > phase0-evidence/cargo-metadata.json
+          sha256sum Cargo.toml Cargo.lock "$manifest" arena/runners/nexusq/Cargo.lock \
+            | tee phase0-evidence/manifest-sha256.txt
+
+      - name: Record local patch targets and kernel readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -nE 'ml-kem = \{ path =|module-lattice = \{ path =' \
+            arena/runners/nexusq/Cargo.toml \
+            | tee phase0-evidence/local-patches.txt
+          if test -f crates/nexusq-kernels/Cargo.toml; then
+            echo 'nexusq-kernels manifest exists' | tee phase0-evidence/kernel-crate-status.txt
+          else
+            echo 'nexusq-kernels manifest not present; Phase 0 remains incomplete' \
+              | tee phase0-evidence/kernel-crate-status.txt
+          fi
+
+      - name: Upload Phase 0 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v4-issue23-phase0-${{ github.sha }}
+          path: phase0-evidence/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  measurement:
+    if: github.event_name != 'pull_request' && startsWith(github.ref, 'refs/heads/v4/')
     name: Build and exercise Rust/AWS-LC on one host
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -332,3 +543,77 @@ jobs:
           path: arena/results/v4-phase0/
           if-no-files-found: ignore
           retention-days: 30
+
+  archive:
+    name: Archive evidence (only after every gate passed)
+    needs: [rust-validation, security, secret-scan, phase0, measurement]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/v4/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      statuses: write
+    steps:
+      - name: Checkout tested commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Download Phase 0 and measurement evidence
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v4-issue23-*-${{ github.sha }}
+          path: evidence
+
+      - name: Archive evidence and publish the PR CI status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          latest_sha="$(git ls-remote origin "refs/heads/$HEAD_REF" | awk 'NR == 1 {print $1}')"
+          if [[ "$latest_sha" != "$GITHUB_SHA" ]]; then
+            echo "Branch moved to $latest_sha; the newer CI run will archive and publish."
+            exit 0
+          fi
+          for entry in phase0:v4-issue23-phase0 measurement:v4-issue23-measurement; do
+            key="${entry%%:*}"
+            artifact="${entry#*:}"
+            source_dir="evidence/${artifact}-${GITHUB_SHA}"
+            destination="artifact-archive/v4-issue23-${key}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            [[ -d "$source_dir" ]] || { echo "Missing evidence: $source_dir" >&2; exit 1; }
+            mkdir -p "$destination"
+            cp -a "$source_dir/." "$destination/"
+            cat > "$destination/README.txt" <<EOF
+          NEXUS-Q V4 ${key} CI archive
+          workflow_run_id=${GITHUB_RUN_ID}
+          workflow_attempt=${GITHUB_RUN_ATTEMPT}
+          source_commit=${GITHUB_SHA}
+          source_ref=${GITHUB_REF}
+          workflow_url=https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          EOF
+            find "$destination" -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > "$destination/SHA256SUMS.txt"
+            git add "$destination"
+          done
+          new_sha="$GITHUB_SHA"
+          if ! git diff --cached --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "chore(artifacts): archive V4 CI run ${GITHUB_RUN_ID} [skip ci]"
+            for attempt in 1 2 3; do
+              git fetch origin "$HEAD_REF"
+              git rebase FETCH_HEAD
+              if git push origin "HEAD:refs/heads/${HEAD_REF}"; then
+                new_sha="$(git rev-parse HEAD)"
+                break
+              fi
+              sleep 1
+            done
+            [[ "$new_sha" != "$GITHUB_SHA" ]] || { echo 'Unable to push archived evidence after retries' >&2; exit 1; }
+          fi
+          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$new_sha" \
+            -f state=success -f context='NEXUS-Q V4 / PR CI' \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            -f description="All gates passed on ${GITHUB_SHA:0:7}; head differs only by archived evidence." >/dev/null
+          echo "Published NEXUS-Q V4 / PR CI=success on $new_sha"
