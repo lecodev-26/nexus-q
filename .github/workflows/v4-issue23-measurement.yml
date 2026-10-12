@@ -174,7 +174,6 @@ jobs:
                       'rustcrypto_ml_kem_operation',
                       'nexusq_core_ml_dsa_wrapper_operation',
                       'cached_ml_dsa_verifier_operation',
-                      'aws_lc_evp_operation_including_per_sample_context_setup',
                       'aws_lc_evp_primitive_operation',
                   }
                   assert scope in expected_scopes, (name, row['operation'], scope)
