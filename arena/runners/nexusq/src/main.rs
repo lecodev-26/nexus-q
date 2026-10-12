@@ -6,6 +6,68 @@ use ml_kem::{
 use nexusq_core::crypto::pq_sign;
 use std::env;
 use std::hint::black_box;
+use std::sync::Mutex;
+
+mod cycles {
+    //! Raw hardware-counter instrumentation; ticks are not assumed to be nanoseconds.
+    #[inline]
+    pub fn read() -> Option<u64> {
+        #[cfg(target_arch = "x86_64")]
+        {
+            let low: u32;
+            let high: u32;
+            // SAFETY: LFENCE orders RDTSC after prior instructions; outputs are explicit
+            // and the instruction does not access memory.
+            unsafe {
+                core::arch::asm!(
+                    "lfence", "rdtsc", "lfence",
+                    out("eax") low, out("edx") high,
+                    options(nostack, preserves_flags)
+                );
+            }
+            return Some(((high as u64) << 32) | low as u64);
+        }
+        #[cfg(target_arch = "aarch64")]
+        {
+            let counter: u64;
+            // SAFETY: ISB orders the architectural counter read; MRS writes one register.
+            unsafe {
+                core::arch::asm!(
+                    "isb", "mrs {counter}, cntvct_el0",
+                    counter = out(reg) counter,
+                    options(nostack, preserves_flags)
+                );
+            }
+            return Some(counter);
+        }
+        #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+        { None }
+    }
+
+    pub const fn source() -> &'static str {
+        #[cfg(target_arch = "x86_64")]
+        { return "x86_64_tsc_ticks"; }
+        #[cfg(target_arch = "aarch64")]
+        { return "aarch64_cntvct_ticks"; }
+        #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+        { "unavailable" }
+    }
+}
+
+static CYCLE_SAMPLES: Mutex<Vec<u64>> = Mutex::new(Vec::new());
+
+#[inline]
+fn record_cycles(start: Option<u64>) {
+    if let (Some(start), Some(end)) = (start, cycles::read()) {
+        if let Ok(mut samples) = CYCLE_SAMPLES.lock() {
+            samples.push(end.wrapping_sub(start));
+        }
+    }
+}
+
+fn take_cycle_samples() -> Vec<u64> {
+    CYCLE_SAMPLES.lock().map(|mut samples| std::mem::take(&mut *samples)).unwrap_or_default()
+}
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 const DEFAULT_ITERATIONS: usize = 1_000;
@@ -102,6 +164,7 @@ fn emit_operation_samples(
         "benchmark sample set must not be empty"
     );
     let stats = summary(samples);
+    let cycle_samples = take_cycle_samples();
     let latency_ns = stats["median_ns"].as_u64().unwrap_or(1) as f64;
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -134,7 +197,8 @@ fn emit_operation_samples(
             } else {
                 "per-operation std::time::Instant; nexusq-core ML-DSA wrapper; median latency"
             },
-            "samples_ns":samples, "statistics":stats
+            "samples_ns":samples, "statistics":stats,
+            "cycle_counter_source":cycles::source(), "samples_cycles":cycle_samples
         },
         "sizes":sizes
     });
@@ -143,6 +207,7 @@ fn emit_operation_samples(
 
 fn emit_cached_verify_samples(samples: &[u128], public_key_len: usize, signature_len: usize) {
     let stats = summary(samples);
+    let cycle_samples = take_cycle_samples();
     let latency_ns = stats["median_ns"].as_u64().unwrap_or(1) as f64;
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -171,7 +236,8 @@ fn emit_cached_verify_samples(samples: &[u128], public_key_len: usize, signature
             "measurement_timestamp_unix_ns":timestamp, "latency_ns":latency_ns,
             "throughput_ops_s":1_000_000_000.0/latency_ns, "memory_bytes":null,
             "measurement_method":"per-operation std::time::Instant; cached MlDsa65VerifyingKey",
-            "samples_ns":samples, "statistics":stats
+            "samples_ns":samples, "statistics":stats,
+            "cycle_counter_source":cycles::source(), "samples_cycles":cycle_samples
         },
         "sizes":{"public_key_bytes":public_key_len,"secret_key_bytes":ML_DSA_65_SECRET_KEY_LEN,"ciphertext_bytes":null,"signature_bytes":signature_len}
     });
@@ -192,8 +258,10 @@ fn emit_ml_dsa_sign_distribution(
         }
         let mut samples = Vec::with_capacity(ml_dsa_sign_samples_per_seed());
         for _ in 0..ml_dsa_sign_samples_per_seed() {
+            let cycle_start = cycles::read();
             let start = Instant::now();
             black_box(black_box(key).sign(black_box(MESSAGE)));
+            record_cycles(cycle_start);
             samples.push(start.elapsed().as_nanos());
         }
         all_samples.extend_from_slice(&samples);
@@ -204,6 +272,7 @@ fn emit_ml_dsa_sign_distribution(
         }));
     }
     let overall = summary(&all_samples);
+    let cycle_samples = take_cycle_samples();
     let latency_ns = overall["median_ns"].as_u64().unwrap_or(1) as f64;
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -241,6 +310,8 @@ fn emit_ml_dsa_sign_distribution(
             "samples_ns":all_samples,
             "statistics":overall,
             "seed_samples":per_seed,
+            "cycle_counter_source":cycles::source(),
+            "samples_cycles":cycle_samples,
             "seed_count":keys.len(),
             "samples_per_seed":ml_dsa_sign_samples_per_seed()
         },
@@ -303,8 +374,10 @@ fn main() {
     }
     let mut samples = Vec::with_capacity(iterations());
     for _ in 0..iterations() {
+        let cycle_start = cycles::read();
         let start = Instant::now();
         black_box(MlKem768::generate_keypair());
+        record_cycles(cycle_start);
         samples.push(start.elapsed().as_nanos());
     }
     emit_operation_samples(
@@ -321,9 +394,11 @@ fn main() {
     let mut ct768_bytes = Vec::new();
     let mut samples = Vec::with_capacity(iterations());
     for _ in 0..iterations() {
+        let cycle_start = cycles::read();
         let start = Instant::now();
         let (c, s) = black_box(&pk768).encapsulate();
         black_box(s);
+        record_cycles(cycle_start);
         let elapsed = start.elapsed().as_nanos();
         // Keep ciphertext serialization/copying outside the timed primitive call.
         ct768_bytes = c.as_slice().to_vec();
@@ -345,8 +420,10 @@ fn main() {
     }
     let mut samples = Vec::with_capacity(iterations());
     for _ in 0..iterations() {
+        let cycle_start = cycles::read();
         let start = Instant::now();
         black_box(black_box(&sk768).decapsulate(black_box(&ct768)));
+        record_cycles(cycle_start);
         samples.push(start.elapsed().as_nanos());
     }
     emit_operation_samples(
@@ -373,8 +450,10 @@ fn main() {
     }
     let mut samples = Vec::with_capacity(iterations());
     for _ in 0..iterations() {
+        let cycle_start = cycles::read();
         let start = Instant::now();
         black_box(MlKem1024::generate_keypair());
+        record_cycles(cycle_start);
         samples.push(start.elapsed().as_nanos());
     }
     emit_operation_samples(
@@ -391,9 +470,11 @@ fn main() {
     }
     let mut samples = Vec::with_capacity(iterations());
     for _ in 0..iterations() {
+        let cycle_start = cycles::read();
         let start = Instant::now();
         let (c, s) = black_box(&pk1024).encapsulate();
         black_box(s);
+        record_cycles(cycle_start);
         let elapsed = start.elapsed().as_nanos();
         // Keep serialization/copying the ciphertext outside the timed primitive call.
         ct2 = c.as_slice().to_vec();
@@ -415,8 +496,10 @@ fn main() {
     }
     let mut samples = Vec::with_capacity(iterations());
     for _ in 0..iterations() {
+        let cycle_start = cycles::read();
         let start = Instant::now();
         black_box(black_box(&sk1024).decapsulate(black_box(&ct1024)));
+        record_cycles(cycle_start);
         samples.push(start.elapsed().as_nanos());
     }
     emit_operation_samples(
@@ -435,8 +518,10 @@ fn main() {
     }
     let mut samples = Vec::with_capacity(iterations());
     for _ in 0..iterations() {
+        let cycle_start = cycles::read();
         let start = Instant::now();
         black_box(pq_sign::MlDsa65KeyPair::generate());
+        record_cycles(cycle_start);
         samples.push(start.elapsed().as_nanos());
     }
     emit_operation_samples(
@@ -465,8 +550,10 @@ fn main() {
         }
         let mut cached_verify_samples = Vec::with_capacity(iterations());
         for _ in 0..iterations() {
+            let cycle_start = cycles::read();
             let start = Instant::now();
             black_box(black_box(&cached_verifier).verify(black_box(MESSAGE), black_box(&sig))).unwrap();
+            record_cycles(cycle_start);
             cached_verify_samples.push(start.elapsed().as_nanos());
         }
         emit_cached_verify_samples(&cached_verify_samples, pk.len(), sig.len());
@@ -477,9 +564,11 @@ fn main() {
     }
     let mut samples = Vec::with_capacity(iterations());
     for _ in 0..iterations() {
+        let cycle_start = cycles::read();
         let start = Instant::now();
         black_box(pq_sign::ml_dsa_65_verify(black_box(&pk), black_box(MESSAGE), black_box(&sig))).unwrap();
         black_box(());
+        record_cycles(cycle_start);
         samples.push(start.elapsed().as_nanos());
     }
     emit_operation_samples(

@@ -236,6 +236,10 @@ jobs:
             if name == "v3":
               for row in rows[name]:
                 measurement=row["measurement"]
+                assert measurement.get("cycle_counter_source") in {"x86_64_tsc_ticks", "aarch64_cntvct_ticks", "unavailable"}
+                cycle_samples=measurement.get("samples_cycles", [])
+                if measurement["cycle_counter_source"] != "unavailable":
+                  assert len(cycle_samples)==measurement["iterations"], (row["algorithm"],row["operation"],"cycle samples mismatch")
                 if row["operation"] != "sign":
                   assert measurement["iterations"]>=1000, (row["algorithm"],row["operation"],measurement["iterations"])
                   assert len(measurement.get("samples_ns",[]))>=1000, (row["algorithm"],row["operation"],"missing 1,000 individual samples")

@@ -180,6 +180,17 @@
             "minimum": 1
           }
         },
+        "cycle_counter_source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "samples_cycles": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
         "statistics": {
           "$ref": "#/$defs/sampleStatistics"
         },
