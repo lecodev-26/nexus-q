@@ -93,7 +93,7 @@ impl AuditLog {
     /// # Errors
     ///
     /// Returns [`DbError::Io`] if the directory cannot be read or
-    /// written, [`DbError::NotFound`] is not applicable here (we
+    /// written; `DbError::NotFound` is not applicable here (we
     /// never look up by name), and any parse error from the segment
     /// being opened.
     pub fn open(dir: impl AsRef<Path>, auth_key: &[u8; 32]) -> Result<Self, DbError> {

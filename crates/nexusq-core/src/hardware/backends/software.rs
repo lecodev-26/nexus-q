@@ -3,7 +3,7 @@
 //! The fallback that works everywhere. It uses the operating system's
 //! ordinary facilities:
 //!
-//! - Randomness: the OS CSPRNG, via [`OsRandomSource`].
+//! - Randomness: the OS CSPRNG, via [`crate::crypto::random::OsRandomSource`].
 //! - Secure storage: a directory on disk with strict permissions.
 //! - Key provider: a stub. Software cannot protect keys from software;
 //!   the vault is where keys live. The stub exists so the trait surface

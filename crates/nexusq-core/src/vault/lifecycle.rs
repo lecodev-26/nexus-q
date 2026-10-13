@@ -1,7 +1,7 @@
 //! Key lifecycle operations.
 //!
 //! Types and reasons for the operations that move a key through its
-//! [`KeyStatus`](super::KeyStatus) states: activation, rotation,
+//! [`KeyStatus`] states: activation, rotation,
 //! revocation and destruction.
 //!
 //! The operations themselves live on

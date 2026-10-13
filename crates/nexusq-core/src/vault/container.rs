@@ -203,7 +203,7 @@ pub struct Vault {
 /// An unlocked vault session.
 ///
 /// Holds the derived KEK and the decrypted body in memory. Dropping the
-/// session zeroizes the KEK. Passing it back to [`Vault::lock`] persists
+/// session zeroizes the KEK. Passing it back to [`Session::lock`] persists
 /// any changes and returns ownership of the [`Vault`].
 pub struct Session {
     vault: Vault,
@@ -467,7 +467,7 @@ impl Session {
     /// Returns a mutable reference to the decrypted body.
     ///
     /// Mutations are only persisted when the session is passed back to
-    /// [`Vault::lock`].
+    /// [`Session::lock`].
     pub(crate) fn body_mut(&mut self) -> Result<&mut VaultBody, VaultError> {
         self.require_writes_allowed()?;
         Ok(&mut self.body)
@@ -1644,7 +1644,7 @@ impl Session {
     /// Deactivates the policy engine for the current session.
     ///
     /// Policy administration is an authenticated session operation;
-    /// callers cannot bypass it through [`Session::body_mut`], which is
+    /// callers cannot bypass it through `Session::body_mut`, which is
     /// crate-internal. After this call, every operation is allowed again,
     /// matching the behavior of a vault with no policies configured.
     ///
