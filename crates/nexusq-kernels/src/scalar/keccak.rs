@@ -121,6 +121,85 @@ fn shake(input: &[u8], output: &mut [u8], rate: usize) {
     }
 }
 
+/// Incremental SHAKE sponge that absorbs input and squeezes output without
+/// building intermediate concatenation or output buffers.
+///
+/// The API is deliberately scalar and safe; optimized backends can preserve
+/// this absorb/finalize/squeeze contract while processing multiple states.
+pub struct Shake {
+    state: [u64; 25],
+    rate: usize,
+    absorb_position: usize,
+    squeeze_position: usize,
+    squeezing: bool,
+}
+
+impl Shake {
+    /// Create an incremental SHAKE128 sponge (168-byte rate).
+    pub const fn new128() -> Self {
+        Self::new(168)
+    }
+
+    /// Create an incremental SHAKE256 sponge (136-byte rate).
+    pub const fn new256() -> Self {
+        Self::new(136)
+    }
+
+    const fn new(rate: usize) -> Self {
+        Self {
+            state: [0_u64; 25],
+            rate,
+            absorb_position: 0,
+            squeeze_position: 0,
+            squeezing: false,
+        }
+    }
+
+    /// Absorb another input chunk. Chunks may be split at arbitrary boundaries.
+    /// Panics if called after `finalize`.
+    pub fn absorb(&mut self, input: &[u8]) {
+        assert!(!self.squeezing, "cannot absorb after SHAKE finalization");
+        for &byte in input {
+            self.state[self.absorb_position / 8] ^=
+                u64::from(byte) << ((self.absorb_position % 8) * 8);
+            self.absorb_position += 1;
+            if self.absorb_position == self.rate {
+                keccak_f1600(&mut self.state);
+                self.absorb_position = 0;
+            }
+        }
+    }
+
+    /// Apply SHAKE domain separation and transition to the squeeze phase.
+    /// Repeated calls are harmless and leave the sponge in the squeeze phase.
+    pub fn finalize(&mut self) {
+        if self.squeezing {
+            return;
+        }
+        self.state[self.absorb_position / 8] ^=
+            0x1f_u64 << ((self.absorb_position % 8) * 8);
+        self.state[(self.rate - 1) / 8] ^= 0x80_u64 << (((self.rate - 1) % 8) * 8);
+        keccak_f1600(&mut self.state);
+        self.squeeze_position = 0;
+        self.squeezing = true;
+    }
+
+    /// Squeeze the next output bytes into a caller-provided buffer.
+    /// Panics if called before `finalize`.
+    pub fn squeeze(&mut self, output: &mut [u8]) {
+        assert!(self.squeezing, "SHAKE must be finalized before squeezing");
+        for byte in output {
+            if self.squeeze_position == self.rate {
+                keccak_f1600(&mut self.state);
+                self.squeeze_position = 0;
+            }
+            *byte = (self.state[self.squeeze_position / 8]
+                >> ((self.squeeze_position % 8) * 8)) as u8;
+            self.squeeze_position += 1;
+        }
+    }
+}
+
 fn xor_bytes_into_state(state: &mut [u64; 25], bytes: &[u8]) {
     for (index, byte) in bytes.iter().copied().enumerate() {
         state[index / 8] ^= u64::from(byte) << ((index % 8) * 8);
@@ -129,7 +208,7 @@ fn xor_bytes_into_state(state: &mut [u64; 25], bytes: &[u8]) {
 
 #[cfg(test)]
 mod tests {
-    use super::{keccak_f1600, shake128, shake256};
+    use super::{keccak_f1600, shake128, shake256, Shake};
 
     fn decode_hex(hex: &str) -> Vec<u8> {
         assert_eq!(hex.len() % 2, 0);
@@ -198,6 +277,43 @@ d75dc4ddd8c0f200cb05019d67b592f6fc821c49479ab48640292eacb3b7c4be"
         shake128(b"multi-block output", &mut long);
         assert_eq!(long[..short.len()], short);
         assert!(long[168..].iter().any(|byte| *byte != 0));
+    }
+
+    #[test]
+    fn incremental_shake_matches_one_shot_across_arbitrary_chunk_boundaries() {
+        let input: Vec<u8> = (0..401).map(|index| (index * 37 + 11) as u8).collect();
+        for (rate, mut sponge, one_shot) in [
+            (168, Shake::new128(), shake128 as fn(&[u8], &mut [u8])),
+            (136, Shake::new256(), shake256 as fn(&[u8], &mut [u8])),
+        ] {
+            sponge.absorb(&input[..rate - 3]);
+            sponge.absorb(&input[rate - 3..rate + 5]);
+            sponge.absorb(&input[rate + 5..]);
+            sponge.finalize();
+            sponge.finalize();
+
+            let mut expected = vec![0_u8; rate * 2 + 29];
+            let mut actual = vec![0_u8; expected.len()];
+            one_shot(&input, &mut expected);
+            let first = rate - 7;
+            sponge.squeeze(&mut actual[..first]);
+            sponge.squeeze(&mut actual[first..rate + 13]);
+            sponge.squeeze(&mut actual[rate + 13..]);
+            assert_eq!(actual, expected);
+        }
+    }
+
+    #[test]
+    fn incremental_shake_supports_empty_input_and_empty_squeeze() {
+        let mut sponge = Shake::new128();
+        sponge.absorb(&[]);
+        sponge.finalize();
+        sponge.squeeze(&mut []);
+        let mut output = [0_u8; 32];
+        sponge.squeeze(&mut output);
+        let mut expected = [0_u8; 32];
+        shake128(b"", &mut expected);
+        assert_eq!(output, expected);
     }
 
     #[test]
