@@ -74,7 +74,9 @@ jobs:
       - name: Build public documentation
         env:
           RUSTDOCFLAGS: -D warnings
-        run: cargo doc --workspace --no-deps --locked
+        # nexusq-cli's binary and nexusq-c's library share the rustdoc output
+        # name `nexusq`; serialize rustdoc to avoid concurrent directory cleanup.
+        run: cargo doc --workspace --no-deps --locked --jobs 1
 
   security:
     name: Security / cargo-audit, cargo-deny, SBOM input
