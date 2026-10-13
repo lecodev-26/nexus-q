@@ -1,73 +1,76 @@
 <div align="center">
 
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
-  <defs>
-    <!-- Fondo con degradado oscuro -->
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0B0F19"/>
-      <stop offset="100%" stop-color="#1A1F2C"/>
-    </linearGradient>
-    
-    <!-- Gradiente Rust (Naranja/Ámbar) -->
-    <linearGradient id="rustGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#CE422B"/>
-      <stop offset="100%" stop-color="#E57324"/>
-    </linearGradient>
-    
-    <!-- Gradiente Cuántico (Cian/Azul) -->
-    <linearGradient id="quantumGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#00F2FE"/>
-      <stop offset="100%" stop-color="#4FACFE"/>
-    </linearGradient>
-    
-    <!-- Filtro de brillo neón -->
-    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="6" result="blur"/>
-      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
-    </filter>
-  </defs>
+<p align="center">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="220" height="220">
+    <defs>
+      <!-- Fondo con degradado oscuro -->
+      <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#0B0F19"/>
+        <stop offset="100%" stop-color="#1A1F2C"/>
+      </linearGradient>
+      
+      <!-- Gradiente Rust (Naranja/Ámbar) -->
+      <linearGradient id="rustGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#CE422B"/>
+        <stop offset="100%" stop-color="#E57324"/>
+      </linearGradient>
+      
+      <!-- Gradiente Cuántico (Cian/Azul) -->
+      <linearGradient id="quantumGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#00F2FE"/>
+        <stop offset="100%" stop-color="#4FACFE"/>
+      </linearGradient>
+      
+      <!-- Filtro de brillo neón -->
+      <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+        <feGaussianBlur stdDeviation="6" result="blur"/>
+        <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+      </filter>
+    </defs>
 
-  <!-- Fondo base con esquinas redondeadas -->
-  <rect width="500" height="500" rx="35" fill="url(#bgGrad)"/>
+    <!-- Fondo base con esquinas redondeadas -->
+    <rect width="500" height="500" rx="35" fill="url(#bgGrad)"/>
 
-  <!-- Grupo central del logotipo -->
-  <g transform="translate(250, 215)">
-    <!-- Red de Celosía Post-Cuántica (Lattice Grid) -->
-    <g stroke="#4FACFE" stroke-width="1.5" stroke-opacity="0.3" fill="none">
-      <path d="M-100,-100 L100,-100 L140,0 L100,100 L-100,100 L-140,0 Z"/>
-      <path d="M-60,-120 L60,-120 L120,-60 L120,60 L60,120 L-60,120 L-120,60 L-120,-60 Z"/>
-      <line x1="-120" y1="-60" x2="120" y2="60"/>
-      <line x1="-120" y1="60" x2="120" y2="-60"/>
-      <line x1="-140" y1="0" x2="140" y2="0"/>
-      <line x1="0" y1="-120" x2="0" y2="120"/>
+    <!-- Grupo central del logotipo -->
+    <g transform="translate(250, 215)">
+      <!-- Red de Celosía Post-Cuántica (Lattice Grid) -->
+      <g stroke="#4FACFE" stroke-width="1.5" stroke-opacity="0.3" fill="none">
+        <path d="M-100,-100 L100,-100 L140,0 L100,100 L-100,100 L-140,0 Z"/>
+        <path d="M-60,-120 L60,-120 L120,-60 L120,60 L60,120 L-60,120 L-120,60 L-120,-60 Z"/>
+        <line x1="-120" y1="-60" x2="120" y2="60"/>
+        <line x1="-120" y1="60" x2="120" y2="-60"/>
+        <line x1="-140" y1="0" x2="140" y2="0"/>
+        <line x1="0" y1="-120" x2="0" y2="120"/>
+      </g>
+
+      <!-- Nodos Cuánticos distribuidos -->
+      <g fill="#00F2FE" filter="url(#glow)">
+        <circle cx="0" cy="0" r="5"/>
+        <circle cx="-100" cy="-100" r="3.5"/>
+        <circle cx="100" cy="-100" r="3.5"/>
+        <circle cx="140" cy="0" r="3.5"/>
+        <circle cx="100" cy="100" r="3.5"/>
+        <circle cx="-100" cy="100" r="3.5"/>
+        <circle cx="-140" cy="0" r="3.5"/>
+      </g>
+
+      <!-- Núcleo Hexagonal de Rust -->
+      <polygon points="0,-80 70,-40 70,40 0,80 -70,40 -70,-40" fill="none" stroke="url(#rustGrad)" stroke-width="4" filter="url(#glow)"/>
+      <polygon points="0,-65 56,-32.5 56,32.5 0,65 -56,32.5 -56,-32.5" fill="#0B0F19" stroke="url(#rustGrad)" stroke-width="1.5" opacity="0.95"/>
+
+      <!-- Monograma Central (Nexus / Q) -->
+      <path d="M-22,22 L-22,-22 L0,8 L22,-22 L22,22" fill="none" stroke="url(#quantumGrad)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+      
+      <!-- Anillo Orbital Cuántico -->
+      <ellipse cx="0" cy="3" rx="32" ry="38" fill="none" stroke="#00F2FE" stroke-width="2" stroke-dasharray="5,4" opacity="0.85"/>
     </g>
 
-    <!-- Nodos Cuánticos distribuidos -->
-    <g fill="#00F2FE" filter="url(#glow)">
-      <circle cx="0" cy="0" r="5"/>
-      <circle cx="-100" cy="-100" r="3.5"/>
-      <circle cx="100" cy="-100" r="3.5"/>
-      <circle cx="140" cy="0" r="3.5"/>
-      <circle cx="100" cy="100" r="3.5"/>
-      <circle cx="-100" cy="100" r="3.5"/>
-      <circle cx="-140" cy="0" r="3.5"/>
-    </g>
+    <!-- Tipografía: Título y Subtítulo -->
+    <text x="250" y="410" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="28" font-weight="800" fill="#FFFFFF" text-anchor="middle" letter-spacing="5">NEXUS Q</text>
+    <text x="250" y="438" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="11" font-weight="700" fill="#E57324" text-anchor="middle" letter-spacing="3">POST-QUANTUM RUST ENGINE</text>
+  </svg>
+</p>
 
-    <!-- Núcleo Hexagonal de Rust -->
-    <polygon points="0,-80 70,-40 70,40 0,80 -70,40 -70,-40" fill="none" stroke="url(#rustGrad)" stroke-width="4" filter="url(#glow)"/>
-    <polygon points="0,-65 56,-32.5 56,32.5 0,65 -56,32.5 -56,-32.5" fill="#0B0F19" stroke="url(#rustGrad)" stroke-width="1.5" opacity="0.95"/>
-
-    <!-- Monograma Central (Nexus / Q) -->
-    <path d="M-22,22 L-22,-22 L0,8 L22,-22 L22,22" fill="none" stroke="url(#quantumGrad)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
-    
-    <!-- Anillo Orbital Cuántico -->
-    <ellipse cx="0" cy="3" rx="32" ry="38" fill="none" stroke="#00F2FE" stroke-width="2" stroke-dasharray="5,4" opacity="0.85"/>
-  </g>
-
-  <!-- Tipografía: Título y Subtítulo -->
-  <text x="250" y="410" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="28" font-weight="800" fill="#FFFFFF" text-anchor="middle" letter-spacing="5">NEXUS Q</text>
-  <text x="250" y="438" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="11" font-weight="700" fill="#E57324" text-anchor="middle" letter-spacing="3">POST-QUANTUM RUST ENGINE</text>
-</svg>
 
 <img src="assets/logo.png" alt="NEXUS-Q logo" width="132">
 
