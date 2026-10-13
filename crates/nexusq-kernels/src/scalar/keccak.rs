@@ -176,8 +176,7 @@ impl Shake {
         if self.squeezing {
             return;
         }
-        self.state[self.absorb_position / 8] ^=
-            0x1f_u64 << ((self.absorb_position % 8) * 8);
+        self.state[self.absorb_position / 8] ^= 0x1f_u64 << ((self.absorb_position % 8) * 8);
         self.state[(self.rate - 1) / 8] ^= 0x80_u64 << (((self.rate - 1) % 8) * 8);
         keccak_f1600(&mut self.state);
         self.squeeze_position = 0;
@@ -193,8 +192,8 @@ impl Shake {
                 keccak_f1600(&mut self.state);
                 self.squeeze_position = 0;
             }
-            *byte = (self.state[self.squeeze_position / 8]
-                >> ((self.squeeze_position % 8) * 8)) as u8;
+            *byte =
+                (self.state[self.squeeze_position / 8] >> ((self.squeeze_position % 8) * 8)) as u8;
             self.squeeze_position += 1;
         }
     }
@@ -208,7 +207,7 @@ fn xor_bytes_into_state(state: &mut [u64; 25], bytes: &[u8]) {
 
 #[cfg(test)]
 mod tests {
-    use super::{keccak_f1600, shake128, shake256, Shake};
+    use super::{Shake, keccak_f1600, shake128, shake256};
 
     fn decode_hex(hex: &str) -> Vec<u8> {
         assert_eq!(hex.len() % 2, 0);
