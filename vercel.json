@@ -5,5 +5,29 @@
   "buildCommand": null,
   "outputDirectory": "site",
   "cleanUrls": true,
-  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- site/; result=$?; if [ \"$result\" -eq 0 ]; then exit 0; else exit 1; fi"
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- site/; result=$?; if [ \"$result\" -eq 0 ]; then exit 0; else exit 1; fi",
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "nexus-q-topaz.vercel.app"
+        }
+      ],
+      "destination": "https://nexus-q.link/$1",
+      "permanent": true
+    },
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.nexus-q.link"
+        }
+      ],
+      "destination": "https://nexus-q.link/$1",
+      "permanent": true
+    }
+  ]
 }

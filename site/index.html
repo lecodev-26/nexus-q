@@ -9,19 +9,19 @@
 <meta property="og:description" content="Open source Rust engine for protecting data, keys and identities. ML-KEM-768 + X25519, ML-DSA-65, vaults, audit log, SDKs. No independent audit implied.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="NEXUS-Q">
-<meta property="og:url" content="https://nexus-q-topaz.vercel.app/">
-<meta property="og:image" content="https://nexus-q-topaz.vercel.app/og.jpg">
+<meta property="og:url" content="https://nexus-q.link/">
+<meta property="og:image" content="https://nexus-q.link/og.jpg">
 <meta property="og:image:width" content="1280">
 <meta property="og:image:height" content="640">
 <meta property="og:image:alt" content="NEXUS-Q: post-quantum cryptographic security engine">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="NEXUS-Q — Post-quantum cryptographic security engine">
 <meta name="twitter:description" content="Open source Rust engine for protecting data, keys and identities with ML-KEM and ML-DSA. No independent audit implied.">
-<meta name="twitter:image" content="https://nexus-q-topaz.vercel.app/og.jpg">
-<link rel="canonical" href="https://nexus-q-topaz.vercel.app/">
+<meta name="twitter:image" content="https://nexus-q.link/og.jpg">
+<link rel="canonical" href="https://nexus-q.link/">
 <meta name="google-site-verification" content="YnqYGc3PRPTnJIYz4G42fGCpNzalz9IaJ5KiCJ7kMmc" />
 <meta name="keywords" content="post-quantum cryptography, ML-KEM, ML-DSA, Kyber, Dilithium, FIPS 203, FIPS 204, Rust, encryption, key management, vault">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"NEXUS-Q","description":"Post-quantum cryptographic security engine written in Rust for protecting data, keys and identities.","url":"https://nexus-q-topaz.vercel.app/","codeRepository":"https://github.com/lecodev-26/nexus-q","programmingLanguage":"Rust","license":["https://opensource.org/license/mit","https://www.apache.org/licenses/LICENSE-2.0"],"author":{"@type":"Person","name":"lecodev-26","url":"https://github.com/lecodev-26"}}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"NEXUS-Q","description":"Post-quantum cryptographic security engine written in Rust for protecting data, keys and identities.","url":"https://nexus-q.link/","codeRepository":"https://github.com/lecodev-26/nexus-q","programmingLanguage":"Rust","license":["https://opensource.org/license/mit","https://www.apache.org/licenses/LICENSE-2.0"],"author":{"@type":"Person","name":"lecodev-26","url":"https://github.com/lecodev-26"}}</script>
 <meta name="theme-color" content="#06080b">
 <link rel="icon" href="/favicon.ico" sizes="48x48">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
@@ -59,7 +59,7 @@ nav .wrap{display:flex;align-items:center;justify-content:space-between;gap:16px
 .mb{display:none;width:42px;height:42px;padding:0;justify-content:center;align-items:center;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:99px;cursor:pointer}
 .mb svg{width:20px;height:20px}
 .links .mo{display:none}
-@media (max-width:860px){
+@media (max-width:1080px){
 .mb{display:inline-flex}
 .links{display:none;position:absolute;top:100%;left:0;right:0;flex-direction:column;gap:0;background:var(--bg);border-bottom:1px solid var(--line);padding:4px clamp(16px,4vw,40px) 14px;max-height:calc(100vh - 80px);overflow-y:auto}
 .links.open{display:flex}
@@ -170,6 +170,28 @@ footer{border-top:1px solid var(--line);padding:40px 0 60px;color:var(--mut);fon
 footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px}
 .rv{opacity:0;transform:translateY(28px);transition:opacity .8s,transform .8s}.rv.on{opacity:1;transform:none}
 @media (prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}.rv{opacity:1;transform:none}.bar{transition:none}}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+img,svg,canvas{max-width:100%}
+.grid>*,.qs>*,.yn>*,.flow>*,.tl>*{min-width:0}
+.chip{max-width:100%;line-height:1.45;align-items:flex-start}
+.chip b{flex:none;margin-top:7px}
+h1,h2,h3{overflow-wrap:anywhere}
+.lead,.sec-lead,.aud,.card p{overflow-wrap:break-word}
+.docs a span{max-width:55%}
+@media (min-width:1400px){.wrap{max-width:1280px}}
+@media (max-width:700px){
+.hero{padding:104px 0 56px}
+h1{font-size:clamp(44px,13vw,80px);max-width:none;margin:18px 0}
+h2{font-size:clamp(36px,10vw,60px);max-width:none}
+.cta .btn{flex:1 1 auto;justify-content:center}
+.stats div{padding-right:10px}
+.card{padding:20px}
+.ver h3{font-size:38px}
+.panel{padding:16px}
+.table{font-size:13.5px}
+.table td:first-child{white-space:normal}
+}
+@media (max-width:380px){.btn{padding:9px 14px;font-size:13px}}
 </style>
 </head>
 <body>
@@ -403,7 +425,7 @@ function closeMenu(){menu.classList.remove('open');mb.setAttribute('aria-expande
 mb.addEventListener('click',function(){var o=menu.classList.toggle('open');mb.setAttribute('aria-expanded',o?'true':'false')});
 menu.addEventListener('click',function(e){if(e.target.tagName==='A')closeMenu()});
 document.addEventListener('keydown',function(e){if(e.key==='Escape')closeMenu()});
-addEventListener('resize',function(){if(innerWidth>860)closeMenu()});
+addEventListener('resize',function(){if(innerWidth>1080)closeMenu()});
 var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('on');io.unobserve(e.target)}})},{threshold:.1});
 document.querySelectorAll('.rv').forEach(function(el){io.observe(el)});
 document.querySelectorAll('.copy').forEach(function(b){b.addEventListener('click',function(){var t=b.parentNode.querySelector('pre').innerText;(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){b.textContent='Copied'},function(){b.textContent='Select + copy'});setTimeout(function(){b.textContent='Copy'},1600)})});

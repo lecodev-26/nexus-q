@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://nexus-q-topaz.vercel.app/sitemap.xml
+Sitemap: https://nexus-q.link/sitemap.xml
