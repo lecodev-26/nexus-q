@@ -521,6 +521,47 @@ mod tests {
     }
 
     #[test]
+    fn ntt_basemul_matches_independent_oracle_for_deterministic_edge_corpus() {
+        // Deterministic xorshift corpus keeps this differential test reproducible
+        // without introducing a random-number dependency into the kernel crate.
+        let mut state = 0x4d59_5df4_d0f3_3173_u64;
+        let mut next = || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+
+        let edge_values = [0_i16, 1, Q - 1, Q - 2, Q / 2];
+        for case in 0..8 {
+            let lhs: Polynomial = core::array::from_fn(|index| {
+                if index % 17 == 0 {
+                    edge_values[(index / 17 + case) % edge_values.len()]
+                } else {
+                    (next() % Q as u64) as i16
+                }
+            });
+            let rhs: Polynomial = core::array::from_fn(|index| {
+                if index % 19 == 0 {
+                    edge_values[(index / 19 + case + 1) % edge_values.len()]
+                } else {
+                    (next() % Q as u64) as i16
+                }
+            });
+
+            let expected = naive_negacyclic_product(&lhs, &rhs);
+            let mut lhs_ntt = lhs;
+            let mut rhs_ntt = rhs;
+            ntt(&mut lhs_ntt);
+            ntt(&mut rhs_ntt);
+            let mut product_ntt = basemul(&lhs_ntt, &rhs_ntt);
+            inverse_ntt(&mut product_ntt);
+
+            assert_eq!(product_ntt, expected, "differential corpus case {case}");
+        }
+    }
+
+    #[test]
     fn pack_unpack_roundtrip_for_standard_widths() {
         for d in 1..=12 {
             let limit = 1_u16 << d;
