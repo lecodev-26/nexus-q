@@ -27,7 +27,7 @@ This checklist mirrors the phases and acceptance criteria in Issue #23. Keep it 
 - [ ] Complete and accept the portable scalar reference-kernel phase: the source currently contains Keccak-f[1600]/SHAKE128/SHAKE256; NTT/inverse NTT; basemul; reduce/freeze; compression/decompression; packing/unpacking; CBD; and rejection-sampling routines. Required independent correctness evidence and phase acceptance remain pending.
 - [ ] Add explicit target-feature detection/dispatch resolved once, plus `NEXUSQ_FORCE_SCALAR` test override.
 - [ ] Differential tests compare every optimized kernel to scalar on random and edge/boundary inputs, bit-exactly.
-- [ ] Every `unsafe` block in the optimized-kernel surface has a `// SAFETY:` justification; add CI auditing (`cargo geiger` and/or a repository gate). `nexusq-core` remains `forbid(unsafe_code)`. The existing `nexusq-c` crate is a narrow C-ABI boundary and necessarily contains raw-pointer/FFI unsafe; audit that boundary separately, but do not put SIMD, assembly, or cryptographic kernel logic there.
+- [ ] Every `unsafe` block in the optimized-kernel surface has a `// SAFETY:` justification; CI repository gate added at `.github/scripts/check-kernel-unsafe.py` and wired into `.github/workflows/ci.yml`, but acceptance awaits a green run on this PR head. `nexusq-core` remains `forbid(unsafe_code)`. The existing `nexusq-c` crate is a narrow C-ABI boundary and necessarily contains raw-pointer/FFI unsafe; audit that boundary separately, but do not put SIMD, assembly, or cryptographic kernel logic there.
 
 ## Phase 2 — Keccak/SHAKE
 
