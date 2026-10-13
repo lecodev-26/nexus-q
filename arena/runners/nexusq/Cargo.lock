@@ -481,6 +481,7 @@ dependencies = [
 name = "nexusq-arena-runner"
 version = "0.1.0"
 dependencies = [
+ "ml-dsa",
  "ml-kem",
  "nexusq-core",
  "serde_json",

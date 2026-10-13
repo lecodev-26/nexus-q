@@ -1,3 +1,7 @@
+use ml_dsa::{
+    Generate as _, KeyInit as _, Keypair as _, MlDsa65, SignatureEncoding as _, Signer as _,
+    Verifier as _,
+};
 use ml_kem::kem::{Decapsulate, Encapsulate, Kem};
 use ml_kem::{
     DecapsulationKey768, DecapsulationKey1024, EncapsulationKey768, EncapsulationKey1024,
@@ -41,16 +45,24 @@ mod cycles {
             return Some(counter);
         }
         #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
-        { None }
+        {
+            None
+        }
     }
 
     pub const fn source() -> &'static str {
         #[cfg(target_arch = "x86_64")]
-        { return "x86_64_tsc_ticks"; }
+        {
+            return "x86_64_tsc_ticks";
+        }
         #[cfg(target_arch = "aarch64")]
-        { return "aarch64_cntvct_ticks"; }
+        {
+            return "aarch64_cntvct_ticks";
+        }
         #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
-        { "unavailable" }
+        {
+            "unavailable"
+        }
     }
 }
 
@@ -58,7 +70,9 @@ static CYCLE_SAMPLES: Mutex<Vec<u64>> = Mutex::new(Vec::new());
 
 #[inline]
 fn cycle_delta(start: Option<u64>) -> Option<u64> {
-    start.zip(cycles::read()).map(|(start, end)| end.wrapping_sub(start))
+    start
+        .zip(cycles::read())
+        .map(|(start, end)| end.wrapping_sub(start))
 }
 
 #[inline]
@@ -71,7 +85,10 @@ fn record_cycles(sample: Option<u64>) {
 }
 
 fn take_cycle_samples() -> Vec<u64> {
-    CYCLE_SAMPLES.lock().map(|mut samples| std::mem::take(&mut *samples)).unwrap_or_default()
+    CYCLE_SAMPLES
+        .lock()
+        .map(|mut samples| std::mem::take(&mut *samples))
+        .unwrap_or_default()
 }
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
@@ -200,13 +217,13 @@ fn emit_operation_samples(
             "measurement_method":if algorithm == "ml-kem" {
                 "per-operation std::time::Instant; direct RustCrypto ml-kem API; median latency"
             } else {
-                "per-operation std::time::Instant; nexusq-core ML-DSA wrapper; median latency"
+                "per-operation std::time::Instant; direct RustCrypto ml-dsa API; median latency"
             },
             "comparison_contract":"fips_operation_v1",
             "measurement_scope":if algorithm == "ml-kem" {
                 "rustcrypto_ml_kem_operation"
             } else {
-                "nexusq_core_ml_dsa_wrapper_operation"
+                "rustcrypto_ml_dsa_operation"
             },
             "samples_ns":samples, "statistics":stats,
             "cycle_counter_source":cycles::source(), "samples_cycles":cycle_samples
@@ -258,7 +275,7 @@ fn emit_cached_verify_samples(samples: &[u128], public_key_len: usize, signature
 }
 
 fn emit_ml_dsa_sign_distribution(
-    keys: &[pq_sign::MlDsa65KeyPair],
+    keys: &[ml_dsa::SigningKey<MlDsa65>],
     seed_ids: &[String],
     public_key: &[u8],
     signature_len: usize,
@@ -267,13 +284,21 @@ fn emit_ml_dsa_sign_distribution(
     let mut all_samples = Vec::with_capacity(keys.len() * ml_dsa_sign_samples_per_seed());
     for (key, seed_id) in keys.iter().zip(seed_ids) {
         for _ in 0..warmups() {
-            black_box(black_box(key).sign(black_box(MESSAGE)));
+            black_box(
+                black_box(key)
+                    .try_sign(black_box(MESSAGE))
+                    .expect("ML-DSA signing cannot fail"),
+            );
         }
         let mut samples = Vec::with_capacity(ml_dsa_sign_samples_per_seed());
         for _ in 0..ml_dsa_sign_samples_per_seed() {
             let cycle_start = cycles::read();
             let start = Instant::now();
-            black_box(black_box(key).sign(black_box(MESSAGE)));
+            black_box(
+                black_box(key)
+                    .try_sign(black_box(MESSAGE))
+                    .expect("ML-DSA signing cannot fail"),
+            );
             let cycle_sample = cycle_delta(cycle_start);
             let elapsed = start.elapsed().as_nanos();
             record_cycles(cycle_sample);
@@ -321,9 +346,9 @@ fn emit_ml_dsa_sign_distribution(
             "latency_ns":latency_ns,
             "throughput_ops_s":1_000_000_000.0 / latency_ns,
             "memory_bytes":null,
-            "measurement_method":"per-sign std::time::Instant; nexusq-core ML-DSA wrapper; deterministic 64-key seed corpus; fixed message",
+            "measurement_method":"per-sign std::time::Instant; direct RustCrypto ml-dsa API; deterministic 64-key seed corpus; fixed message",
             "comparison_contract":"fips_operation_v1",
-            "measurement_scope":"nexusq_core_ml_dsa_wrapper_operation",
+            "measurement_scope":"rustcrypto_ml_dsa_operation",
             "samples_ns":all_samples,
             "statistics":overall,
             "seed_samples":per_seed,
@@ -537,17 +562,22 @@ fn main() {
         serde_json::json!({"public_key_bytes":pk1024_bytes.len(),"secret_key_bytes":sk1024_bytes,"ciphertext_bytes":ct2.len(),"signature_bytes":null}),
     );
 
-    let dsa = pq_sign::MlDsa65KeyPair::generate();
-    let pk = dsa.public_key();
-    let sig = dsa.sign(MESSAGE);
+    let dsa = ml_dsa::SigningKey::<MlDsa65>::generate();
+    let pk = dsa.verifying_key().to_bytes().as_slice().to_vec();
+    let sig = dsa
+        .try_sign(MESSAGE)
+        .expect("ML-DSA signing cannot fail")
+        .to_bytes()
+        .as_slice()
+        .to_vec();
     for _ in 0..warmups() {
-        black_box(pq_sign::MlDsa65KeyPair::generate());
+        black_box(ml_dsa::SigningKey::<MlDsa65>::generate());
     }
     let mut samples = Vec::with_capacity(iterations());
     for _ in 0..iterations() {
         let cycle_start = cycles::read();
         let start = Instant::now();
-        black_box(pq_sign::MlDsa65KeyPair::generate());
+        black_box(ml_dsa::SigningKey::<MlDsa65>::generate());
         let cycle_sample = cycle_delta(cycle_start);
         let elapsed = start.elapsed().as_nanos();
         record_cycles(cycle_sample);
@@ -564,9 +594,7 @@ fn main() {
     let mut seed_ids = Vec::with_capacity(ML_DSA_SIGN_SEEDS);
     for index in 0..ML_DSA_SIGN_SEEDS {
         let seed = deterministic_seed(index);
-        sign_keys.push(
-            pq_sign::MlDsa65KeyPair::from_secret_key(&seed).expect("fixed benchmark seed is valid"),
-        );
+        sign_keys.push(ml_dsa::SigningKey::<MlDsa65>::new(&seed.into()));
         seed_ids.push(format!("seed-{index:03}"));
     }
     emit_ml_dsa_sign_distribution(&sign_keys, &seed_ids, &pk, sig.len());
@@ -575,13 +603,15 @@ fn main() {
         let cached_verifier = pq_sign::MlDsa65VerifyingKey::from_public_key(&pk)
             .expect("generated public key is valid");
         for _ in 0..warmups() {
-            black_box(black_box(&cached_verifier).verify(black_box(MESSAGE), black_box(&sig))).unwrap();
+            black_box(black_box(&cached_verifier).verify(black_box(MESSAGE), black_box(&sig)))
+                .unwrap();
         }
         let mut cached_verify_samples = Vec::with_capacity(iterations());
         for _ in 0..iterations() {
             let cycle_start = cycles::read();
             let start = Instant::now();
-            black_box(black_box(&cached_verifier).verify(black_box(MESSAGE), black_box(&sig))).unwrap();
+            black_box(black_box(&cached_verifier).verify(black_box(MESSAGE), black_box(&sig)))
+                .unwrap();
             let cycle_sample = cycle_delta(cycle_start);
             let elapsed = start.elapsed().as_nanos();
             record_cycles(cycle_sample);
@@ -589,15 +619,20 @@ fn main() {
         }
         emit_cached_verify_samples(&cached_verify_samples, pk.len(), sig.len());
     }
+    let encoded = ml_dsa::EncodedVerifyingKey::<MlDsa65>::try_from(pk.as_slice())
+        .expect("generated public key encoding is valid");
+    let verifier = ml_dsa::VerifyingKey::<MlDsa65>::decode(&encoded);
+    let signature = ml_dsa::Signature::<MlDsa65>::try_from(sig.as_slice())
+        .expect("generated signature encoding is valid");
     for _ in 0..warmups() {
-        black_box(pq_sign::ml_dsa_65_verify(black_box(&pk), black_box(MESSAGE), black_box(&sig))).unwrap();
+        black_box(black_box(&verifier).verify(black_box(MESSAGE), black_box(&signature))).unwrap();
         black_box(());
     }
     let mut samples = Vec::with_capacity(iterations());
     for _ in 0..iterations() {
         let cycle_start = cycles::read();
         let start = Instant::now();
-        black_box(pq_sign::ml_dsa_65_verify(black_box(&pk), black_box(MESSAGE), black_box(&sig))).unwrap();
+        black_box(black_box(&verifier).verify(black_box(MESSAGE), black_box(&signature))).unwrap();
         black_box(());
         let cycle_sample = cycle_delta(cycle_start);
         let elapsed = start.elapsed().as_nanos();

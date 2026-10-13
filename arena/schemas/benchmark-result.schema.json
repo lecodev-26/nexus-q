@@ -214,7 +214,7 @@
           "type": "string",
           "enum": [
             "rustcrypto_ml_kem_operation",
-            "nexusq_core_ml_dsa_wrapper_operation",
+            "rustcrypto_ml_dsa_operation",
             "cached_ml_dsa_verifier_operation",
             "aws_lc_evp_primitive_operation"
           ]

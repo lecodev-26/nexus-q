@@ -383,7 +383,7 @@ jobs:
                   scope = measurement.get('measurement_scope')
                   expected_scopes = {
                       'rustcrypto_ml_kem_operation',
-                      'nexusq_core_ml_dsa_wrapper_operation',
+                      'rustcrypto_ml_dsa_operation',
                       'cached_ml_dsa_verifier_operation',
                       'aws_lc_evp_primitive_operation',
                   }
@@ -427,12 +427,12 @@ jobs:
                      r['measurement'].get('comparison_contract') == 'fips_operation_v1'
                      for r in nexus_rows if r['algorithm']['id'] == 'ml-kem'), (
               'NEXUS-Q ML-KEM records must identify the direct RustCrypto API layer and scope')
-          assert all('nexusq-core ML-DSA wrapper' in r['measurement'].get('measurement_method', '') and
-                     r['measurement']['measurement_scope'] == 'nexusq_core_ml_dsa_wrapper_operation' and
+          assert all('direct RustCrypto ml-dsa API' in r['measurement'].get('measurement_method', '') and
+                     r['measurement']['measurement_scope'] == 'rustcrypto_ml_dsa_operation' and
                      r['measurement'].get('comparison_contract') == 'fips_operation_v1'
                      for r in nexus_rows if r['algorithm']['id'] == 'ml-dsa' and
                      'cached' not in r['measurement'].get('measurement_method', '')), (
-              'NEXUS-Q ML-DSA records must identify the wrapper API layer and scope')
+              'NEXUS-Q ML-DSA records must identify the direct primitive API layer and scope')
           assert all(r['measurement']['measurement_scope'] == 'cached_ml_dsa_verifier_operation' and
                      r['measurement'].get('comparison_contract') == 'cached_verification_diagnostic_v1'
                      for r in nexus_rows if 'cached' in r['measurement'].get('measurement_method', '').lower()), (
