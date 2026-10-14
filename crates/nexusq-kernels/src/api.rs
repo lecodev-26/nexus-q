@@ -8,7 +8,54 @@
 
 use crate::backend::{KernelBackend, ScalarBackend};
 use crate::dispatch::{Backend, selected_backend};
+use crate::scalar::keccak::Shake as ScalarShake;
 use crate::scalar::mlkem::Polynomial;
+
+/// Incremental SHAKE sponge exposed through the kernel API.
+///
+/// Input is absorbed in caller-provided chunks and output is squeezed directly
+/// into caller-owned buffers, avoiding a concatenated input/output allocation.
+/// This wrapper currently uses the portable scalar implementation; it does not
+/// imply that single-state SIMD dispatch is available.
+pub struct Shake {
+    inner: ScalarShake,
+}
+
+impl Shake {
+    /// Create an incremental SHAKE128 sponge.
+    pub const fn new128() -> Self {
+        Self {
+            inner: ScalarShake::new128(),
+        }
+    }
+
+    /// Create an incremental SHAKE256 sponge.
+    pub const fn new256() -> Self {
+        Self {
+            inner: ScalarShake::new256(),
+        }
+    }
+
+    /// Absorb another input chunk. Chunks may be split at arbitrary boundaries.
+    /// Panics if called after [`finalize`](Self::finalize).
+    #[inline]
+    pub fn absorb(&mut self, input: &[u8]) {
+        self.inner.absorb(input);
+    }
+
+    /// Apply SHAKE domain separation and transition to squeezing.
+    #[inline]
+    pub fn finalize(&mut self) {
+        self.inner.finalize();
+    }
+
+    /// Squeeze the next output bytes into a caller-provided buffer.
+    /// Panics if called before [`finalize`](Self::finalize).
+    #[inline]
+    pub fn squeeze(&mut self, output: &mut [u8]) {
+        self.inner.squeeze(output);
+    }
+}
 
 /// Apply the selected `Keccak-f\[1600\]` implementation to a 25-lane state.
 #[inline]
@@ -166,7 +213,7 @@ pub fn freeze(value: i32) -> i16 {
 #[cfg(test)]
 mod tests {
     use super::{
-        basemul, freeze, inverse_ntt, keccak_f1600, keccak_f1600x4, ntt, reduce, shake128,
+        Shake, basemul, freeze, inverse_ntt, keccak_f1600, keccak_f1600x4, ntt, reduce, shake128,
         shake128x4, shake256, shake256x4,
     };
     use crate::scalar::{keccak, mlkem};
@@ -347,5 +394,37 @@ mod tests {
             freeze(mlkem::Q as i32 + 19),
             mlkem::freeze(mlkem::Q as i32 + 19)
         );
+    }
+
+    #[test]
+    fn incremental_shake_matches_one_shot_across_chunk_boundaries() {
+        let input: Vec<u8> = (0..401).map(|i| (i * 29) as u8).collect();
+
+        for (new_sponge, one_shot) in [
+            (
+                Shake::new128 as fn() -> Shake,
+                shake128 as fn(&[u8], &mut [u8]),
+            ),
+            (
+                Shake::new256 as fn() -> Shake,
+                shake256 as fn(&[u8], &mut [u8]),
+            ),
+        ] {
+            let mut expected = vec![0_u8; 401];
+            one_shot(&input, &mut expected);
+
+            let mut sponge = new_sponge();
+            sponge.absorb(&input[..1]);
+            sponge.absorb(&input[1..168]);
+            sponge.absorb(&input[168..337]);
+            sponge.absorb(&input[337..]);
+            sponge.finalize();
+
+            let mut actual = vec![0_u8; 401];
+            sponge.squeeze(&mut actual[..7]);
+            sponge.squeeze(&mut actual[7..173]);
+            sponge.squeeze(&mut actual[173..]);
+            assert_eq!(actual, expected);
+        }
     }
 }

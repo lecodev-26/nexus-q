@@ -112,3 +112,26 @@ api::keccak_f1600(&mut state);
 
 Routed API tests compare Keccak/SHAKE and ML-KEM primitive outputs with the scalar
 reference. These tests have not been run locally; they are intended for GitHub CI.
+
+## Incremental SHAKE
+
+`api::Shake` exposes chunked absorb/finalize/squeeze operations so callers can
+stream input and output through caller-owned buffers instead of building a
+concatenated message or output allocation. It currently wraps the scalar sponge;
+this is an allocation/interface improvement, not a claim of single-state SIMD
+acceleration.
+
+```rust
+use nexusq_kernels::api::Shake;
+
+let mut shake = Shake::new128();
+shake.absorb(b"header:");
+shake.absorb(b"payload");
+shake.finalize();
+let mut digest = [0u8; 32];
+shake.squeeze(&mut digest);
+```
+
+Absorbing after finalization or squeezing before finalization panics, matching the
+underlying scalar sponge's state contract. Multiple `squeeze` calls continue the
+same output stream.
