@@ -85,7 +85,11 @@ impl CbdSamplingSize for U3 {
 /// A `ParameterSet` captures the parameters that describe a particular instance of ML-KEM.
 ///
 /// There are three variants, corresponding to three different security levels.
-pub trait ParameterSet: Default + Clone + Debug + PartialEq {
+pub trait ParameterSet: Default + Clone + Debug + PartialEq
+where
+    Self::K: Mul<Self::K>,
+    Prod<Self::K, Self::K>: ArraySize,
+{
     /// The dimensionality of vectors and arrays
     type K: ArraySize;
 

@@ -469,14 +469,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nexusq-kernels"
-version = "2.0.0"
-dependencies = [
- "hybrid-array",
- "module-lattice",
-]
-
-[[package]]
 name = "module-lattice"
 version = "0.2.3"
 dependencies = [
@@ -526,6 +518,10 @@ dependencies = [
  "x25519-dalek",
  "zeroize",
 ]
+
+[[package]]
+name = "nexusq-kernels"
+version = "2.0.0"
 
 [[package]]
 name = "num-traits"
