@@ -414,10 +414,14 @@ mod tests {
             one_shot(&input, &mut expected);
 
             let mut sponge = new_sponge();
+            sponge.absorb(&[]);
             sponge.absorb(&input[..1]);
+            sponge.absorb(&[]);
             sponge.absorb(&input[1..168]);
             sponge.absorb(&input[168..337]);
             sponge.absorb(&input[337..]);
+            sponge.absorb(&[]);
+            sponge.finalize();
             sponge.finalize();
 
             let mut actual = vec![0_u8; 401];
