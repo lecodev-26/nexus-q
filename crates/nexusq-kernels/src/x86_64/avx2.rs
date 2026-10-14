@@ -51,7 +51,8 @@ unsafe fn keccak_f1600x4_avx2(states: &mut [[u64; 25]; 4]) {
                     lanes[x + 20],
                 ),
             );
-            let rotated = rotate_left_64(column[(x + 1) % 5], 1);
+            // SAFETY: This call is within the AVX2-targeted permutation function.
+            let rotated = unsafe { rotate_left_64(column[(x + 1) % 5], 1) };
             delta[x] = _mm256_xor_si256(column[(x + 4) % 5], rotated);
         }
         for y in 0..5 {
@@ -65,7 +66,9 @@ unsafe fn keccak_f1600x4_avx2(states: &mut [[u64; 25]; 4]) {
             for x in 0..5 {
                 let source = x + 5 * y;
                 let destination = y + 5 * ((2 * x + 3 * y) % 5);
-                moved[destination] = rotate_left_64(lanes[source], ROTATION_OFFSETS[source]);
+                // SAFETY: This call is within the AVX2-targeted permutation function.
+                moved[destination] =
+                    unsafe { rotate_left_64(lanes[source], ROTATION_OFFSETS[source]) };
             }
         }
 
