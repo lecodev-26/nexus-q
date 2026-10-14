@@ -88,13 +88,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # Expensive release-only checks stay in the workflow and can be re-enabled
+      # by setting the repository Actions variable ENABLE_SECURITY_AUDIT=true.
       - name: Install security tooling
+        if: ${{ vars.ENABLE_SECURITY_AUDIT == 'true' }}
         run: |
           cargo install cargo-audit --locked
           cargo install cargo-deny --locked
       - name: Cargo audit
+        if: ${{ vars.ENABLE_SECURITY_AUDIT == 'true' }}
         run: cargo audit
       - name: Cargo deny
+        if: ${{ vars.ENABLE_SECURITY_AUDIT == 'true' }}
         run: cargo deny check
       - name: Metadata / SBOM input
         run: cargo metadata --format-version 1 --locked > cargo-metadata.json

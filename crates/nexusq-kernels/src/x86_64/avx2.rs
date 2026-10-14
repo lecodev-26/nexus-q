@@ -1,4 +1,4 @@
-//! Four-way AVX2 `Keccak-f[1600]` permutation.
+//! Four-way AVX2 `Keccak-f\[1600\]` permutation.
 //!
 //! Each vector holds the same lane from four independent states. This is aimed
 //! at parallel SHAKE workloads (for example, matrix expansion), not single-state

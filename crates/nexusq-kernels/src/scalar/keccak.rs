@@ -1,4 +1,4 @@
-//! Portable `Keccak-f[1600]` and SHAKE reference implementation.
+//! Portable `Keccak-f\[1600\]` and SHAKE reference implementation.
 //!
 //! This implementation favors a small, auditable scalar reference over speed.
 //! It is intended as a differential-test oracle for later SIMD backends.
@@ -35,7 +35,7 @@ pub(crate) const ROTATION_OFFSETS: [u32; 25] = [
     0, 1, 62, 28, 27, 36, 44, 6, 55, 20, 3, 10, 43, 25, 39, 41, 45, 15, 21, 8, 18, 2, 61, 56, 14,
 ];
 
-/// Applies the 24-round `Keccak-f[1600]` permutation to a 25-lane state.
+/// Applies the 24-round `Keccak-f\[1600\]` permutation to a 25-lane state.
 ///
 /// Lane and byte ordering are little-endian, matching the SHA-3/SHAKE
 /// specifications.

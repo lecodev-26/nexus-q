@@ -12,7 +12,7 @@ use crate::scalar::{keccak, mlkem};
 /// scalar reference implementations. Higher-level algorithms should build on
 /// these primitives instead of duplicating backend selection logic.
 pub trait KernelBackend {
-    /// Apply the `Keccak-f[1600]` permutation to a 25-lane state.
+    /// Apply the `Keccak-f\[1600\]` permutation to a 25-lane state.
     fn keccak_f1600(state: &mut [u64; 25]);
 
     /// Compute SHAKE128 into a caller-provided output buffer.
