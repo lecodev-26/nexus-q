@@ -19,6 +19,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/lecodev-26/nexus-q"
 
 [patch.crates-io]
+ml-dsa = { path = "vendor/ml-dsa" }
 ml-kem = { path = "vendor/ml-kem" }
 module-lattice = { path = "vendor/module-lattice" }
 
