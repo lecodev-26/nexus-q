@@ -11,3 +11,6 @@ pub mod api;
 pub mod backend;
 pub mod dispatch;
 pub mod scalar;
+
+#[cfg(target_arch = "x86_64")]
+pub mod x86_64;

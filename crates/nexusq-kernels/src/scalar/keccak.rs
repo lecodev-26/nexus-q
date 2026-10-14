@@ -3,7 +3,7 @@
 //! This implementation favors a small, auditable scalar reference over speed.
 //! It is intended as a differential-test oracle for later SIMD backends.
 
-const ROUND_CONSTANTS: [u64; 24] = [
+pub(crate) const ROUND_CONSTANTS: [u64; 24] = [
     0x0000_0000_0000_0001,
     0x0000_0000_0000_8082,
     0x8000_0000_0000_808a,
@@ -31,7 +31,7 @@ const ROUND_CONSTANTS: [u64; 24] = [
 ];
 
 // Indexed as x + 5*y, as specified by Keccak's 5x5 lane state.
-const ROTATION_OFFSETS: [u32; 25] = [
+pub(crate) const ROTATION_OFFSETS: [u32; 25] = [
     0, 1, 62, 28, 27, 36, 44, 6, 55, 20, 3, 10, 43, 25, 39, 41, 45, 15, 21, 8, 18, 2, 61, 56, 14,
 ];
 
