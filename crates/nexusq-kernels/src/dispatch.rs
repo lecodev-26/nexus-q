@@ -60,6 +60,12 @@ pub fn dispatch_info() -> &'static DispatchInfo {
     DISPATCH_INFO.get_or_init(resolve_dispatch)
 }
 
+/// Return whether the process explicitly forced the scalar implementation.
+#[inline]
+pub fn scalar_forced() -> bool {
+    dispatch_info().reason == SelectionReason::ForcedScalar
+}
+
 /// Return the selected backend without requiring callers to inspect dispatch metadata.
 #[inline]
 pub fn selected_backend() -> Backend {

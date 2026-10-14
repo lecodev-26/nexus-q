@@ -7,7 +7,7 @@
 //! ML-KEM/ML-DSA flows and remains subject to Issue #23 acceptance gates.
 
 use crate::backend::{KernelBackend, ScalarBackend};
-use crate::dispatch::{Backend, selected_backend};
+use crate::dispatch::{Backend, SelectionReason, dispatch_info, selected_backend};
 use crate::scalar::keccak::Shake as ScalarShake;
 use crate::scalar::mlkem::Polynomial;
 
@@ -181,9 +181,10 @@ pub fn keccak_f1600(state: &mut [u64; 25]) {
 /// is not yet selected for single-state SHAKE or the top-level PQC flows.
 #[inline]
 pub fn keccak_f1600x4(states: &mut [[u64; 25]; 4]) {
+    let force_scalar = dispatch_info().reason == SelectionReason::ForcedScalar;
     #[cfg(target_arch = "x86_64")]
     {
-        if crate::x86_64::avx2::keccak_f1600x4(states) {
+        if !force_scalar && crate::x86_64::avx2::keccak_f1600x4(states) {
             return;
         }
     }
