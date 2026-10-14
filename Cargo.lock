@@ -833,6 +833,7 @@ dependencies = [
  "ctutils",
  "hybrid-array",
  "module-lattice",
+ "nexusq-kernels",
  "pkcs8",
  "shake",
  "signature",
