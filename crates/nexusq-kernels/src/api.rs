@@ -229,8 +229,13 @@ mod tests {
                         keccak::shake256(&inputs[lane], &mut expected[lane]);
                     }
                 }
-                let mut output_refs: [&mut [u8]; 4] =
-                    std::array::from_fn(|lane| actual[lane].as_mut_slice());
+                let [actual0, actual1, actual2, actual3] = &mut actual;
+                let mut output_refs: [&mut [u8]; 4] = [
+                    actual0.as_mut_slice(),
+                    actual1.as_mut_slice(),
+                    actual2.as_mut_slice(),
+                    actual3.as_mut_slice(),
+                ];
                 let input_refs = std::array::from_fn(|lane| inputs[lane].as_slice());
                 if is_128 {
                     shake128x4(input_refs, &mut output_refs);
@@ -255,8 +260,13 @@ mod tests {
         for lane in 0..4 {
             keccak::shake128(inputs[lane], &mut expected[lane]);
         }
-        let mut output_refs: [&mut [u8]; 4] =
-            std::array::from_fn(|lane| outputs[lane].as_mut_slice());
+        let [output0, output1, output2, output3] = &mut outputs;
+        let mut output_refs: [&mut [u8]; 4] = [
+            output0.as_mut_slice(),
+            output1.as_mut_slice(),
+            output2.as_mut_slice(),
+            output3.as_mut_slice(),
+        ];
         shake128x4(inputs, &mut output_refs);
         assert_eq!(outputs, expected);
     }
