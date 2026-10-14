@@ -16,6 +16,25 @@ pub fn keccak_f1600(state: &mut [u64; 25]) {
     }
 }
 
+/// Apply Keccak-f[1600] to four independent states in parallel when an
+/// accelerated four-way kernel is available, otherwise use the scalar oracle.
+///
+/// The AVX2 implementation is intentionally exposed as a batch primitive; it
+/// is not yet selected for single-state SHAKE or the top-level PQC flows.
+#[inline]
+pub fn keccak_f1600x4(states: &mut [[u64; 25]; 4]) {
+    #[cfg(target_arch = "x86_64")]
+    {
+        if crate::x86_64::avx2::keccak_f1600x4(states) {
+            return;
+        }
+    }
+
+    for state in states {
+        ScalarBackend::keccak_f1600(state);
+    }
+}
+
 /// Compute SHAKE128 using the selected backend.
 #[inline]
 pub fn shake128(input: &[u8], output: &mut [u8]) {
@@ -97,6 +116,24 @@ mod tests {
         keccak::shake256(input, &mut expected256);
         shake256(input, &mut actual256);
         assert_eq!(actual256, expected256);
+    }
+
+    #[test]
+    fn routed_four_way_keccak_matches_four_scalar_permutations() {
+        let mut states = std::array::from_fn(|state_index| {
+            std::array::from_fn(|lane_index| {
+                (state_index as u64 + 3)
+                    .wrapping_mul(0x9e37_79b9_7f4a_7c15)
+                    .rotate_left((lane_index * 11 + state_index) as u32)
+            })
+        });
+        let mut expected = states;
+        for state in &mut expected {
+            keccak::keccak_f1600(state);
+        }
+
+        keccak_f1600x4(&mut states);
+        assert_eq!(states, expected);
     }
 
     #[test]
