@@ -66,15 +66,12 @@ impl ShakeX4 {
             "SHAKEx4 input lengths must match"
         );
 
-        let [input0, input1, input2, input3] = inputs;
-        let [state0, state1, state2, state3] = &mut self.states;
-        for (((byte0, byte1), byte2), byte3) in input0.iter().zip(input1).zip(input2).zip(input3) {
+        for position in 0..len {
             let shift = (self.absorb_position % 8) * 8;
             let lane_index = self.absorb_position / 8;
-            state0[lane_index] ^= u64::from(*byte0) << shift;
-            state1[lane_index] ^= u64::from(*byte1) << shift;
-            state2[lane_index] ^= u64::from(*byte2) << shift;
-            state3[lane_index] ^= u64::from(*byte3) << shift;
+            for lane in 0..4 {
+                self.states[lane][lane_index] ^= u64::from(inputs[lane][position]) << shift;
+            }
             self.absorb_position += 1;
             if self.absorb_position == self.rate {
                 keccak_f1600x4(&mut self.states);

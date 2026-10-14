@@ -461,10 +461,19 @@ dependencies = [
  "hybrid-array",
  "kem",
  "module-lattice",
+ "nexusq-kernels",
  "pkcs8",
  "rand_core 0.10.1",
  "sha3",
  "zeroize",
+]
+
+[[package]]
+name = "nexusq-kernels"
+version = "2.0.0"
+dependencies = [
+ "hybrid-array",
+ "module-lattice",
 ]
 
 [[package]]
