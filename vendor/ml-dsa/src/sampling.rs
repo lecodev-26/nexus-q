@@ -198,11 +198,26 @@ fn rej_ntt_poly_from_batch(rho: &[u8], r: u8, s: u8, buf: &[u8; 840]) -> NttPoly
         }
     }
 
-    // Preserve the reference stream's continuation behavior in the extremely
-    // unlikely case that 840 bytes do not yield 256 accepted coefficients.
+    // Continue the same SHAKE stream in the extremely unlikely case that
+    // 840 bytes do not yield 256 accepted coefficients. Recreate the sponge,
+    // consume the batch already processed, then continue from byte 840.
+    let mut ctx = G::default().absorb(rho).absorb(&[s]).absorb(&[r]);
+    let mut discarded = [0u8; 840];
+    ctx.squeeze(&mut discarded);
+    let mut tmp = [0u8; 3];
+    while j < 256 {
+        ctx.squeeze(&mut tmp);
+        if let Some(x) = coeff_from_three_bytes(tmp) {
+            a.0[j] = x;
+            j += 1;
+        }
+    }
     #[cfg(feature = "zeroize")]
-    a.zeroize();
-    rej_ntt_poly(rho, r, s)
+    {
+        discarded.zeroize();
+        tmp.zeroize();
+    }
+    a
 }
 
 // Algorithm 32 ExpandA
@@ -225,9 +240,10 @@ pub(crate) fn expand_a<K: ArraySize, L: ArraySize>(rho: &[u8]) -> NttMatrix<K, L
                     inputs[0].as_slice(), inputs[1].as_slice(),
                     inputs[2].as_slice(), inputs[3].as_slice(),
                 ];
+                let [out0, out1, out2, out3] = &mut outputs;
                 let mut output_refs = [
-                    outputs[0].as_mut_slice(), outputs[1].as_mut_slice(),
-                    outputs[2].as_mut_slice(), outputs[3].as_mut_slice(),
+                    out0.as_mut_slice(), out1.as_mut_slice(),
+                    out2.as_mut_slice(), out3.as_mut_slice(),
                 ];
                 nexusq_kernels::api::shake128x4(input_refs, &mut output_refs);
                 for lane in 0..4 {
