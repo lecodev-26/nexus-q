@@ -355,6 +355,25 @@ jobs:
           arena/results/v4-phase0/aws-lc-runner \
             | tee arena/results/v4-phase0/aws-lc.jsonl
 
+      - name: Collect non-gating production-path allocation and latency profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --locked --release --features cached-verifier --bin profile_hotspots \
+            --manifest-path arena/runners/nexusq/Cargo.toml
+          profiler=arena/runners/nexusq/target/release/profile_hotspots
+          output=arena/results/v4-phase0/profile-hotspots.txt
+          : > "$output"
+          for workload in \
+            ml-kem-768-keygen ml-kem-768-encaps ml-kem-768-decaps \
+            ml-kem-1024-keygen ml-kem-1024-encaps ml-kem-1024-decaps \
+            ml-dsa-65-keygen ml-dsa-65-sign ml-dsa-65-verify \
+            ml-dsa-65-verify-cached; do
+            "$profiler" "$workload" | tee -a "$output"
+          done
+          printf '\nProfile is diagnostic only; it does not alter or bypass the 1.5x regression gate.\n' \
+            | tee -a "$output"
+
       - name: Validate schema, operation coverage, and configured counts
         shell: bash
         run: |
