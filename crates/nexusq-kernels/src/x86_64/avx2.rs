@@ -9,7 +9,7 @@ use core::arch::x86_64::{
     _mm256_sllv_epi64, _mm256_srlv_epi64, _mm256_storeu_si256, _mm256_xor_si256,
 };
 
-use crate::scalar::keccak::{self, ROTATION_OFFSETS, ROUND_CONSTANTS};
+use crate::scalar::keccak::{ROTATION_OFFSETS, ROUND_CONSTANTS};
 
 /// Permute four independent Keccak states in parallel when AVX2 is available.
 ///
@@ -29,45 +29,34 @@ pub fn keccak_f1600x4(states: &mut [[u64; 25]; 4]) -> bool {
 #[target_feature(enable = "avx2")]
 unsafe fn keccak_f1600x4_avx2(states: &mut [[u64; 25]; 4]) {
     let mut lanes: [__m256i; 25] = core::array::from_fn(|i| {
-        // SAFETY: This function is only called after AVX2 runtime detection;
-        // constructing a vector from four scalar lanes has no memory access.
-        unsafe {
-            _mm256_set_epi64x(
-                states[3][i] as i64,
-                states[2][i] as i64,
-                states[1][i] as i64,
-                states[0][i] as i64,
-            )
-        }
+        _mm256_set_epi64x(
+            states[3][i] as i64,
+            states[2][i] as i64,
+            states[1][i] as i64,
+            states[0][i] as i64,
+        )
     });
 
-    // SAFETY: AVX2 is enabled for this function; these intrinsics only broadcast constants.
-    let mut column = unsafe { [_mm256_set1_epi64x(0); 5] };
-    // SAFETY: AVX2 is enabled for this function; these intrinsics only broadcast constants.
-    let mut delta = unsafe { [_mm256_set1_epi64x(0); 5] };
-    // SAFETY: AVX2 is enabled for this function; these intrinsics only broadcast constants.
-    let mut moved = unsafe { [_mm256_set1_epi64x(0); 25] };
+    let mut column = [_mm256_set1_epi64x(0); 5];
+    let mut delta = [_mm256_set1_epi64x(0); 5];
+    let mut moved = [_mm256_set1_epi64x(0); 25];
 
     for round_constant in ROUND_CONSTANTS {
         // Theta: all bitwise operations act on four independent states.
         for x in 0..5 {
-            // SAFETY: AVX2 is enabled for this function; indices are bounded by 0..25.
-            unsafe {
-                column[x] = _mm256_xor_si256(
-                    _mm256_xor_si256(lanes[x], lanes[x + 5]),
-                    _mm256_xor_si256(
-                        _mm256_xor_si256(lanes[x + 10], lanes[x + 15]),
-                        lanes[x + 20],
-                    ),
-                );
-                let rotated = rotate_left_64(column[(x + 1) % 5], 1);
-                delta[x] = _mm256_xor_si256(column[(x + 4) % 5], rotated);
-            }
+            column[x] = _mm256_xor_si256(
+                _mm256_xor_si256(lanes[x], lanes[x + 5]),
+                _mm256_xor_si256(
+                    _mm256_xor_si256(lanes[x + 10], lanes[x + 15]),
+                    lanes[x + 20],
+                ),
+            );
+            let rotated = rotate_left_64(column[(x + 1) % 5], 1);
+            delta[x] = _mm256_xor_si256(column[(x + 4) % 5], rotated);
         }
         for y in 0..5 {
             for x in 0..5 {
-                // SAFETY: AVX2 is enabled and lane indices are bounded.
-                unsafe { lanes[x + 5 * y] = _mm256_xor_si256(lanes[x + 5 * y], delta[x]) };
+                lanes[x + 5 * y] = _mm256_xor_si256(lanes[x + 5 * y], delta[x]);
             }
         }
 
@@ -76,10 +65,7 @@ unsafe fn keccak_f1600x4_avx2(states: &mut [[u64; 25]; 4]) {
             for x in 0..5 {
                 let source = x + 5 * y;
                 let destination = y + 5 * ((2 * x + 3 * y) % 5);
-                // SAFETY: AVX2 is enabled; source/destination are in 0..25.
-                unsafe {
-                    moved[destination] = rotate_left_64(lanes[source], ROTATION_OFFSETS[source])
-                };
+                moved[destination] = rotate_left_64(lanes[source], ROTATION_OFFSETS[source]);
             }
         }
 
@@ -87,21 +73,15 @@ unsafe fn keccak_f1600x4_avx2(states: &mut [[u64; 25]; 4]) {
         for y in 0..5 {
             for x in 0..5 {
                 let index = x + 5 * y;
-                // SAFETY: AVX2 is enabled and modulo-5 lane indices are bounded.
-                unsafe {
-                    lanes[index] = _mm256_xor_si256(
-                        moved[index],
-                        _mm256_andnot_si256(moved[(x + 1) % 5 + 5 * y], moved[(x + 2) % 5 + 5 * y]),
-                    );
-                }
+                lanes[index] = _mm256_xor_si256(
+                    moved[index],
+                    _mm256_andnot_si256(moved[(x + 1) % 5 + 5 * y], moved[(x + 2) % 5 + 5 * y]),
+                );
             }
         }
 
         // Iota affects lane zero in each of the four states.
-        // SAFETY: AVX2 is enabled; XOR with a broadcast constant is valid.
-        unsafe {
-            lanes[0] = _mm256_xor_si256(lanes[0], _mm256_set1_epi64x(round_constant as i64));
-        }
+        lanes[0] = _mm256_xor_si256(lanes[0], _mm256_set1_epi64x(round_constant as i64));
     }
 
     for lane in 0..25 {
@@ -109,8 +89,8 @@ unsafe fn keccak_f1600x4_avx2(states: &mut [[u64; 25]; 4]) {
         // SAFETY: values points to four writable u64 lanes (32 bytes), and
         // storeu permits unaligned output. AVX2 is enabled for this function.
         unsafe { _mm256_storeu_si256(values.as_mut_ptr().cast::<__m256i>(), lanes[lane]) };
-        for state in 0..4 {
-            states[state][lane] = values[state];
+        for (state, output) in states.iter_mut().enumerate() {
+            output[lane] = values[state];
         }
     }
 }
@@ -120,13 +100,9 @@ unsafe fn keccak_f1600x4_avx2(states: &mut [[u64; 25]; 4]) {
 #[target_feature(enable = "avx2")]
 #[inline]
 unsafe fn rotate_left_64(value: __m256i, amount: u32) -> __m256i {
-    // SAFETY: Callers execute under the AVX2 target feature. Shift counts are
-    // broadcast as 64-bit integers and amount is always in 0..64.
-    unsafe {
-        let left = _mm256_sllv_epi64(value, _mm256_set1_epi64x(i64::from(amount)));
-        let right = _mm256_srlv_epi64(value, _mm256_set1_epi64x(i64::from(64 - amount)));
-        _mm256_or_si256(left, right)
-    }
+    let left = _mm256_sllv_epi64(value, _mm256_set1_epi64x(i64::from(amount)));
+    let right = _mm256_srlv_epi64(value, _mm256_set1_epi64x(i64::from(64 - amount)));
+    _mm256_or_si256(left, right)
 }
 
 #[cfg(test)]
@@ -137,12 +113,12 @@ mod tests {
     #[test]
     fn four_way_permutation_matches_scalar_for_zero_and_distinct_states() {
         let mut states = [[0_u64; 25]; 4];
-        for state in 0..4 {
-            for lane in 0..25 {
-                states[state][lane] = (state as u64 + 1)
+        for (state_index, state) in states.iter_mut().enumerate() {
+            for (lane_index, lane) in state.iter_mut().enumerate() {
+                *lane = (state_index as u64 + 1)
                     .wrapping_mul(0x9e37_79b9_7f4a_7c15)
-                    .rotate_left((lane * 7 + state) as u32)
-                    ^ (lane as u64).wrapping_mul(0x0101_0101_0101_0101);
+                    .rotate_left((lane_index * 7 + state_index) as u32)
+                    ^ (lane_index as u64).wrapping_mul(0x0101_0101_0101_0101);
             }
         }
         states[0] = [0; 25];
