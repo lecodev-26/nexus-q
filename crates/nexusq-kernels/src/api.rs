@@ -21,6 +21,104 @@ pub struct Shake {
     inner: ScalarShake,
 }
 
+/// Four independent incremental SHAKE sponges processed in lockstep.
+///
+/// Every call must provide equal input/output lengths for all four lanes. This
+/// keeps absorb and squeeze positions synchronized so a single four-state
+/// permutation is equivalent to four independent scalar permutations. Callers
+/// with unequal lengths should use [`Shake`] or the one-shot batch helpers.
+pub struct ShakeX4 {
+    states: [[u64; 25]; 4],
+    rate: usize,
+    absorb_position: usize,
+    squeeze_position: usize,
+    squeezing: bool,
+}
+
+impl ShakeX4 {
+    /// Create four incremental SHAKE128 sponges (168-byte rate).
+    pub const fn new128() -> Self {
+        Self::new(168)
+    }
+
+    /// Create four incremental SHAKE256 sponges (136-byte rate).
+    pub const fn new256() -> Self {
+        Self::new(136)
+    }
+
+    const fn new(rate: usize) -> Self {
+        Self {
+            states: [[0; 25]; 4],
+            rate,
+            absorb_position: 0,
+            squeeze_position: 0,
+            squeezing: false,
+        }
+    }
+
+    /// Absorb one chunk per lane. All four chunks must have equal length.
+    /// Panics if called after finalization or if lane lengths differ.
+    pub fn absorb(&mut self, inputs: [&[u8]; 4]) {
+        assert!(!self.squeezing, "cannot absorb after SHAKE finalization");
+        let len = inputs[0].len();
+        assert!(
+            inputs.iter().all(|input| input.len() == len),
+            "SHAKEx4 input lengths must match"
+        );
+
+        for offset in 0..len {
+            for lane in 0..4 {
+                self.states[lane][self.absorb_position / 8] ^=
+                    u64::from(inputs[lane][offset]) << ((self.absorb_position % 8) * 8);
+            }
+            self.absorb_position += 1;
+            if self.absorb_position == self.rate {
+                keccak_f1600x4(&mut self.states);
+                self.absorb_position = 0;
+            }
+        }
+    }
+
+    /// Apply SHAKE domain separation to all four states.
+    /// Repeated calls are harmless.
+    pub fn finalize(&mut self) {
+        if self.squeezing {
+            return;
+        }
+        for state in &mut self.states {
+            state[self.absorb_position / 8] ^= 0x1f_u64 << ((self.absorb_position % 8) * 8);
+            state[(self.rate - 1) / 8] ^= 0x80_u64 << (((self.rate - 1) % 8) * 8);
+        }
+        keccak_f1600x4(&mut self.states);
+        self.squeeze_position = 0;
+        self.squeezing = true;
+    }
+
+    /// Squeeze equal-length output chunks into all four caller-owned buffers.
+    /// Panics before finalization or if output lengths differ.
+    pub fn squeeze(&mut self, outputs: [&mut [u8]; 4]) {
+        assert!(self.squeezing, "SHAKE must be finalized before squeezing");
+        let len = outputs[0].len();
+        assert!(
+            outputs.iter().all(|output| output.len() == len),
+            "SHAKEx4 output lengths must match"
+        );
+
+        for offset in 0..len {
+            if self.squeeze_position == self.rate {
+                keccak_f1600x4(&mut self.states);
+                self.squeeze_position = 0;
+            }
+            for lane in 0..4 {
+                outputs[lane][offset] = (self.states[lane][self.squeeze_position / 8]
+                    >> ((self.squeeze_position % 8) * 8))
+                    as u8;
+            }
+            self.squeeze_position += 1;
+        }
+    }
+}
+
 impl Shake {
     /// Create an incremental SHAKE128 sponge.
     pub const fn new128() -> Self {
@@ -213,8 +311,8 @@ pub fn freeze(value: i32) -> i16 {
 #[cfg(test)]
 mod tests {
     use super::{
-        Shake, basemul, freeze, inverse_ntt, keccak_f1600, keccak_f1600x4, ntt, reduce, shake128,
-        shake128x4, shake256, shake256x4,
+        Shake, ShakeX4, basemul, freeze, inverse_ntt, keccak_f1600, keccak_f1600x4, ntt, reduce,
+        shake128, shake128x4, shake256, shake256x4,
     };
     use crate::scalar::{keccak, mlkem};
 
@@ -371,6 +469,47 @@ mod tests {
         ];
         shake128x4(inputs, &mut output_refs);
         assert_eq!(outputs, expected);
+    }
+
+    #[test]
+    fn incremental_four_way_shake_matches_scalar_across_chunk_boundaries() {
+        for (new_sponge, one_shot, rate) in [
+            (
+                ShakeX4::new128 as fn() -> ShakeX4,
+                shake128 as fn(&[u8], &mut [u8]),
+                168usize,
+            ),
+            (
+                ShakeX4::new256 as fn() -> ShakeX4,
+                shake256 as fn(&[u8], &mut [u8]),
+                136usize,
+            ),
+        ] {
+            for input_len in [0, 1, rate - 1, rate, rate + 1, rate * 2 + 7] {
+                let inputs: [Vec<u8>; 4] = std::array::from_fn(|lane| {
+                    (0..input_len)
+                        .map(|i| (i as u8).wrapping_mul(13).wrapping_add((lane * 31) as u8))
+                        .collect()
+                });
+                let mut expected: [Vec<u8>; 4] = std::array::from_fn(|_| vec![0; rate * 2 + 11]);
+                for lane in 0..4 {
+                    one_shot(&inputs[lane], &mut expected[lane]);
+                }
+                let mut sponge = new_sponge();
+                let first: [&[u8]; 4] = std::array::from_fn(|lane| &inputs[lane][..input_len / 2]);
+                let second: [&[u8]; 4] = std::array::from_fn(|lane| &inputs[lane][input_len / 2..]);
+                sponge.absorb(first);
+                sponge.absorb(second);
+                sponge.finalize();
+                sponge.finalize();
+                let mut actual: [Vec<u8>; 4] = std::array::from_fn(|_| vec![0; rate * 2 + 11]);
+                let [a, b, c, d] = &mut actual;
+                sponge.squeeze([&mut a[..7], &mut b[..7], &mut c[..7], &mut d[..7]]);
+                let [a, b, c, d] = &mut actual;
+                sponge.squeeze([&mut a[7..], &mut b[7..], &mut c[7..], &mut d[7..]]);
+                assert_eq!(actual, expected, "rate={rate}, input_len={input_len}");
+            }
+        }
     }
 
     #[test]
