@@ -184,12 +184,79 @@ fn rej_bounded_poly(rho: &[u8], eta: Eta, r: u16) -> Polynomial {
     a
 }
 
+#[cfg(feature = "nexusq-kernels")]
+fn rej_ntt_poly_from_batch(rho: &[u8], r: u8, s: u8, buf: &[u8; 840]) -> NttPolynomial {
+    let mut a = NttPolynomial::default();
+    let mut j = 0;
+    for chunk in buf.chunks_exact(3) {
+        if let Some(x) = coeff_from_three_bytes([chunk[0], chunk[1], chunk[2]]) {
+            a.0[j] = x;
+            j += 1;
+            if j == 256 {
+                return a;
+            }
+        }
+    }
+
+    // Preserve the reference stream's continuation behavior in the extremely
+    // unlikely case that 840 bytes do not yield 256 accepted coefficients.
+    #[cfg(feature = "zeroize")]
+    a.zeroize();
+    rej_ntt_poly(rho, r, s)
+}
+
 // Algorithm 32 ExpandA
 pub(crate) fn expand_a<K: ArraySize, L: ArraySize>(rho: &[u8]) -> NttMatrix<K, L> {
     NttMatrix::new(Array::from_fn(|r| {
-        NttVector::new(Array::from_fn(|s| {
-            rej_ntt_poly(rho, Truncate::truncate(r), Truncate::truncate(s))
-        }))
+        let r = Truncate::truncate(r);
+        #[cfg(feature = "nexusq-kernels")]
+        {
+            let mut row: Array<NttPolynomial, L> = Array::from_fn(|_| NttPolynomial::default());
+            let mut s = 0;
+            while s + 4 <= L::USIZE {
+                let mut inputs = [[0u8; 34]; 4];
+                for lane in 0..4 {
+                    inputs[lane][..32].copy_from_slice(rho);
+                    inputs[lane][32] = Truncate::truncate(s + lane);
+                    inputs[lane][33] = r;
+                }
+                let mut outputs = [[0u8; 840]; 4];
+                let input_refs = [
+                    inputs[0].as_slice(), inputs[1].as_slice(),
+                    inputs[2].as_slice(), inputs[3].as_slice(),
+                ];
+                let mut output_refs = [
+                    outputs[0].as_mut_slice(), outputs[1].as_mut_slice(),
+                    outputs[2].as_mut_slice(), outputs[3].as_mut_slice(),
+                ];
+                nexusq_kernels::api::shake128x4(input_refs, &mut output_refs);
+                for lane in 0..4 {
+                    row[s + lane] = rej_ntt_poly_from_batch(
+                        rho,
+                        r,
+                        Truncate::truncate(s + lane),
+                        &outputs[lane],
+                    );
+                }
+                #[cfg(feature = "zeroize")]
+                {
+                    inputs.zeroize();
+                    outputs.zeroize();
+                }
+                s += 4;
+            }
+            while s < L::USIZE {
+                row[s] = rej_ntt_poly(rho, r, Truncate::truncate(s));
+                s += 1;
+            }
+            NttVector::new(row)
+        }
+        #[cfg(not(feature = "nexusq-kernels"))]
+        {
+            NttVector::new(Array::from_fn(|s| {
+                rej_ntt_poly(rho, r, Truncate::truncate(s))
+            }))
+        }
     }))
 }
 

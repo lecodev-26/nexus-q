@@ -71,6 +71,7 @@ rand_core = [
     "common/rand_core",
     "signature/rand_core",
 ]
+nexusq-kernels = ["dep:nexusq-kernels"]
 zeroize = [
     "dep:zeroize",
     "hybrid-array/zeroize",
@@ -120,6 +121,10 @@ features = ["extra-sizes"]
 [dependencies.module-lattice]
 version = "0.2.3"
 features = ["ctutils"]
+
+[dependencies.nexusq-kernels]
+version = "2.0.0"
+optional = true
 
 [dependencies.pkcs8]
 version = "0.11"
