@@ -35,6 +35,76 @@ pub fn keccak_f1600x4(states: &mut [[u64; 25]; 4]) {
     }
 }
 
+/// Compute four independent SHAKE128 streams in parallel when all input and
+/// output lengths match. Unequal lengths safely fall back to the scalar oracle.
+pub fn shake128x4(inputs: [&[u8]; 4], outputs: &mut [&mut [u8]; 4]) {
+    shake_x4(inputs, outputs, 168);
+}
+
+/// Compute four independent SHAKE256 streams in parallel when all input and
+/// output lengths match. Unequal lengths safely fall back to the scalar oracle.
+pub fn shake256x4(inputs: [&[u8]; 4], outputs: &mut [&mut [u8]; 4]) {
+    shake_x4(inputs, outputs, 136);
+}
+
+fn shake_x4(inputs: [&[u8]; 4], outputs: &mut [&mut [u8]; 4], rate: usize) {
+    let input_len = inputs[0].len();
+    let output_len = outputs[0].len();
+    if inputs.iter().any(|input| input.len() != input_len)
+        || outputs.iter().any(|output| output.len() != output_len)
+    {
+        for (input, output) in inputs.into_iter().zip(outputs.iter_mut()) {
+            match rate {
+                168 => ScalarBackend::shake128(input, output),
+                136 => ScalarBackend::shake256(input, output),
+                _ => unreachable!("SHAKE rate is selected by the public wrapper"),
+            }
+        }
+        return;
+    }
+
+    let mut states = [[0_u64; 25]; 4];
+    let mut offset = 0;
+    while input_len - offset >= rate {
+        for lane in 0..4 {
+            xor_bytes_into_state(&mut states[lane], &inputs[lane][offset..offset + rate]);
+        }
+        keccak_f1600x4(&mut states);
+        offset += rate;
+    }
+
+    let remainder_len = input_len - offset;
+    for lane in 0..4 {
+        xor_bytes_into_state(&mut states[lane], &inputs[lane][offset..]);
+        states[lane][remainder_len / 8] ^= 0x1f_u64 << ((remainder_len % 8) * 8);
+        states[lane][(rate - 1) / 8] ^= 0x80_u64 << (((rate - 1) % 8) * 8);
+    }
+    keccak_f1600x4(&mut states);
+
+    let mut written = 0;
+    while written < output_len {
+        let take = (output_len - written).min(rate);
+        for lane in 0..4 {
+            for (index, byte) in outputs[lane][written..written + take]
+                .iter_mut()
+                .enumerate()
+            {
+                *byte = (states[lane][index / 8] >> ((index % 8) * 8)) as u8;
+            }
+        }
+        written += take;
+        if written < output_len {
+            keccak_f1600x4(&mut states);
+        }
+    }
+}
+
+fn xor_bytes_into_state(state: &mut [u64; 25], bytes: &[u8]) {
+    for (index, byte) in bytes.iter().copied().enumerate() {
+        state[index / 8] ^= u64::from(byte) << ((index % 8) * 8);
+    }
+}
+
 /// Compute SHAKE128 using the selected backend.
 #[inline]
 pub fn shake128(input: &[u8], output: &mut [u8]) {
@@ -94,7 +164,8 @@ pub fn freeze(value: i32) -> i16 {
 #[cfg(test)]
 mod tests {
     use super::{
-        basemul, freeze, inverse_ntt, keccak_f1600, keccak_f1600x4, ntt, reduce, shake128, shake256,
+        basemul, freeze, inverse_ntt, keccak_f1600, keccak_f1600x4, ntt, reduce, shake128,
+        shake128x4, shake256, shake256x4,
     };
     use crate::scalar::{keccak, mlkem};
 
@@ -136,6 +207,58 @@ mod tests {
 
         keccak_f1600x4(&mut states);
         assert_eq!(states, expected);
+    }
+
+    #[test]
+    fn four_way_shake_matches_scalar_at_absorb_and_squeeze_boundaries() {
+        for (rate, output_len, is_128) in
+            [(168_usize, 337_usize, true), (136_usize, 273_usize, false)]
+        {
+            for input_len in [0, 1, rate - 1, rate, rate + 1, rate * 2, rate * 2 + 7] {
+                let inputs: [Vec<u8>; 4] = std::array::from_fn(|lane| {
+                    (0..input_len)
+                        .map(|index| (index as u8).wrapping_mul(17).wrapping_add(lane as u8 * 43))
+                        .collect()
+                });
+                let mut expected: [Vec<u8>; 4] = std::array::from_fn(|_| vec![0; output_len]);
+                let mut actual: [Vec<u8>; 4] = std::array::from_fn(|_| vec![0; output_len]);
+                for lane in 0..4 {
+                    if is_128 {
+                        keccak::shake128(&inputs[lane], &mut expected[lane]);
+                    } else {
+                        keccak::shake256(&inputs[lane], &mut expected[lane]);
+                    }
+                }
+                let mut output_refs: [&mut [u8]; 4] =
+                    std::array::from_fn(|lane| actual[lane].as_mut_slice());
+                let input_refs = std::array::from_fn(|lane| inputs[lane].as_slice());
+                if is_128 {
+                    shake128x4(input_refs, &mut output_refs);
+                } else {
+                    shake256x4(input_refs, &mut output_refs);
+                }
+                assert_eq!(actual, expected, "rate={rate}, input_len={input_len}");
+            }
+        }
+    }
+
+    #[test]
+    fn four_way_shake_unequal_lengths_use_scalar_fallback() {
+        let inputs: [&[u8]; 4] = [b"a", b"longer input", b"", b"third"];
+        let mut outputs = [
+            vec![0_u8; 32],
+            vec![0_u8; 31],
+            vec![0_u8; 32],
+            vec![0_u8; 32],
+        ];
+        let mut expected = outputs.clone();
+        for lane in 0..4 {
+            keccak::shake128(inputs[lane], &mut expected[lane]);
+        }
+        let mut output_refs: [&mut [u8]; 4] =
+            std::array::from_fn(|lane| outputs[lane].as_mut_slice());
+        shake128x4(inputs, &mut output_refs);
+        assert_eq!(outputs, expected);
     }
 
     #[test]
