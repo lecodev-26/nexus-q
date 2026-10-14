@@ -66,11 +66,15 @@ impl ShakeX4 {
             "SHAKEx4 input lengths must match"
         );
 
-        for offset in 0..len {
-            for lane in 0..4 {
-                self.states[lane][self.absorb_position / 8] ^=
-                    u64::from(inputs[lane][offset]) << ((self.absorb_position % 8) * 8);
-            }
+        let [input0, input1, input2, input3] = inputs;
+        let [state0, state1, state2, state3] = &mut self.states;
+        for (((byte0, byte1), byte2), byte3) in input0.iter().zip(input1).zip(input2).zip(input3) {
+            let shift = (self.absorb_position % 8) * 8;
+            let lane_index = self.absorb_position / 8;
+            state0[lane_index] ^= u64::from(*byte0) << shift;
+            state1[lane_index] ^= u64::from(*byte1) << shift;
+            state2[lane_index] ^= u64::from(*byte2) << shift;
+            state3[lane_index] ^= u64::from(*byte3) << shift;
             self.absorb_position += 1;
             if self.absorb_position == self.rate {
                 keccak_f1600x4(&mut self.states);
@@ -104,16 +108,23 @@ impl ShakeX4 {
             "SHAKEx4 output lengths must match"
         );
 
-        for offset in 0..len {
+        let [output0, output1, output2, output3] = outputs;
+        for (((byte0, byte1), byte2), byte3) in output0
+            .iter_mut()
+            .zip(output1.iter_mut())
+            .zip(output2.iter_mut())
+            .zip(output3.iter_mut())
+        {
             if self.squeeze_position == self.rate {
                 keccak_f1600x4(&mut self.states);
                 self.squeeze_position = 0;
             }
-            for lane in 0..4 {
-                outputs[lane][offset] = (self.states[lane][self.squeeze_position / 8]
-                    >> ((self.squeeze_position % 8) * 8))
-                    as u8;
-            }
+            let lane_index = self.squeeze_position / 8;
+            let shift = (self.squeeze_position % 8) * 8;
+            *byte0 = (self.states[0][lane_index] >> shift) as u8;
+            *byte1 = (self.states[1][lane_index] >> shift) as u8;
+            *byte2 = (self.states[2][lane_index] >> shift) as u8;
+            *byte3 = (self.states[3][lane_index] >> shift) as u8;
             self.squeeze_position += 1;
         }
     }
