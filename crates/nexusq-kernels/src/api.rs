@@ -93,7 +93,9 @@ pub fn freeze(value: i32) -> i16 {
 
 #[cfg(test)]
 mod tests {
-    use super::{basemul, freeze, inverse_ntt, keccak_f1600, ntt, reduce, shake128, shake256};
+    use super::{
+        basemul, freeze, inverse_ntt, keccak_f1600, keccak_f1600x4, ntt, reduce, shake128, shake256,
+    };
     use crate::scalar::{keccak, mlkem};
 
     #[test]
