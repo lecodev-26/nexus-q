@@ -31,6 +31,8 @@ This checklist mirrors the phases and acceptance criteria in Issue #23. Keep it 
 
 ## Phase 2 — Keccak/SHAKE
 
+> Progress note for the current working PR: the AVX2 Keccak-f[1600] x4 and SHAKE128/SHAKE256 x4 source paths are present, and this change adds FIPS 202 empty-input known-answer checks for single-state and four-way SHAKE128/SHAKE256 plus corrects stale kernel README/API descriptions. These tests and documentation are not accepted evidence until CI passes on the exact commit; this phase remains open because single-state dispatch, streaming integration, ARM paths, and top-level PQC integration are not complete.
+
 - [ ] x86_64 AVX2 Keccak-f[1600] x4 and SHAKE128/SHAKE256 x4 for matrix expansion and sampling workloads.
 - [ ] Evaluate a fast single-state BMI2/rotate path; AVX-512 is optional and separately dispatched, accepted only if end-to-end Arena data supports it without unacceptable downclocking.
 - [ ] aarch64 ARMv8.2 SHA3 instructions and NEON x2, with portable fallback.

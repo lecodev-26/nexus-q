@@ -1,7 +1,7 @@
 # NEXUS-Q kernel dispatch
 
-This crate contains portable scalar reference kernels and the dispatch boundary for
-future architecture-specific implementations.
+This crate contains portable scalar reference kernels, a cached backend-dispatch
+boundary, and an experimental x86_64 AVX2 four-state Keccak/SHAKE batch path.
 
 ## Safety and selection policy
 
@@ -19,7 +19,10 @@ Issue #23 gates:
 - constant-time and secret-handling review, including zeroization requirements;
 - repeated same-hardware benchmarks with median, p95, and dispersion reported.
 
-No unsafe or architecture-specific kernel is enabled by this dispatch layer.
+The general backend dispatcher still selects only the scalar backend. The explicit
+Keccak-f[1600] x4 API independently checks AVX2 at runtime and uses its isolated
+unsafe implementation only on supported x86_64 CPUs; this batch path is not yet
+selected by single-state dispatch or integrated into top-level PQC flows.
 
 ## Inspecting the current decision
 
@@ -60,10 +63,13 @@ for an appropriate target feature before it can be called.
 
 ## Current limitations
 
-- Only `Backend::Scalar` exists; AVX2 and NEON implementations are future work.
+- Only `Backend::Scalar` exists in the general dispatcher. An experimental AVX2
+  Keccak-f[1600] x4 implementation and SHAKE128/SHAKE256 x4 wrappers exist, but
+  NEON and the ML-KEM/ML-DSA optimized kernels remain future work.
 - The scalar ML-KEM routines are correctness-oriented reference code, not a
   constant-time production implementation.
-- Dispatch metadata does not currently select separate Keccak or ML-KEM kernels.
+- Dispatch metadata does not currently select separate single-state Keccak or ML-KEM
+  kernels; the four-state Keccak API has its own guarded AVX2 path.
 - This API is experimental and may evolve during V4; it is not a stable semver
   contract yet.
 
