@@ -51,6 +51,10 @@ unsafe fn keccak_f1600x4_avx2(states: &mut [[u64; 25]; 4]) {
                     lanes[x + 20],
                 ),
             );
+        }
+        // Compute deltas only after all five columns are available; otherwise
+        // an earlier delta would observe a column overwritten in this round.
+        for x in 0..5 {
             // SAFETY: This call is within the AVX2-targeted permutation function.
             let rotated = unsafe { rotate_left_64(column[(x + 1) % 5], 1) };
             delta[x] = _mm256_xor_si256(column[(x + 4) % 5], rotated);
