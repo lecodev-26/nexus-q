@@ -69,8 +69,8 @@ impl ShakeX4 {
         for (position, _) in inputs[0].iter().enumerate() {
             let shift = (self.absorb_position % 8) * 8;
             let lane_index = self.absorb_position / 8;
-            for (lane, input) in inputs.iter().enumerate() {
-                self.states[lane][lane_index] ^= u64::from(input[position]) << shift;
+            for (state, input) in self.states.iter_mut().zip(inputs.iter()) {
+                state[lane_index] ^= u64::from(input[position]) << shift;
             }
             self.absorb_position += 1;
             if self.absorb_position == self.rate {
