@@ -129,23 +129,41 @@ impl ShakeX4 {
         );
 
         let [output0, output1, output2, output3] = outputs;
-        for (((byte0, byte1), byte2), byte3) in output0
-            .iter_mut()
-            .zip(output1.iter_mut())
-            .zip(output2.iter_mut())
-            .zip(output3.iter_mut())
-        {
+        let mut position = 0;
+        while position < len {
             if self.squeeze_position == self.rate {
                 keccak_f1600x4(&mut self.states);
                 self.squeeze_position = 0;
             }
-            let lane_index = self.squeeze_position / 8;
-            let shift = (self.squeeze_position % 8) * 8;
-            *byte0 = (self.states[0][lane_index] >> shift) as u8;
-            *byte1 = (self.states[1][lane_index] >> shift) as u8;
-            *byte2 = (self.states[2][lane_index] >> shift) as u8;
-            *byte3 = (self.states[3][lane_index] >> shift) as u8;
-            self.squeeze_position += 1;
+
+            // Emit complete little-endian words in one operation. Sampling
+            // callers usually request long, equal-sized streams, so this
+            // avoids repeating lane/shift arithmetic for every output byte.
+            if self.squeeze_position % 8 == 0
+                && len - position >= 8
+                && self.squeeze_position + 8 <= self.rate
+            {
+                let lane_index = self.squeeze_position / 8;
+                output0[position..position + 8]
+                    .copy_from_slice(&self.states[0][lane_index].to_le_bytes());
+                output1[position..position + 8]
+                    .copy_from_slice(&self.states[1][lane_index].to_le_bytes());
+                output2[position..position + 8]
+                    .copy_from_slice(&self.states[2][lane_index].to_le_bytes());
+                output3[position..position + 8]
+                    .copy_from_slice(&self.states[3][lane_index].to_le_bytes());
+                self.squeeze_position += 8;
+                position += 8;
+            } else {
+                let lane_index = self.squeeze_position / 8;
+                let shift = (self.squeeze_position % 8) * 8;
+                output0[position] = (self.states[0][lane_index] >> shift) as u8;
+                output1[position] = (self.states[1][lane_index] >> shift) as u8;
+                output2[position] = (self.states[2][lane_index] >> shift) as u8;
+                output3[position] = (self.states[3][lane_index] >> shift) as u8;
+                self.squeeze_position += 1;
+                position += 1;
+            }
         }
     }
 }
