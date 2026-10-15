@@ -533,9 +533,9 @@ mod tests {
             result as u16
         });
         let mut expected = [0_u16; 256];
-        for pair in 0..128 {
+        for (pair, &g) in gamma.iter().enumerate() {
             let i = pair * 2;
-            let b1g = u32::from(rhs[i + 1]) * u32::from(gamma[pair]) % 3329;
+            let b1g = u32::from(rhs[i + 1]) * u32::from(g) % 3329;
             expected[i] = ((u32::from(lhs[i]) * u32::from(rhs[i]) + u32::from(lhs[i + 1]) * b1g)
                 % 3329) as u16;
             expected[i + 1] = ((u32::from(lhs[i]) * u32::from(rhs[i + 1])

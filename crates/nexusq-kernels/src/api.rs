@@ -329,13 +329,13 @@ pub fn basemul_mlkem(lhs: &[u16; 256], rhs: &[u16; 256], gamma: &[u16; 128], out
         return;
     }
 
-    for pair in 0..128 {
+    for (pair, &g) in gamma.iter().enumerate() {
         let index = pair * 2;
         let a0 = u64::from(lhs[index]);
         let a1 = u64::from(lhs[index + 1]);
         let b0 = u64::from(rhs[index]);
         let b1 = u64::from(rhs[index + 1]);
-        let g = u64::from(gamma[pair]);
+        let g = u64::from(g);
         let b1g = b1 * g % 3329;
         out[index] = ((a0 * b0 + a1 * b1g) % 3329) as u16;
         out[index + 1] = ((a0 * b1 + a1 * b0) % 3329) as u16;
