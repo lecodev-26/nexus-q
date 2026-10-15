@@ -1,0 +1,40 @@
+[package]
+name = "nexusq-native-backend"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+license = "MIT OR Apache-2.0"
+description = "Experimental: NEXUS-Q Rust API over vendored mlkem-native/mldsa-native (the AWS-LC arithmetic core) with runtime-dispatched x86-64 assembly"
+build = "build.rs"
+links = "nq_native_backend"
+
+# Deliberately outside the root workspace (like arena/runners/nexusq): the
+# experimental backend must not change the production crates or Cargo.lock.
+[workspace]
+
+[features]
+# Build mlkem-native/mldsa-native without any assembly (portable C only).
+portable-only = []
+# Keep the AVX2 backends but use upstream's portable C 1-way Keccak instead of
+# the s2n-bignum routine (A/B measurement only).
+upstream-c-keccak = []
+
+[dependencies]
+getrandom = "0.3"
+zeroize = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+ml-kem = { path = "../../vendor/ml-kem", features = ["zeroize"] }
+ml-dsa = { path = "../../vendor/ml-dsa", features = ["zeroize"] }
+
+[build-dependencies]
+cc = "1"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+debug = 1
+
+[patch.crates-io]
+module-lattice = { path = "../../vendor/module-lattice" }
