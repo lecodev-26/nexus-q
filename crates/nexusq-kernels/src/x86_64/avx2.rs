@@ -8,8 +8,8 @@ use core::arch::x86_64::{
     __m256i, _mm_loadu_si128, _mm256_add_epi32, _mm256_and_si256, _mm256_andnot_si256,
     _mm256_blend_epi32, _mm256_cmpgt_epi32, _mm256_cvtepu16_epi32, _mm256_mul_epu32,
     _mm256_mullo_epi32, _mm256_or_si256, _mm256_set_epi64x, _mm256_set1_epi32, _mm256_set1_epi64x,
-    _mm256_setzero_si256, _mm256_sllv_epi64, _mm256_srli_epi64, _mm256_srlv_epi64,
-    _mm256_storeu_si256, _mm256_sub_epi32, _mm256_xor_si256,
+    _mm256_setzero_si256, _mm256_slli_epi64, _mm256_sllv_epi64, _mm256_srli_epi64,
+    _mm256_srlv_epi64, _mm256_storeu_si256, _mm256_sub_epi32, _mm256_xor_si256,
 };
 
 use crate::scalar::keccak::{ROTATION_OFFSETS, ROUND_CONSTANTS};
@@ -226,7 +226,10 @@ unsafe fn reduce_mlkem_product(value: __m256i) -> __m256i {
     let even_products = _mm256_mul_epu32(value, reciprocal);
     let odd_products = _mm256_mul_epu32(_mm256_srli_epi64(value, 32), reciprocal);
     let even_quotients = _mm256_srli_epi64(even_products, 32);
-    let odd_quotients = _mm256_srli_epi64(odd_products, 32);
+    // The odd 32-bit products were shifted into each 64-bit lane's low half
+    // before multiplication, so move their quotients back to the high halves
+    // before interleaving. Without this shift, odd quotient lanes stay zero.
+    let odd_quotients = _mm256_slli_epi64(_mm256_srli_epi64(odd_products, 32), 32);
     let quotient = _mm256_blend_epi32(even_quotients, odd_quotients, 0b1010_1010);
     let remainder = _mm256_sub_epi32(
         value,
