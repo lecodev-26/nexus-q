@@ -261,6 +261,7 @@ jobs:
         id: checkout
         with:
           ref: ${{ github.sha }}
+          submodules: recursive
 
       - name: Install native build dependencies
         run: sudo apt-get update && sudo apt-get install -y cmake ninja-build build-essential perl
