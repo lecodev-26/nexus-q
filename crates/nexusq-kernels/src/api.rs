@@ -66,13 +66,36 @@ impl ShakeX4 {
             "SHAKEx4 input lengths must match"
         );
 
-        for (position, _) in inputs[0].iter().enumerate() {
-            let shift = (self.absorb_position % 8) * 8;
-            let lane_index = self.absorb_position / 8;
-            for (state, input) in self.states.iter_mut().zip(inputs.iter()) {
-                state[lane_index] ^= u64::from(input[position]) << shift;
+        let mut position = 0;
+        while position < len {
+            // Most callers absorb complete byte strings into an empty sponge.
+            // XOR complete little-endian lanes at once instead of performing
+            // eight shifts and four per-byte updates for every 64-bit word.
+            if self.absorb_position % 8 == 0
+                && len - position >= 8
+                && self.absorb_position + 8 <= self.rate
+            {
+                let lane_index = self.absorb_position / 8;
+                for (state, input) in self.states.iter_mut().zip(inputs.iter()) {
+                    let word = u64::from_le_bytes(
+                        input[position..position + 8]
+                            .try_into()
+                            .expect("an eight-byte SHAKE lane was selected"),
+                    );
+                    state[lane_index] ^= word;
+                }
+                self.absorb_position += 8;
+                position += 8;
+            } else {
+                let shift = (self.absorb_position % 8) * 8;
+                let lane_index = self.absorb_position / 8;
+                for (state, input) in self.states.iter_mut().zip(inputs.iter()) {
+                    state[lane_index] ^= u64::from(input[position]) << shift;
+                }
+                self.absorb_position += 1;
+                position += 1;
             }
-            self.absorb_position += 1;
+
             if self.absorb_position == self.rate {
                 keccak_f1600x4(&mut self.states);
                 self.absorb_position = 0;
