@@ -3,6 +3,7 @@ resolver = "3"
 exclude = ["arena/runners/nexusq"]
 members = [
     "crates/nexusq-core",
+    "crates/nexusq-kernels",
     "crates/nexusq-cli",
     "crates/nexusq-server",
     "crates/nexusq-c",
@@ -18,6 +19,8 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/lecodev-26/nexus-q"
 
 [patch.crates-io]
+ml-dsa = { path = "vendor/ml-dsa" }
+nexusq-kernels = { path = "crates/nexusq-kernels" }
 ml-kem = { path = "vendor/ml-kem" }
 module-lattice = { path = "vendor/module-lattice" }
 
@@ -42,8 +45,9 @@ hkdf = "0.13.0-rc.5"
 hmac = { version = "0.13", features = ["zeroize"] }
 aes-gcm = { version = "0.11.0-rc.5", features = ["zeroize"] }
 chacha20poly1305 = { version = "0.11.0-rc.5", features = ["zeroize"] }
-ml-kem = { version = "0.3", features = ["getrandom", "zeroize"] }
-ml-dsa = { version = "0.1.1", features = ["zeroize"] }
+ml-kem = { version = "0.3", features = ["getrandom", "zeroize", "nexusq-kernels"] }
+module-lattice = "0.2.3"
+ml-dsa = { version = "0.1.1", features = ["zeroize", "nexusq-kernels"] }
 slh-dsa = { version = "0.2.0-rc.5", features = ["zeroize"] }
 x25519-dalek = { version = "3", features = ["getrandom", "static_secrets", "zeroize"] }
 ed25519-dalek = { version = "3", features = ["rand_core", "zeroize"] }

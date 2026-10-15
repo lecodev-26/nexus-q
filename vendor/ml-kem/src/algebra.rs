@@ -3,7 +3,11 @@ use crate::{
     crypto::{PRF, PrfOutput, XOF},
     param::CbdSamplingSize,
 };
-use array::{Array, ArraySize, typenum::U256};
+use array::{
+    Array, ArraySize,
+    typenum::{U256, operator_aliases::Prod},
+};
+use core::ops::Mul;
 use module_lattice::{Encode, Field, MultiplyNtt, Truncate};
 use sha3::digest::XofReader;
 
@@ -91,14 +95,119 @@ pub(crate) fn sample_ntt(B: &mut impl XofReader) -> NttPolynomial {
     NttPolynomial::new(Array::from_fn(|_| reader.next()))
 }
 
-pub(crate) fn matrix_sample_ntt<K: ArraySize>(rho: &B32, transpose: bool) -> NttMatrix<K> {
+pub(crate) fn matrix_sample_ntt<K>(rho: &B32, transpose: bool) -> NttMatrix<K>
+where
+    K: ArraySize + Mul<K>,
+    Prod<K, K>: ArraySize,
+{
+    let total = K::USIZE * K::USIZE;
+
+    // Flatten the matrix while sampling so adjacent polynomials can share one
+    // four-lane SHAKE128 invocation. The final one to three polynomials use
+    // the original scalar reader. This keeps the generic K=3 and K=4 paths
+    // bit-identical without padding a batch with semantically fake matrix cells.
+    #[cfg(feature = "nexusq-kernels")]
+    let mut pending: Option<core::array::IntoIter<NttPolynomial, 4>> = None;
+
+    let sampled: Array<NttPolynomial, Prod<K, K>> = Array::from_fn(|index| {
+        #[cfg(feature = "nexusq-kernels")]
+        if total - index >= 4 {
+            if index % 4 == 0 {
+                let mut encoded = [[0_u8; 34]; 4];
+                for lane in 0..4 {
+                    let flat = index + lane;
+                    let row = flat / K::USIZE;
+                    let column = flat % K::USIZE;
+                    let (i, j) = if transpose {
+                        (column, row)
+                    } else {
+                        (row, column)
+                    };
+                    // XOF(rho, i, j) absorbs rho || j || i.
+                    encoded[lane][..32].copy_from_slice(rho.as_ref());
+                    encoded[lane][32] = Truncate::truncate(j);
+                    encoded[lane][33] = Truncate::truncate(i);
+                }
+                pending = Some(sample_ntt_x4(&encoded).into_iter());
+            }
+            return pending
+                .as_mut()
+                .expect("a complete four-polynomial batch was initialized")
+                .next()
+                .expect("each four-polynomial batch has four results");
+        }
+
+        let row = index / K::USIZE;
+        let column = index % K::USIZE;
+        let (i, j) = if transpose {
+            (column, row)
+        } else {
+            (row, column)
+        };
+        let mut xof = XOF(rho, Truncate::truncate(j), Truncate::truncate(i));
+        sample_ntt(&mut xof)
+    });
+
     NttMatrix::new(Array::from_fn(|i| {
-        NttVector::new(Array::from_fn(|j| {
-            let (i, j) = if transpose { (j, i) } else { (i, j) };
-            let mut xof = XOF(rho, Truncate::truncate(j), Truncate::truncate(i));
-            sample_ntt(&mut xof)
-        }))
+        NttVector::new(Array::from_fn(|j| sampled[i * K::USIZE + j].clone()))
     }))
+}
+
+#[cfg(feature = "nexusq-kernels")]
+fn sample_ntt_x4(inputs: &[[u8; 34]; 4]) -> [NttPolynomial; 4] {
+    use nexusq_kernels::api::ShakeX4;
+
+    let input_refs = core::array::from_fn(|lane| inputs[lane].as_slice());
+    let mut shake = ShakeX4::new128();
+    shake.absorb(input_refs);
+    shake.finalize();
+
+    let mut values = [[0; 256]; 4];
+    let mut counts = [0_usize; 4];
+
+    // Each lane has its own rejection-sampling count. We squeeze equal-sized
+    // chunks to preserve SIMD lockstep, but completed lanes are ignored and
+    // every active lane consumes exactly the same SHAKE byte stream as scalar.
+    while counts.iter().any(|count| *count < 256) {
+        let mut blocks = [[0_u8; 96]; 4];
+        let [b0, b1, b2, b3] = &mut blocks;
+        shake.squeeze([
+            b0.as_mut_slice(),
+            b1.as_mut_slice(),
+            b2.as_mut_slice(),
+            b3.as_mut_slice(),
+        ]);
+
+        for lane in 0..4 {
+            if counts[lane] == 256 {
+                continue;
+            }
+            for bytes in blocks[lane].chunks_exact(3) {
+                let d1 = Int::from(bytes[0]) + ((Int::from(bytes[1]) & 0x0f) << 8);
+                let d2 = (Int::from(bytes[1]) >> 4) + (Int::from(bytes[2]) << 4);
+
+                if d1 < BaseField::Q {
+                    values[lane][counts[lane]] = d1;
+                    counts[lane] += 1;
+                    if counts[lane] < 256 && d2 < BaseField::Q {
+                        values[lane][counts[lane]] = d2;
+                        counts[lane] += 1;
+                    }
+                } else if d2 < BaseField::Q {
+                    values[lane][counts[lane]] = d2;
+                    counts[lane] += 1;
+                }
+
+                if counts[lane] == 256 {
+                    break;
+                }
+            }
+        }
+    }
+
+    core::array::from_fn(|lane| {
+        NttPolynomial::new(Array::from_fn(|index| Elem::new(values[lane][index])))
+    })
 }
 
 /// Algorithm 8: `SamplePolyCBD_eta(B)`
@@ -120,7 +229,7 @@ where
     K: ArraySize,
 {
     Vector::new(Array::from_fn(|i| {
-        let N = start_n + u8::truncate(i);
+        let N = start_n + <u8 as Truncate<usize>>::truncate(i);
         let prf_output = PRF::<Eta>(sigma, N);
         sample_poly_cbd::<Eta>(&prf_output)
     }))
@@ -352,6 +461,28 @@ mod test {
         ArraySize, Flatten,
         typenum::{U2, U3, U8},
     };
+
+    #[cfg(feature = "nexusq-kernels")]
+    #[test]
+    fn four_way_sample_ntt_is_bit_exact_with_scalar_rejection_sampling() {
+        use super::sample_ntt_x4;
+
+        let rho = B32::default();
+        let coordinates = [(0_u8, 0_u8), (0, 1), (1, 0), (1, 1)];
+        let mut encoded = [[0_u8; 34]; 4];
+        for (lane, (i, j)) in coordinates.into_iter().enumerate() {
+            encoded[lane][..32].copy_from_slice(rho.as_ref());
+            encoded[lane][32] = j;
+            encoded[lane][33] = i;
+        }
+
+        let actual = sample_ntt_x4(&encoded);
+        for (lane, (i, j)) in coordinates.into_iter().enumerate() {
+            let mut xof = XOF(&rho, i, j);
+            let expected = super::sample_ntt(&mut xof);
+            assert_eq!(actual[lane], expected, "matrix coordinates ({i}, {j})");
+        }
+    }
 
     /// A polynomial with only a scalar component, to make simple test cases
     fn const_ntt(x: Int) -> NttPolynomial {

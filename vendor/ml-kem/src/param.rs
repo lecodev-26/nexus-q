@@ -85,7 +85,11 @@ impl CbdSamplingSize for U3 {
 /// A `ParameterSet` captures the parameters that describe a particular instance of ML-KEM.
 ///
 /// There are three variants, corresponding to three different security levels.
-pub trait ParameterSet: Default + Clone + Debug + PartialEq {
+pub trait ParameterSet: Default + Clone + Debug + PartialEq
+where
+    Self::K: Mul<Self::K>,
+    Prod<Self::K, Self::K>: ArraySize,
+{
     /// The dimensionality of vectors and arrays
     type K: ArraySize;
 
@@ -112,7 +116,11 @@ type EncodedU<P> = Array<u8, EncodedUSize<P>>;
 type EncodedV<P> = Array<u8, EncodedVSize<P>>;
 
 /// Derived parameter relevant to K-PKE
-pub trait PkeParams: Kem<SharedKeySize = U32> + ParameterSet {
+pub trait PkeParams: Kem<SharedKeySize = U32> + ParameterSet
+where
+    Self::K: Mul<Self::K>,
+    Prod<Self::K, Self::K>: ArraySize,
+{
     type NttVectorSize: ArraySize;
     type EncryptionKeySize: ArraySize;
 
@@ -135,6 +143,8 @@ where
     P: Kem<CiphertextSize = Sum<EncodedUSize<P>, EncodedVSize<P>>, SharedKeySize = U32>
         + ParameterSet,
     U384: Mul<P::K>,
+    P::K: Mul<P::K>,
+    Prod<P::K, P::K>: ArraySize,
     Prod<U384, P::K>: ArraySize + Add<U32> + Div<P::K, Output = U384> + Rem<P::K, Output = U0>,
     EncodedUSize<P>: Add<EncodedVSize<P>>,
     Sum<EncodedUSize<P>, EncodedVSize<P>>:

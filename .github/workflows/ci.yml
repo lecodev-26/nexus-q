@@ -1,0 +1,713 @@
+name: NEXUS-Q CI
+
+# The single CI workflow of the repository.
+#
+# V4 work branches (v4/**, e.g. v4/issue-23-kernel-work): one run per push. The push run
+# validates the head commit of the open PR (-> nexusqv4), so no separate pull_request
+# trigger exists for them (it would only run every gate twice).
+# Gates: Rust validation, security (audit/deny/SBOM), secret scan, Phase 0 provenance and
+# the matched-host measurement. The evidence archive + the `NEXUS-Q V4 / PR CI` status are
+# written once, only after every gate is green.
+#
+# main: pushes and PRs run Rust validation, security and secret scan; fuzz harness build on
+# PRs to main; the 4-hour fuzz soaks only on pushes to main (release/security gate).
+#
+# All Rust validation runs on GitHub-hosted runners. Do not build, lint, or test locally.
+on:
+  push:
+    branches:
+      - 'v4/**'
+      - main
+    paths-ignore:
+      - 'artifact-archive/**'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  rust-validation:
+    name: Rust / fmt, check, clippy, test, build, docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust with CI components
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust dependencies and build outputs
+        uses: Swatinem/rust-cache@v2
+
+      - name: Record toolchain and tested revision
+        run: |
+          rustc -Vv
+          cargo -V
+          git rev-parse HEAD
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Audit kernel unsafe-code boundary
+        run: python3 .github/scripts/check-kernel-unsafe.py
+
+      - name: Check workspace and all targets
+        run: cargo check --workspace --all-targets --locked
+
+      - name: Run Clippy on workspace and all targets
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Run workspace tests
+        run: cargo test --workspace --locked
+
+      - name: Build workspace and all targets
+        run: cargo build --workspace --all-targets --locked
+
+      - name: Build public documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        # nexusq-cli's binary and nexusq-c's library share the rustdoc output
+        # name `nexusq`; serialize rustdoc to avoid concurrent directory cleanup.
+        run: cargo doc --workspace --no-deps --locked --jobs 1
+
+  security:
+    name: Security / cargo-audit, cargo-deny, SBOM input
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      # Expensive release-only checks stay in the workflow and can be re-enabled
+      # by setting the repository Actions variable ENABLE_SECURITY_AUDIT=true.
+      - name: Install security tooling
+        if: ${{ vars.ENABLE_SECURITY_AUDIT == 'true' }}
+        run: |
+          cargo install cargo-audit --locked
+          cargo install cargo-deny --locked
+      - name: Cargo audit
+        if: ${{ vars.ENABLE_SECURITY_AUDIT == 'true' }}
+        run: cargo audit
+      - name: Cargo deny
+        if: ${{ vars.ENABLE_SECURITY_AUDIT == 'true' }}
+        run: cargo deny check
+      - name: Metadata / SBOM input
+        run: cargo metadata --format-version 1 --locked > cargo-metadata.json
+      - name: Upload dependency metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-metadata
+          path: cargo-metadata.json
+
+  secret-scan:
+    name: Secret scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan repository
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Fuzzing is deliberately skipped on V4 work branches (never runs on v4/**).
+  # Full campaigns stay enabled on main as the release/security gate.
+  fuzz-build:
+    name: Fuzz harness build
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Build fuzz targets
+        run: cargo fuzz build
+        working-directory: fuzz
+
+  fuzz-soak-vault:
+    name: 4-hour fuzz soak - vault parser
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 250
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Fuzz vault parser
+        run: cargo fuzz run vault_parse -- -max_total_time=14400
+        working-directory: fuzz
+
+  fuzz-soak-envelope:
+    name: 4-hour fuzz soak - envelope parser
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 250
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Fuzz envelope parser
+        run: cargo fuzz run envelope_parse -- -max_total_time=14400
+        working-directory: fuzz
+
+  phase0:
+    if: github.event_name != 'pull_request' && startsWith(github.ref, 'refs/heads/v4/')
+    name: V4 Phase 0 / dependency provenance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout V4 ref
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Capture toolchain and runner identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p phase0-evidence
+          printf '%s\n' "$(git rev-parse HEAD)" > phase0-evidence/commit.txt
+          printf '%s\n' "$GITHUB_REF" > phase0-evidence/ref.txt
+          rustc --version --verbose | tee phase0-evidence/rustc.txt
+          cargo --version | tee phase0-evidence/cargo.txt
+          uname -a | tee phase0-evidence/uname.txt
+          if command -v lscpu >/dev/null 2>&1; then
+            lscpu | tee phase0-evidence/lscpu.txt
+          fi
+          git status --short | tee phase0-evidence/git-status.txt
+
+      - name: Prove locked Arena dependency sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest=arena/runners/nexusq/Cargo.toml
+          cargo tree --locked --manifest-path "$manifest" -i ml-kem \
+            | tee phase0-evidence/tree-ml-kem.txt
+          cargo tree --locked --manifest-path "$manifest" -i module-lattice \
+            | tee phase0-evidence/tree-module-lattice.txt
+          cargo tree --locked --manifest-path "$manifest" -i ml-dsa \
+            | tee phase0-evidence/tree-ml-dsa.txt
+          grep -F 'vendor/ml-kem' phase0-evidence/tree-ml-kem.txt >/dev/null || {
+            echo 'ERROR: Arena ml-kem does not resolve to vendor/ml-kem' >&2
+            exit 1
+          }
+          grep -F 'vendor/module-lattice' phase0-evidence/tree-module-lattice.txt >/dev/null || {
+            echo 'ERROR: Arena module-lattice does not resolve to vendor/module-lattice' >&2
+            exit 1
+          }
+          cargo metadata --locked --format-version 1 --manifest-path "$manifest" \
+            > phase0-evidence/cargo-metadata.json
+          sha256sum Cargo.toml Cargo.lock "$manifest" arena/runners/nexusq/Cargo.lock \
+            | tee phase0-evidence/manifest-sha256.txt
+
+      - name: Record local patch targets and kernel readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -nE 'ml-kem = \{ path =|module-lattice = \{ path =' \
+            arena/runners/nexusq/Cargo.toml \
+            | tee phase0-evidence/local-patches.txt
+          if test -f crates/nexusq-kernels/Cargo.toml; then
+            echo 'nexusq-kernels manifest exists' | tee phase0-evidence/kernel-crate-status.txt
+          else
+            echo 'nexusq-kernels manifest not present; Phase 0 remains incomplete' \
+              | tee phase0-evidence/kernel-crate-status.txt
+          fi
+
+      - name: Upload Phase 0 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v4-issue23-phase0-${{ github.sha }}
+          path: phase0-evidence/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  measurement:
+    if: github.event_name != 'pull_request' && startsWith(github.ref, 'refs/heads/v4/')
+    name: Build and exercise Rust/AWS-LC on one host
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      NEXUSQ_ITERATIONS: "1000"
+      NEXUSQ_WARMUPS: "100"
+      NEXUSQ_SIGN_SAMPLES_PER_SEED: "16"
+      AWSLC_ITERATIONS: "1000"
+      AWSLC_WARMUPS: "100"
+      ARENA_OPT: release
+      ARENA_TARGET: x86_64-linux-gnu
+      ARENA_OS: Ubuntu
+      NEXUSQ_MAX_RATIO: "1.5"
+    steps:
+      - uses: actions/checkout@v4
+        id: checkout
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Install native build dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build build-essential perl
+
+      - name: Capture shared host and toolchain metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p arena/results/v4-phase0
+          uname -a | tee arena/results/v4-phase0/uname.txt
+          lscpu | tee arena/results/v4-phase0/lscpu.txt
+          rustc --version --verbose | tee arena/results/v4-phase0/rustc.txt
+          cargo --version | tee arena/results/v4-phase0/cargo.txt
+          cc --version | head -1 | tee arena/results/v4-phase0/cc.txt
+          awk -F': ' '/model name|Hardware|Processor/{print $2; exit}' /proc/cpuinfo | tee arena/results/v4-phase0/cpu.txt
+          awk -F': ' '/^flags|^Features/{print $2; exit}' /proc/cpuinfo | tee arena/results/v4-phase0/cpu-features.txt
+          CPU_FREQ_KHZ="$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq 2>/dev/null || true)"
+          [[ "$CPU_FREQ_KHZ" =~ ^[0-9]+$ ]] || CPU_FREQ_KHZ=""
+          CPU_GOVERNOR="$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || true)"
+          [[ -n "$CPU_GOVERNOR" ]] || CPU_GOVERNOR="unknown"
+          printf '%s\n' "${CPU_FREQ_KHZ:-unavailable}" | tee arena/results/v4-phase0/cpu-frequency-khz.txt
+          printf '%s\n' "$CPU_GOVERNOR" | tee arena/results/v4-phase0/cpu-governor.txt
+          printf 'NEXUSQ_ITERATIONS=%s\nNEXUSQ_WARMUPS=%s\nNEXUSQ_SIGN_SAMPLES_PER_SEED=%s\nAWSLC_ITERATIONS=%s\nAWSLC_WARMUPS=%s\n' \
+            "$NEXUSQ_ITERATIONS" "$NEXUSQ_WARMUPS" "$NEXUSQ_SIGN_SAMPLES_PER_SEED" "$AWSLC_ITERATIONS" "$AWSLC_WARMUPS" \
+            | tee arena/results/v4-phase0/measurement-policy.txt
+
+      - name: Test benchmark statistics conventions
+        run: cargo test --locked --manifest-path arena/runners/nexusq/Cargo.toml --bin nexusq-arena-runner
+
+      - name: Build locked NEXUS-Q Arena runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          NEXUSQ_COMMIT="$(git rev-parse HEAD)" \
+          NEXUSQ_CPU="$(cat arena/results/v4-phase0/cpu.txt)" \
+          NEXUSQ_CPU_FEATURES="$(tr ' ' ',' < arena/results/v4-phase0/cpu-features.txt)" \
+          NEXUSQ_RUSTC_VERBOSE="$(rustc --version --verbose | tr '\n' ';')" \
+          RUSTC_VERSION="$(rustc --version)" \
+          NEXUSQ_CARGO_LOCK_SHA256="$(sha256sum arena/runners/nexusq/Cargo.lock | cut -d' ' -f1)" \
+          NEXUSQ_CPU_FREQUENCY_KHZ="$(cat arena/results/v4-phase0/cpu-frequency-khz.txt | grep -E '^[0-9]+$' || true)" \
+          NEXUSQ_CPU_GOVERNOR="$(cat arena/results/v4-phase0/cpu-governor.txt)" \
+          NEXUSQ_OPT=release \
+          cargo build --locked --release --features cached-verifier --manifest-path arena/runners/nexusq/Cargo.toml
+          cp arena/runners/nexusq/target/release/nexusq-arena-runner arena/results/v4-phase0/nexusq-arena-runner
+
+      - name: Fetch pinned AWS-LC source
+        run: |
+          git init .arena-aws-lc
+          git -C .arena-aws-lc remote add origin https://github.com/aws/aws-lc.git
+          git -C .arena-aws-lc fetch --depth 1 origin ec05f25ef5bcb1bf03d2e2f44ba57973a878e0ba
+          git -C .arena-aws-lc checkout --detach ec05f25ef5bcb1bf03d2e2f44ba57973a878e0ba
+          test "$(git -C .arena-aws-lc rev-parse HEAD)" = "ec05f25ef5bcb1bf03d2e2f44ba57973a878e0ba"
+
+      - name: Build pinned AWS-LC
+        run: |
+          cmake -S .arena-aws-lc -B .arena-aws-lc-build -GNinja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+          cmake --build .arena-aws-lc-build --parallel 2
+
+      - name: Compile AWS-LC adapter with strict warnings
+        run: |
+          cc -std=c11 -O3 -Wall -Wextra -Werror \
+            -I"$GITHUB_WORKSPACE/.arena-aws-lc/include" \
+            arena/adapters/aws-lc/runner.c \
+            -L"$GITHUB_WORKSPACE/.arena-aws-lc-build/crypto" \
+            -Wl,-rpath,"$GITHUB_WORKSPACE/.arena-aws-lc-build/crypto" \
+            -lcrypto -lm -o arena/results/v4-phase0/aws-lc-runner
+
+      - name: Run both harnesses with Phase 0 iteration policy and real host metadata
+        shell: bash
+        env:
+          AWSLC_VERSION: ec05f25
+        run: |
+          set -euo pipefail
+          NEXUSQ_RUN_ID="v4-phase0-${GITHUB_RUN_ID}" \
+          NEXUSQ_RUN_ORDER=nexusq-before-aws-lc \
+          NEXUSQ_CPU="$(cat arena/results/v4-phase0/cpu.txt)" \
+          NEXUSQ_CPU_FEATURES="$(tr ' ' ',' < arena/results/v4-phase0/cpu-features.txt)" \
+          NEXUSQ_RUSTC_VERBOSE="$(rustc --version --verbose | tr '\n' ';')" \
+          RUSTC_VERSION="$(rustc --version)" \
+          NEXUSQ_CARGO_LOCK_SHA256="$(sha256sum arena/runners/nexusq/Cargo.lock | cut -d' ' -f1)" \
+          NEXUSQ_CPU_FREQUENCY_KHZ="$(cat arena/results/v4-phase0/cpu-frequency-khz.txt | grep -E '^[0-9]+$' || true)" \
+          NEXUSQ_CPU_GOVERNOR="$(cat arena/results/v4-phase0/cpu-governor.txt)" \
+          NEXUSQ_OPT=release \
+          arena/runners/nexusq/target/release/nexusq-arena-runner \
+            | tee arena/results/v4-phase0/nexusq.jsonl
+          ARENA_CPU="$(cat arena/results/v4-phase0/cpu.txt)" \
+          ARENA_CPU_FEATURES="$(tr ' ' ',' < arena/results/v4-phase0/cpu-features.txt)" \
+          ARENA_RUN_ORDER=aws-lc-after-nexusq \
+          ARENA_CPU_FREQUENCY_KHZ="$(cat arena/results/v4-phase0/cpu-frequency-khz.txt | grep -E '^[0-9]+$' || true)" \
+          ARENA_CPU_GOVERNOR="$(cat arena/results/v4-phase0/cpu-governor.txt)" \
+          ARENA_TARGET=x86_64-linux-gnu ARENA_OS=Ubuntu ARENA_OPT=release \
+          arena/results/v4-phase0/aws-lc-runner \
+            | tee arena/results/v4-phase0/aws-lc.jsonl
+
+      - name: Collect non-gating production-path allocation and latency profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --locked --release --features cached-verifier --bin profile_hotspots \
+            --manifest-path arena/runners/nexusq/Cargo.toml
+          profiler=arena/runners/nexusq/target/release/profile_hotspots
+          output=arena/results/v4-phase0/profile-hotspots.txt
+          : > "$output"
+          for workload in \
+            ml-kem-768-keygen ml-kem-768-encaps ml-kem-768-decaps \
+            ml-kem-1024-keygen ml-kem-1024-encaps ml-kem-1024-decaps \
+            ml-dsa-65-keygen ml-dsa-65-sign ml-dsa-65-verify \
+            ml-dsa-65-verify-cached; do
+            "$profiler" "$workload" | tee -a "$output"
+          done
+          printf '\nProfile is diagnostic only; it does not alter or bypass the 1.5x regression gate.\n' \
+            | tee -a "$output"
+
+      - name: Collect sampled CPU profile and call stacks (diagnostic only)
+        shell: bash
+        run: |
+          set -uo pipefail
+          profile_dir=arena/results/v4-phase0/cpu-profile
+          mkdir -p "$profile_dir"
+          if ! command -v perf >/dev/null 2>&1; then
+            printf '%s\n' 'SKIPPED: perf is not installed on this hosted runner.' | tee "$profile_dir/status.txt"
+            exit 0
+          fi
+          # Separate diagnostic build with frame pointers. Never changes the
+          # benchmark executable or the enforced 1.5x regression gate.
+          if ! RUSTFLAGS="-C force-frame-pointers=yes" cargo build --locked --release \
+              --features cached-verifier --bin profile_hotspots \
+              --manifest-path arena/runners/nexusq/Cargo.toml; then
+            printf '%s\n' 'SKIPPED: diagnostic build failed; regression gate remains unchanged.' | tee "$profile_dir/status.txt"
+            exit 0
+          fi
+          profiler=arena/runners/nexusq/target/release/profile_hotspots
+          : > "$profile_dir/status.txt"
+          # Hosted runners often set perf_event_paranoid=4, which blocks perf
+          # sampling even when perf is installed. Callgrind is the fallback:
+          # it reports deterministic instruction/call counts, not wall-clock time.
+          callgrind_ready=0
+          for workload in ml-kem-768-keygen ml-kem-768-encaps ml-kem-768-decaps \
+                          ml-dsa-65-keygen ml-dsa-65-sign ml-dsa-65-verify; do
+            data="$profile_dir/$workload.perf.data"
+            log="$profile_dir/$workload.record.log"
+            if perf record -F 99 -g --call-graph dwarf -o "$data" -- "$profiler" "$workload" >"$log" 2>&1; then
+              if perf report --stdio --children --sort comm,dso,symbol -i "$data" > "$profile_dir/$workload.perf-report.txt" 2>>"$log"; then
+                printf '%s: perf sampled profile captured\n' "$workload" | tee -a "$profile_dir/status.txt"
+                continue
+              fi
+              printf '%s: perf report unavailable; trying Callgrind\n' "$workload" | tee -a "$profile_dir/status.txt"
+            else
+              printf '%s: perf sampling unavailable; trying Callgrind\n' "$workload" | tee -a "$profile_dir/status.txt"
+            fi
+            rm -f "$data"
+            if [[ "$callgrind_ready" -eq 0 ]]; then
+              if command -v valgrind >/dev/null 2>&1 && command -v callgrind_annotate >/dev/null 2>&1; then
+                callgrind_ready=1
+              elif sudo apt-get update -qq && sudo apt-get install -y -qq valgrind; then
+                callgrind_ready=1
+              else
+                callgrind_ready=2
+                printf '%s\n' 'Callgrind fallback unavailable (Valgrind install failed); inspect per-workload record logs.' | tee -a "$profile_dir/status.txt"
+              fi
+            fi
+            if [[ "$callgrind_ready" -eq 1 ]]; then
+              callgrind_data="$profile_dir/$workload.callgrind.out"
+              if valgrind --tool=callgrind --callgrind-out-file="$callgrind_data" \
+                  "$profiler" "$workload" > "$profile_dir/$workload.callgrind.log" 2>&1; then
+                if callgrind_annotate --inclusive=yes --tree=both "$callgrind_data" \
+                    > "$profile_dir/$workload.callgrind-report.txt" 2>> "$profile_dir/$workload.callgrind.log"; then
+                  printf '%s: Callgrind call graph captured (instruction counts; not timing)\n' "$workload" | tee -a "$profile_dir/status.txt"
+                else
+                  printf '%s: Callgrind ran but report generation failed\n' "$workload" | tee -a "$profile_dir/status.txt"
+                fi
+              else
+                printf '%s: Callgrind sampling failed; inspect callgrind log\n' "$workload" | tee -a "$profile_dir/status.txt"
+              fi
+            fi
+          done
+          printf '%s\n' 'Diagnostic-only profiles; neither perf nor Callgrind results alter benchmark results or the 1.5x gate.' | tee -a "$profile_dir/status.txt"
+
+      - name: Validate schema, operation coverage, and configured counts
+        shell: bash
+        run: |
+          python3 -m pip install --disable-pip-version-check --no-input 'jsonschema==4.26.0'
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          import jsonschema
+
+          schema = json.loads(Path('arena/schemas/benchmark-result.schema.json').read_text())
+          validator = jsonschema.Draft202012Validator(schema)
+          root = Path('arena/results/v4-phase0')
+          expected_aws = {
+              ('ml-kem', '768', 'keygen'), ('ml-kem', '768', 'encaps'), ('ml-kem', '768', 'decaps'),
+              ('ml-kem', '1024', 'keygen'), ('ml-kem', '1024', 'encaps'), ('ml-kem', '1024', 'decaps'),
+              ('ml-dsa', '65', 'keygen'), ('ml-dsa', '65', 'sign'), ('ml-dsa', '65', 'verify'),
+          }
+          for name, implementation in [('nexusq.jsonl', 'nexusq'), ('aws-lc.jsonl', 'aws-lc')]:
+              rows = [json.loads(line) for line in (root / name).read_text().splitlines() if line.strip()]
+              assert rows, f'{name}: no records emitted'
+              for row in rows:
+                  validator.validate(row)
+                  assert row['implementation']['id'] == implementation, (name, row['implementation'])
+                  measurement = row['measurement']
+                  assert measurement['iterations'] >= 1000, (name, row['operation'], measurement['iterations'])
+                  assert measurement['warmups'] >= 100, (name, row['operation'], measurement['warmups'])
+                  samples = measurement.get('samples_ns', [])
+                  stats = measurement.get('statistics')
+                  assert len(samples) == measurement['iterations'], (name, row['operation'], len(samples))
+                  assert stats is not None, (name, row['operation'], 'missing statistics')
+                  assert stats.get('sample_count') == measurement['iterations'], (name, row['operation'], stats)
+                  assert stats['min_ns'] <= stats['median_ns'] <= stats['p95_ns'], (name, row['operation'], stats)
+                  assert measurement['latency_ns'] == stats['median_ns'], (name, row['operation'], measurement['latency_ns'], stats['median_ns'])
+                  counter_source = measurement.get('cycle_counter_source')
+                  assert counter_source in {'x86_64_tsc_ticks', 'aarch64_cntvct_ticks', 'unavailable'}, (name, row['operation'], counter_source)
+                  scope = measurement.get('measurement_scope')
+                  expected_scopes = {
+                      'rustcrypto_ml_kem_operation',
+                      'rustcrypto_ml_dsa_operation',
+                      'cached_ml_dsa_verifier_operation',
+                      'aws_lc_evp_primitive_operation',
+                  }
+                  assert scope in expected_scopes, (name, row['operation'], scope)
+                  assert row['environment'].get('cpu_frequency_khz') is None or row['environment']['cpu_frequency_khz'] >= 0, (name, row['operation'], 'invalid CPU frequency')
+                  assert row['environment'].get('cpu_governor') not in (None, ''), (name, row['operation'], 'missing CPU governor or explicit unknown')
+                  if name == 'nexusq':
+                      assert row['environment'].get('rustc_verbose') not in (None, '', 'unknown'), (name, row['operation'], 'missing Rust toolchain provenance')
+                      assert len(row['environment'].get('cargo_lock_sha256', '')) == 64, (name, row['operation'], 'missing Cargo.lock SHA-256')
+                  cycle_samples = measurement.get('samples_cycles', [])
+                  if counter_source != 'unavailable':
+                      assert len(cycle_samples) == measurement['iterations'], (name, row['operation'], len(cycle_samples), measurement['iterations'])
+              print(f'{name}: {len(rows)} schema-valid records with raw samples/statistics; counts meet configured thresholds')
+          aws_rows = [json.loads(line) for line in (root / 'aws-lc.jsonl').read_text().splitlines() if line.strip()]
+          actual_aws = {(r['algorithm']['id'], r['algorithm']['parameter_set'], r['operation']) for r in aws_rows}
+          assert len(aws_rows) == 9, f'expected nine AWS-LC records, got {len(aws_rows)}'
+          assert actual_aws == expected_aws, (actual_aws, expected_aws)
+          assert all('AWS-LC public EVP primitive call' in r['measurement'].get('measurement_method', '') for r in aws_rows), (
+              'AWS-LC measurement records must identify the public EVP API layer')
+          assert all(r['measurement']['measurement_scope'] == 'aws_lc_evp_primitive_operation'
+                     for r in aws_rows), 'AWS-LC scope must exclude reusable context construction from timed samples'
+          assert all(r['measurement'].get('comparison_contract') == 'fips_operation_v1' for r in aws_rows), (
+              'AWS-LC operation contract must be explicit')
+
+          from collections import Counter
+          nexus_rows = [json.loads(line) for line in (root / 'nexusq.jsonl').read_text().splitlines() if line.strip()]
+          expected_nexusq = {
+              ('ml-kem', '768', 'keygen'), ('ml-kem', '768', 'encaps'), ('ml-kem', '768', 'decaps'),
+              ('ml-kem', '1024', 'keygen'), ('ml-kem', '1024', 'encaps'), ('ml-kem', '1024', 'decaps'),
+              ('ml-dsa', '65', 'keygen'), ('ml-dsa', '65', 'sign'), ('ml-dsa', '65', 'verify'),
+          }
+          actual_nexusq = {(r['algorithm']['id'], r['algorithm']['parameter_set'], r['operation']) for r in nexus_rows}
+          assert actual_nexusq == expected_nexusq, (actual_nexusq, expected_nexusq)
+          expected_counts = {op: 1 for op in expected_nexusq}
+          expected_counts[('ml-dsa', '65', 'verify')] = 2  # conventional and cached verification remain distinct records
+          actual_counts = Counter((r['algorithm']['id'], r['algorithm']['parameter_set'], r['operation']) for r in nexus_rows)
+          assert actual_counts == Counter(expected_counts), (actual_counts, expected_counts)
+          assert len(nexus_rows) == 10, f'expected 10 NEXUS-Q records (nine operations plus separate cached verify), got {len(nexus_rows)}'
+          assert all('direct RustCrypto ml-kem API' in r['measurement'].get('measurement_method', '') and
+                     r['measurement']['measurement_scope'] == 'rustcrypto_ml_kem_operation' and
+                     r['measurement'].get('comparison_contract') == 'fips_operation_v1'
+                     for r in nexus_rows if r['algorithm']['id'] == 'ml-kem'), (
+              'NEXUS-Q ML-KEM records must identify the direct RustCrypto API layer and scope')
+          assert all('direct RustCrypto ml-dsa API' in r['measurement'].get('measurement_method', '') and
+                     r['measurement']['measurement_scope'] == 'rustcrypto_ml_dsa_operation' and
+                     r['measurement'].get('comparison_contract') == 'fips_operation_v1'
+                     for r in nexus_rows if r['algorithm']['id'] == 'ml-dsa' and
+                     'cached' not in r['measurement'].get('measurement_method', '')), (
+              'NEXUS-Q ML-DSA records must identify the direct primitive API layer and scope')
+          assert all(r['measurement']['measurement_scope'] == 'cached_ml_dsa_verifier_operation' and
+                     r['measurement'].get('comparison_contract') == 'cached_verification_diagnostic_v1'
+                     for r in nexus_rows if 'cached' in r['measurement'].get('measurement_method', '').lower()), (
+              'cached ML-DSA verification must have a distinct scope')
+
+          nexus_env = nexus_rows[0]['environment']
+          aws_env = aws_rows[0]['environment']
+          assert nexus_env['cpu'] == aws_env['cpu'], (nexus_env['cpu'], aws_env['cpu'])
+          assert nexus_env.get('cpu_features') and nexus_env['cpu_features'] == aws_env.get('cpu_features'), (
+              nexus_env.get('cpu_features'), aws_env.get('cpu_features'))
+          assert nexus_env.get('optimization') == aws_env.get('optimization') == 'release', (
+              nexus_env.get('optimization'), aws_env.get('optimization'))
+          assert nexus_env.get('run_order') == 'nexusq-before-aws-lc', nexus_env.get('run_order')
+          assert aws_env.get('run_order') == 'aws-lc-after-nexusq', aws_env.get('run_order')
+          assert all(r['environment'].get('run_order') == nexus_env.get('run_order') for r in nexus_rows)
+          assert all(r['environment'].get('run_order') == aws_env.get('run_order') for r in aws_rows)
+          assert all(r['environment'].get('cpu') == nexus_env['cpu'] and
+                     r['environment'].get('cpu_features') == nexus_env['cpu_features'] for r in nexus_rows)
+          assert all(r['environment'].get('cpu') == aws_env['cpu'] and
+                     r['environment'].get('cpu_features') == aws_env['cpu_features'] for r in aws_rows)
+          print('NEXUS-Q operation coverage: OK (all nine operations; cached verify separate)')
+          print('Matched-host metadata: CPU, CPU feature set, and release profile agree across both runners')
+          print('AWS-LC and NEXUS-Q provide per-operation raw samples and median/p95/stddev statistics.')
+          print('NEXUS-Q and AWS-LC ML-KEM-768/1024 both pass pre-measurement encaps/decaps shared-secret self-checks.')
+
+          # Emit the operation-level report and enforce the configured same-run ratio gate.
+          # Keep implementation-specific measurement scopes visible for review.
+          nexus_by_key = {}
+          for row in nexus_rows:
+              key = (row['algorithm']['id'], row['algorithm']['parameter_set'], row['operation'])
+              if row['algorithm']['id'] == 'ml-dsa' and row['operation'] == 'verify' and \
+                      'cached' in row['measurement'].get('measurement_method', '').lower():
+                  continue
+              nexus_by_key[key] = row
+          aws_by_key = {
+              (row['algorithm']['id'], row['algorithm']['parameter_set'], row['operation']): row
+              for row in aws_rows
+          }
+          report = [
+              '# Issue #23 — operation-level comparison and regression gate', '',
+              '**Status: ENFORCED CI GATE.** Ratios use the shared FIPS operation contract and the pinned AWS-LC comparator from the same host/run. API-specific scopes remain visible; passing the gate is not a public speed-leadership claim.', '',
+              '| Algorithm | Parameter | Operation | NEXUS-Q scope | AWS-LC scope | NEXUS-Q median (ns) | AWS-LC median (ns) | Median ratio | NEXUS-Q p95 (ns) | AWS-LC p95 (ns) | p95 ratio | Comparability |',
+              '|---|---:|---|---|---|---:|---:|---:|---:|---:|---:|---|'
+          ]
+          max_ratio = float(__import__('os').environ.get('NEXUSQ_MAX_RATIO', '1.5'))
+          if max_ratio <= 0:
+              raise SystemExit(f'NEXUSQ_MAX_RATIO must be positive, got {max_ratio}')
+          gate_failures = []
+          all_keys = sorted(set(nexus_by_key) | set(aws_by_key))
+          for key in all_keys:
+              nrow, arow = nexus_by_key.get(key), aws_by_key.get(key)
+              if nrow is None or arow is None:
+                  gate_failures.append(f'{key}: missing comparator coverage')
+                  report.append(f'| {key[0]} | {key[1]} | {key[2]} | ' +
+                                f"{nrow['measurement'].get('measurement_scope', '—') if nrow else '—'} | " +
+                                f"{arow['measurement'].get('measurement_scope', '—') if arow else '—'} | " +
+                                f"{nrow['measurement']['statistics']['median_ns'] if nrow else '—'} | " +
+                                f"{arow['measurement']['statistics']['median_ns'] if arow else '—'} | — | " +
+                                f"{nrow['measurement']['statistics']['p95_ns'] if nrow else '—'} | " +
+                                f"{arow['measurement']['statistics']['p95_ns'] if arow else '—'} | — | NO MATCHED COMPARATOR |")
+                  continue
+              nmedian = nrow['measurement']['statistics']['median_ns']
+              amedian = arow['measurement']['statistics']['median_ns']
+              nscope = nrow['measurement']['measurement_scope']
+              ascope = arow['measurement']['measurement_scope']
+              ratio = nmedian / amedian
+              np95 = nrow['measurement']['statistics']['p95_ns']
+              ap95 = arow['measurement']['statistics']['p95_ns']
+              p95_ratio = np95 / ap95
+              ncontract = nrow['measurement'].get('comparison_contract')
+              acontract = arow['measurement'].get('comparison_contract')
+              comparability = 'CONTRACT MATCH — REVIEW IMPLEMENTATION DETAILS' if ncontract == acontract == 'fips_operation_v1' else 'INCOMPARABLE — CONTRACT MISMATCH'
+              report.append(f'| {key[0]} | {key[1]} | {key[2]} | {nscope} | {ascope} | {nmedian} | {amedian} | {ratio:.3f}x | {np95} | {ap95} | {p95_ratio:.3f}x | {comparability} |')
+              if ncontract != 'fips_operation_v1' or acontract != 'fips_operation_v1':
+                  gate_failures.append(f'{key}: incompatible operation contract NEXUS-Q={ncontract!r}, AWS-LC={acontract!r}')
+              else:
+                  if ratio > max_ratio:
+                      gate_failures.append(f'{key}: median ratio {ratio:.3f}x exceeds {max_ratio:.3f}x')
+                  if p95_ratio > max_ratio:
+                      gate_failures.append(f'{key}: p95 ratio {p95_ratio:.3f}x exceeds {max_ratio:.3f}x')
+          report += ['', '## Blocking gaps', '',
+                     '- `measurement_scope` is machine-readable and validated for every record; the report keeps implementation-specific scopes visible and the gate checks the separate shared `comparison_contract`.',
+                     '- The shared `fips_operation_v1` contract compares the same FIPS algorithm/parameter/operation at the public primitive-call boundary. NEXUS-Q uses RustCrypto/nexusq-core APIs and AWS-LC uses EVP; implementation-specific wrapper and required per-call initialization costs remain part of the measured call and must be reviewed before interpreting ratios.',
+                     '- Comparator coverage is asserted against all nine AWS-LC operations, including ML-KEM-1024; any missing record fails the workflow rather than being inferred.',
+                     '- The milestone gate uses the explicit shared operation contract and complete same-run comparator coverage; a contract mismatch or missing comparator is a hard failure. The report still documents API-layer differences and does not itself claim a speed win.', '']
+          report += ['', '## Enforced per-operation regression gate', '',
+                     f'- Active maximum ratio: **{max_ratio:.3f}x** for both median and p95.',
+                     '- Gate comparator: AWS-LC pinned revision measured in the same job/host.',
+                     '- Cached ML-DSA verification is diagnostic only and is excluded from this gate.',
+                     '- A missing operation, contract mismatch, or median/p95 ratio above the threshold fails the job.', '']
+          if gate_failures:
+              report += ['**RESULT: FAIL**', ''] + [f'- {failure}' for failure in gate_failures] + ['']
+          else:
+              report += ['**RESULT: PASS** — all nine operations satisfy the configured threshold.', '']
+          (root / 'comparison-report.md').write_text('\n'.join(report))
+          if gate_failures:
+              print('Per-operation regression gate FAILED:')
+              for failure in gate_failures:
+                  print(f' - {failure}')
+              raise SystemExit(1)
+          print(f'Per-operation regression gate PASSED at {max_ratio:.3f}x for all nine operations.')
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v4-issue23-measurement-${{ github.sha }}
+          path: arena/results/v4-phase0/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  archive:
+    name: Archive evidence (only after every gate passed)
+    needs: [rust-validation, security, secret-scan, phase0, measurement]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/v4/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      statuses: write
+    steps:
+      - name: Checkout tested commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Download Phase 0 and measurement evidence
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v4-issue23-*-${{ github.sha }}
+          path: evidence
+
+      - name: Archive evidence and publish the PR CI status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          latest_sha="$(git ls-remote origin "refs/heads/$HEAD_REF" | awk 'NR == 1 {print $1}')"
+          if [[ "$latest_sha" != "$GITHUB_SHA" ]]; then
+            echo "Branch moved to $latest_sha; the newer CI run will archive and publish."
+            exit 0
+          fi
+          for entry in phase0:v4-issue23-phase0 measurement:v4-issue23-measurement; do
+            key="${entry%%:*}"
+            artifact="${entry#*:}"
+            source_dir="evidence/${artifact}-${GITHUB_SHA}"
+            destination="artifact-archive/v4-issue23-${key}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            [[ -d "$source_dir" ]] || { echo "Missing evidence: $source_dir" >&2; exit 1; }
+            mkdir -p "$destination"
+            cp -a "$source_dir/." "$destination/"
+            cat > "$destination/README.txt" <<EOF
+          NEXUS-Q V4 ${key} CI archive
+          workflow_run_id=${GITHUB_RUN_ID}
+          workflow_attempt=${GITHUB_RUN_ATTEMPT}
+          source_commit=${GITHUB_SHA}
+          source_ref=${GITHUB_REF}
+          workflow_url=https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          EOF
+            find "$destination" -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 -r sha256sum > "$destination/SHA256SUMS.txt"
+            git add "$destination"
+          done
+          new_sha="$GITHUB_SHA"
+          if ! git diff --cached --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "chore(artifacts): archive V4 CI run ${GITHUB_RUN_ID} [skip ci]"
+            for attempt in 1 2 3; do
+              git fetch origin "$HEAD_REF"
+              git rebase FETCH_HEAD
+              if git push origin "HEAD:refs/heads/${HEAD_REF}"; then
+                new_sha="$(git rev-parse HEAD)"
+                break
+              fi
+              sleep 1
+            done
+            [[ "$new_sha" != "$GITHUB_SHA" ]] || { echo 'Unable to push archived evidence after retries' >&2; exit 1; }
+          fi
+          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$new_sha" \
+            -f state=success -f context='NEXUS-Q V4 / PR CI' \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            -f description="All gates passed on ${GITHUB_SHA:0:7}; head differs only by archived evidence." >/dev/null
+          echo "Published NEXUS-Q V4 / PR CI=success on $new_sha"

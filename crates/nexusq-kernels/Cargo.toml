@@ -1,0 +1,20 @@
+[package]
+name = "nexusq-kernels"
+description = "Portable scalar reference kernels and audited dispatch boundary for NEXUS-Q"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+force-scalar = []
+
+[dev-dependencies]
+module-lattice = { workspace = true }
+hybrid-array = { workspace = true }
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"

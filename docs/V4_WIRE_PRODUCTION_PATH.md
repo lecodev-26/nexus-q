@@ -34,6 +34,20 @@ Standalone kernels alone do not move Arena ratios. The profiler and CI evidence 
 - [ ] Same-host Arena run records improved ratios (target: majority of ops under 2.0x as intermediate checkpoint; formal gate remains 1.5x).
 - [ ] CI green on this branch; no changes to `main` or to the other V4 working branch.
 
+
+## Implementation landed (2026-10-15)
+
+Brought production-path kernel integration onto this branch from the parallel kernel workstream without modifying that branch:
+
+1. `crates/nexusq-kernels` (scalar + AVX2 SHAKE x4 dispatch).
+2. Vendored `ml-kem` / `ml-dsa` with optional `nexusq-kernels` feature.
+3. Workspace enables `nexusq-kernels` on `ml-kem` and `ml-dsa`.
+4. **Arena runner fix:** `arena/runners/nexusq` now enables `nexusq-kernels` for **both** `ml-kem` and `ml-dsa` (previously only ML-DSA had the feature; ML-KEM measured path stayed scalar).
+5. Bit-exact differential test in `vendor/ml-kem/src/algebra.rs` for four-way SampleNTT vs scalar rejection sampling.
+6. CI workflows and kernel unsafe boundary script carried over so Phase 0 / Arena gates can measure the wired path.
+
+Verification is CI-only (no local Termux compile/test). Expect the matched-host Arena job to exercise the feature-enabled production path.
+
 ## Working rules
 
 1. Every commit must keep the scalar / RustCrypto path available.
