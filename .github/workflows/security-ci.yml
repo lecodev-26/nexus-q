@@ -40,8 +40,10 @@ jobs:
           path: cargo-metadata.json
 
   fuzz-build:
-    name: Fuzz harness build
+    name: Fuzz harness build (main only)
     runs-on: ubuntu-latest
+    # Per release policy, even fuzz-target compilation runs only on main.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
