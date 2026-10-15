@@ -71,7 +71,7 @@ static void emit(const char *alg, const char *param, const char *op,
         "\"optimization\":\"%s\",\"harness_version\":\"arena-v1\"},"
         "\"measurement\":{\"iterations\":%d,\"warmups\":%d,\"measurement_timestamp_unix_ns\":%llu,\"latency_ns\":%.3f,"
         "\"throughput_ops_s\":%.6f,\"memory_bytes\":null,"
-        "\"measurement_method\":\"clock_gettime(CLOCK_MONOTONIC) mean wall-clock latency\"},"
+        "\"measurement_scope\":\"reference_implementation_operation\",\"comparison_contract\":\"fips_operation_v1\",\"measurement_method\":\"clock_gettime(CLOCK_MONOTONIC) mean wall-clock latency\"},"
         "\"sizes\":{\"public_key_bytes\":%zu,\"secret_key_bytes\":%zu,"
         "\"ciphertext_bytes\":%s,\"signature_bytes\":%s}}\n",
         alg, param, op, LIBOQS_VERSION, LIBOQS_COMMIT,

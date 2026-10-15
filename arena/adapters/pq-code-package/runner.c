@@ -70,7 +70,7 @@ static void emit(const char *run_id, const char *impl_ver, const char *commit,
            "\"environment\":{\"target\":\"%s\",\"os\":\"%s\",\"cpu\":\"%s\",\"cpu_features\":[],"
            "\"compiler\":\"%s\",\"compiler_version\":\"%s\",\"optimization\":\"%s\",\"harness_version\":\"arena-v1\"},"
            "\"measurement\":{\"iterations\":%d,\"warmups\":%d,\"measurement_timestamp_unix_ns\":%llu,\"latency_ns\":%.3f,\"throughput_ops_s\":%.6f,"
-           "\"memory_bytes\":null,\"measurement_method\":\"monotonic-clock-average\"},"
+           "\"memory_bytes\":null,\"measurement_scope\":\"reference_implementation_operation\",\"comparison_contract\":\"fips_operation_v1\",\"measurement_method\":\"monotonic-clock-average\"},"
            "\"sizes\":{\"public_key_bytes\":%s,\"secret_key_bytes\":%s,\"ciphertext_bytes\":%s,\"signature_bytes\":%s}}\n",
            run_id, impl_ver, commit, alg, param, op, target, os, cpu, compiler, compver, opt,
            ITERATIONS, WARMUPS, (unsigned long long)timestamp_ns, latency, 1e9 / latency, jpk, jsk, jct, jsig);

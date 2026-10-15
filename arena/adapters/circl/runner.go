@@ -66,6 +66,8 @@ func emit(algorithm, parameterSet, operation string, latency time.Duration, size
 			"latency_ns":                    latencyNS,
 			"throughput_ops_s":              1_000_000_000.0 / latencyNS,
 			"memory_bytes":                  nil,
+			"measurement_scope":              "reference_implementation_operation",
+			"comparison_contract":            "fips_operation_v1",
 			"measurement_method":            "time.Since mean wall-clock latency",
 		},
 		"sizes": sizes,

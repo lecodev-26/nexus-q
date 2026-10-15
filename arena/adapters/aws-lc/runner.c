@@ -97,7 +97,7 @@ static void format_cpu_features(char *output, size_t output_len) {
     for (char *token = strtok_r(copy, ",", &saveptr); token != NULL;
          token = strtok_r(NULL, ",", &saveptr)) {
         /* CPU feature names are identifiers; reject anything that is not one. */
-        if (strspn(token, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-") != strlen(token)) {
+        if (strspn(token, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" "0123456789_-") != strlen(token)) {
             continue;
         }
         written = snprintf(output + used, output_len - used, "%s\"%s\"", first ? "" : ",", token);

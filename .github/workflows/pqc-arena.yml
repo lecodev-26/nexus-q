@@ -93,7 +93,16 @@ jobs:
         run: |
           git fetch --depth=1 origin refs/tags/v1.0.0:refs/tags/v1.0.0
           git checkout v1.0.0
-          cp "${{ runner.temp }}/nexusq-arena-runner-main.rs" arena/runners/nexusq/src/main.rs
+          # Preserve the V1 implementation and dependencies; only annotate its JSON output.
+          python3 - <<'PYV1'
+          from pathlib import Path
+          p = Path("arena/runners/nexusq/src/main.rs")
+          s = p.read_text()
+          old = '"measurement_method":"std::time::Instant mean wall-clock latency"'
+          new = old + ",\"measurement_scope\":\"reference_implementation_operation\",\"comparison_contract\":\"fips_operation_v1\""
+          assert old in s, "V1 benchmark metadata marker not found"
+          p.write_text(s.replace(old, new, 1))
+          PYV1
           echo "$(sha256sum arena/runners/nexusq/Cargo.lock | cut -d' ' -f1)" > "${{ runner.temp }}/v1-lock-hash"
           NEXUSQ_COMMIT="$(git rev-parse HEAD)" cargo build --locked --release --manifest-path arena/runners/nexusq/Cargo.toml
       - name: Build V1 with zeroize hardening only
@@ -117,6 +126,7 @@ jobs:
         env:
           CARGO_TARGET_DIR: ${{ runner.temp }}/nexusq-arena-v3
         run: |
+          git fetch --depth=1 origin "${{ github.event.pull_request.head.sha || github.sha }}"
           git reset --hard "${{ github.event.pull_request.head.sha || github.sha }}"
           echo "$(sha256sum arena/runners/nexusq/Cargo.lock | cut -d' ' -f1)" > "${{ runner.temp }}/v3-lock-hash"
           NEXUSQ_COMMIT="${{ github.event.pull_request.head.sha || github.sha }}" cargo build --locked --release --features cached-verifier --manifest-path arena/runners/nexusq/Cargo.toml
@@ -516,7 +526,7 @@ jobs:
             arena/adapters/aws-lc/runner.c \
             -L"$GITHUB_WORKSPACE/.arena-aws-lc-build/crypto" \
             -Wl,-rpath,"$GITHUB_WORKSPACE/.arena-aws-lc-build/crypto" \
-            -lcrypto -o arena-aws-lc-runner
+            -lcrypto -lm -o arena-aws-lc-runner
       - name: Capture AWS-LC version and run adapter
         env:
           ARENA_OPT: release
@@ -879,7 +889,8 @@ jobs:
           operations=sorted({k[:4] for k in groups})
           assert len(operations)==10, operations
           verify_methods={k[3] for k in operations if k[0]=='ml-dsa' and k[2]=='verify'}
-          assert verify_methods=={'per-operation std::time::Instant; median latency','per-operation std::time::Instant; cached MlDsa65VerifyingKey'}, verify_methods
+          assert len(verify_methods)==2 and sum('cached MlDsa65VerifyingKey' in method for method in verify_methods)==1, verify_methods
+          assert sum('direct RustCrypto ml-dsa API' in method for method in verify_methods)==1, verify_methods
           for alg,param,op,method in operations:
             baseline=statistics.median(groups[(alg,param,op,method,'baseline')])
             ratios=[]
