@@ -1,6 +1,6 @@
 # Experimental native backend (Rust API + C + assembly)
 
-Status: **experimental, isolated, not wired into `nexusq-core`.** This document records the design, the decisions and the evidence. A decision is only marked verified when reproducible evidence is linked.
+Status (2026-10-15): **merged into `nexusqv4` as an experimental backend; still not wired into `nexusq-core`.** PR #51 was merged into the backend branch, then PR #50 was merged into `nexusqv4` at commit [`05a0d19`](https://github.com/lecodev-26/nexus-q/commit/05a0d19a01dfdba2bb74b6f8d90c17718f4fcf87). The latest completed official gate before that integration passed 11/11 jobs and 6/6 replicas at [run 38808489339](https://github.com/lecodev-26/nexus-q/actions/runs/38808489339), using the unchanged 1.5× median-and-p95 evaluator. The merge-triggered PR run [38810967797](https://github.com/lecodev-26/nexus-q/actions/runs/38810967797) was interrupted/cancelled during retargeting; it is **not** evidence of a green integrated branch. Re-run/verify full CI and the gate on the merged `nexusqv4` commit before promotion to `main`. This document records design, decisions and evidence; historical failures remain historical evidence and are not erased by a later green run.
 
 Tracking: [Issue #48](https://github.com/lecodev-26/nexus-q/issues/48). Branch: `perf/native-backend-hybrid`. Workflow: `.github/workflows/native-backend-gate.yml`.
 
@@ -171,13 +171,15 @@ CI run [38803028946](https://github.com/lecodev-26/nexus-q/actions/runs/38803028
 | ML-KEM-1024 encaps | 1.099 | 1.125 |
 | ML-KEM-1024 keygen | 1.116 | 1.117 |
 
-The same replica's 12-round extended statistics reported no failing 3-round windows for any of the nine operations. These results are encouraging evidence for this commit, but do not establish that the I/O change alone caused the improvement: this is not a paired A/B measurement, and the earlier failures remain valid historical observations. Keep PR #51 in draft pending review of the custom sponge hooks, licensing, and the remaining integration decisions.
+The same replica's 12-round extended statistics reported no failing 3-round windows for any of the nine operations. These results are encouraging evidence for this commit, but do not establish that the I/O change alone caused the improvement: this is not a paired A/B measurement, and the earlier failures remain valid historical observations. PR #51 is now merged into PR #50; the custom sponge hooks still require review of their contract, licensing, and integration behavior. The successful run is evidence for the tested commit, not proof that the I/O change alone caused the improvement.
 
 ## Not done yet (explicitly)
+
+- The PRs are merged into `nexusqv4` (PR #51 → native-backend branch, then PR #50 → `nexusqv4`). The merge result is commit `05a0d19a01dfdba2bb74b6f8d90c17718f4fcf87`; complete CI/gate validation of this merge result is still pending. The earlier green gate run is not a substitute.
 
 - The backend is not wired into `nexusq-core`, CLI, server or SDK. The production cryptographic path is unchanged.
 - AArch64 NEON backend: not enabled. AArch64 is functionally tested only on the portable C path.
 - No FIPS 140-3 validation. No pairwise consistency test (PCT) is run, which matches the non-FIPS AWS-LC build used as the comparator.
-- The gate is not green (see above). The p95 failures match the A/A false-failure rate, but they are not declared green.
+- Historical gate runs include p95 failures and A/A false failures; they remain recorded. The latest completed pre-integration gate run passed 6/6 replicas, but the merged `nexusqv4` commit still needs a fresh complete run.
 - The Zen 3 median gap (7–14 % on ML-KEM) is not closed; see the hypothesis above.
 - No independent external review of this integration. Phase 21 (external audit) remains open, so this work does not make NEXUS-Q v1.0 or v2 production-ready.
