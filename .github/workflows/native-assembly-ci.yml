@@ -60,6 +60,15 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Run workspace tests
         run: cargo test --workspace --locked
+      - name: Run AVX2 kernel differential tests
+        run: cargo test -p nexusq-kernels --features experimental-avx2 --locked
+      - name: Check standalone Arena runner with experimental kernels
+        run: cargo check --manifest-path arena/runners/nexusq/Cargo.toml --all-targets --locked --features experimental-kernels
+      - name: Check formatting for excluded benchmark/vendor manifests
+        run: |
+          cargo fmt --manifest-path arena/runners/nexusq/Cargo.toml -- --check
+          cargo fmt --manifest-path vendor/ml-kem/Cargo.toml -- --check
+          cargo fmt --manifest-path vendor/ml-dsa/Cargo.toml -- --check
       - name: Build workspace
         run: cargo build --workspace --all-targets --locked
       - name: Build public documentation
