@@ -549,6 +549,47 @@ mod tests {
     }
 
     #[test]
+    fn mlkem_basemul_handles_canonical_boundary_patterns() {
+        let gamma = core::array::from_fn(|i| {
+            // Deterministic canonical twiddle-like values exercise reduction
+            // near q-1 without relying on a random-number dependency.
+            ((i * 97 + 3327) % 3329) as u16
+        });
+
+        for pattern in 0..4 {
+            let lhs = core::array::from_fn(|i| match pattern {
+                0 => 0,
+                1 => 3328,
+                2 => if i % 2 == 0 { 0 } else { 3328 },
+                _ => ((i * 313 + 3328) % 3329) as u16,
+            });
+            let rhs = core::array::from_fn(|i| match pattern {
+                0 => 3328,
+                1 => 3328,
+                2 => if i % 2 == 0 { 3328 } else { 0 },
+                _ => ((i * 811 + 17) % 3329) as u16,
+            });
+
+            let mut expected = [0_u16; 256];
+            for (pair, &g) in gamma.iter().enumerate() {
+                let i = pair * 2;
+                let a0 = u32::from(lhs[i]);
+                let a1 = u32::from(lhs[i + 1]);
+                let b0 = u32::from(rhs[i]);
+                let b1 = u32::from(rhs[i + 1]);
+                let b1g = b1 * u32::from(g) % 3329;
+                expected[i] = ((a0 * b0 + a1 * b1g) % 3329) as u16;
+                expected[i + 1] = ((a0 * b1 + a1 * b0) % 3329) as u16;
+            }
+
+            let mut actual = [0_u16; 256];
+            if mlkem_basemul(&lhs, &rhs, &gamma, &mut actual) {
+                assert_eq!(actual, expected, "boundary pattern {pattern}");
+            }
+        }
+    }
+
+    #[test]
     fn mlkem_inverse_ntt_assembly_path_matches_scalar_reference() {
         let mut input = core::array::from_fn(|i| ((i * 211 + 7) % 3329) as u16);
         let mut expected = input;
