@@ -353,28 +353,20 @@ impl NttInverse for NttPolynomial {
         }
 
         #[cfg(not(feature = "experimental-kernels"))]
-        let mut f: Array<Elem, U256> = self.0.clone();
-        #[cfg(not(feature = "experimental-kernels"))]
-        let mut k = 127;
+        {
+            let mut f: Array<Elem, U256> = self.0.clone();
+            let mut k = 127;
 
-        #[cfg(not(feature = "experimental-kernels"))]
-        ntt_inverse_layer::<2, 64>(&mut f, &mut k);
-        #[cfg(not(feature = "experimental-kernels"))]
-        ntt_inverse_layer::<4, 32>(&mut f, &mut k);
-        #[cfg(not(feature = "experimental-kernels"))]
-        ntt_inverse_layer::<8, 16>(&mut f, &mut k);
-        #[cfg(not(feature = "experimental-kernels"))]
-        ntt_inverse_layer::<16, 8>(&mut f, &mut k);
-        #[cfg(not(feature = "experimental-kernels"))]
-        ntt_inverse_layer::<32, 4>(&mut f, &mut k);
-        #[cfg(not(feature = "experimental-kernels"))]
-        ntt_inverse_layer::<64, 2>(&mut f, &mut k);
-        #[cfg(not(feature = "experimental-kernels"))]
-        ntt_inverse_layer::<128, 1>(&mut f, &mut k);
+            ntt_inverse_layer::<2, 64>(&mut f, &mut k);
+            ntt_inverse_layer::<4, 32>(&mut f, &mut k);
+            ntt_inverse_layer::<8, 16>(&mut f, &mut k);
+            ntt_inverse_layer::<16, 8>(&mut f, &mut k);
+            ntt_inverse_layer::<32, 4>(&mut f, &mut k);
+            ntt_inverse_layer::<64, 2>(&mut f, &mut k);
+            ntt_inverse_layer::<128, 1>(&mut f, &mut k);
 
-        #[cfg(not(feature = "experimental-kernels"))]
-        Elem::new(3303)
-            * &Polynomial::new(f)
+            Elem::new(3303) * &Polynomial::new(f)
+        }
     }
 }
 
