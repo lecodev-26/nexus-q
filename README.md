@@ -12,7 +12,7 @@
 
 </div>
 
-> **Version status (2026-10-09):** V1 is the frozen baseline (`v1.0.0`); V2 is frozen on `nexusqv2` (`v2.0.0`); V3 has been integrated into `main` by [PR #45](https://github.com/lecodev-26/nexus-q/pull/45), with V3 Incremental CI and PQC Benchmark Arena evidence retained. The release includes a downloadable evidence archive and SHA-256 manifest. Post-release `main` CI and four-hour fuzz soaks are tracked separately; see the linked Actions runs for their current status. V4 is the planned architecture-specific performance-kernel line tracked by [Issue #23](https://github.com/lecodev-26/nexus-q/issues/23). **No independent audit, certification, or downstream registry publication is implied.**
+> **Version status (2026-10-09):** V1 is the frozen baseline (`v1.0.0`); V2 is frozen on `nexusqv2` (`v2.0.0`); V3 has been integrated into `main` by [PR #45](https://github.com/lecodev-26/nexus-q/pull/45), with V3 Incremental CI and PQC Benchmark Arena evidence retained. The release includes a downloadable evidence archive and SHA-256 manifest. Post-release `main` CI and four-hour fuzz soaks are tracked separately; see the linked Actions runs for their current status. The active V4 native-assembly performance initiative is tracked by [Issue #48](https://github.com/lecodev-26/nexus-q/issues/48); the previous execution line in [Issue #23](https://github.com/lecodev-26/nexus-q/issues/23) is retained as historical and technical context. **No independent audit, certification, or downstream registry publication is implied.**
 
 <div align="center">
 
@@ -195,7 +195,7 @@ The ML-DSA-only zeroize control does not prove SHA3/SHAKE zeroization is the cau
 
 V3 consolidates the hardened implementation, the reproducible PQC Benchmark Arena, dependency/profile diagnostics, corrected benchmark sampling and archived evidence. The V3 GitHub release is an engineering release, not a claim of independent audit, certification, or registry publication. The four-hour fuzz soaks are tracked separately in `main` CI. The latest recovered V1/V2/V3 artifacts and checksums are tracked in [`artifact-archive/README.md`](artifact-archive/README.md).
 
-V4 is a **planned development line**, not a release. Its performance work is tracked by [Issue #23](https://github.com/lecodev-26/nexus-q/issues/23). The plan is to prototype AVX2/NEON kernels behind explicit feature dispatch, retain a portable fallback, and require differential tests, cryptographic test vectors, fuzzing, constant-time review, and repeatable same-hardware benchmarks before enabling optimized paths by default. Security zeroization must not be removed as a shortcut to improve latency. See [`docs/V3_V4_ROADMAP.md`](docs/V3_V4_ROADMAP.md).
+V4 native-assembly performance work is an active development line, not a release. The assembly-first implementation plan and 1.5x AWS-LC milestone are tracked by [Issue #48](https://github.com/lecodev-26/nexus-q/issues/48); [Issue #23](https://github.com/lecodev-26/nexus-q/issues/23) and [PR #46](https://github.com/lecodev-26/nexus-q/pull/46) remain historical technical context. Native x86-64 AVX2 assembly is required from the first new optimized kernel, with Rust integration, explicit runtime dispatch, a portable scalar fallback, differential tests, cryptographic vectors, security review, and controlled same-host benchmarks. The performance gate remains unsatisfied until every required operation passes both median and p95 thresholds. See [`docs/performance/ROADMAP.md`](docs/performance/ROADMAP.md).
 
 </details>
 
