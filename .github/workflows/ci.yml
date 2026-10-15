@@ -394,21 +394,50 @@ jobs:
           fi
           profiler=arena/runners/nexusq/target/release/profile_hotspots
           : > "$profile_dir/status.txt"
+          # Hosted runners often set perf_event_paranoid=4, which blocks perf
+          # sampling even when perf is installed. Callgrind is the fallback:
+          # it reports deterministic instruction/call counts, not wall-clock time.
+          callgrind_ready=0
           for workload in ml-kem-768-keygen ml-kem-768-encaps ml-kem-768-decaps \
                           ml-dsa-65-keygen ml-dsa-65-sign ml-dsa-65-verify; do
             data="$profile_dir/$workload.perf.data"
             log="$profile_dir/$workload.record.log"
             if perf record -F 99 -g --call-graph dwarf -o "$data" -- "$profiler" "$workload" >"$log" 2>&1; then
-              if perf report --stdio --children --sort comm,dso,symbol -i "$data" > "$profile_dir/$workload.report.txt" 2>>"$log"; then
-                printf '%s: sampled profile captured\n' "$workload" | tee -a "$profile_dir/status.txt"
-              else
-                printf '%s: perf report unavailable; inspect record log\n' "$workload" | tee -a "$profile_dir/status.txt"
+              if perf report --stdio --children --sort comm,dso,symbol -i "$data" > "$profile_dir/$workload.perf-report.txt" 2>>"$log"; then
+                printf '%s: perf sampled profile captured\n' "$workload" | tee -a "$profile_dir/status.txt"
+                continue
               fi
+              printf '%s: perf report unavailable; trying Callgrind\n' "$workload" | tee -a "$profile_dir/status.txt"
             else
-              printf '%s: sampling unavailable or denied; inspect record log\n' "$workload" | tee -a "$profile_dir/status.txt"
+              printf '%s: perf sampling unavailable; trying Callgrind\n' "$workload" | tee -a "$profile_dir/status.txt"
+            fi
+            rm -f "$data"
+            if [[ "$callgrind_ready" -eq 0 ]]; then
+              if command -v valgrind >/dev/null 2>&1 && command -v callgrind_annotate >/dev/null 2>&1; then
+                callgrind_ready=1
+              elif sudo apt-get update -qq && sudo apt-get install -y -qq valgrind; then
+                callgrind_ready=1
+              else
+                callgrind_ready=2
+                printf '%s\n' 'Callgrind fallback unavailable (Valgrind install failed); inspect per-workload record logs.' | tee -a "$profile_dir/status.txt"
+              fi
+            fi
+            if [[ "$callgrind_ready" -eq 1 ]]; then
+              callgrind_data="$profile_dir/$workload.callgrind.out"
+              if valgrind --tool=callgrind --callgrind-out-file="$callgrind_data" \
+                  "$profiler" "$workload" > "$profile_dir/$workload.callgrind.log" 2>&1; then
+                if callgrind_annotate --inclusive=yes --tree=both "$callgrind_data" \
+                    > "$profile_dir/$workload.callgrind-report.txt" 2>> "$profile_dir/$workload.callgrind.log"; then
+                  printf '%s: Callgrind call graph captured (instruction counts; not timing)\n' "$workload" | tee -a "$profile_dir/status.txt"
+                else
+                  printf '%s: Callgrind ran but report generation failed\n' "$workload" | tee -a "$profile_dir/status.txt"
+                fi
+              else
+                printf '%s: Callgrind sampling failed; inspect callgrind log\n' "$workload" | tee -a "$profile_dir/status.txt"
+              fi
             fi
           done
-          printf '%s\n' 'Diagnostic-only CPU samples; this step does not alter benchmark results or the 1.5x gate.' | tee -a "$profile_dir/status.txt"
+          printf '%s\n' 'Diagnostic-only profiles; neither perf nor Callgrind results alter benchmark results or the 1.5x gate.' | tee -a "$profile_dir/status.txt"
 
       - name: Validate schema, operation coverage, and configured counts
         shell: bash
