@@ -9,3 +9,10 @@ paths = [
   '''vendor/ml-kem/tests/examples/.*\.priv''',
   '''vendor/ml-dsa/tests/examples/.*\.priv''',
 ]
+
+[[allowlists]]
+description = "Known false positive: source-level CPU feature identifier validation in AWS-LC adapter"
+condition = "AND"
+paths = ['''arena/adapters/aws-lc/runner\.c''']
+regexTarget = "line"
+regexes = ['''strspn\(token, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" "0123456789_-"''']

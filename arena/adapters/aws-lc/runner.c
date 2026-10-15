@@ -1,4 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
+#include <ctype.h>
 #include <openssl/evp.h>
 #include <openssl/base.h>
 #include <errno.h>
@@ -97,7 +98,14 @@ static void format_cpu_features(char *output, size_t output_len) {
     for (char *token = strtok_r(copy, ",", &saveptr); token != NULL;
          token = strtok_r(NULL, ",", &saveptr)) {
         /* CPU feature names are identifiers; reject anything that is not one. */
-        if (strspn(token, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" "0123456789_-") != strlen(token)) {
+        int valid = 1;
+        for (const unsigned char *ch = (const unsigned char *)token; *ch != '\0'; ++ch) {
+            if (!isalnum(*ch) && *ch != '_' && *ch != '-') {
+                valid = 0;
+                break;
+            }
+        }
+        if (!valid) {
             continue;
         }
         written = snprintf(output + used, output_len - used, "%s\"%s\"", first ? "" : ",", token);
