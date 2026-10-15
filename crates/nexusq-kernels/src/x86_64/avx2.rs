@@ -235,6 +235,7 @@ pub fn mlkem_basemul(
     true
 }
 
+// SAFETY: the only caller checks AVX2 support before entering this target-feature function.
 #[target_feature(enable = "avx2")]
 unsafe fn mlkem_basemul_avx2(
     lhs: &[u16; 256],
@@ -273,12 +274,19 @@ unsafe fn mlkem_basemul_avx2(
         };
         // SAFETY: this function is AVX2-targeted; all lane products are positive
         // and below 2^25, matching reduce_mlkem_product's documented range.
+        // SAFETY: AVX2 was checked above; products of canonical coefficients fit the reducer range.
         let b1g = unsafe { reduce_mlkem_product(mullo_i32x8_asm(b1v, gv)) };
+        // SAFETY: AVX2 was checked above; each product is at most 3328 squared.
         let p00 = unsafe { mullo_i32x8_asm(a0v, b0v) };
+        // SAFETY: AVX2 was checked above; both operands are canonical coefficients.
         let p11 = unsafe { mullo_i32x8_asm(a1v, b1g) };
+        // SAFETY: AVX2 was checked above; both operands are canonical coefficients.
         let p01 = unsafe { mullo_i32x8_asm(a0v, b1v) };
+        // SAFETY: AVX2 was checked above; both operands are canonical coefficients.
         let p10 = unsafe { mullo_i32x8_asm(a1v, b0v) };
+        // SAFETY: AVX2 was checked above; sums are below 2^25 and supported by the reducer.
         let c0v = unsafe { reduce_mlkem_product(_mm256_add_epi32(p00, p11)) };
+        // SAFETY: AVX2 was checked above; sums are below 2^25 and supported by the reducer.
         let c1v = unsafe { reduce_mlkem_product(_mm256_add_epi32(p01, p10)) };
         // SAFETY: c0 and c1 each provide 32 writable bytes for eight lanes.
         unsafe {
@@ -387,7 +395,8 @@ unsafe fn mlkem_inverse_ntt_avx2(poly: &mut [u16; 256]) {
 /// detection. Inputs are eight signed 32-bit lanes; `vpmulld` deliberately
 /// retains each low 32-bit product, which is exact for the documented ML-KEM
 /// bounds (< 2^24 for twiddle products and < 2^16 for reduction correction).
-#[inline(always)]
+// SAFETY: caller must be in an AVX2-enabled function after runtime feature detection.
+#[target_feature(enable = "avx2")]
 unsafe fn mullo_i32x8_asm(lhs: __m256i, rhs: __m256i) -> __m256i {
     let output: __m256i;
     // SAFETY: this helper is called only from AVX2-targeted functions whose
