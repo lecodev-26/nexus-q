@@ -1,0 +1,25 @@
+[package]
+name = "nexusq-native-arena-runner"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+license = "MIT OR Apache-2.0"
+description = "Arena runner for the experimental NEXUS-Q native backend (same JSON schema as arena/runners/nexusq)"
+
+# Standalone, like arena/runners/nexusq: excluded from the root workspace.
+[workspace]
+
+[features]
+portable-only = ["nexusq-native-backend/portable-only"]
+upstream-c-keccak = ["nexusq-native-backend/upstream-c-keccak"]
+
+[dependencies]
+nexusq-native-backend = { path = "../../../crates/nexusq-native-backend" }
+serde_json = "1"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+debug = 1
+
