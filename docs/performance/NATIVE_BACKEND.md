@@ -56,7 +56,7 @@ arena/runners/nexusq-native     Arena runner: same JSON schema and statistics as
 
 ## Licensing note
 
-mlkem-native and mldsa-native are Apache-2.0 OR ISC OR MIT. The s2n-bignum repository is Apache-2.0 OR ISC OR MIT-0, but `sha3_keccak_f1600.S` carries `SPDX-License-Identifier: Apache-2.0` because it derives from OpenSSL. Binaries that include this backend therefore contain Apache-2.0-only code and must ship `vendor/s2n-bignum/LICENSE` and `NOTICE`. The `upstream-c-keccak` feature removes that file from the build.
+mlkem-native and mldsa-native are Apache-2.0 OR ISC OR MIT. The s2n-bignum repository is Apache-2.0 OR ISC OR MIT-0, but `sha3_keccak_f1600.S` carries `SPDX-License-Identifier: Apache-2.0` because it derives from OpenSSL. Binaries that include this backend therefore contain Apache-2.0-only code and must ship `vendor/s2n-bignum/LICENSE` and `NOTICE`. Accordingly, the standalone crate manifest declares `Apache-2.0`, not `MIT OR Apache-2.0`; the latter would incorrectly imply that the default crate can be distributed under MIT alone. The `upstream-c-keccak` feature removes the s2n assembly from that build, but does not change the crate-level license declaration.
 
 ## Measurements on GitHub-hosted runners
 
