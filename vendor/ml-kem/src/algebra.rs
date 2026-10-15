@@ -100,6 +100,7 @@ where
     K: ArraySize + Mul<K>,
     Prod<K, K>: ArraySize,
 {
+    #[cfg(feature = "experimental-kernels")]
     let total = K::USIZE * K::USIZE;
 
     // Flatten the matrix while sampling so adjacent polynomials can share one
