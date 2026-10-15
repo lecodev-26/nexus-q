@@ -90,6 +90,11 @@ jobs:
           cmp .up-s2n/x86_att/sha3/sha3_keccak_f1600.S .up-awslc/third_party/s2n-bignum/s2n-bignum-imported/x86_att/sha3/sha3_keccak_f1600.S
           echo "AWS-LC $AWSLC_COMMIT imports exactly these commits; its Keccak-x1 routine is identical"
       - name: Upstream functional, KAT and NIST ACVP tests (pinned commits, this runner)
+        env:
+          # The upstream ACVP client fetches NIST vectors through api.github.com;
+          # unauthenticated requests from shared runners hit the rate limit
+          # (run 38798844655). Read-only job token, used only for that download.
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           lscpu | sed -n 's/^Model name:[[:space:]]*//p'
