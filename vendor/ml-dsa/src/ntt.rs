@@ -78,7 +78,9 @@ impl Ntt for Polynomial {
         {
             let mut coefficients = core::array::from_fn(|index| self.0[index].0);
             nexusq_kernels::api::ntt_mldsa(&mut coefficients);
-            return NttPolynomial::new(hybrid_array::Array::from_fn(|index| Elem::new(coefficients[index])));
+            return NttPolynomial::new(hybrid_array::Array::from_fn(|index| {
+                Elem::new(coefficients[index])
+            }));
         }
 
         #[cfg(not(feature = "experimental-kernels"))]
@@ -146,7 +148,9 @@ impl NttInverse for NttPolynomial {
         {
             let mut coefficients = core::array::from_fn(|index| self.0[index].0);
             nexusq_kernels::api::inverse_ntt_mldsa(&mut coefficients);
-            return Polynomial::new(hybrid_array::Array::from_fn(|index| Elem::new(coefficients[index])));
+            return Polynomial::new(hybrid_array::Array::from_fn(|index| {
+                Elem::new(coefficients[index])
+            }));
         }
 
         #[cfg(not(feature = "experimental-kernels"))]
