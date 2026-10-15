@@ -36,8 +36,10 @@ struct Test {
     #[serde(rename(deserialize = "tcId"))]
     id: usize,
     comment: String,
-    #[serde(with = "hex::serde")]
+    #[serde(default, with = "hex::serde")]
     msg: Vec<u8>,
+    #[serde(default)]
+    mu: Option<String>,
     #[serde(default, with = "hex::serde")]
     ctx: Vec<u8>,
     #[serde(with = "hex::serde")]
@@ -81,7 +83,12 @@ macro_rules! mldsa_sign_seed_test {
                 for test in &group.tests {
                     println!("Test #{}: {} ({:?})", test.id, &test.comment, &test.result);
 
-                    if test.ctx.is_empty() {
+                    if let Some(mu) = &test.mu {
+                        let mu = hex::decode(mu).expect("valid hexadecimal mu");
+                        let mu = mu.as_slice().try_into().expect("ML-DSA mu is 64 bytes");
+                        let sig = sk.expanded_key().sign_mu_deterministic(&mu);
+                        assert_eq!(&*sig.to_bytes(), test.sig.as_slice());
+                    } else if test.ctx.is_empty() {
                         let sig = sk.sign(&test.msg);
                         assert_eq!(&*sig.to_bytes(), test.sig.as_slice());
                     } else {
