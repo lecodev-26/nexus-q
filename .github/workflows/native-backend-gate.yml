@@ -183,7 +183,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        replica: [1, 2, 3, 4]
+        replica: [1, 2, 3, 4, 5, 6]
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -284,7 +284,7 @@ jobs:
             python3 arena/scripts/native_backend_stats.py $out/extended-stats.json $out/extended-stats.md $out 12
             echo
             echo "Hypervisor steal ticks during the runs: $(awk 'NR>1{s+=$3} END{print s}' $out/steal.tsv)"
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
