@@ -471,10 +471,13 @@ const GAMMA: [Elem; 128] = {
 
 #[cfg(test)]
 mod test {
+    #[cfg(feature = "experimental-kernels")]
+    use super::ntt_layer;
     use super::{
         Array, B32, BaseField, Elem, Field, Int, Ntt, NttInverse, NttMatrix, NttPolynomial,
         NttVector, PRF, Polynomial, U256, XOF,
     };
+
     use array::{
         ArraySize, Flatten,
         typenum::{U2, U3, U8},
