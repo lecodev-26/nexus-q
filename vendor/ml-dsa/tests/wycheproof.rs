@@ -24,11 +24,25 @@ struct TestGroup {
     #[serde(default, rename(deserialize = "privateSeed"), with = "hex::serde")]
     private_seed: Vec<u8>,
 
-    #[serde(default, rename(deserialize = "publicKey"), with = "hex::serde")]
+    #[serde(
+        default,
+        rename(deserialize = "publicKey"),
+        deserialize_with = "deserialize_hex_or_null"
+    )]
     #[allow(dead_code)]
     public_key: Vec<u8>,
 
     tests: Vec<Test>,
+}
+
+fn deserialize_hex_or_null<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Option::<String>::deserialize(deserializer)?
+        .map(|value| hex::decode(value).map_err(serde::de::Error::custom))
+        .transpose()
+        .map(Option::unwrap_or_default)
 }
 
 #[derive(Deserialize, Debug)]
@@ -76,9 +90,17 @@ macro_rules! mldsa_sign_seed_test {
             let tests = load_json_file!($json_file);
 
             for group in tests.groups {
-                let sk = SigningKey::<$params>::from_seed(
-                    &group.private_seed.as_slice().try_into().unwrap(),
-                );
+                let Ok(seed) = <&[u8; 32]>::try_from(group.private_seed.as_slice()) else {
+                    assert!(
+                        group
+                            .tests
+                            .iter()
+                            .all(|test| test.result == ExpectedResult::Invalid),
+                        "invalid seed length must only be used by invalid test vectors"
+                    );
+                    continue;
+                };
+                let sk = SigningKey::<$params>::from_seed(seed);
 
                 for test in &group.tests {
                     println!("Test #{}: {} ({:?})", test.id, &test.comment, &test.result);
