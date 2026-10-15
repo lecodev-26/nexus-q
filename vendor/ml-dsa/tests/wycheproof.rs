@@ -2,7 +2,7 @@
 
 // Implementation is based in part on `rsa` which is in turn based on Graviola.
 
-use ml_dsa::{MlDsa44, MlDsa65, MlDsa87, Signature, SigningKey, VerifyingKey};
+use ml_dsa::{MlDsa44, MlDsa65, MlDsa87, Seed, Signature, SigningKey, VerifyingKey};
 use serde::Deserialize;
 use signature::{SignatureEncoding, Signer, Verifier};
 use std::fs::File;
@@ -90,7 +90,7 @@ macro_rules! mldsa_sign_seed_test {
             let tests = load_json_file!($json_file);
 
             for group in tests.groups {
-                let Ok(seed) = <&[u8; 32]>::try_from(group.private_seed.as_slice()) else {
+                let Ok(seed) = Seed::try_from(group.private_seed.as_slice()) else {
                     assert!(
                         group
                             .tests
@@ -100,7 +100,7 @@ macro_rules! mldsa_sign_seed_test {
                     );
                     continue;
                 };
-                let sk = SigningKey::<$params>::from_seed(seed);
+                let sk = SigningKey::<$params>::from_seed(&seed);
 
                 for test in &group.tests {
                     println!("Test #{}: {} ({:?})", test.id, &test.comment, &test.result);
