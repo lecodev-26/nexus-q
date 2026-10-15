@@ -77,7 +77,6 @@ jobs:
           diff -r .up-mldsa/mldsa vendor/mldsa-native/mldsa
           cmp .up-mldsa/LICENSE vendor/mldsa-native/LICENSE
           cmp .up-s2n/x86_att/sha3/sha3_keccak_f1600.S vendor/s2n-bignum/x86_att/sha3/sha3_keccak_f1600.S
-          cmp .up-s2n/x86_att/sha3/sha3_keccak4_f1600_alt.S vendor/s2n-bignum/x86_att/sha3/sha3_keccak4_f1600_alt.S
           cmp .up-s2n/include/_internal_s2n_bignum_x86_att.h vendor/s2n-bignum/include/_internal_s2n_bignum_x86_att.h
           cmp .up-s2n/LICENSE vendor/s2n-bignum/LICENSE
           cmp .up-s2n/NOTICE vendor/s2n-bignum/NOTICE
@@ -89,7 +88,6 @@ jobs:
           grep -q "commit: $MLDSA_NATIVE_COMMIT" .up-awslc/crypto/fipsmodule/ml_dsa/META.yml
           grep -q "commit: $S2N_BIGNUM_COMMIT" .up-awslc/third_party/s2n-bignum/META.yml
           cmp .up-s2n/x86_att/sha3/sha3_keccak_f1600.S .up-awslc/third_party/s2n-bignum/s2n-bignum-imported/x86_att/sha3/sha3_keccak_f1600.S
-          cmp .up-s2n/x86_att/sha3/sha3_keccak4_f1600_alt.S .up-awslc/third_party/s2n-bignum/s2n-bignum-imported/x86_att/sha3/sha3_keccak4_f1600_alt.S
           echo "AWS-LC $AWSLC_COMMIT imports exactly these commits; its Keccak-x1 routine is identical"
       - name: Upstream functional, KAT and NIST ACVP tests (pinned commits, this runner)
         run: |
@@ -145,11 +143,6 @@ jobs:
         env:
           NQ_DIFF_ITERS: "2000"
         run: cargo test --manifest-path crates/nexusq-native-backend/Cargo.toml --locked --release --features upstream-c-keccak
-      - name: Differential tests, upstream AVX2 x4 Keccak variant (A/B build)
-        if: runner.arch == 'X64'
-        env:
-          NQ_DIFF_ITERS: "2000"
-        run: cargo test --manifest-path crates/nexusq-native-backend/Cargo.toml --locked --release --features upstream-x4-keccak
       - name: Build Arena runner
         if: runner.arch == 'X64'
         run: |

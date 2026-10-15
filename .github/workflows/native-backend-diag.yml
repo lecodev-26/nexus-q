@@ -56,16 +56,15 @@ jobs:
           git -C .arena-aws-lc checkout --detach "$AWSLC_COMMIT"
           cmake -S .arena-aws-lc -B .arena-aws-lc-build -GNinja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
           cmake --build .arena-aws-lc-build --parallel 2 --target crypto
-      - name: Build diagnostic binaries (build.rs flags; upstream x4 Keccak; AWS-LC flags)
+      - name: Build diagnostic binaries (build.rs flags, plus AWS-LC flag variant)
         run: |
           d=crates/nexusq-native-backend/diag
           $d/run.sh "$PWD/.arena-aws-lc" "$PWD/.arena-aws-lc-build" /tmp/ab
-          $d/run.sh "$PWD/.arena-aws-lc" "$PWD/.arena-aws-lc-build" /tmp/ab-upx4 -DNQ_UPSTREAM_X4_KECCAK
           $d/run.sh "$PWD/.arena-aws-lc" "$PWD/.arena-aws-lc-build" /tmp/ab-awsflags -std=gnu11 -DNDEBUG -fvisibility=hidden -fno-common -fno-omit-frame-pointer
       - name: In-process A/B, 3 passes x 10000 iterations (pinned to CPU 1)
         run: |
-          for pass in 1 2 3; do
-            for bin in /tmp/ab /tmp/ab-upx4 /tmp/ab-awsflags; do
+          for bin in /tmp/ab /tmp/ab-awsflags; do
+            for pass in 1 2 3; do
               echo "== $bin pass $pass ($(lscpu | sed -n 's/^Model name:[[:space:]]*//p'))"
               taskset -c 1 $bin/inproc_ab 10000 | python3 -c "import sys;[print('  '.join(f'{c:>22}' if i==0 else f'{c:>10}' for i,c in enumerate(l.split('\t')))) for l in sys.stdin.read().splitlines()]"
             done

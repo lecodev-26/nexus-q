@@ -17,10 +17,9 @@ S2N=("-I$vendor/s2n-bignum" "-I$vendor/s2n-bignum/include")
 $CC "${F[@]}" "${KEM[@]}" -c "$crate/csrc/nq_mlkem_all.c" -o "$out/kem.o"
 $CC "${F[@]}" "${KEM[@]}" -c "$crate/csrc/nq_mlkem_asm.S" -o "$out/kemasm.o"
 $CC "${F[@]}" "${KEM[@]}" "${S2N[@]}" -c "$crate/csrc/nq_keccak_x1.S" -o "$out/keccak.o"
-$CC "${F[@]}" "${KEM[@]}" "${S2N[@]}" -c "$crate/csrc/nq_keccak_x4.S" -o "$out/keccak4.o"
 $CC "${F[@]}" "${DSA[@]}" -c "$crate/csrc/nq_mldsa_all.c" -o "$out/dsa.o"
 $CC "${F[@]}" "${DSA[@]}" -c "$crate/csrc/nq_mldsa_asm.S" -o "$out/dsaasm.o"
-$CC "${F[@]}" "$here/ct_harness.c" "$out"/kem.o "$out"/kemasm.o "$out"/keccak.o "$out"/keccak4.o "$out"/dsa.o "$out"/dsaasm.o -o "$out/ct_harness"
+$CC "${F[@]}" "$here/ct_harness.c" "$out"/kem.o "$out"/kemasm.o "$out"/keccak.o "$out"/dsa.o "$out"/dsaasm.o -o "$out/ct_harness"
 $CC -O1 -g "$here/neg.c" -o "$out/neg"
 
 "$out/ct_harness"
@@ -37,8 +36,7 @@ grep -m1 "Conditional jump" "$out/neg.log"
 echo "== coverage control: assembly actually executed under valgrind =="
 valgrind --tool=callgrind --callgrind-out-file="$out/ct.callgrind" "$out/ct_harness" > /dev/null 2>&1
 callgrind_annotate "$out/ct.callgrind" > "$out/ct.callgrind.txt" 2>/dev/null
-for sym in nq_sha3_keccak_f1600 nq_sha3_keccak4_f1600_alt nq_mlkem_poly_ntt nq_mldsa65_poly_ntt rej_uniform_avx2_asm; do
+for sym in nq_sha3_keccak_f1600 keccak_f1600_x4_avx2_asm nq_mlkem_poly_ntt nq_mldsa65_poly_ntt rej_uniform_avx2_asm; do
   if grep -q "$sym" "$out/ct.callgrind.txt"; then echo "executed: $sym"; else echo "FAIL: $sym not executed"; exit 1; fi
 done
-if grep -q "keccak_f1600_x4_avx2_asm" "$out/ct.callgrind.txt"; then echo "FAIL: upstream x4 Keccak executed; s2n-bignum x4 hook not active"; exit 1; fi
 echo "CT CHECK PASSED"
