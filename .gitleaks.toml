@@ -12,6 +12,9 @@ paths = [
 
 
 [[allowlists]]
-description = "Known false positive in historical CPU feature identifier validation source"
-commits = ["e175fba0300a422ee368c816b54fbfc40aaf44ea"]
+description = "Known false positive for the historical AWS-LC CPU-feature identifier validator"
+condition = "AND"
+regexTarget = "line"
+regexes = ['''strspn\(token, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"\s*"0123456789_-"\) != strlen\(token\)''']
 paths = ['''arena/adapters/aws-lc/runner[.]c''']
+commits = ["e175fba0300a422ee368c816b54fbfc40aaf44ea"]

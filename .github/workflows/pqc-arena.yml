@@ -254,11 +254,13 @@ jobs:
               for row in rows[name]:
                 measurement=row["measurement"]
                 if row["operation"] != "sign":
-                  assert measurement["iterations"]==50, (row["algorithm"],row["operation"],measurement["iterations"])
-                  assert len(measurement.get("samples_ns",[]))==50, (row["algorithm"],row["operation"],"missing individual samples")
+                  iterations=measurement["iterations"]
+                  samples=measurement.get("samples_ns",[])
+                  assert iterations >= 50, (row["algorithm"],row["operation"],"too few samples",iterations)
+                  assert len(samples)==iterations, (row["algorithm"],row["operation"],"sample count differs from iterations",len(samples),iterations)
                   stats=measurement.get("statistics",{})
                   assert all(key in stats for key in ("sample_count","min_ns","median_ns","p95_ns","stddev_ns")), (row["algorithm"],row["operation"],"missing summary stats")
-                  assert stats["sample_count"]==50
+                  assert stats["sample_count"]==iterations, (row["algorithm"],row["operation"],"summary sample count differs",stats.get("sample_count"),iterations)
             assert all(r["environment"].get("cargo_lock_sha256") for r in rows[name])
             assert all(r["environment"].get("rustc_verbose") for r in rows[name])
             assert len({r["environment"]["cpu"] for r in rows[name]})==1
