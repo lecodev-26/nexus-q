@@ -19,7 +19,7 @@ A task may be checked only when its evidence is linked. A successful compile alo
 
 - [x] `NQ-009` Create issue #48 and cross-link the historical issue. Evidence: [Issue #48](https://github.com/lecodev-26/nexus-q/issues/48) links #23, #46 and #47.
 - [x] `NQ-010` Create a dedicated branch from the selected stable base. Evidence: `perf/issue-48-native-assembly-gate`, based on `nexusqv4` commit `dc560e0`.
-- [ ] `NQ-011` Create a dedicated PR and link issue #48.
+- [x] `NQ-011` Create a dedicated PR and link issue #48. Evidence: [draft PR #49](https://github.com/lecodev-26/nexus-q/pull/49).
 - [x] `NQ-012` Add ROADMAP.md with phase exit criteria. Evidence: `docs/performance/ROADMAP.md`.
 - [x] `NQ-013` Add IMPLEMENTATION_CHECKLIST.md with stable task IDs. Evidence: 110 IDs in `docs/performance/IMPLEMENTATION_CHECKLIST.md`.
 - [x] `NQ-014` Add BENCHMARK_BASELINE.md with raw-evidence references. Evidence: `docs/performance/BENCHMARK_BASELINE.md`.
@@ -30,13 +30,13 @@ A task may be checked only when its evidence is linked. A successful compile alo
 
 ## P2 — CI and benchmark contract
 
-- [x] `NQ-019` Add a fast Rust validation workflow for the new branch/PR. Evidence: `.github/workflows/native-assembly-ci.yml`; first remote execution pending.
-- [x] `NQ-020` Add an unsafe-code policy check for the kernel boundary. Evidence: `.github/scripts/check-kernel-unsafe.py`; first remote execution pending.
+- [x] `NQ-019` Add a fast Rust validation workflow for the new branch/PR. Evidence: [CI run #2](https://github.com/lecodev-26/nexus-q/actions/runs/38725627171): format, check, Clippy, tests, AVX2 differential tests, runner check and build pass; rustdoc fails on a redundant link, now corrected for rerun.
+- [x] `NQ-020` Add an unsafe-code policy check for the kernel boundary. Evidence: [CI run #2](https://github.com/lecodev-26/nexus-q/actions/runs/38725627171), unsafe-code boundary job passes.
 - [x] `NQ-021` Keep existing security, fuzz, SDK and release workflows intact. No legacy workflow deletions were imported.
 - [x] `NQ-022` Pin the AWS-LC commit and record its build configuration in `.github/workflows/native-assembly-benchmarks.yml`.
 - [x] `NQ-023` Pin the CI channel to stable and record rustc/cargo versions in both native assembly workflows.
-- [x] `NQ-024` Ensure the benchmark is configured to use the branch's path-patched vendored ML-KEM/ML-DSA and `experimental-kernels` feature; remote confirmation pending.
-- [x] `NQ-025` The runner and evaluator define all nine required operations; remote output validation will confirm each operation.
+- [x] `NQ-024` Ensure the benchmark is configured to use the branch's path-patched vendored ML-KEM/ML-DSA and `experimental-kernels` feature; CI run #2 confirms the runner builds; benchmark execution failed before measurements because cargo run did not select a binary, now corrected for rerun.
+- [x] `NQ-025` The runner and evaluator define all nine required operations; benchmark run #2 failed before producing operation samples because cargo run did not select a binary; corrected for rerun.
 - [x] `NQ-026` Configure 100 warmups and 1000 measured samples (ML-DSA sign uses 1024 seeded samples) in the benchmark workflow.
 - [x] `NQ-027` Preserve raw `samples_ns` in each JSONL result and upload all round files as CI artifacts.
 - [x] `NQ-028` Compute median, nearest-rank p95 and population standard deviation from pooled raw samples in `arena/scripts/evaluate_native_assembly_gate.py`.
@@ -44,7 +44,7 @@ A task may be checked only when its evidence is linked. A successful compile alo
 - [ ] `NQ-030` Review wrapper/context overhead for every comparator operation.
 - [x] `NQ-031` Configure three rounds with alternating NEXUS-Q/AWS-LC suite order.
 - [x] `NQ-032` Evaluator fails closed on missing operations, duplicate rows, invalid samples or fewer than 1000 samples.
-- [x] `NQ-033` Configure upload of raw JSONL, gate report and host/toolchain metadata; first artifact pending CI execution.
+- [x] `NQ-033` Configure upload of raw JSONL, gate report and host/toolchain metadata; CI run #2 uploaded an artifact, but it contains only partial metadata because the benchmark command failed before sampling.
 
 ## P3 — ML-KEM basemul and accumulation
 

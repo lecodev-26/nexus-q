@@ -101,11 +101,11 @@ jobs:
               export NEXUSQ_RUN_ORDER="round-${round}-second"
               export ARENA_RUN_ORDER="round-${round}-first"
               ./arena-aws-lc-runner > "$out/aws-lc-round-${round}.jsonl"
-              cargo run --manifest-path arena/runners/nexusq/Cargo.toml --release --locked --features experimental-kernels > "$out/nexusq-round-${round}.jsonl"
+              cargo run --manifest-path arena/runners/nexusq/Cargo.toml --bin nexusq-arena-runner --release --locked --features experimental-kernels > "$out/nexusq-round-${round}.jsonl"
             else
               export NEXUSQ_RUN_ORDER="round-${round}-first"
               export ARENA_RUN_ORDER="round-${round}-second"
-              cargo run --manifest-path arena/runners/nexusq/Cargo.toml --release --locked --features experimental-kernels > "$out/nexusq-round-${round}.jsonl"
+              cargo run --manifest-path arena/runners/nexusq/Cargo.toml --bin nexusq-arena-runner --release --locked --features experimental-kernels > "$out/nexusq-round-${round}.jsonl"
               ./arena-aws-lc-runner > "$out/aws-lc-round-${round}.jsonl"
             fi
           done
