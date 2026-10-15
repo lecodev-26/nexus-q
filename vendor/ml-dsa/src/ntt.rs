@@ -82,30 +82,21 @@ impl Ntt for Polynomial {
         }
 
         #[cfg(not(feature = "experimental-kernels"))]
-        let mut w: [Elem; 256] = self.0.clone().into();
-        #[cfg(not(feature = "experimental-kernels"))]
-        let mut m = 0;
-
-        #[cfg(not(feature = "experimental-kernels"))]
-        ntt_layer::<128, 1>(&mut w, &mut m);
-        #[cfg(not(feature = "experimental-kernels"))]
-        ntt_layer::<64, 2>(&mut w, &mut m);
-        #[cfg(not(feature = "experimental-kernels"))]
-        ntt_layer::<32, 4>(&mut w, &mut m);
-        #[cfg(not(feature = "experimental-kernels"))]
-        ntt_layer::<16, 8>(&mut w, &mut m);
-        #[cfg(not(feature = "experimental-kernels"))]
-        ntt_layer::<8, 16>(&mut w, &mut m);
-        #[cfg(not(feature = "experimental-kernels"))]
-        ntt_layer::<4, 32>(&mut w, &mut m);
-        #[cfg(not(feature = "experimental-kernels"))]
-        ntt_layer::<2, 64>(&mut w, &mut m);
-        #[cfg(not(feature = "experimental-kernels"))]
-        ntt_layer::<1, 128>(&mut w, &mut m);
-
-        #[cfg(not(feature = "experimental-kernels"))]
-        NttPolynomial::new(w.into())
+        {
+            let mut w: [Elem; 256] = self.0.clone().into();
+            let mut m = 0;
+            ntt_layer::<128, 1>(&mut w, &mut m);
+            ntt_layer::<64, 2>(&mut w, &mut m);
+            ntt_layer::<32, 4>(&mut w, &mut m);
+            ntt_layer::<16, 8>(&mut w, &mut m);
+            ntt_layer::<8, 16>(&mut w, &mut m);
+            ntt_layer::<4, 32>(&mut w, &mut m);
+            ntt_layer::<2, 64>(&mut w, &mut m);
+            ntt_layer::<1, 128>(&mut w, &mut m);
+            NttPolynomial::new(w.into())
+        }
     }
+}
 }
 
 impl<K: ArraySize> Ntt for Vector<K> {
@@ -160,32 +151,22 @@ impl NttInverse for NttPolynomial {
         }
 
         #[cfg(not(feature = "experimental-kernels"))]
-        const INVERSE_256: Elem = Elem::new(8_347_681);
-        #[cfg(not(feature = "experimental-kernels"))]
-        let mut w: [Elem; 256] = self.0.clone().into();
-        #[cfg(not(feature = "experimental-kernels"))]
-        let mut m = 256;
-
-        #[cfg(not(feature = "experimental-kernels"))]
-        ntt_inverse_layer::<1, 128>(&mut w, &mut m);
-        #[cfg(not(feature = "experimental-kernels"))]
-        ntt_inverse_layer::<2, 64>(&mut w, &mut m);
-        #[cfg(not(feature = "experimental-kernels"))]
-        ntt_inverse_layer::<4, 32>(&mut w, &mut m);
-        #[cfg(not(feature = "experimental-kernels"))]
-        ntt_inverse_layer::<8, 16>(&mut w, &mut m);
-        #[cfg(not(feature = "experimental-kernels"))]
-        ntt_inverse_layer::<16, 8>(&mut w, &mut m);
-        #[cfg(not(feature = "experimental-kernels"))]
-        ntt_inverse_layer::<32, 4>(&mut w, &mut m);
-        #[cfg(not(feature = "experimental-kernels"))]
-        ntt_inverse_layer::<64, 2>(&mut w, &mut m);
-        #[cfg(not(feature = "experimental-kernels"))]
-        ntt_inverse_layer::<128, 1>(&mut w, &mut m);
-
-        #[cfg(not(feature = "experimental-kernels"))]
-        INVERSE_256 * &Polynomial::new(w.into())
+        {
+            const INVERSE_256: Elem = Elem::new(8_347_681);
+            let mut w: [Elem; 256] = self.0.clone().into();
+            let mut m = 256;
+            ntt_inverse_layer::<1, 128>(&mut w, &mut m);
+            ntt_inverse_layer::<2, 64>(&mut w, &mut m);
+            ntt_inverse_layer::<4, 32>(&mut w, &mut m);
+            ntt_inverse_layer::<8, 16>(&mut w, &mut m);
+            ntt_inverse_layer::<16, 8>(&mut w, &mut m);
+            ntt_inverse_layer::<32, 4>(&mut w, &mut m);
+            ntt_inverse_layer::<64, 2>(&mut w, &mut m);
+            ntt_inverse_layer::<128, 1>(&mut w, &mut m);
+            INVERSE_256 * &Polynomial::new(w.into())
+        }
     }
+}
 }
 
 impl<K: ArraySize> NttInverse for NttVector<K> {
