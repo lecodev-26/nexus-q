@@ -6,6 +6,6 @@ useDefault = true
 [allowlist]
 description = "Public deterministic test-key fixtures shipped by vendored RustCrypto ML-KEM and ML-DSA crates; these are test vectors, not credentials."
 paths = [
-  '''vendor/ml-kem/tests/examples/.*\\.priv''',
-  '''vendor/ml-dsa/tests/examples/.*\\.priv''',
+  '''vendor/ml-kem/tests/examples/.*\.priv''',
+  '''vendor/ml-dsa/tests/examples/.*\.priv''',
 ]
