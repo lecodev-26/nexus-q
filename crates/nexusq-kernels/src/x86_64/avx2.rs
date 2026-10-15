@@ -6,8 +6,9 @@
 
 use core::arch::asm;
 use core::arch::x86_64::{
-    __m256i, _mm_loadu_si128, _mm256_add_epi32, _mm256_and_si256, _mm256_andnot_si256,
-    _mm256_blend_epi32, _mm256_cmpgt_epi32, _mm256_cvtepu16_epi32, _mm256_loadu_si256,
+    __m128i, __m256i, _mm_loadu_si128, _mm_packus_epi32, _mm_storeu_si128, _mm256_add_epi32,
+    _mm256_and_si256, _mm256_andnot_si256, _mm256_blend_epi32, _mm256_castsi256_si128,
+    _mm256_cmpgt_epi32, _mm256_cvtepu16_epi32, _mm256_extracti128_si256, _mm256_loadu_si256,
     _mm256_mul_epu32, _mm256_or_si256, _mm256_set_epi64x, _mm256_set1_epi32, _mm256_set1_epi64x,
     _mm256_setzero_si256, _mm256_slli_epi64, _mm256_sllv_epi64, _mm256_srli_epi64,
     _mm256_srlv_epi64, _mm256_storeu_si256, _mm256_sub_epi32, _mm256_xor_si256,
@@ -189,16 +190,25 @@ unsafe fn mlkem_ntt_avx2(poly: &mut [u16; 256]) {
                     difference,
                     _mm256_and_si256(negative, _mm256_set1_epi32(MLKEM_Q)),
                 );
-                let mut sums = [0_i32; 8];
-                let mut differences = [0_i32; 8];
-                // SAFETY: both temporary arrays provide 32 writable bytes.
+                // All lanes are canonical residues in 0..=3328, so unsigned
+                // saturating packs are exact. Store eight coefficients per half
+                // directly instead of spilling vectors and copying lane by lane.
+                let sums16 = _mm_packus_epi32(
+                    _mm256_castsi256_si128(sum),
+                    _mm256_extracti128_si256(sum, 1),
+                );
+                let differences16 = _mm_packus_epi32(
+                    _mm256_castsi256_si128(difference),
+                    _mm256_extracti128_si256(difference, 1),
+                );
+                // SAFETY: each destination covers eight writable u16 coefficients;
+                // unaligned stores are permitted and the polynomial bounds hold.
                 unsafe {
-                    _mm256_storeu_si256(sums.as_mut_ptr().cast(), sum);
-                    _mm256_storeu_si256(differences.as_mut_ptr().cast(), difference);
-                }
-                for lane in 0..8 {
-                    poly[index + lane] = sums[lane] as u16;
-                    poly[index + length + lane] = differences[lane] as u16;
+                    _mm_storeu_si128(poly.as_mut_ptr().add(index).cast::<__m128i>(), sums16);
+                    _mm_storeu_si128(
+                        poly.as_mut_ptr().add(index + length).cast::<__m128i>(),
+                        differences16,
+                    );
                 }
                 index += 8;
             }
@@ -344,16 +354,23 @@ unsafe fn mlkem_inverse_ntt_avx2(poly: &mut [u16; 256]) {
                 let product = unsafe {
                     reduce_mlkem_product(mullo_i32x8_asm(difference, _mm256_set1_epi32(zeta)))
                 };
-                let mut sums = [0_i32; 8];
-                let mut products = [0_i32; 8];
-                // SAFETY: both arrays have room for eight 32-bit lanes.
+                // Both vectors contain canonical residues, making these packs exact.
+                let sums16 = _mm_packus_epi32(
+                    _mm256_castsi256_si128(sum),
+                    _mm256_extracti128_si256(sum, 1),
+                );
+                let products16 = _mm_packus_epi32(
+                    _mm256_castsi256_si128(product),
+                    _mm256_extracti128_si256(product, 1),
+                );
+                // SAFETY: each destination covers eight writable u16 coefficients;
+                // unaligned stores are permitted and the polynomial bounds hold.
                 unsafe {
-                    _mm256_storeu_si256(sums.as_mut_ptr().cast(), sum);
-                    _mm256_storeu_si256(products.as_mut_ptr().cast(), product);
-                }
-                for lane in 0..8 {
-                    poly[index + lane] = sums[lane] as u16;
-                    poly[index + length + lane] = products[lane] as u16;
+                    _mm_storeu_si128(poly.as_mut_ptr().add(index).cast::<__m128i>(), sums16);
+                    _mm_storeu_si128(
+                        poly.as_mut_ptr().add(index + length).cast::<__m128i>(),
+                        products16,
+                    );
                 }
                 index += 8;
             }
