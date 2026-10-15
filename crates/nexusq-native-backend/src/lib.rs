@@ -59,7 +59,7 @@ pub(crate) fn map_err(rc: i32) -> Error {
 
 #[cfg(test)]
 mod error_mapping_tests {
-    use super::{map_err, Error};
+    use super::{Error, map_err};
 
     #[test]
     fn algorithm_specific_minus_six_is_not_misclassified() {
