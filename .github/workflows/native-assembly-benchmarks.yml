@@ -28,6 +28,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: native-assembly-benchmarks-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
   benchmark-gate:
     name: Nine operations / three alternating rounds / median and p95
