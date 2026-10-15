@@ -249,7 +249,7 @@ pub(crate) trait Ntt {
 /// butterfly groups in the layer. Making both compile-time constants lets the compiler
 /// eliminate the iterator length calculation (`256 / (2 * LEN)`) that `step_by` would
 /// otherwise compute with a `UDIV` instruction.
-#[cfg(feature = "experimental-kernels")]
+#[cfg(any(not(feature = "experimental-kernels"), test))]
 #[inline(always)]
 fn ntt_layer<const LEN: usize, const ITERATIONS: usize>(f: &mut Array<Elem, U256>, k: &mut usize) {
     for i in 0..ITERATIONS {
