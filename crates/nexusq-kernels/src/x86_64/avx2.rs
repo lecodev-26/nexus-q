@@ -16,6 +16,183 @@ use core::arch::x86_64::{
 
 use crate::scalar::keccak::{ROTATION_OFFSETS, ROUND_CONSTANTS};
 
+const MLDSA_Q: u32 = 8_380_417;
+const MLDSA_BARRETT_SHIFT: u32 = 46;
+const MLDSA_BARRETT_MULTIPLIER: u128 = (1_u128 << MLDSA_BARRETT_SHIFT) / MLDSA_Q as u128;
+
+const fn mldsa_zetas() -> [u32; 256] {
+    let mut table = [0_u32; 256];
+    let mut i = 1;
+    let mut power = 1_u64;
+    while i < 256 {
+        power = (power * 1753) % MLDSA_Q as u64;
+        table[i] = power as u32;
+        i += 1;
+    }
+    let mut ordered = [0_u32; 256];
+    i = 1;
+    while i < 256 {
+        ordered[i] = table[(i as u8).reverse_bits() as usize];
+        i += 1;
+    }
+    ordered
+}
+
+const MLDSA_ZETAS: [u32; 256] = mldsa_zetas();
+
+#[inline]
+fn mldsa_mul_reduce(lhs: u32, rhs: u32) -> u32 {
+    let product = u128::from(lhs) * u128::from(rhs);
+    let quotient = (product * MLDSA_BARRETT_MULTIPLIER) >> MLDSA_BARRETT_SHIFT;
+    let remainder = product - quotient * u128::from(MLDSA_Q);
+    let value = remainder as u32;
+    value - (MLDSA_Q & 0_u32.wrapping_sub(u32::from(value >= MLDSA_Q)))
+}
+
+#[inline]
+fn mldsa_add_mod(lhs: __m256i, rhs: __m256i) -> __m256i {
+    let sum = _mm256_add_epi32(lhs, rhs);
+    let mask = _mm256_cmpgt_epi32(sum, _mm256_set1_epi32((MLDSA_Q - 1) as i32));
+    _mm256_sub_epi32(
+        sum,
+        _mm256_and_si256(mask, _mm256_set1_epi32(MLDSA_Q as i32)),
+    )
+}
+
+#[inline]
+fn mldsa_sub_mod(lhs: __m256i, rhs: __m256i) -> __m256i {
+    let difference = _mm256_sub_epi32(lhs, rhs);
+    let mask = _mm256_cmpgt_epi32(_mm256_setzero_si256(), difference);
+    _mm256_add_epi32(
+        difference,
+        _mm256_and_si256(mask, _mm256_set1_epi32(MLDSA_Q as i32)),
+    )
+}
+
+/// Forward ML-DSA NTT. Coefficients and output are canonical residues modulo q.
+/// Uses AVX2 for butterfly add/subtract and fixed-width scalar Barrett products.
+pub fn mldsa_ntt(poly: &mut [u32; 256]) -> bool {
+    if !std::is_x86_feature_detected!("avx2") {
+        return false;
+    }
+    // SAFETY: runtime detection guarantees AVX2 support for this call.
+    unsafe { mldsa_ntt_avx2(poly) };
+    true
+}
+
+#[target_feature(enable = "avx2")]
+unsafe fn mldsa_ntt_avx2(poly: &mut [u32; 256]) {
+    let mut zeta_index = 1;
+    let mut length = 128;
+    while length >= 1 {
+        for start in (0..256).step_by(2 * length) {
+            let zeta = MLDSA_ZETAS[zeta_index];
+            zeta_index += 1;
+            let mut j = 0;
+            while j + 8 <= length {
+                let index = start + j;
+                let mut products = [0_u32; 8];
+                for lane in 0..8 {
+                    products[lane] = mldsa_mul_reduce(zeta, poly[index + length + lane]);
+                }
+                // SAFETY: all pointers cover exactly eight u32 lanes.
+                let (left, product) = unsafe {
+                    (
+                        _mm256_loadu_si256(poly.as_ptr().add(index).cast()),
+                        _mm256_loadu_si256(products.as_ptr().cast()),
+                    )
+                };
+                let sum = mldsa_add_mod(left, product);
+                let difference = mldsa_sub_mod(left, product);
+                // SAFETY: both stores target eight coefficients inside the fixed array.
+                unsafe {
+                    _mm256_storeu_si256(poly.as_mut_ptr().add(index).cast(), sum);
+                    _mm256_storeu_si256(poly.as_mut_ptr().add(index + length).cast(), difference);
+                }
+                j += 8;
+            }
+            while j < length {
+                let index = start + j;
+                let left = poly[index];
+                let product = mldsa_mul_reduce(zeta, poly[index + length]);
+                let sum = left + product;
+                poly[index] = sum - (MLDSA_Q & 0_u32.wrapping_sub(u32::from(sum >= MLDSA_Q)));
+                let difference = left.wrapping_sub(product);
+                poly[index + length] = difference
+                    .wrapping_add(MLDSA_Q & 0_u32.wrapping_sub(u32::from(left < product)));
+                j += 1;
+            }
+        }
+        length /= 2;
+    }
+}
+
+/// Inverse ML-DSA NTT including multiplication by 256^-1 modulo q.
+pub fn mldsa_inverse_ntt(poly: &mut [u32; 256]) -> bool {
+    if !std::is_x86_feature_detected!("avx2") {
+        return false;
+    }
+    // SAFETY: runtime detection guarantees AVX2 support for this call.
+    unsafe { mldsa_inverse_ntt_avx2(poly) };
+    true
+}
+
+#[target_feature(enable = "avx2")]
+unsafe fn mldsa_inverse_ntt_avx2(poly: &mut [u32; 256]) {
+    let mut zeta_index = 255;
+    let mut length = 1;
+    while length <= 128 {
+        for start in (0..256).step_by(2 * length) {
+            let zeta = MLDSA_ZETAS[zeta_index];
+            zeta_index -= 1;
+            let mut j = 0;
+            while j + 8 <= length {
+                let index = start + j;
+                // SAFETY: both loads cover eight coefficients within the polynomial.
+                let (left, right) = unsafe {
+                    (
+                        _mm256_loadu_si256(poly.as_ptr().add(index).cast()),
+                        _mm256_loadu_si256(poly.as_ptr().add(index + length).cast()),
+                    )
+                };
+                let sum = mldsa_add_mod(left, right);
+                let difference = mldsa_sub_mod(right, left);
+                let mut products = [0_u32; 8];
+                // SAFETY: difference is stored to a bounded eight-lane temporary.
+                unsafe { _mm256_storeu_si256(products.as_mut_ptr().cast(), difference) };
+                for product in &mut products {
+                    *product = mldsa_mul_reduce(zeta, *product);
+                }
+                // SAFETY: stores cover exactly eight coefficients in each butterfly half.
+                unsafe {
+                    _mm256_storeu_si256(poly.as_mut_ptr().add(index).cast(), sum);
+                    _mm256_storeu_si256(
+                        poly.as_mut_ptr().add(index + length).cast(),
+                        _mm256_loadu_si256(products.as_ptr().cast()),
+                    );
+                }
+                j += 8;
+            }
+            while j < length {
+                let index = start + j;
+                let left = poly[index];
+                let right = poly[index + length];
+                let sum = left + right;
+                poly[index] = sum - (MLDSA_Q & 0_u32.wrapping_sub(u32::from(sum >= MLDSA_Q)));
+                let difference = right
+                    .wrapping_sub(left)
+                    .wrapping_add(MLDSA_Q & 0_u32.wrapping_sub(u32::from(right < left)));
+                poly[index + length] = mldsa_mul_reduce(zeta, difference);
+                j += 1;
+            }
+        }
+        length *= 2;
+    }
+    for value in poly {
+        *value = mldsa_mul_reduce(*value, 8_347_681);
+    }
+}
+
 /// Permute four independent Keccak states in parallel when AVX2 is available.
 ///
 /// Returns `false` without modifying the states when the CPU lacks AVX2, so
@@ -629,6 +806,45 @@ mod tests {
         }
         if mlkem_inverse_ntt(&mut input) {
             assert_eq!(input, expected);
+        }
+    }
+}
+
+#[cfg(test)]
+mod mldsa_ntt_tests {
+    use super::{mldsa_inverse_ntt, mldsa_ntt};
+    use crate::scalar::mldsa;
+
+    #[test]
+    fn avx2_mldsa_ntt_matches_scalar_on_boundary_patterns() {
+        if !std::is_x86_feature_detected!("avx2") {
+            return;
+        }
+        for pattern in 0..6_u32 {
+            let input = core::array::from_fn(|i| match pattern {
+                0 => 0,
+                1 => mldsa::Q - 1,
+                2 => i as u32 % mldsa::Q,
+                3 => ((i as u32) * 65_537 + 123) % mldsa::Q,
+                4 => {
+                    if i % 2 == 0 {
+                        mldsa::Q - 1
+                    } else {
+                        0
+                    }
+                }
+                _ => ((i as u32).wrapping_mul(7_919_191).wrapping_add(8_380_416)) % mldsa::Q,
+            });
+            let mut expected = input;
+            let mut actual = input;
+            mldsa::ntt(&mut expected);
+            assert!(mldsa_ntt(&mut actual));
+            assert_eq!(actual, expected, "forward transform pattern {pattern}");
+
+            mldsa::inverse_ntt(&mut expected);
+            assert!(mldsa_inverse_ntt(&mut actual));
+            assert_eq!(actual, expected, "inverse transform pattern {pattern}");
+            assert_eq!(actual, input, "round trip pattern {pattern}");
         }
     }
 }

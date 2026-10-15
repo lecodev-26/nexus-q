@@ -687,3 +687,22 @@ mod tests {
         }
     }
 }
+
+/// Apply the forward ML-DSA NTT to 256 canonical coefficients modulo 8,380,417.
+/// AVX2 is used when enabled and available; otherwise the scalar reference runs.
+pub fn ntt_mldsa(coefficients: &mut [u32; 256]) {
+    #[cfg(all(target_arch = "x86_64", feature = "experimental-avx2"))]
+    if !crate::dispatch::scalar_forced() && crate::x86_64::avx2::mldsa_ntt(coefficients) {
+        return;
+    }
+    crate::scalar::mldsa::ntt(coefficients);
+}
+
+/// Apply the inverse ML-DSA NTT, including multiplication by 256^-1 modulo q.
+pub fn inverse_ntt_mldsa(coefficients: &mut [u32; 256]) {
+    #[cfg(all(target_arch = "x86_64", feature = "experimental-avx2"))]
+    if !crate::dispatch::scalar_forced() && crate::x86_64::avx2::mldsa_inverse_ntt(coefficients) {
+        return;
+    }
+    crate::scalar::mldsa::inverse_ntt(coefficients);
+}

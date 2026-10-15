@@ -74,18 +74,36 @@ impl Ntt for Polynomial {
     // This implementation uses const-generic helper functions to ensure all loop
     // bounds are compile-time constants, avoiding potential UDIV instructions.
     fn ntt(&self) -> Self::Output {
+        #[cfg(feature = "experimental-kernels")]
+        {
+            let mut coefficients = core::array::from_fn(|index| self.0[index].0);
+            nexusq_kernels::api::ntt_mldsa(&mut coefficients);
+            return NttPolynomial::new(hybrid_array::Array::from_fn(|index| Elem::new(coefficients[index])));
+        }
+
+        #[cfg(not(feature = "experimental-kernels"))]
         let mut w: [Elem; 256] = self.0.clone().into();
+        #[cfg(not(feature = "experimental-kernels"))]
         let mut m = 0;
 
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_layer::<128, 1>(&mut w, &mut m);
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_layer::<64, 2>(&mut w, &mut m);
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_layer::<32, 4>(&mut w, &mut m);
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_layer::<16, 8>(&mut w, &mut m);
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_layer::<8, 16>(&mut w, &mut m);
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_layer::<4, 32>(&mut w, &mut m);
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_layer::<2, 64>(&mut w, &mut m);
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_layer::<1, 128>(&mut w, &mut m);
 
+        #[cfg(not(feature = "experimental-kernels"))]
         NttPolynomial::new(w.into())
     }
 }
@@ -134,20 +152,38 @@ impl NttInverse for NttPolynomial {
     // This implementation uses const-generic helper functions to ensure all loop
     // bounds are compile-time constants, avoiding potential UDIV instructions.
     fn ntt_inverse(&self) -> Self::Output {
-        const INVERSE_256: Elem = Elem::new(8_347_681);
+        #[cfg(feature = "experimental-kernels")]
+        {
+            let mut coefficients = core::array::from_fn(|index| self.0[index].0);
+            nexusq_kernels::api::inverse_ntt_mldsa(&mut coefficients);
+            return Polynomial::new(hybrid_array::Array::from_fn(|index| Elem::new(coefficients[index])));
+        }
 
+        #[cfg(not(feature = "experimental-kernels"))]
+        const INVERSE_256: Elem = Elem::new(8_347_681);
+        #[cfg(not(feature = "experimental-kernels"))]
         let mut w: [Elem; 256] = self.0.clone().into();
+        #[cfg(not(feature = "experimental-kernels"))]
         let mut m = 256;
 
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_inverse_layer::<1, 128>(&mut w, &mut m);
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_inverse_layer::<2, 64>(&mut w, &mut m);
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_inverse_layer::<4, 32>(&mut w, &mut m);
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_inverse_layer::<8, 16>(&mut w, &mut m);
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_inverse_layer::<16, 8>(&mut w, &mut m);
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_inverse_layer::<32, 4>(&mut w, &mut m);
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_inverse_layer::<64, 2>(&mut w, &mut m);
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_inverse_layer::<128, 1>(&mut w, &mut m);
 
+        #[cfg(not(feature = "experimental-kernels"))]
         INVERSE_256 * &Polynomial::new(w.into())
     }
 }

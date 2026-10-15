@@ -2,3 +2,5 @@
 
 pub mod keccak;
 pub mod mlkem;
+
+pub mod mldsa;
