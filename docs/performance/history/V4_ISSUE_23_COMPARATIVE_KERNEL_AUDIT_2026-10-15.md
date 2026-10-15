@@ -1,7 +1,7 @@
 # NEXUS-Q V4 / Issue #23 — Comparative ML-KEM and ML-DSA Kernel Audit
 
-**Audit date:** 2026-10-15  
-**Reviewed revision:** `ffe84faf3ab2212778b140140578fa4cfc497e1b`  
+**Audit date:** 2026-10-15
+**Reviewed revision:** `ffe84faf3ab2212778b140140578fa4cfc497e1b`
 **Scope:** static source and benchmark-methodology audit only. No production implementation changed. No local build, test, or benchmark was run.
 
 ## Executive summary

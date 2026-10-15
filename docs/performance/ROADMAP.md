@@ -1,7 +1,7 @@
 # NEXUS-Q Native Assembly Performance Roadmap
 
-**Tracking issue:** [#48](https://github.com/lecodev-26/nexus-q/issues/48)  
-**Historical line:** [Issue #23](https://github.com/lecodev-26/nexus-q/issues/23), [PR #46](https://github.com/lecodev-26/nexus-q/pull/46), [PR #47](https://github.com/lecodev-26/nexus-q/pull/47)  
+**Tracking issue:** [#48](https://github.com/lecodev-26/nexus-q/issues/48)
+**Historical line:** [Issue #23](https://github.com/lecodev-26/nexus-q/issues/23), [PR #46](https://github.com/lecodev-26/nexus-q/pull/46), [PR #47](https://github.com/lecodev-26/nexus-q/pull/47)
 **First target:** x86-64 AVX2, Rust integration plus native assembly from the first new optimized kernel.
 
 ## Mission

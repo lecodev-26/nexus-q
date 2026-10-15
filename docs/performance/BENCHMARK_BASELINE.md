@@ -1,6 +1,6 @@
 # Native Assembly Initiative — Benchmark Baseline
 
-**Tracking issue:** [#48](https://github.com/lecodev-26/nexus-q/issues/48)  
+**Tracking issue:** [#48](https://github.com/lecodev-26/nexus-q/issues/48)
 **Status:** Historical baseline, not a current pass result.
 
 ## Recorded production gate ratios

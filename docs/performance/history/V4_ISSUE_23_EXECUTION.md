@@ -1,6 +1,6 @@
 # NEXUS-Q V4 — Issue #23 execution tracker
 
-**Source of truth:** [Issue #23](https://github.com/lecodev-26/nexus-q/issues/23)  
+**Source of truth:** [Issue #23](https://github.com/lecodev-26/nexus-q/issues/23)
 **Working PR:** [#46](https://github.com/lecodev-26/nexus-q/pull/46), branch `v4/issue-23-kernel-work`, targeting `nexusqv4`
 
 **Baseline:** reviewed V3 snapshot on `nexusqv4`
