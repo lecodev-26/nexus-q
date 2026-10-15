@@ -9,7 +9,7 @@ A task may be checked only when its evidence is linked. A successful compile alo
 - [x] `NQ-001` Confirm clean worktree and record base commit, branch and remote refs. Evidence: `docs/performance/HISTORICAL_DECISIONS.md`.
 - [x] `NQ-002` Compare main, nexusqv4, PR #46 and PR #47 file-by-file. Evidence: `docs/performance/FILE_MIGRATION_MATRIX.md`.
 - [x] `NQ-003` Classify changed files as keep, adapt, historical or reject. Evidence: `docs/performance/FILE_MIGRATION_MATRIX.md`.
-- [ ] `NQ-004` Verify archive manifests and SHA-256 hashes for retained artifacts.
+- [x] `NQ-004` Verify archive manifests and SHA-256 hashes for retained artifacts. Verified 392 files across 28 V4 measurement/Phase 0 run manifests from PR #46; all Git blob hashes matched.
 - [x] `NQ-005` Identify deleted workflows and ensure repository-wide gates are preserved. The new branch is additive; existing workflows remain intact. Evidence: `.github/workflows/native-assembly-ci.yml`.
 - [ ] `NQ-006` Inventory current production callsites for all nine operations.
 - [ ] `NQ-007` Record dependency versions and vendored-source provenance.

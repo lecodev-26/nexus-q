@@ -23,7 +23,7 @@ This matrix records intended treatment. “Candidate” means the content still 
 | `arena/protocol.md` | Imported, review pending | Imported in commit `e175fba`; wrapper/context costs still require explicit review. |
 | `arena/schemas/benchmark-result.schema.json` | Imported, CI validation pending | Imported in commit `e175fba`; benchmark workflow currently checks required operations and raw samples. |
 | `arena/adapters/aws-lc/README.md` | Keep + adapt | Preserve pinned source/build instructions and limitations. |
-| `artifact-archive/**` | Preserve as history | Keep raw evidence, hashes and manifests; never treat old results as new results. |
+| `artifact-archive/**` | Preserve in historical branch; do not duplicate wholesale | Keep all raw evidence and manifests on PR #46's branch; 392 files across 28 V4 run manifests were hash-verified. Link to the archive from `HISTORICAL_DECISIONS.md`; never treat old results as new results. |
 | `crates/nexusq-kernels/**` | Imported baseline; assembly work remains | Imported in commit `e175fba` as scalar/intrinsics baseline. It does not satisfy the new hand-written assembly requirement by itself. |
 | `vendor/ml-kem/**` | Selective changes imported | Selected manifest, algebra, compression and parameter changes imported in `e175fba`; arithmetic and callsite review remains open. |
 | `vendor/ml-dsa/**` | Vendored source imported | Imported in `e175fba` with license files and `UPSTREAM.md`; review experimental changes before relying on them. |

@@ -1,6 +1,6 @@
 # Historical Decisions and Migration Record
 
-This new performance initiative is tracked by [Issue #48](https://github.com/lecodev-26/nexus-q/issues/48). The previous V4 implementation line is preserved for reference in [PR #46](https://github.com/lecodev-26/nexus-q/pull/46), [PR #47](https://github.com/lecodev-26/nexus-q/pull/47), and [Issue #23](https://github.com/lecodev-26/nexus-q/issues/23).
+This new performance initiative is tracked by [Issue #48](https://github.com/lecodev-26/nexus-q/issues/48). The previous V4 implementation line is preserved for reference in [PR #46](https://github.com/lecodev-26/nexus-q/pull/46), [PR #47](https://github.com/lecodev-26/nexus-q/pull/47), and [Issue #23](https://github.com/lecodev-26/nexus-q/issues/23). Its raw run evidence remains on the historical [PR #46 branch artifact archive](https://github.com/lecodev-26/nexus-q/tree/v4/issue-23-kernel-work/artifact-archive); 392 files across 28 V4 measurement/Phase 0 manifests were verified against their recorded SHA-256 values.
 
 ## New-line baseline
 The dedicated branch `perf/issue-48-native-assembly-gate` was created from `nexusqv4` at base commit `dc560e0817d8d3a39b69f0c7811bcaab57b23cda`. The selected baseline is intentionally separate from the 153-commit PR #46 branch. The documentation/history baseline is commit `c3bba13`; reviewed kernel/benchmark components were imported selectively in commit `e175fba` and are recorded in `FILE_MIGRATION_MATRIX.md`. The new CI and evaluator are being added as a separate commit.
