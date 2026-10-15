@@ -10,9 +10,8 @@ paths = [
   '''vendor/ml-dsa/tests/examples/.*\.priv''',
 ]
 
+
 [[allowlists]]
-description = "Known false positive: source-level CPU feature identifier validation in AWS-LC adapter"
-condition = "AND"
+description = "Known false positive in historical CPU feature identifier validation source"
+commits = ["e175fba0300a422ee368c816b54fbfc40aaf44ea"]
 paths = ['''arena/adapters/aws-lc/runner\.c''']
-regexTarget = "line"
-regexes = ['''strspn\(token, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" "0123456789_-"''']

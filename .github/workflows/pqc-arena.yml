@@ -99,7 +99,7 @@ jobs:
           p = Path("arena/runners/nexusq/src/main.rs")
           s = p.read_text()
           old = '"measurement_method":"std::time::Instant mean wall-clock latency"'
-          new = old + ",\"measurement_scope\":\"reference_implementation_operation\",\"comparison_contract\":\"fips_operation_v1\""
+          new = old + ',"measurement_scope":"reference_implementation_operation","comparison_contract":"fips_operation_v1"'
           assert old in s, "V1 benchmark metadata marker not found"
           s = s.replace(old, new, 1)
           old_env = '"cpu":option_env!("NEXUSQ_CPU").unwrap_or("unknown"),"cpu_features":[],"compiler":"rustc","compiler_version":option_env!("RUSTC_VERSION").unwrap_or("unknown"),"optimization":option_env!("NEXUSQ_OPT").unwrap_or("unknown"),"harness_version":"arena-v1"'
