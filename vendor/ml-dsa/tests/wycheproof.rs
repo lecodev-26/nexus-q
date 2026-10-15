@@ -4,7 +4,7 @@
 
 use ml_dsa::{MlDsa44, MlDsa65, MlDsa87, Seed, Signature, SigningKey, VerifyingKey};
 use serde::Deserialize;
-use signature::rand_core::{CryptoRng, RngCore};
+use signature::rand_core::{Infallible, TryCryptoRng, TryRng};
 use signature::{SignatureEncoding, Signer, Verifier};
 use std::fs::File;
 
@@ -52,20 +52,22 @@ struct VectorRng {
     offset: usize,
 }
 
-impl RngCore for VectorRng {
-    fn next_u32(&mut self) -> u32 {
+impl TryRng for VectorRng {
+    type Error = Infallible;
+
+    fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
         let mut bytes = [0; 4];
-        self.fill_bytes(&mut bytes);
-        u32::from_le_bytes(bytes)
+        self.try_fill_bytes(&mut bytes)?;
+        Ok(u32::from_le_bytes(bytes))
     }
 
-    fn next_u64(&mut self) -> u64 {
+    fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
         let mut bytes = [0; 8];
-        self.fill_bytes(&mut bytes);
-        u64::from_le_bytes(bytes)
+        self.try_fill_bytes(&mut bytes)?;
+        Ok(u64::from_le_bytes(bytes))
     }
 
-    fn fill_bytes(&mut self, dest: &mut [u8]) {
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Self::Error> {
         let end = self
             .offset
             .checked_add(dest.len())
@@ -76,10 +78,11 @@ impl RngCore for VectorRng {
         );
         dest.copy_from_slice(&self.bytes[self.offset..end]);
         self.offset = end;
+        Ok(())
     }
 }
 
-impl CryptoRng for VectorRng {}
+impl TryCryptoRng for VectorRng {}
 
 #[derive(Deserialize, Debug)]
 struct Test {
