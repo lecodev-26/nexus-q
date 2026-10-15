@@ -478,7 +478,7 @@ mod test {
 
         let actual = sample_ntt_x4(&encoded);
         for (lane, (i, j)) in coordinates.into_iter().enumerate() {
-            let mut xof = XOF(&rho, i, j);
+            let mut xof = XOF(&rho, j, i);
             let expected = super::sample_ntt(&mut xof);
             assert_eq!(actual[lane], expected, "matrix coordinates ({i}, {j})");
         }
