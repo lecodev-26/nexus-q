@@ -247,6 +247,13 @@ jobs:
           export ARENA_CPU_GOVERNOR="unknown-hosted-runner" NEXUSQ_CPU_GOVERNOR="unknown-hosted-runner"
           export ARENA_TARGET="x86_64-linux-gnu" ARENA_OS="Ubuntu"
           steal() { awk '/^cpu /{print $9}' /proc/stat; }
+          # Run and discard one complete pass for each implementation before
+          # collecting gate samples. This primes lazy initialization, code/data
+          # pages, and hosted-runner CPU state without changing the 3-round gate
+          # inputs, sample count, evaluator, or 1.5x median/p95 threshold.
+          export NEXUSQ_RUN_ORDER="preflight" ARENA_RUN_ORDER="preflight"
+          ./nexusq-native-runner > /dev/null
+          ./arena-aws-lc-runner > /dev/null
           echo -e "round\timpl\tsteal_ticks" > $out/steal.tsv
           for round in $(seq 1 12); do
             if [ $((round % 2)) = 0 ]; then order="aws nexusq"; else order="nexusq aws"; fi
