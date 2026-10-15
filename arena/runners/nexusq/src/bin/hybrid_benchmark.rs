@@ -13,7 +13,12 @@ fn percentile(sorted: &[u128], p: usize) -> u128 {
 fn stats(mut values: Vec<u128>) -> (u128, u128, u128, u128) {
     values.sort_unstable();
     let sum: u128 = values.iter().sum();
-    (sum / values.len() as u128, percentile(&values, 50), percentile(&values, 95), percentile(&values, 99))
+    (
+        sum / values.len() as u128,
+        percentile(&values, 50),
+        percentile(&values, 95),
+        percentile(&values, 99),
+    )
 }
 
 fn main() {
@@ -43,8 +48,12 @@ fn main() {
     let cpu = std::fs::read_to_string("/proc/cpuinfo")
         .ok()
         .and_then(|s| {
-            s.lines()
-                .find_map(|l| l.strip_prefix("model name").and_then(|v| v.strip_prefix(':')).map(str::trim).map(str::to_owned))
+            s.lines().find_map(|l| {
+                l.strip_prefix("model name")
+                    .and_then(|v| v.strip_prefix(':'))
+                    .map(str::trim)
+                    .map(str::to_owned)
+            })
         })
         .unwrap_or_else(|| "unknown".into());
 
@@ -55,7 +64,10 @@ fn main() {
     println!("warmups={WARMUPS}");
     println!("profile=release");
     println!("cpu={cpu}");
-    println!("rustc={}", std::env::var("NEXUSQ_RUSTC_VERSION").unwrap_or_else(|_| "unknown".into()));
+    println!(
+        "rustc={}",
+        std::env::var("NEXUSQ_RUSTC_VERSION").unwrap_or_else(|_| "unknown".into())
+    );
     println!("encaps_mean_ns={enc_mean}");
     println!("encaps_p50_ns={enc_p50}");
     println!("encaps_p95_ns={enc_p95}");

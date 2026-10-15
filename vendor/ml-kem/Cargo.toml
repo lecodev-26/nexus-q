@@ -66,6 +66,8 @@ zeroize = [
     "module-lattice/zeroize",
     "dep:zeroize",
 ]
+nexusq-kernels = ["dep:nexusq-kernels"]
+experimental-kernels = ["nexusq-kernels/experimental-avx2"]
 
 [lib]
 name = "ml_kem"
@@ -100,6 +102,11 @@ default-features = false
 
 [dependencies.kem]
 version = "0.3"
+
+[dependencies.nexusq-kernels]
+version = "2.0.0"
+path = "../../crates/nexusq-kernels"
+optional = true
 
 [dependencies.module-lattice]
 version = "0.2.3"

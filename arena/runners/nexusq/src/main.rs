@@ -1,25 +1,156 @@
+use ml_dsa::{
+    Generate as _, KeyInit as _, Keypair as _, MlDsa65, SignatureEncoding as _, Signer as _,
+    Verifier as _,
+};
 use ml_kem::kem::{Decapsulate, Encapsulate, Kem};
-use ml_kem::{DecapsulationKey1024, EncapsulationKey1024, KeyExport, MlKem1024};
-use nexusq_core::crypto::{kem::ml_kem_768, pq_sign};
+use ml_kem::{
+    DecapsulationKey768, DecapsulationKey1024, EncapsulationKey768, EncapsulationKey1024,
+    KeyExport, MlKem768, MlKem1024,
+};
+use nexusq_core::crypto::pq_sign;
 use std::env;
 use std::hint::black_box;
+use std::sync::Mutex;
+
+mod cycles {
+    //! Raw hardware-counter instrumentation; ticks are not assumed to be nanoseconds.
+    #[inline]
+    pub fn read() -> Option<u64> {
+        #[cfg(target_arch = "x86_64")]
+        {
+            let low: u32;
+            let high: u32;
+            // SAFETY: LFENCE orders RDTSC after prior instructions; outputs are explicit
+            // and the instruction does not access memory.
+            unsafe {
+                core::arch::asm!(
+                    "lfence", "rdtsc", "lfence",
+                    out("eax") low, out("edx") high,
+                    options(nostack, preserves_flags)
+                );
+            }
+            return Some(((high as u64) << 32) | low as u64);
+        }
+        #[cfg(target_arch = "aarch64")]
+        {
+            let counter: u64;
+            // SAFETY: ISB orders the architectural counter read; MRS writes one register.
+            unsafe {
+                core::arch::asm!(
+                    "isb", "mrs {counter}, cntvct_el0",
+                    counter = out(reg) counter,
+                    options(nostack, preserves_flags)
+                );
+            }
+            return Some(counter);
+        }
+        #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+        {
+            None
+        }
+    }
+
+    pub const fn source() -> &'static str {
+        #[cfg(target_arch = "x86_64")]
+        {
+            return "x86_64_tsc_ticks";
+        }
+        #[cfg(target_arch = "aarch64")]
+        {
+            return "aarch64_cntvct_ticks";
+        }
+        #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+        {
+            "unavailable"
+        }
+    }
+}
+
+static CYCLE_SAMPLES: Mutex<Vec<u64>> = Mutex::new(Vec::new());
+
+#[inline]
+fn cycle_delta(start: Option<u64>) -> Option<u64> {
+    start
+        .zip(cycles::read())
+        .map(|(start, end)| end.wrapping_sub(start))
+}
+
+#[inline]
+fn record_cycles(sample: Option<u64>) {
+    if let Some(sample) = sample {
+        if let Ok(mut samples) = CYCLE_SAMPLES.lock() {
+            samples.push(sample);
+        }
+    }
+}
+
+fn take_cycle_samples() -> Vec<u64> {
+    CYCLE_SAMPLES
+        .lock()
+        .map(|mut samples| std::mem::take(&mut *samples))
+        .unwrap_or_default()
+}
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-const ITERATIONS: usize = 50;
-const WARMUPS: usize = 10;
+const DEFAULT_ITERATIONS: usize = 1_000;
+const DEFAULT_WARMUPS: usize = 100;
+
+fn configured_count(name: &str, default: usize, minimum: usize) -> usize {
+    match env::var(name) {
+        Ok(value) => {
+            let parsed = value.parse::<usize>().unwrap_or_else(|_| {
+                eprintln!("{name} must be a positive integer; got {value:?}");
+                std::process::exit(2);
+            });
+            if parsed < minimum {
+                eprintln!("{name} must be at least {minimum}; got {parsed}");
+                std::process::exit(2);
+            }
+            parsed
+        }
+        Err(_) => default,
+    }
+}
+
+fn iterations() -> usize {
+    configured_count("NEXUSQ_ITERATIONS", DEFAULT_ITERATIONS, 1)
+}
+
+fn warmups() -> usize {
+    configured_count("NEXUSQ_WARMUPS", DEFAULT_WARMUPS, 0)
+}
 const ML_DSA_SIGN_SEEDS: usize = 64;
-const ML_DSA_SIGN_SAMPLES_PER_SEED: usize = 5;
+const DEFAULT_ML_DSA_SIGN_SAMPLES_PER_SEED: usize = 16;
+
+fn ml_dsa_sign_samples_per_seed() -> usize {
+    configured_count(
+        "NEXUSQ_SIGN_SAMPLES_PER_SEED",
+        DEFAULT_ML_DSA_SIGN_SAMPLES_PER_SEED,
+        1,
+    )
+}
 const MESSAGE: &[u8] = b"nexusq-pqc-arena-v1";
 const ML_KEM_768_SECRET_KEY_LEN: usize = 2400;
 const ML_KEM_1024_SECRET_KEY_LEN: usize = 3168;
 const ML_DSA_65_SECRET_KEY_LEN: usize = 4032;
 
-fn percentile(sorted: &[u128], percentile: f64) -> u128 {
+fn median(sorted: &[u128]) -> u128 {
+    let middle = sorted.len() / 2;
+    if sorted.len() % 2 == 0 {
+        let lower = sorted[middle - 1];
+        let upper = sorted[middle];
+        lower + (upper - lower) / 2
+    } else {
+        sorted[middle]
+    }
+}
+
+fn nearest_rank_percentile(sorted: &[u128], percentile: f64) -> u128 {
     if sorted.is_empty() {
         return 0;
     }
-    let index = ((sorted.len() - 1) as f64 * percentile).ceil() as usize;
-    sorted[index.min(sorted.len() - 1)]
+    let rank = ((sorted.len() as f64) * percentile).ceil() as usize;
+    sorted[rank.saturating_sub(1).min(sorted.len() - 1)]
 }
 
 fn summary(samples: &[u128]) -> serde_json::Value {
@@ -37,8 +168,8 @@ fn summary(samples: &[u128]) -> serde_json::Value {
     serde_json::json!({
         "sample_count": samples.len(),
         "min_ns": sorted.first().copied().unwrap_or_default(),
-        "median_ns": percentile(&sorted, 0.50),
-        "p95_ns": percentile(&sorted, 0.95),
+        "median_ns": median(&sorted),
+        "p95_ns": nearest_rank_percentile(&sorted, 0.95),
         "stddev_ns": variance.sqrt(),
     })
 }
@@ -55,6 +186,7 @@ fn emit_operation_samples(
         "benchmark sample set must not be empty"
     );
     let stats = summary(samples);
+    let cycle_samples = take_cycle_samples();
     let latency_ns = stats["median_ns"].as_u64().unwrap_or(1) as f64;
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -76,14 +208,25 @@ fn emit_operation_samples(
             "cpu_frequency_khz":env::var("NEXUSQ_CPU_FREQUENCY_KHZ").ok().and_then(|x| x.parse::<u64>().ok()),
             "cpu_governor":env::var("NEXUSQ_CPU_GOVERNOR").unwrap_or_else(|_| "unknown".into()),
             "run_order":env::var("NEXUSQ_RUN_ORDER").unwrap_or_else(|_| "unknown".into()),
-            "optimization":env::var("NEXUSQ_OPT").unwrap_or_else(|_| "unknown".into()), "harness_version":"arena-v2-distribution"
+            "optimization":env::var("NEXUSQ_OPT").unwrap_or_else(|_| "unknown".into()), "harness_version":"arena-v4-cycle-counter"
         },
         "measurement": {
-            "iterations":samples.len(), "warmups":WARMUPS,
+            "iterations":samples.len(), "warmups":warmups(),
             "measurement_timestamp_unix_ns":timestamp, "latency_ns":latency_ns,
             "throughput_ops_s":1_000_000_000.0/latency_ns, "memory_bytes":null,
-            "measurement_method":"per-operation std::time::Instant; median latency",
-            "samples_ns":samples, "statistics":stats
+            "measurement_method":if algorithm == "ml-kem" {
+                "per-operation std::time::Instant; direct RustCrypto ml-kem API; median latency"
+            } else {
+                "per-operation std::time::Instant; direct RustCrypto ml-dsa API; median latency"
+            },
+            "comparison_contract":"fips_operation_v1",
+            "measurement_scope":if algorithm == "ml-kem" {
+                "rustcrypto_ml_kem_operation"
+            } else {
+                "rustcrypto_ml_dsa_operation"
+            },
+            "samples_ns":samples, "statistics":stats,
+            "cycle_counter_source":cycles::source(), "samples_cycles":cycle_samples
         },
         "sizes":sizes
     });
@@ -92,6 +235,7 @@ fn emit_operation_samples(
 
 fn emit_cached_verify_samples(samples: &[u128], public_key_len: usize, signature_len: usize) {
     let stats = summary(samples);
+    let cycle_samples = take_cycle_samples();
     let latency_ns = stats["median_ns"].as_u64().unwrap_or(1) as f64;
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -113,14 +257,17 @@ fn emit_cached_verify_samples(samples: &[u128], public_key_len: usize, signature
             "cpu_frequency_khz":env::var("NEXUSQ_CPU_FREQUENCY_KHZ").ok().and_then(|x| x.parse::<u64>().ok()),
             "cpu_governor":env::var("NEXUSQ_CPU_GOVERNOR").unwrap_or_else(|_| "unknown".into()),
             "run_order":env::var("NEXUSQ_RUN_ORDER").unwrap_or_else(|_| "unknown".into()),
-            "optimization":env::var("NEXUSQ_OPT").unwrap_or_else(|_| "unknown".into()), "harness_version":"arena-v2-distribution"
+            "optimization":env::var("NEXUSQ_OPT").unwrap_or_else(|_| "unknown".into()), "harness_version":"arena-v4-cycle-counter"
         },
         "measurement": {
-            "iterations":samples.len(), "warmups":WARMUPS,
+            "iterations":samples.len(), "warmups":warmups(),
             "measurement_timestamp_unix_ns":timestamp, "latency_ns":latency_ns,
             "throughput_ops_s":1_000_000_000.0/latency_ns, "memory_bytes":null,
             "measurement_method":"per-operation std::time::Instant; cached MlDsa65VerifyingKey",
-            "samples_ns":samples, "statistics":stats
+            "comparison_contract":"cached_verification_diagnostic_v1",
+            "measurement_scope":"cached_ml_dsa_verifier_operation",
+            "samples_ns":samples, "statistics":stats,
+            "cycle_counter_source":cycles::source(), "samples_cycles":cycle_samples
         },
         "sizes":{"public_key_bytes":public_key_len,"secret_key_bytes":ML_DSA_65_SECRET_KEY_LEN,"ciphertext_bytes":null,"signature_bytes":signature_len}
     });
@@ -128,22 +275,34 @@ fn emit_cached_verify_samples(samples: &[u128], public_key_len: usize, signature
 }
 
 fn emit_ml_dsa_sign_distribution(
-    keys: &[pq_sign::MlDsa65KeyPair],
+    keys: &[ml_dsa::SigningKey<MlDsa65>],
     seed_ids: &[String],
     public_key: &[u8],
     signature_len: usize,
 ) {
     let mut per_seed = Vec::with_capacity(keys.len());
-    let mut all_samples = Vec::with_capacity(keys.len() * ML_DSA_SIGN_SAMPLES_PER_SEED);
+    let mut all_samples = Vec::with_capacity(keys.len() * ml_dsa_sign_samples_per_seed());
     for (key, seed_id) in keys.iter().zip(seed_ids) {
-        for _ in 0..WARMUPS {
-            black_box(key.sign(MESSAGE));
+        for _ in 0..warmups() {
+            black_box(
+                black_box(key)
+                    .try_sign(black_box(MESSAGE))
+                    .expect("ML-DSA signing cannot fail"),
+            );
         }
-        let mut samples = Vec::with_capacity(ML_DSA_SIGN_SAMPLES_PER_SEED);
-        for _ in 0..ML_DSA_SIGN_SAMPLES_PER_SEED {
+        let mut samples = Vec::with_capacity(ml_dsa_sign_samples_per_seed());
+        for _ in 0..ml_dsa_sign_samples_per_seed() {
+            let cycle_start = cycles::read();
             let start = Instant::now();
-            black_box(key.sign(MESSAGE));
-            samples.push(start.elapsed().as_nanos());
+            black_box(
+                black_box(key)
+                    .try_sign(black_box(MESSAGE))
+                    .expect("ML-DSA signing cannot fail"),
+            );
+            let cycle_sample = cycle_delta(cycle_start);
+            let elapsed = start.elapsed().as_nanos();
+            record_cycles(cycle_sample);
+            samples.push(elapsed);
         }
         all_samples.extend_from_slice(&samples);
         per_seed.push(serde_json::json!({
@@ -153,6 +312,7 @@ fn emit_ml_dsa_sign_distribution(
         }));
     }
     let overall = summary(&all_samples);
+    let cycle_samples = take_cycle_samples();
     let latency_ns = overall["median_ns"].as_u64().unwrap_or(1) as f64;
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -160,7 +320,7 @@ fn emit_ml_dsa_sign_distribution(
         .as_nanos();
     let obj = serde_json::json!({
         "schema_version": 1,
-        "run_id": format!("{}-ml-dsa-65-sign-distribution-{}x{}", env::var("NEXUSQ_RUN_ID").unwrap_or_else(|_| "nexusq-local".into()), keys.len(), ML_DSA_SIGN_SAMPLES_PER_SEED),
+        "run_id": format!("{}-ml-dsa-65-sign-distribution-{}x{}", env::var("NEXUSQ_RUN_ID").unwrap_or_else(|_| "nexusq-local".into()), keys.len(), ml_dsa_sign_samples_per_seed()),
         "implementation": {"id":"nexusq","version":env!("CARGO_PKG_VERSION"),"commit":option_env!("NEXUSQ_COMMIT").or_else(|| Some("unknown"))},
         "algorithm": {"id":"ml-dsa","parameter_set":"65"},
         "operation": "sign",
@@ -177,21 +337,25 @@ fn emit_ml_dsa_sign_distribution(
             "cpu_governor":env::var("NEXUSQ_CPU_GOVERNOR").unwrap_or_else(|_| "unknown".into()),
             "run_order":env::var("NEXUSQ_RUN_ORDER").unwrap_or_else(|_| "unknown".into()),
             "optimization":env::var("NEXUSQ_OPT").unwrap_or_else(|_| "unknown".into()),
-            "harness_version":"arena-v2-distribution"
+            "harness_version":"arena-v4-cycle-counter"
         },
         "measurement": {
             "iterations":all_samples.len(),
-            "warmups":WARMUPS * keys.len(),
+            "warmups":warmups() * keys.len(),
             "measurement_timestamp_unix_ns":timestamp,
             "latency_ns":latency_ns,
             "throughput_ops_s":1_000_000_000.0 / latency_ns,
             "memory_bytes":null,
-            "measurement_method":"per-sign std::time::Instant; deterministic 64-key seed corpus; fixed message",
+            "measurement_method":"per-sign std::time::Instant; direct RustCrypto ml-dsa API; deterministic 64-key seed corpus; fixed message",
+            "comparison_contract":"fips_operation_v1",
+            "measurement_scope":"rustcrypto_ml_dsa_operation",
             "samples_ns":all_samples,
             "statistics":overall,
             "seed_samples":per_seed,
+            "cycle_counter_source":cycles::source(),
+            "samples_cycles":cycle_samples,
             "seed_count":keys.len(),
-            "samples_per_seed":ML_DSA_SIGN_SAMPLES_PER_SEED
+            "samples_per_seed":ml_dsa_sign_samples_per_seed()
         },
         "sizes":{"public_key_bytes":public_key.len(),"secret_key_bytes":ML_DSA_65_SECRET_KEY_LEN,"ciphertext_bytes":null,"signature_bytes":signature_len}
     });
@@ -214,75 +378,132 @@ fn deterministic_seed(index: usize) -> [u8; 32] {
     seed
 }
 
-fn main() {
-    let p768 = ml_kem_768::generate();
-    let pk768 = ml_kem_768::public_key_bytes(&p768.1);
-    let sk768_len = ML_KEM_768_SECRET_KEY_LEN;
-    for _ in 0..WARMUPS {
-        black_box(ml_kem_768::generate());
+#[cfg(test)]
+mod statistics_tests {
+    use super::{median, nearest_rank_percentile};
+
+    #[test]
+    fn median_averages_the_middle_pair_for_even_sample_counts() {
+        assert_eq!(median(&[10, 20]), 15);
+        assert_eq!(median(&[10, 20, 30, 40]), 25);
     }
-    let mut samples = Vec::with_capacity(ITERATIONS);
-    for _ in 0..ITERATIONS {
+
+    #[test]
+    fn median_selects_the_middle_value_for_odd_sample_counts() {
+        assert_eq!(median(&[10, 20, 30]), 20);
+    }
+
+    #[test]
+    fn p95_uses_the_nearest_rank_definition_shared_with_aws_lc() {
+        let samples: Vec<u128> = (1..=1000).collect();
+        assert_eq!(nearest_rank_percentile(&samples, 0.95), 950);
+    }
+}
+
+fn main() {
+    let (sk768, pk768): (DecapsulationKey768, EncapsulationKey768) = MlKem768::generate_keypair();
+    let (check_ct768, check_ss768) = pk768.encapsulate();
+    let check_dec_ss768 = sk768.decapsulate(&check_ct768);
+    assert_eq!(
+        check_ss768.as_slice(),
+        check_dec_ss768.as_slice(),
+        "ML-KEM-768 self-check failed"
+    );
+    let pk768_bytes = pk768.to_bytes();
+    let sk768_len = ML_KEM_768_SECRET_KEY_LEN;
+    for _ in 0..warmups() {
+        black_box(MlKem768::generate_keypair());
+    }
+    let mut samples = Vec::with_capacity(iterations());
+    for _ in 0..iterations() {
+        let cycle_start = cycles::read();
         let start = Instant::now();
-        black_box(ml_kem_768::generate());
-        samples.push(start.elapsed().as_nanos());
+        black_box(MlKem768::generate_keypair());
+        let cycle_sample = cycle_delta(cycle_start);
+        let elapsed = start.elapsed().as_nanos();
+        record_cycles(cycle_sample);
+        samples.push(elapsed);
     }
     emit_operation_samples(
         "ml-kem",
         "768",
         "keygen",
         &samples,
-        serde_json::json!({"public_key_bytes":pk768.len(),"secret_key_bytes":sk768_len,"ciphertext_bytes":ml_kem_768::CIPHERTEXT_LEN,"signature_bytes":null}),
+        serde_json::json!({"public_key_bytes":pk768_bytes.len(),"secret_key_bytes":sk768_len,"ciphertext_bytes":1088,"signature_bytes":null}),
     );
-    let mut ct = Vec::new();
-    for _ in 0..WARMUPS {
-        let (c, s) = ml_kem_768::encapsulate(&p768.1);
+    for _ in 0..warmups() {
+        let (c, s) = black_box(&pk768).encapsulate();
         black_box((c, s));
     }
-    let mut samples = Vec::with_capacity(ITERATIONS);
-    for _ in 0..ITERATIONS {
+    let mut ct768_bytes = Vec::new();
+    let mut samples = Vec::with_capacity(iterations());
+    for _ in 0..iterations() {
+        let cycle_start = cycles::read();
         let start = Instant::now();
-        let (c, s) = ml_kem_768::encapsulate(&p768.1);
+        let (c, s) = black_box(&pk768).encapsulate();
         black_box(s);
-        ct = c;
-        samples.push(start.elapsed().as_nanos());
+        let cycle_sample = cycle_delta(cycle_start);
+        let elapsed = start.elapsed().as_nanos();
+        record_cycles(cycle_sample);
+        // Keep ciphertext serialization/copying outside the timed primitive call.
+        ct768_bytes = c.as_slice().to_vec();
+        samples.push(elapsed);
     }
     emit_operation_samples(
         "ml-kem",
         "768",
         "encaps",
         &samples,
-        serde_json::json!({"public_key_bytes":pk768.len(),"secret_key_bytes":sk768_len,"ciphertext_bytes":ct.len(),"signature_bytes":null}),
+        serde_json::json!({"public_key_bytes":pk768_bytes.len(),"secret_key_bytes":sk768_len,"ciphertext_bytes":ct768_bytes.len(),"signature_bytes":null}),
     );
-    for _ in 0..WARMUPS {
-        black_box(ml_kem_768::decapsulate(&p768.0, &ct).unwrap());
+    let ct768: ml_kem::ml_kem_768::Ciphertext = ct768_bytes
+        .clone()
+        .try_into()
+        .expect("ML-KEM-768 ciphertext length");
+    for _ in 0..warmups() {
+        black_box(black_box(&sk768).decapsulate(black_box(&ct768)));
     }
-    let mut samples = Vec::with_capacity(ITERATIONS);
-    for _ in 0..ITERATIONS {
+    let mut samples = Vec::with_capacity(iterations());
+    for _ in 0..iterations() {
+        let cycle_start = cycles::read();
         let start = Instant::now();
-        black_box(ml_kem_768::decapsulate(&p768.0, &ct).unwrap());
-        samples.push(start.elapsed().as_nanos());
+        black_box(black_box(&sk768).decapsulate(black_box(&ct768)));
+        let cycle_sample = cycle_delta(cycle_start);
+        let elapsed = start.elapsed().as_nanos();
+        record_cycles(cycle_sample);
+        samples.push(elapsed);
     }
     emit_operation_samples(
         "ml-kem",
         "768",
         "decaps",
         &samples,
-        serde_json::json!({"public_key_bytes":pk768.len(),"secret_key_bytes":sk768_len,"ciphertext_bytes":ct.len(),"signature_bytes":null}),
+        serde_json::json!({"public_key_bytes":pk768_bytes.len(),"secret_key_bytes":sk768_len,"ciphertext_bytes":ct768_bytes.len(),"signature_bytes":null}),
     );
 
     let (sk1024, pk1024): (DecapsulationKey1024, EncapsulationKey1024) =
         MlKem1024::generate_keypair();
+    let (check_ct1024, check_ss1024) = pk1024.encapsulate();
+    let check_dec_ss1024 = sk1024.decapsulate(&check_ct1024);
+    assert_eq!(
+        check_ss1024.as_slice(),
+        check_dec_ss1024.as_slice(),
+        "ML-KEM-1024 self-check failed"
+    );
     let pk1024_bytes = pk1024.to_bytes();
     let sk1024_bytes = ML_KEM_1024_SECRET_KEY_LEN;
-    for _ in 0..WARMUPS {
+    for _ in 0..warmups() {
         black_box(MlKem1024::generate_keypair());
     }
-    let mut samples = Vec::with_capacity(ITERATIONS);
-    for _ in 0..ITERATIONS {
+    let mut samples = Vec::with_capacity(iterations());
+    for _ in 0..iterations() {
+        let cycle_start = cycles::read();
         let start = Instant::now();
         black_box(MlKem1024::generate_keypair());
-        samples.push(start.elapsed().as_nanos());
+        let cycle_sample = cycle_delta(cycle_start);
+        let elapsed = start.elapsed().as_nanos();
+        record_cycles(cycle_sample);
+        samples.push(elapsed);
     }
     emit_operation_samples(
         "ml-kem",
@@ -292,17 +513,22 @@ fn main() {
         serde_json::json!({"public_key_bytes":pk1024_bytes.len(),"secret_key_bytes":sk1024_bytes,"ciphertext_bytes":1568,"signature_bytes":null}),
     );
     let mut ct2 = Vec::new();
-    for _ in 0..WARMUPS {
-        let (c, s) = pk1024.encapsulate();
+    for _ in 0..warmups() {
+        let (c, s) = black_box(&pk1024).encapsulate();
         black_box((c, s));
     }
-    let mut samples = Vec::with_capacity(ITERATIONS);
-    for _ in 0..ITERATIONS {
+    let mut samples = Vec::with_capacity(iterations());
+    for _ in 0..iterations() {
+        let cycle_start = cycles::read();
         let start = Instant::now();
-        let (c, s) = pk1024.encapsulate();
+        let (c, s) = black_box(&pk1024).encapsulate();
         black_box(s);
+        let cycle_sample = cycle_delta(cycle_start);
+        let elapsed = start.elapsed().as_nanos();
+        record_cycles(cycle_sample);
+        // Keep serialization/copying the ciphertext outside the timed primitive call.
         ct2 = c.as_slice().to_vec();
-        samples.push(start.elapsed().as_nanos());
+        samples.push(elapsed);
     }
     emit_operation_samples(
         "ml-kem",
@@ -315,14 +541,18 @@ fn main() {
         .clone()
         .try_into()
         .expect("ML-KEM-1024 ciphertext length");
-    for _ in 0..WARMUPS {
-        black_box(sk1024.decapsulate(&ct1024));
+    for _ in 0..warmups() {
+        black_box(black_box(&sk1024).decapsulate(black_box(&ct1024)));
     }
-    let mut samples = Vec::with_capacity(ITERATIONS);
-    for _ in 0..ITERATIONS {
+    let mut samples = Vec::with_capacity(iterations());
+    for _ in 0..iterations() {
+        let cycle_start = cycles::read();
         let start = Instant::now();
-        black_box(sk1024.decapsulate(&ct1024));
-        samples.push(start.elapsed().as_nanos());
+        black_box(black_box(&sk1024).decapsulate(black_box(&ct1024)));
+        let cycle_sample = cycle_delta(cycle_start);
+        let elapsed = start.elapsed().as_nanos();
+        record_cycles(cycle_sample);
+        samples.push(elapsed);
     }
     emit_operation_samples(
         "ml-kem",
@@ -332,17 +562,26 @@ fn main() {
         serde_json::json!({"public_key_bytes":pk1024_bytes.len(),"secret_key_bytes":sk1024_bytes,"ciphertext_bytes":ct2.len(),"signature_bytes":null}),
     );
 
-    let dsa = pq_sign::MlDsa65KeyPair::generate();
-    let pk = dsa.public_key();
-    let sig = dsa.sign(MESSAGE);
-    for _ in 0..WARMUPS {
-        black_box(pq_sign::MlDsa65KeyPair::generate());
+    let dsa = ml_dsa::SigningKey::<MlDsa65>::generate();
+    let pk = dsa.verifying_key().to_bytes().as_slice().to_vec();
+    let sig = dsa
+        .try_sign(MESSAGE)
+        .expect("ML-DSA signing cannot fail")
+        .to_bytes()
+        .as_slice()
+        .to_vec();
+    for _ in 0..warmups() {
+        black_box(ml_dsa::SigningKey::<MlDsa65>::generate());
     }
-    let mut samples = Vec::with_capacity(ITERATIONS);
-    for _ in 0..ITERATIONS {
+    let mut samples = Vec::with_capacity(iterations());
+    for _ in 0..iterations() {
+        let cycle_start = cycles::read();
         let start = Instant::now();
-        black_box(pq_sign::MlDsa65KeyPair::generate());
-        samples.push(start.elapsed().as_nanos());
+        black_box(ml_dsa::SigningKey::<MlDsa65>::generate());
+        let cycle_sample = cycle_delta(cycle_start);
+        let elapsed = start.elapsed().as_nanos();
+        record_cycles(cycle_sample);
+        samples.push(elapsed);
     }
     emit_operation_samples(
         "ml-dsa",
@@ -355,9 +594,7 @@ fn main() {
     let mut seed_ids = Vec::with_capacity(ML_DSA_SIGN_SEEDS);
     for index in 0..ML_DSA_SIGN_SEEDS {
         let seed = deterministic_seed(index);
-        sign_keys.push(
-            pq_sign::MlDsa65KeyPair::from_secret_key(&seed).expect("fixed benchmark seed is valid"),
-        );
+        sign_keys.push(ml_dsa::SigningKey::<MlDsa65>::new(&seed.into()));
         seed_ids.push(format!("seed-{index:03}"));
     }
     emit_ml_dsa_sign_distribution(&sign_keys, &seed_ids, &pk, sig.len());
@@ -365,27 +602,42 @@ fn main() {
     {
         let cached_verifier = pq_sign::MlDsa65VerifyingKey::from_public_key(&pk)
             .expect("generated public key is valid");
-        for _ in 0..WARMUPS {
-            black_box(cached_verifier.verify(MESSAGE, &sig)).unwrap();
+        for _ in 0..warmups() {
+            black_box(black_box(&cached_verifier).verify(black_box(MESSAGE), black_box(&sig)))
+                .unwrap();
         }
-        let mut cached_verify_samples = Vec::with_capacity(ITERATIONS);
-        for _ in 0..ITERATIONS {
+        let mut cached_verify_samples = Vec::with_capacity(iterations());
+        for _ in 0..iterations() {
+            let cycle_start = cycles::read();
             let start = Instant::now();
-            black_box(cached_verifier.verify(MESSAGE, &sig)).unwrap();
-            cached_verify_samples.push(start.elapsed().as_nanos());
+            black_box(black_box(&cached_verifier).verify(black_box(MESSAGE), black_box(&sig)))
+                .unwrap();
+            let cycle_sample = cycle_delta(cycle_start);
+            let elapsed = start.elapsed().as_nanos();
+            record_cycles(cycle_sample);
+            cached_verify_samples.push(elapsed);
         }
         emit_cached_verify_samples(&cached_verify_samples, pk.len(), sig.len());
     }
-    for _ in 0..WARMUPS {
-        pq_sign::ml_dsa_65_verify(&pk, MESSAGE, &sig).unwrap();
+    let encoded = ml_dsa::EncodedVerifyingKey::<MlDsa65>::try_from(pk.as_slice())
+        .expect("generated public key encoding is valid");
+    let verifier = ml_dsa::VerifyingKey::<MlDsa65>::decode(&encoded);
+    let signature = ml_dsa::Signature::<MlDsa65>::try_from(sig.as_slice())
+        .expect("generated signature encoding is valid");
+    for _ in 0..warmups() {
+        black_box(black_box(&verifier).verify(black_box(MESSAGE), black_box(&signature))).unwrap();
         black_box(());
     }
-    let mut samples = Vec::with_capacity(ITERATIONS);
-    for _ in 0..ITERATIONS {
+    let mut samples = Vec::with_capacity(iterations());
+    for _ in 0..iterations() {
+        let cycle_start = cycles::read();
         let start = Instant::now();
-        pq_sign::ml_dsa_65_verify(&pk, MESSAGE, &sig).unwrap();
+        black_box(black_box(&verifier).verify(black_box(MESSAGE), black_box(&signature))).unwrap();
         black_box(());
-        samples.push(start.elapsed().as_nanos());
+        let cycle_sample = cycle_delta(cycle_start);
+        let elapsed = start.elapsed().as_nanos();
+        record_cycles(cycle_sample);
+        samples.push(elapsed);
     }
     emit_operation_samples(
         "ml-dsa",
