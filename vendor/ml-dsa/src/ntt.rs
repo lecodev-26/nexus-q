@@ -97,7 +97,6 @@ impl Ntt for Polynomial {
         }
     }
 }
-}
 
 impl<K: ArraySize> Ntt for Vector<K> {
     type Output = NttVector<K>;
@@ -166,7 +165,6 @@ impl NttInverse for NttPolynomial {
             INVERSE_256 * &Polynomial::new(w.into())
         }
     }
-}
 }
 
 impl<K: ArraySize> NttInverse for NttVector<K> {
