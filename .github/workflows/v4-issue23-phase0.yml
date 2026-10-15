@@ -17,9 +17,9 @@ jobs:
   dependency-provenance:
     if: >-
       (github.event_name == 'workflow_dispatch' &&
-       (github.ref == 'refs/heads/nexusqv4' || github.ref == 'refs/heads/v4/issue-23-kernel-work')) ||
+       (github.ref == 'refs/heads/nexusqv4' || github.ref == 'refs/heads/v4/issue-23-kernel-work' || github.ref == 'refs/heads/v4/wire-kernels-production-path')) ||
       (github.event_name == 'pull_request' &&
-       github.base_ref == 'nexusqv4' && github.head_ref == 'v4/issue-23-kernel-work')
+       github.base_ref == 'nexusqv4' && (github.head_ref == 'v4/issue-23-kernel-work' || github.head_ref == 'v4/wire-kernels-production-path'))
     name: V4 Phase 0 / dependency provenance
     runs-on: ubuntu-latest
     timeout-minutes: 10
