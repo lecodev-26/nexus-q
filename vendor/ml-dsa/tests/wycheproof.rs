@@ -4,6 +4,7 @@
 
 use ml_dsa::{MlDsa44, MlDsa65, MlDsa87, Seed, Signature, SigningKey, VerifyingKey};
 use serde::Deserialize;
+use signature::rand_core::{CryptoRng, RngCore};
 use signature::{SignatureEncoding, Signer, Verifier};
 use std::fs::File;
 
@@ -45,6 +46,41 @@ where
         .map(Option::unwrap_or_default)
 }
 
+/// Deterministic RNG adapter for Wycheproof vectors carrying an explicit `rnd` value.
+struct VectorRng {
+    bytes: [u8; 32],
+    offset: usize,
+}
+
+impl RngCore for VectorRng {
+    fn next_u32(&mut self) -> u32 {
+        let mut bytes = [0; 4];
+        self.fill_bytes(&mut bytes);
+        u32::from_le_bytes(bytes)
+    }
+
+    fn next_u64(&mut self) -> u64 {
+        let mut bytes = [0; 8];
+        self.fill_bytes(&mut bytes);
+        u64::from_le_bytes(bytes)
+    }
+
+    fn fill_bytes(&mut self, dest: &mut [u8]) {
+        let end = self
+            .offset
+            .checked_add(dest.len())
+            .expect("RNG offset overflow");
+        assert!(
+            end <= self.bytes.len(),
+            "Wycheproof vector requested more than 32 random bytes"
+        );
+        dest.copy_from_slice(&self.bytes[self.offset..end]);
+        self.offset = end;
+    }
+}
+
+impl CryptoRng for VectorRng {}
+
 #[derive(Deserialize, Debug)]
 struct Test {
     #[serde(rename(deserialize = "tcId"))]
@@ -54,6 +90,8 @@ struct Test {
     msg: Vec<u8>,
     #[serde(default)]
     mu: Option<String>,
+    #[serde(default)]
+    rnd: Option<String>,
     #[serde(default, with = "hex::serde")]
     ctx: Vec<u8>,
     #[serde(with = "hex::serde")]
@@ -108,7 +146,19 @@ macro_rules! mldsa_sign_seed_test {
                     if let Some(mu) = &test.mu {
                         let mu = hex::decode(mu).expect("valid hexadecimal mu");
                         let mu = mu.as_slice().try_into().expect("ML-DSA mu is 64 bytes");
-                        let sig = sk.expanded_key().sign_mu_deterministic(&mu);
+                        let sig = if let Some(rnd) = &test.rnd {
+                            let rnd = hex::decode(rnd).expect("valid hexadecimal rnd");
+                            let rnd: [u8; 32] = rnd.try_into().expect("ML-DSA rnd is 32 bytes");
+                            let mut rng = VectorRng {
+                                bytes: rnd,
+                                offset: 0,
+                            };
+                            sk.expanded_key()
+                                .sign_mu_randomized(&mu, &mut rng)
+                                .expect("fixed vector RNG cannot fail")
+                        } else {
+                            sk.expanded_key().sign_mu_deterministic(&mu)
+                        };
                         assert_eq!(&*sig.to_bytes(), test.sig.as_slice());
                     } else if test.ctx.is_empty() {
                         let sig = sk.sign(&test.msg);
