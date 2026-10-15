@@ -291,7 +291,7 @@ jobs:
         run: cargo test --locked --manifest-path arena/runners/nexusq/Cargo.toml --bin nexusq-arena-runner
 
       - name: Differential tests for experimental ML-KEM matrix sampling
-        run: cargo test --locked --manifest-path vendor/ml-kem/Cargo.toml --features experimental-kernels
+        run: cargo test --manifest-path vendor/ml-kem/Cargo.toml --features experimental-kernels
 
       - name: Differential tests for experimental ML-DSA matrix sampling
         run: cargo test --manifest-path vendor/ml-dsa/Cargo.toml --features experimental-kernels
