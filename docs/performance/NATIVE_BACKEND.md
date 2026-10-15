@@ -37,7 +37,9 @@ arena/runners/nexusq-native     Arena runner: same JSON schema and statistics as
 | D5 | Build-time ABI guards | Rust FFI declarations must match the C prototypes exactly. A mismatch is now a compile error instead of memory corruption. | `csrc/nq_*_all.c`, `-Werror=incompatible-pointer-types` |
 | D6 | Benchmark contract `fips_operation_v1` from encoded keys | encaps and verify start from public-key bytes (FIPS 203 modulus check and `H(ek)`, FIPS 204 expansion of A and t1 on every call). decaps and sign start from secret-key bytes. This matches the AWS-LC adapter and removes the cached-verifier asymmetry of the current gate. | `arena/runners/nexusq-native/src/main.rs` |
 | D7 | ML-DSA sign uses one key per round, hedged signing, empty context (AWS-LC adapter protocol) | Same work as the comparator. **This differs from `arena/runners/nexusq` (64 seeds × 16, deterministic) and needs reviewer sign-off.** | runner source |
-| D8 | Official verdict = unmodified `evaluate_native_assembly_gate.py`, 3 rounds, 1.5x on both median and p95 | The threshold and the protocol are not relaxed. Nine additional rounds, bootstrap CIs and steal-time capture are informational only; they show how robust the verdict is. | workflow `benchmark-gate` (4 independent replicas) |
+| D8 | Official verdict = unmodified `evaluate_native_assembly_gate.py`, 3 rounds, 1.5x on both median and p95 | The threshold and the protocol are not relaxed. Nine additional rounds, bootstrap CIs and steal-time capture are informational only; they show how robust the verdict is. | workflow `benchmark-gate` (6 independent replicas) |
+| D9 | **Rejected:** s2n-bignum `sha3_keccak4_f1600_alt` for the 4-way permutation (the routine AWS-LC uses) | The perf profile on EPYC 7763 suggested it, but the measurements did not support it. In-process A/B: about 1 % slower on Zen 3, neutral on Zen 4/5. Upstream's x4 routine is kept. | commit `9e56d1b`, reverted in `ff8ac01`; runs [38798035934](https://github.com/lecodev-26/nexus-q/actions/runs/38798035934), [38798036136](https://github.com/lecodev-26/nexus-q/actions/runs/38798036136) |
+| D10 | A/A control of the gate protocol (`native-backend-aa-control.yml`) | It measures how often hosted-runner noise alone breaks the p95 limit. Evaluator, threshold and protocol are unchanged. | see "Gate reliability" below |
 
 ## Security evidence (blocking)
 
@@ -56,13 +58,95 @@ arena/runners/nexusq-native     Arena runner: same JSON schema and statistics as
 
 mlkem-native and mldsa-native are Apache-2.0 OR ISC OR MIT. The s2n-bignum repository is Apache-2.0 OR ISC OR MIT-0, but `sha3_keccak_f1600.S` carries `SPDX-License-Identifier: Apache-2.0` because it derives from OpenSSL. Binaries that include this backend therefore contain Apache-2.0-only code and must ship `vendor/s2n-bignum/LICENSE` and `NOTICE`. The `upstream-c-keccak` feature removes that file from the build.
 
-## Measurements
+## Measurements on GitHub-hosted runners
 
-CI results for each commit are recorded in the PR (job summaries and artifacts `native-backend-gate-<sha>-replica-<n>`). Local measurements (Intel Xeon KVM VM, 2 vCPU) are not a substitute for the GitHub-hosted runners and are not used as gate evidence.
+All numbers are NEXUS-Q / AWS-LC ratios from the **unmodified official evaluator**, three alternating rounds, 1000 samples per round. They are extracted from the job logs. Local measurements (Intel Xeon KVM VM, 2 vCPU) are not used as gate evidence.
+
+### Official verdict per replica
+
+| Run | Commit | Replica | CPU | Verdict | Failing ops (median / p95) |
+|---|---|---|---|---|---|
+| [38795522829](https://github.com/lecodev-26/nexus-q/actions/runs/38795522829) | b84726d | 1 | AMD EPYC 7763 | PASS | - |
+| [38795522829](https://github.com/lecodev-26/nexus-q/actions/runs/38795522829) | b84726d | 3 | AMD EPYC 9V74 | PASS | - |
+| [38795522829](https://github.com/lecodev-26/nexus-q/actions/runs/38795522829) | b84726d | 4 | AMD EPYC 7763 | PASS | - |
+| [38795522829](https://github.com/lecodev-26/nexus-q/actions/runs/38795522829) | b84726d | 2 | AMD EPYC 7763 | PASS | - |
+| [38796903676](https://github.com/lecodev-26/nexus-q/actions/runs/38796903676) | 9054d10 | 5 | AMD EPYC 9V45 | PASS | - |
+| [38796903676](https://github.com/lecodev-26/nexus-q/actions/runs/38796903676) | 9054d10 | 2 | AMD EPYC 7763 | PASS | - |
+| [38796903676](https://github.com/lecodev-26/nexus-q/actions/runs/38796903676) | 9054d10 | 6 | AMD EPYC 9V74 | PASS | - |
+| [38796903676](https://github.com/lecodev-26/nexus-q/actions/runs/38796903676) | 9054d10 | 1 | AMD EPYC 7763 | PASS | - |
+| [38796903676](https://github.com/lecodev-26/nexus-q/actions/runs/38796903676) | 9054d10 | 3 | AMD EPYC 7763 | PASS | - |
+| [38796903676](https://github.com/lecodev-26/nexus-q/actions/runs/38796903676) | 9054d10 | 4 | AMD EPYC 7763 | FAIL | ml-kem-1024 decaps 1.102 / 1.639; ml-kem-1024 encaps 1.145 / 1.596 |
+| [38798036136](https://github.com/lecodev-26/nexus-q/actions/runs/38798036136) | 9e56d1b (s2n x4, reverted) | 2 | AMD EPYC 7763 | PASS | - |
+| [38798036136](https://github.com/lecodev-26/nexus-q/actions/runs/38798036136) | 9e56d1b (s2n x4, reverted) | 1 | AMD EPYC 7763 | PASS | - |
+| [38798036136](https://github.com/lecodev-26/nexus-q/actions/runs/38798036136) | 9e56d1b (s2n x4, reverted) | 6 | AMD EPYC 7763 | PASS | - |
+| [38798036136](https://github.com/lecodev-26/nexus-q/actions/runs/38798036136) | 9e56d1b (s2n x4, reverted) | 5 | AMD EPYC 9V74 | PASS | - |
+| [38798036136](https://github.com/lecodev-26/nexus-q/actions/runs/38798036136) | 9e56d1b (s2n x4, reverted) | 4 | INTEL(R) XEON(R) PLATINUM 8573C | PASS | - |
+| [38798036136](https://github.com/lecodev-26/nexus-q/actions/runs/38798036136) | 9e56d1b (s2n x4, reverted) | 3 | AMD EPYC 7763 | FAIL | ml-kem-768 decaps 1.086 / 1.516 |
+| [38798844655](https://github.com/lecodev-26/nexus-q/actions/runs/38798844655) | cd42080 | 2 | AMD EPYC 7763 | PASS | - |
+| [38798844655](https://github.com/lecodev-26/nexus-q/actions/runs/38798844655) | cd42080 | 6 | AMD EPYC 7763 | PASS | - |
+| [38798844655](https://github.com/lecodev-26/nexus-q/actions/runs/38798844655) | cd42080 | 3 | AMD EPYC 9V74 | PASS | - |
+| [38798844655](https://github.com/lecodev-26/nexus-q/actions/runs/38798844655) | cd42080 | 5 | AMD EPYC 9V74 | PASS | - |
+| [38798844655](https://github.com/lecodev-26/nexus-q/actions/runs/38798844655) | cd42080 | 4 | AMD EPYC 7763 | PASS | - |
+| [38798844655](https://github.com/lecodev-26/nexus-q/actions/runs/38798844655) | cd42080 | 1 | AMD EPYC 7763 | FAIL | ml-kem-1024 encaps 1.109 / 1.594 |
+
+**Status: not green.** 19 of 22 replicas pass and 3 fail. Every failure is a p95 tail on ML-KEM on AMD EPYC 7763, with medians of 1.09–1.15. A single slow episode inflates one round. For example, in run 38796903676 replica 4, ML-KEM-1024 decaps p95 is 37.5 µs against a 24.6 µs median, and the extended statistics show it in one round of 12.
+
+### Ranges per CPU (official 3-round windows, excluding the reverted commit)
+EPYC 7763 (Zen 3): 11 replicas (excluding the reverted commit)
+
+| Operation | median ratio min-max | p95 ratio min / median / max | replicas with p95 > 1.5 |
+|---|---|---|---|
+| ml-kem-768 keygen | 1.127-1.138 | 0.993 / 1.135 / 1.163 | 0/11 |
+| ml-kem-768 encaps | 1.114-1.123 | 0.724 / 1.115 / 1.187 | 0/11 |
+| ml-kem-768 decaps | 1.077-1.134 | 0.837 / 1.078 / 1.138 | 0/11 |
+| ml-kem-1024 keygen | 1.126-1.224 | 1.124 / 1.133 / 1.221 | 0/11 |
+| ml-kem-1024 encaps | 1.109-1.207 | 0.809 / 1.115 / 1.596 | 2/11 |
+| ml-kem-1024 decaps | 1.075-1.154 | 0.763 / 1.090 / 1.639 | 1/11 |
+| ml-dsa-65 keygen | 1.000-1.007 | 0.998 / 1.011 / 1.208 | 0/11 |
+| ml-dsa-65 sign | 0.894-0.970 | 0.834 / 0.875 / 0.936 | 0/11 |
+| ml-dsa-65 verify | 1.073-1.077 | 1.041 / 1.186 / 1.194 | 0/11 |
+
+EPYC 9V74/9V45 (Zen 4/5): 5 replicas (excluding the reverted commit)
+
+| Operation | median ratio min-max | p95 ratio min / median / max | replicas with p95 > 1.5 |
+|---|---|---|---|
+| ml-kem-768 keygen | 1.041-1.106 | 0.924 / 1.048 / 1.101 | 0/5 |
+| ml-kem-768 encaps | 1.022-1.088 | 1.014 / 1.026 / 1.104 | 0/5 |
+| ml-kem-768 decaps | 0.997-1.045 | 0.999 / 1.003 / 1.057 | 0/5 |
+| ml-kem-1024 keygen | 1.028-1.064 | 0.997 / 1.035 / 1.060 | 0/5 |
+| ml-kem-1024 encaps | 1.002-1.067 | 1.004 / 1.036 / 1.067 | 0/5 |
+| ml-kem-1024 decaps | 0.999-1.040 | 0.978 / 1.014 / 1.035 | 0/5 |
+| ml-dsa-65 keygen | 0.891-0.921 | 0.768 / 0.865 / 0.899 | 0/5 |
+| ml-dsa-65 sign | 0.833-0.906 | 0.811 / 0.861 / 0.935 | 0/5 |
+| ml-dsa-65 verify | 0.975-0.994 | 0.697 / 0.872 / 1.136 | 0/5 |
+
+
+ML-KEM-768 decaps, which the review singled out: on Zen 3, p95 ranges from 0.837 to 1.138 in the 11 replicas above. The 1.516 failure happened in run 38798036136 on the reverted commit, again as a single-round tail with an unchanged median.
+
+### Gate reliability: A/A control
+
+AWS-LC is benchmarked against itself with the exact gate protocol and judged by the unmodified evaluator:
+
+| Run | Official windows (rounds 1-3) failing | All 3-round windows failing | Worst false p95 ratio |
+|---|---|---|---|
+| [38798130380](https://github.com/lecodev-26/nexus-q/actions/runs/38798130380) | 2 / 10 | 4 / 40 | 2.350 (Xeon 8370C, ML-KEM-768 keygen) |
+| [38798857918](https://github.com/lecodev-26/nexus-q/actions/runs/38798857918) | 0 / 10 | 2 / 40 | 1.585 (EPYC 9V74, ML-DSA-65 keygen) |
+| **Total** | **2 / 20 (10 %)** | **6 / 80 (7.5 %)** | |
+
+Identical code therefore fails the 1.5x p95 limit in about 7.5–10 % of evaluations on hosted runners. The NEXUS-Q failure rate (3 of 22, 14 %) is of the same order. The NEXUS-Q rate is somewhat higher because on Zen 3 its medians start 8–14 % above AWS-LC, which leaves less headroom. This does **not** make the failing runs green. It means hosted runners cannot give a deterministic p95 verdict, for NEXUS-Q or for AWS-LC itself. Options for the maintainers (not applied here, because they change the protocol): pin both runners to the same core, use a dedicated or self-hosted runner, or require the limit on every one of N independent replicas.
+
+### Zen 3 median gap (systematic, not a gate failure)
+
+The in-process A/B diagnostic (`diag/inproc_ab.c`, `native-backend-diag.yml`) links both libraries into one process and alternates calls per iteration. On EPYC 7763 the NEXUS-Q build is still 7–11 % slower on ML-KEM, also with deterministic RNG inputs. So the cause is neither the RNG nor the harness nor cross-process noise. On Zen 4/5 the difference is within ±3 %. On the local Intel KVM, NEXUS-Q is 5–10 % faster.
+
+- Measured: AWS-LC's compiler flags (`-std=gnu11 -DNDEBUG -fvisibility=hidden -fno-common`) recover 1–3 points (runs 38796903942, 38798035934). The s2n x4 permutation recovers nothing (D9).
+- Hypothesis, not verified: the remaining difference lies in the FIPS202 sponge layer. AWS-LC replaces mlkem-native's (`MLK_CONFIG_FIPS202_CUSTOM_HEADER` with its own absorb/squeeze and 64-bit lane XOR). In the profiles, mlkem-native's `keccakf1600_extract_bytes`/`xor_bytes` account for 3.7–5.3 % of ML-KEM time on Zen 3, while AWS-LC's equivalent is under 1 %. Testing this requires a custom FIPS202 layer, which is new constant-time-relevant code that needs its own review.
 
 ## Not done yet (explicitly)
 
 - The backend is not wired into `nexusq-core`, CLI, server or SDK. The production cryptographic path is unchanged.
 - AArch64 NEON backend: not enabled. AArch64 is functionally tested only on the portable C path.
 - No FIPS 140-3 validation. No pairwise consistency test (PCT) is run, which matches the non-FIPS AWS-LC build used as the comparator.
+- The gate is not green (see above). The p95 failures match the A/A false-failure rate, but they are not declared green.
+- The Zen 3 median gap (7–14 % on ML-KEM) is not closed; see the hypothesis above.
 - No independent external review of this integration. Phase 21 (external audit) remains open, so this work does not make NEXUS-Q v1.0 or v2 production-ready.
