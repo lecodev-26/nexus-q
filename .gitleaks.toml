@@ -14,4 +14,4 @@ paths = [
 [[allowlists]]
 description = "Known false positive in historical CPU feature identifier validation source"
 commits = ["e175fba0300a422ee368c816b54fbfc40aaf44ea"]
-paths = ['''arena/adapters/aws-lc/runner\.c''']
+paths = ['''arena/adapters/aws-lc/runner[.]c''']
