@@ -101,7 +101,7 @@ All numbers are NEXUS-Q / AWS-LC ratios from the **unmodified official evaluator
 | [38800297448](https://github.com/lecodev-26/nexus-q/actions/runs/38800297448) | 8fd2657 (PR #50) | 6 | AMD EPYC 7763 | FAIL | ml-kem-1024 keygen 1.129 / 1.553; ml-kem-768 decaps 1.082 / 1.578 |
 | [38800297448](https://github.com/lecodev-26/nexus-q/actions/runs/38800297448) | 8fd2657 (PR #50) | 1 | AMD EPYC 9V74 | PASS | - |
 
-**Status: not green.** 30 of 34 replicas pass and 4 fail. Every failure is a p95 tail on ML-KEM on AMD EPYC 7763, with medians of 1.08–1.15. A single slow episode inflates one round. For example, in run 38796903676 replica 4, ML-KEM-1024 decaps p95 is 37.5 µs against a 24.6 µs median, and the extended statistics show it in one round of 12. Run 38799671219 passed 6/6 on the branch head, but the PR run 38800297448 on the same code failed one replica (ML-KEM-768 decaps, 1.082 / 1.578).
+**Historical PR #50 status (commit `99bf2ea`, before the sponge-I/O experiment): not green.** 30 of 34 replicas pass and 4 fail. Every failure is a p95 tail on ML-KEM on AMD EPYC 7763, with medians of 1.08–1.15. A single slow episode inflates one round. For example, in run 38796903676 replica 4, ML-KEM-1024 decaps p95 is 37.5 µs against a 24.6 µs median, and the extended statistics show it in one round of 12. Run 38799671219 passed 6/6 on the branch head, but the PR run 38800297448 on the same code failed one replica (ML-KEM-768 decaps, 1.082 / 1.578).
 
 Tails are symmetric between the two implementations. Over the 204 ML-KEM (operation, replica) observations per implementation, NEXUS-Q shows p95/median > 1.25 in 10 cases and AWS-LC in 9 cases. AWS-LC tails do not trip the one-sided gate; they push the ratio below 1 (for example 0.724 for ML-KEM-768 encaps in run 38796903676 replica 3). No NEXUS-Q-specific tail mechanism is visible in the data.
 
@@ -155,6 +155,23 @@ The in-process A/B diagnostic (`diag/inproc_ab.c`, `native-backend-diag.yml`) li
 
 - Measured: AWS-LC's compiler flags (`-std=gnu11 -DNDEBUG -fvisibility=hidden -fno-common`) recover 1–3 points (runs 38796903942, 38798035934). The s2n x4 permutation recovers nothing (D9).
 - Hypothesis, not verified: the remaining difference lies in the FIPS202 sponge layer. AWS-LC replaces mlkem-native's (`MLK_CONFIG_FIPS202_CUSTOM_HEADER` with its own absorb/squeeze and 64-bit lane XOR). In the profiles, mlkem-native's `keccakf1600_extract_bytes`/`xor_bytes` account for 3.7–5.3 % of ML-KEM time on Zen 3, while AWS-LC's equivalent is under 1 %. Testing this requires a custom FIPS202 layer, which is new constant-time-relevant code that needs its own review.
+
+### Follow-up experiment: aligned x4 sponge I/O (PR #51)
+
+Commit [`a35c882`](https://github.com/lecodev-26/nexus-q/commit/a35c8829e73bc4f8c576e940a8c8515637320329) adds NEXUS-Q-owned x4 XOR/extract hooks in `nq_fips202_x86_64_mlk.h`. For byte ranges where both `offset` and `length` are multiples of 8, the hooks process 64-bit lanes with `memcpy`; all partial or unaligned ranges return `MLK_NATIVE_FUNC_FALLBACK` to the upstream C implementation. This code does not change the vendored upstream trees, the evaluator, the benchmark protocol or the 1.5x threshold. It is limited to the ML-KEM native-backend configuration; the production `nexusq-core` path remains unchanged.
+
+CI run [38803028946](https://github.com/lecodev-26/nexus-q/actions/runs/38803028946) for that exact commit completed successfully: build/lint and differential checks passed on x86-64 and AArch64, the constant-time harness and negative control passed, upstream/KAT/ACVP and vendor-integrity checks passed, `cargo audit` passed, and all six official benchmark replicas passed the unchanged 3-round median-and-p95 gate. In the detailed EPYC 7763 replica, the ratios were:
+
+| ML-KEM operation | Median ratio | p95 ratio |
+|---|---:|---:|
+| ML-KEM-768 decaps | 1.078 | 1.113 |
+| ML-KEM-768 encaps | 1.108 | 1.157 |
+| ML-KEM-768 keygen | 1.128 | 1.130 |
+| ML-KEM-1024 decaps | 1.070 | 1.099 |
+| ML-KEM-1024 encaps | 1.099 | 1.125 |
+| ML-KEM-1024 keygen | 1.116 | 1.117 |
+
+The same replica's 12-round extended statistics reported no failing 3-round windows for any of the nine operations. These results are encouraging evidence for this commit, but do not establish that the I/O change alone caused the improvement: this is not a paired A/B measurement, and the earlier failures remain valid historical observations. Keep PR #51 in draft pending review of the custom sponge hooks, licensing, and the remaining integration decisions.
 
 ## Not done yet (explicitly)
 
