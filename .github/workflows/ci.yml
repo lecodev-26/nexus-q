@@ -426,7 +426,8 @@ jobs:
               callgrind_data="$profile_dir/$workload.callgrind.out"
               if valgrind --tool=callgrind --callgrind-out-file="$callgrind_data" \
                   "$profiler" "$workload" > "$profile_dir/$workload.callgrind.log" 2>&1; then
-                if callgrind_annotate --inclusive=yes --tree=both "$callgrind_data" \
+                # Lower the default 99% cutoff; it hid all internal crypto callees in the last report.
+                if callgrind_annotate --threshold=0.5 --inclusive=yes --tree=both "$callgrind_data" \
                     > "$profile_dir/$workload.callgrind-report.txt" 2>> "$profile_dir/$workload.callgrind.log"; then
                   printf '%s: Callgrind call graph captured (instruction counts; not timing)\n' "$workload" | tee -a "$profile_dir/status.txt"
                 else
