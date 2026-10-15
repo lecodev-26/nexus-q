@@ -382,22 +382,37 @@ impl<K: ArraySize> NttInverse for NttVector<K> {
 /// Algorithm 11: `MultiplyNTTs`
 impl MultiplyNtt for BaseField {
     fn multiply_ntt(lhs: &NttPolynomial, rhs: &NttPolynomial) -> NttPolynomial {
-        let mut out = NttPolynomial::new(Array::default());
-
-        for i in 0..128 {
-            let (c0, c1) = base_case_multiply(
-                lhs.0[2 * i],
-                lhs.0[2 * i + 1],
-                rhs.0[2 * i],
-                rhs.0[2 * i + 1],
-                i,
+        #[cfg(feature = "experimental-kernels")]
+        {
+            let lhs_coefficients = core::array::from_fn(|i| lhs.0[i].0);
+            let rhs_coefficients = core::array::from_fn(|i| rhs.0[i].0);
+            let gamma = core::array::from_fn(|i| GAMMA[i].0);
+            let mut coefficients = [0_u16; 256];
+            nexusq_kernels::api::basemul_mlkem(
+                &lhs_coefficients,
+                &rhs_coefficients,
+                &gamma,
+                &mut coefficients,
             );
-
-            out.0[2 * i] = c0;
-            out.0[2 * i + 1] = c1;
+            return NttPolynomial::new(Array::from_fn(|i| Elem::new(coefficients[i])));
         }
 
-        out
+        #[cfg(not(feature = "experimental-kernels"))]
+        {
+            let mut out = NttPolynomial::new(Array::default());
+            for i in 0..128 {
+                let (c0, c1) = base_case_multiply(
+                    lhs.0[2 * i],
+                    lhs.0[2 * i + 1],
+                    rhs.0[2 * i],
+                    rhs.0[2 * i + 1],
+                    i,
+                );
+                out.0[2 * i] = c0;
+                out.0[2 * i + 1] = c1;
+            }
+            out
+        }
     }
 }
 

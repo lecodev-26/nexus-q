@@ -4,10 +4,11 @@
 //! at parallel SHAKE workloads (for example, matrix expansion), not single-state
 //! calls. The scalar implementation remains the reference and fallback.
 
+use core::arch::asm;
 use core::arch::x86_64::{
     __m256i, _mm_loadu_si128, _mm256_add_epi32, _mm256_and_si256, _mm256_andnot_si256,
-    _mm256_blend_epi32, _mm256_cmpgt_epi32, _mm256_cvtepu16_epi32, _mm256_mul_epu32,
-    _mm256_mullo_epi32, _mm256_or_si256, _mm256_set_epi64x, _mm256_set1_epi32, _mm256_set1_epi64x,
+    _mm256_blend_epi32, _mm256_cmpgt_epi32, _mm256_cvtepu16_epi32, _mm256_loadu_si256,
+    _mm256_mul_epu32, _mm256_or_si256, _mm256_set_epi64x, _mm256_set1_epi32, _mm256_set1_epi64x,
     _mm256_setzero_si256, _mm256_slli_epi64, _mm256_sllv_epi64, _mm256_srli_epi64,
     _mm256_srlv_epi64, _mm256_storeu_si256, _mm256_sub_epi32, _mm256_xor_si256,
 };
@@ -176,7 +177,7 @@ unsafe fn mlkem_ntt_avx2(poly: &mut [u16; 256]) {
                 // SAFETY: this function is itself AVX2-targeted and the runtime
                 // wrapper checks AVX2 before entering it.
                 let product = unsafe {
-                    reduce_mlkem_product(_mm256_mullo_epi32(right, _mm256_set1_epi32(zeta)))
+                    reduce_mlkem_product(mullo_i32x8_asm(right, _mm256_set1_epi32(zeta)))
                 };
                 let sum = _mm256_add_epi32(left, product);
                 let sum_mask = _mm256_cmpgt_epi32(sum, _mm256_set1_epi32(MLKEM_Q - 1));
@@ -211,6 +212,83 @@ unsafe fn mlkem_ntt_avx2(poly: &mut [u16; 256]) {
             }
         }
         length /= 2;
+    }
+}
+
+/// Multiply two ML-KEM NTT polynomials using AVX2 and hand-written `vpmulld`.
+///
+/// All inputs are canonical coefficients in `0..3329`; `gamma` contains the 128
+/// FIPS 203 base-case twiddles. Returns `false` without modifying `out` when AVX2
+/// is unavailable. Intermediate products and sums remain below 2^25, so the
+/// reciprocal reduction is exact after at most one conditional subtraction.
+pub fn mlkem_basemul(
+    lhs: &[u16; 256],
+    rhs: &[u16; 256],
+    gamma: &[u16; 128],
+    out: &mut [u16; 256],
+) -> bool {
+    if !std::is_x86_feature_detected!("avx2") {
+        return false;
+    }
+    // SAFETY: runtime feature detection guarantees AVX2 support.
+    unsafe { mlkem_basemul_avx2(lhs, rhs, gamma, out) };
+    true
+}
+
+#[target_feature(enable = "avx2")]
+unsafe fn mlkem_basemul_avx2(
+    lhs: &[u16; 256],
+    rhs: &[u16; 256],
+    gamma: &[u16; 128],
+    out: &mut [u16; 256],
+) {
+    let mut a0 = [0_i32; 8];
+    let mut a1 = [0_i32; 8];
+    let mut b0 = [0_i32; 8];
+    let mut b1 = [0_i32; 8];
+    let mut g = [0_i32; 8];
+    let mut c0 = [0_i32; 8];
+    let mut c1 = [0_i32; 8];
+
+    for base in (0..128).step_by(8) {
+        for lane in 0..8 {
+            let pair = base + lane;
+            a0[lane] = i32::from(lhs[pair * 2]);
+            a1[lane] = i32::from(lhs[pair * 2 + 1]);
+            b0[lane] = i32::from(rhs[pair * 2]);
+            b1[lane] = i32::from(rhs[pair * 2 + 1]);
+            g[lane] = i32::from(gamma[pair]);
+        }
+
+        // SAFETY: all temporary arrays are exactly eight i32 values and thus
+        // provide 32 readable bytes for each unaligned vector load.
+        let (a0v, a1v, b0v, b1v, gv) = unsafe {
+            (
+                _mm256_loadu_si256(a0.as_ptr().cast()),
+                _mm256_loadu_si256(a1.as_ptr().cast()),
+                _mm256_loadu_si256(b0.as_ptr().cast()),
+                _mm256_loadu_si256(b1.as_ptr().cast()),
+                _mm256_loadu_si256(g.as_ptr().cast()),
+            )
+        };
+        // SAFETY: this function is AVX2-targeted; all lane products are positive
+        // and below 2^25, matching reduce_mlkem_product's documented range.
+        let b1g = unsafe { reduce_mlkem_product(mullo_i32x8_asm(b1v, gv)) };
+        let p00 = unsafe { mullo_i32x8_asm(a0v, b0v) };
+        let p11 = unsafe { mullo_i32x8_asm(a1v, b1g) };
+        let p01 = unsafe { mullo_i32x8_asm(a0v, b1v) };
+        let p10 = unsafe { mullo_i32x8_asm(a1v, b0v) };
+        let c0v = unsafe { reduce_mlkem_product(_mm256_add_epi32(p00, p11)) };
+        let c1v = unsafe { reduce_mlkem_product(_mm256_add_epi32(p01, p10)) };
+        // SAFETY: c0 and c1 each provide 32 writable bytes for eight lanes.
+        unsafe {
+            _mm256_storeu_si256(c0.as_mut_ptr().cast(), c0v);
+            _mm256_storeu_si256(c1.as_mut_ptr().cast(), c1v);
+        }
+        for lane in 0..8 {
+            out[(base + lane) * 2] = c0[lane] as u16;
+            out[(base + lane) * 2 + 1] = c1[lane] as u16;
+        }
     }
 }
 
@@ -256,7 +334,7 @@ unsafe fn mlkem_inverse_ntt_avx2(poly: &mut [u16; 256]) {
                 );
                 // SAFETY: this function is AVX2-targeted and products are below 2^24.
                 let product = unsafe {
-                    reduce_mlkem_product(_mm256_mullo_epi32(difference, _mm256_set1_epi32(zeta)))
+                    reduce_mlkem_product(mullo_i32x8_asm(difference, _mm256_set1_epi32(zeta)))
                 };
                 let mut sums = [0_i32; 8];
                 let mut products = [0_i32; 8];
@@ -292,7 +370,7 @@ unsafe fn mlkem_inverse_ntt_avx2(poly: &mut [u16; 256]) {
         let values = _mm256_cvtepu16_epi32(values16);
         // SAFETY: this function is AVX2-targeted.
         let scaled =
-            unsafe { reduce_mlkem_product(_mm256_mullo_epi32(values, _mm256_set1_epi32(3303))) };
+            unsafe { reduce_mlkem_product(mullo_i32x8_asm(values, _mm256_set1_epi32(3303))) };
         let mut output = [0_i32; 8];
         // SAFETY: output has room for eight 32-bit lanes.
         unsafe { _mm256_storeu_si256(output.as_mut_ptr().cast(), scaled) };
@@ -301,6 +379,30 @@ unsafe fn mlkem_inverse_ntt_avx2(poly: &mut [u16; 256]) {
         }
         index += 8;
     }
+}
+
+/// Hand-written AVX2 packed 32-bit multiply used by the ML-KEM NTT hot path.
+///
+/// The caller must be inside an AVX2-targeted routine after runtime feature
+/// detection. Inputs are eight signed 32-bit lanes; `vpmulld` deliberately
+/// retains each low 32-bit product, which is exact for the documented ML-KEM
+/// bounds (< 2^24 for twiddle products and < 2^16 for reduction correction).
+#[inline(always)]
+unsafe fn mullo_i32x8_asm(lhs: __m256i, rhs: __m256i) -> __m256i {
+    let output: __m256i;
+    // SAFETY: this helper is called only from AVX2-targeted functions whose
+    // public entry points check runtime AVX2 support. The instruction has no
+    // memory operands and writes only its declared YMM output.
+    unsafe {
+        asm!(
+            "vpmulld {output}, {lhs}, {rhs}",
+            output = lateout(ymm_reg) output,
+            lhs = in(ymm_reg) lhs,
+            rhs = in(ymm_reg) rhs,
+            options(pure, nomem, nostack),
+        );
+    }
+    output
 }
 
 // AVX2 has no general packed 32x32->64 high-multiply. Compute the high halves
@@ -320,10 +422,9 @@ unsafe fn reduce_mlkem_product(value: __m256i) -> __m256i {
     // before interleaving. Without this shift, odd quotient lanes stay zero.
     let odd_quotients = _mm256_slli_epi64(_mm256_srli_epi64(odd_products, 32), 32);
     let quotient = _mm256_blend_epi32(even_quotients, odd_quotients, 0b1010_1010);
-    let remainder = _mm256_sub_epi32(
-        value,
-        _mm256_mullo_epi32(quotient, _mm256_set1_epi32(MLKEM_Q)),
-    );
+    // SAFETY: this reducer is AVX2-targeted and is called only from AVX2 kernels.
+    let correction = unsafe { mullo_i32x8_asm(quotient, _mm256_set1_epi32(MLKEM_Q)) };
+    let remainder = _mm256_sub_epi32(value, correction);
     let needs_subtract = _mm256_cmpgt_epi32(remainder, _mm256_set1_epi32(MLKEM_Q - 1));
     _mm256_sub_epi32(
         remainder,
@@ -343,8 +444,8 @@ unsafe fn rotate_left_64(value: __m256i, amount: u32) -> __m256i {
 
 #[cfg(test)]
 mod tests {
-    use super::keccak_f1600x4;
-    use crate::scalar::keccak::keccak_f1600;
+    use super::{keccak_f1600x4, mlkem_basemul, mlkem_inverse_ntt, mlkem_ntt};
+    use crate::scalar::{keccak::keccak_f1600, mlkem};
 
     #[test]
     fn four_way_permutation_matches_scalar_for_zero_and_distinct_states() {
@@ -382,6 +483,73 @@ mod tests {
         }
         if keccak_f1600x4(&mut states) {
             assert_eq!(states, expected);
+        }
+    }
+
+    #[test]
+    fn mlkem_ntt_assembly_path_matches_scalar_reference() {
+        let mut input = core::array::from_fn(|i| ((i * 127 + 19) % 3329) as u16);
+        let mut expected = input;
+        let mut scalar = core::array::from_fn(|i| expected[i] as i16);
+        mlkem::ntt(&mut scalar);
+        for (dst, src) in expected.iter_mut().zip(scalar) {
+            *dst = src as u16;
+        }
+        if mlkem_ntt(&mut input) {
+            assert_eq!(input, expected);
+        }
+    }
+
+    #[test]
+    fn mlkem_basemul_assembly_path_matches_scalar_reference() {
+        let lhs = core::array::from_fn(|i| ((i * 127 + 19) % 3329) as u16);
+        let rhs = core::array::from_fn(|i| ((i * 211 + 7) % 3329) as u16);
+        let gamma = core::array::from_fn(|i| {
+            let mut source = i as u8;
+            let mut reversed = 0_u8;
+            for _ in 0..7 {
+                reversed = (reversed << 1) | (source & 1);
+                source >>= 1;
+            }
+            let mut exponent = u32::from(reversed) * 2 + 1;
+            let mut factor = 17_u32;
+            let mut result = 1_u32;
+            while exponent != 0 {
+                if exponent & 1 != 0 {
+                    result = result * factor % 3329;
+                }
+                factor = factor * factor % 3329;
+                exponent >>= 1;
+            }
+            result as u16
+        });
+        let mut expected = [0_u16; 256];
+        for pair in 0..128 {
+            let i = pair * 2;
+            let b1g = u32::from(rhs[i + 1]) * u32::from(gamma[pair]) % 3329;
+            expected[i] = ((u32::from(lhs[i]) * u32::from(rhs[i]) + u32::from(lhs[i + 1]) * b1g)
+                % 3329) as u16;
+            expected[i + 1] = ((u32::from(lhs[i]) * u32::from(rhs[i + 1])
+                + u32::from(lhs[i + 1]) * u32::from(rhs[i]))
+                % 3329) as u16;
+        }
+        let mut actual = [0_u16; 256];
+        if mlkem_basemul(&lhs, &rhs, &gamma, &mut actual) {
+            assert_eq!(actual, expected);
+        }
+    }
+
+    #[test]
+    fn mlkem_inverse_ntt_assembly_path_matches_scalar_reference() {
+        let mut input = core::array::from_fn(|i| ((i * 211 + 7) % 3329) as u16);
+        let mut expected = input;
+        let mut scalar = core::array::from_fn(|i| expected[i] as i16);
+        mlkem::inverse_ntt(&mut scalar);
+        for (dst, src) in expected.iter_mut().zip(scalar) {
+            *dst = src as u16;
+        }
+        if mlkem_inverse_ntt(&mut input) {
+            assert_eq!(input, expected);
         }
     }
 }

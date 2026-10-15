@@ -317,6 +317,31 @@ pub fn shake256(input: &[u8], output: &mut [u8]) {
     }
 }
 
+/// Multiply ML-KEM NTT-domain polynomials using the selected kernel path.
+///
+/// Inputs and twiddles must contain canonical coefficients in `0..3329`. The
+/// AVX2 implementation uses hand-written packed multiply assembly when enabled
+/// and supported; otherwise this function falls back to the scalar arithmetic.
+pub fn basemul_mlkem(lhs: &[u16; 256], rhs: &[u16; 256], gamma: &[u16; 128], out: &mut [u16; 256]) {
+    #[cfg(all(target_arch = "x86_64", feature = "experimental-avx2"))]
+    if !crate::dispatch::scalar_forced() && crate::x86_64::avx2::mlkem_basemul(lhs, rhs, gamma, out)
+    {
+        return;
+    }
+
+    for pair in 0..128 {
+        let index = pair * 2;
+        let a0 = u64::from(lhs[index]);
+        let a1 = u64::from(lhs[index + 1]);
+        let b0 = u64::from(rhs[index]);
+        let b1 = u64::from(rhs[index + 1]);
+        let g = u64::from(gamma[pair]);
+        let b1g = b1 * g % 3329;
+        out[index] = ((a0 * b0 + a1 * b1g) % 3329) as u16;
+        out[index + 1] = ((a0 * b1 + a1 * b0) % 3329) as u16;
+    }
+}
+
 /// Apply the forward ML-KEM NTT to 256 canonical coefficients.
 ///
 /// The AVX2 implementation is available only when `experimental-avx2` is
