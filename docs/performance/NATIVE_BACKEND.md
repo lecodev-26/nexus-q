@@ -88,40 +88,46 @@ All numbers are NEXUS-Q / AWS-LC ratios from the **unmodified official evaluator
 | [38798844655](https://github.com/lecodev-26/nexus-q/actions/runs/38798844655) | cd42080 | 5 | AMD EPYC 9V74 | PASS | - |
 | [38798844655](https://github.com/lecodev-26/nexus-q/actions/runs/38798844655) | cd42080 | 4 | AMD EPYC 7763 | PASS | - |
 | [38798844655](https://github.com/lecodev-26/nexus-q/actions/runs/38798844655) | cd42080 | 1 | AMD EPYC 7763 | FAIL | ml-kem-1024 encaps 1.109 / 1.594 |
+| [38799671219](https://github.com/lecodev-26/nexus-q/actions/runs/38799671219) | 1433771 | 4 | AMD EPYC 7763 | PASS | - |
+| [38799671219](https://github.com/lecodev-26/nexus-q/actions/runs/38799671219) | 1433771 | 3 | AMD EPYC 9V74 | PASS | - |
+| [38799671219](https://github.com/lecodev-26/nexus-q/actions/runs/38799671219) | 1433771 | 1 | AMD EPYC 9V45 | PASS | - |
+| [38799671219](https://github.com/lecodev-26/nexus-q/actions/runs/38799671219) | 1433771 | 6 | AMD EPYC 7763 | PASS | - |
+| [38799671219](https://github.com/lecodev-26/nexus-q/actions/runs/38799671219) | 1433771 | 5 | AMD EPYC 7763 | PASS | - |
+| [38799671219](https://github.com/lecodev-26/nexus-q/actions/runs/38799671219) | 1433771 | 2 | AMD EPYC 9V74 | PASS | - |
 
-**Status: not green.** 19 of 22 replicas pass and 3 fail. Every failure is a p95 tail on ML-KEM on AMD EPYC 7763, with medians of 1.09–1.15. A single slow episode inflates one round. For example, in run 38796903676 replica 4, ML-KEM-1024 decaps p95 is 37.5 µs against a 24.6 µs median, and the extended statistics show it in one round of 12.
+**Status: not green.** 25 of 28 replicas pass and 3 fail. Every failure is a p95 tail on ML-KEM on AMD EPYC 7763, with medians of 1.09–1.15. A single slow episode inflates one round. For example, in run 38796903676 replica 4, ML-KEM-1024 decaps p95 is 37.5 µs against a 24.6 µs median, and the extended statistics show it in one round of 12. The latest run on the branch head (38799671219) passes 6 of 6 replicas, but one green run does not cancel the earlier failures.
 
 ### Ranges per CPU (official 3-round windows, excluding the reverted commit)
-EPYC 7763 (Zen 3): 11 replicas (excluding the reverted commit)
+EPYC 7763 (Zen 3): 14 replicas (excluding the reverted commit)
 
 | Operation | median ratio min-max | p95 ratio min / median / max | replicas with p95 > 1.5 |
 |---|---|---|---|
-| ml-kem-768 keygen | 1.127-1.138 | 0.993 / 1.135 / 1.163 | 0/11 |
-| ml-kem-768 encaps | 1.114-1.123 | 0.724 / 1.115 / 1.187 | 0/11 |
-| ml-kem-768 decaps | 1.077-1.134 | 0.837 / 1.078 / 1.138 | 0/11 |
-| ml-kem-1024 keygen | 1.126-1.224 | 1.124 / 1.133 / 1.221 | 0/11 |
-| ml-kem-1024 encaps | 1.109-1.207 | 0.809 / 1.115 / 1.596 | 2/11 |
-| ml-kem-1024 decaps | 1.075-1.154 | 0.763 / 1.090 / 1.639 | 1/11 |
-| ml-dsa-65 keygen | 1.000-1.007 | 0.998 / 1.011 / 1.208 | 0/11 |
-| ml-dsa-65 sign | 0.894-0.970 | 0.834 / 0.875 / 0.936 | 0/11 |
-| ml-dsa-65 verify | 1.073-1.077 | 1.041 / 1.186 / 1.194 | 0/11 |
+| ml-kem-768 keygen | 1.127-1.138 | 0.993 / 1.135 / 1.163 | 0/14 |
+| ml-kem-768 encaps | 1.113-1.123 | 0.724 / 1.115 / 1.187 | 0/14 |
+| ml-kem-768 decaps | 1.077-1.134 | 0.837 / 1.078 / 1.138 | 0/14 |
+| ml-kem-1024 keygen | 1.126-1.224 | 0.773 / 1.133 / 1.221 | 0/14 |
+| ml-kem-1024 encaps | 1.107-1.207 | 0.717 / 1.114 / 1.596 | 2/14 |
+| ml-kem-1024 decaps | 1.066-1.154 | 0.763 / 1.083 / 1.639 | 1/14 |
+| ml-dsa-65 keygen | 0.999-1.007 | 0.996 / 1.011 / 1.208 | 0/14 |
+| ml-dsa-65 sign | 0.894-0.970 | 0.829 / 0.875 / 0.936 | 0/14 |
+| ml-dsa-65 verify | 1.073-1.080 | 1.041 / 1.191 / 1.210 | 0/14 |
 
-EPYC 9V74/9V45 (Zen 4/5): 5 replicas (excluding the reverted commit)
+EPYC 9V74/9V45 (Zen 4/5): 8 replicas (excluding the reverted commit)
 
 | Operation | median ratio min-max | p95 ratio min / median / max | replicas with p95 > 1.5 |
 |---|---|---|---|
-| ml-kem-768 keygen | 1.041-1.106 | 0.924 / 1.048 / 1.101 | 0/5 |
-| ml-kem-768 encaps | 1.022-1.088 | 1.014 / 1.026 / 1.104 | 0/5 |
-| ml-kem-768 decaps | 0.997-1.045 | 0.999 / 1.003 / 1.057 | 0/5 |
-| ml-kem-1024 keygen | 1.028-1.064 | 0.997 / 1.035 / 1.060 | 0/5 |
-| ml-kem-1024 encaps | 1.002-1.067 | 1.004 / 1.036 / 1.067 | 0/5 |
-| ml-kem-1024 decaps | 0.999-1.040 | 0.978 / 1.014 / 1.035 | 0/5 |
-| ml-dsa-65 keygen | 0.891-0.921 | 0.768 / 0.865 / 0.899 | 0/5 |
-| ml-dsa-65 sign | 0.833-0.906 | 0.811 / 0.861 / 0.935 | 0/5 |
-| ml-dsa-65 verify | 0.975-0.994 | 0.697 / 0.872 / 1.136 | 0/5 |
+| ml-kem-768 keygen | 1.037-1.106 | 0.924 / 1.048 / 1.101 | 0/8 |
+| ml-kem-768 encaps | 1.022-1.088 | 1.014 / 1.027 / 1.114 | 0/8 |
+| ml-kem-768 decaps | 0.997-1.045 | 0.999 / 1.021 / 1.066 | 0/8 |
+| ml-kem-1024 keygen | 1.024-1.064 | 0.940 / 1.035 / 1.060 | 0/8 |
+| ml-kem-1024 encaps | 0.978-1.067 | 0.916 / 1.036 / 1.067 | 0/8 |
+| ml-kem-1024 decaps | 0.975-1.040 | 0.959 / 1.014 / 1.035 | 0/8 |
+| ml-dsa-65 keygen | 0.891-0.921 | 0.768 / 0.885 / 1.036 | 0/8 |
+| ml-dsa-65 sign | 0.833-0.906 | 0.811 / 0.866 / 0.935 | 0/8 |
+| ml-dsa-65 verify | 0.974-0.997 | 0.697 / 0.973 / 1.136 | 0/8 |
 
 
-ML-KEM-768 decaps, which the review singled out: on Zen 3, p95 ranges from 0.837 to 1.138 in the 11 replicas above. The 1.516 failure happened in run 38798036136 on the reverted commit, again as a single-round tail with an unchanged median.
+ML-KEM-768 decaps, which the review singled out, stayed below 1.14 at p95 in every Zen 3 replica above. The one 1.516 failure happened in run 38798036136 on the reverted commit, again as a single-round tail with an unchanged median.
 
 ### Gate reliability: A/A control
 
@@ -133,7 +139,7 @@ AWS-LC is benchmarked against itself with the exact gate protocol and judged by 
 | [38798857918](https://github.com/lecodev-26/nexus-q/actions/runs/38798857918) | 0 / 10 | 2 / 40 | 1.585 (EPYC 9V74, ML-DSA-65 keygen) |
 | **Total** | **2 / 20 (10 %)** | **6 / 80 (7.5 %)** | |
 
-Identical code therefore fails the 1.5x p95 limit in about 7.5–10 % of evaluations on hosted runners. The NEXUS-Q failure rate (3 of 22, 14 %) is of the same order. The NEXUS-Q rate is somewhat higher because on Zen 3 its medians start 8–14 % above AWS-LC, which leaves less headroom. This does **not** make the failing runs green. It means hosted runners cannot give a deterministic p95 verdict, for NEXUS-Q or for AWS-LC itself. Options for the maintainers (not applied here, because they change the protocol): pin both runners to the same core, use a dedicated or self-hosted runner, or require the limit on every one of N independent replicas.
+Identical code therefore fails the 1.5x p95 limit in about 7.5–10 % of evaluations on hosted runners. The NEXUS-Q failure rate (3 of 28, 11 %) is of the same order. The NEXUS-Q rate is somewhat higher because on Zen 3 its medians start 8–14 % above AWS-LC, which leaves less headroom. This does **not** make the failing runs green. It means hosted runners cannot give a deterministic p95 verdict, for NEXUS-Q or for AWS-LC itself. Options for the maintainers (not applied here, because they change the protocol): pin both runners to the same core, use a dedicated or self-hosted runner, or require the limit on every one of N independent replicas.
 
 ### Zen 3 median gap (systematic, not a gate failure)
 
