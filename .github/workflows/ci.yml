@@ -374,6 +374,42 @@ jobs:
           printf '\nProfile is diagnostic only; it does not alter or bypass the 1.5x regression gate.\n' \
             | tee -a "$output"
 
+      - name: Collect sampled CPU profile and call stacks (diagnostic only)
+        shell: bash
+        run: |
+          set -uo pipefail
+          profile_dir=arena/results/v4-phase0/cpu-profile
+          mkdir -p "$profile_dir"
+          if ! command -v perf >/dev/null 2>&1; then
+            printf '%s\n' 'SKIPPED: perf is not installed on this hosted runner.' | tee "$profile_dir/status.txt"
+            exit 0
+          fi
+          # Separate diagnostic build with frame pointers. Never changes the
+          # benchmark executable or the enforced 1.5x regression gate.
+          if ! RUSTFLAGS="-C force-frame-pointers=yes" cargo build --locked --release \
+              --features cached-verifier --bin profile_hotspots \
+              --manifest-path arena/runners/nexusq/Cargo.toml; then
+            printf '%s\n' 'SKIPPED: diagnostic build failed; regression gate remains unchanged.' | tee "$profile_dir/status.txt"
+            exit 0
+          fi
+          profiler=arena/runners/nexusq/target/release/profile_hotspots
+          : > "$profile_dir/status.txt"
+          for workload in ml-kem-768-keygen ml-kem-768-encaps ml-kem-768-decaps \
+                          ml-dsa-65-keygen ml-dsa-65-sign ml-dsa-65-verify; do
+            data="$profile_dir/$workload.perf.data"
+            log="$profile_dir/$workload.record.log"
+            if perf record -F 99 -g --call-graph dwarf -o "$data" -- "$profiler" "$workload" >"$log" 2>&1; then
+              if perf report --stdio --children --sort comm,dso,symbol -i "$data" > "$profile_dir/$workload.report.txt" 2>>"$log"; then
+                printf '%s: sampled profile captured\n' "$workload" | tee -a "$profile_dir/status.txt"
+              else
+                printf '%s: perf report unavailable; inspect record log\n' "$workload" | tee -a "$profile_dir/status.txt"
+              fi
+            else
+              printf '%s: sampling unavailable or denied; inspect record log\n' "$workload" | tee -a "$profile_dir/status.txt"
+            fi
+          done
+          printf '%s\n' 'Diagnostic-only CPU samples; this step does not alter benchmark results or the 1.5x gate.' | tee -a "$profile_dir/status.txt"
+
       - name: Validate schema, operation coverage, and configured counts
         shell: bash
         run: |
