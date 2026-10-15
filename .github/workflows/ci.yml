@@ -384,9 +384,10 @@ jobs:
             printf '%s\n' 'SKIPPED: perf is not installed on this hosted runner.' | tee "$profile_dir/status.txt"
             exit 0
           fi
-          # Separate diagnostic build with frame pointers. Never changes the
-          # benchmark executable or the enforced 1.5x regression gate.
-          if ! RUSTFLAGS="-C force-frame-pointers=yes" cargo build --locked --release \
+          # Separate diagnostic build with frame pointers and DWARF symbols so
+          # optimized/inlined Rust callees can be attributed where debug info permits.
+          # Never changes the benchmark executable or the enforced 1.5x gate.
+          if ! RUSTFLAGS="-C force-frame-pointers=yes -C debuginfo=2" cargo build --locked --release \
               --features cached-verifier --bin profile_hotspots \
               --manifest-path arena/runners/nexusq/Cargo.toml; then
             printf '%s\n' 'SKIPPED: diagnostic build failed; regression gate remains unchanged.' | tee "$profile_dir/status.txt"
