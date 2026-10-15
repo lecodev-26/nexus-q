@@ -777,8 +777,8 @@ jobs:
           assert files
           rows = [json.loads(x) for p in files for x in p.read_text().splitlines() if x.startswith("{")]
           # Ten-round V1 and V3 raw sample artifacts contain 90 and 100
-          # records respectively; external adapters contribute 48 more.
-          assert len(rows) == 238, len(rows)
+          # records respectively; the seven external adapters contribute 51.
+          assert len(rows) == 241, len(rows)
           for row in rows:
               jsonschema.Draft202012Validator(schema).validate(row)
           matrix = {(r["algorithm"]["id"], r["algorithm"]["parameter_set"], r["operation"]) for r in rows}
