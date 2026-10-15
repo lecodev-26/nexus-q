@@ -1,6 +1,6 @@
 # NEXUS-Q V1–V4 version history and transition plan
 
-Updated: 2026-10-09
+Updated: 2026-10-15
 
 ## Version lines
 
@@ -9,7 +9,7 @@ Updated: 2026-10-09
 | V1 | tag `v1.0.0` | Frozen original baseline for compatibility and performance comparisons | Historical baseline |
 | V2 | `nexusqv2`, tag `v2.0.0` | Security hardening, correctness/interoperability and fuzz/release-gate work | Frozen engineering line; retained for reproducibility |
 | V3 | engineering snapshot tag `v3-engineering-2026-10-09`, branch `nexusqv3`, PR [#45](https://github.com/lecodev-26/nexus-q/pull/45) | Hardened PQC implementation, reproducible benchmark tooling, security hardening, documentation and evidence archive | Integrated into `main`; post-merge Security/Release Gates, Security Regression/Fuzzing, and SDK CI all green on `fbd3fbe1d4fe38d52f58a47e11096fb4ab5bee45`; all three 4-hour fuzz soaks completed successfully |
-| V4 | planned branch `nexusqv4` | Assembly/architecture-specific performance-kernel experiments | Planned; issue [#23](https://github.com/lecodev-26/nexus-q/issues/23) remains the source of work |
+| V4 | branch `nexusqv4` | Native-backend and architecture-specific performance-kernel experiments | Experimental backend merged by PRs [#51](https://github.com/lecodev-26/nexus-q/pull/51) and [#50](https://github.com/lecodev-26/nexus-q/pull/50); 1.5× gate passed on the tested pre-integration head; integrated CI, docs, four-hour fuzzing, audit and release decision remain pending |
 
 ## Evidence and artifacts
 
@@ -34,4 +34,4 @@ Updated: 2026-10-09
 
 ## Branch hygiene
 
-The intended long-lived branches are `main`, `nexusqv2`, `nexusqv3`, and `nexusqv4`. Delete diagnostic or temporary branches only after verifying their unique commits and artifacts are merged or preserved in the archive. Do not delete `nexusqv2` or `nexusqv3`. Do not close Issue #23. Issue #41 is closed under the documented speed-versus-security decision. Do not close Issue #23 until its own implementation and validation criteria are met.
+The intended long-lived branches are `main`, `nexusqv2`, `nexusqv3`, and `nexusqv4`. Delete diagnostic or temporary branches only after verifying their unique commits and artifacts are merged or preserved in the archive. Do not delete `nexusqv2` or `nexusqv3`. Issue #41 is closed under the documented speed-versus-security decision. Issue #23 was closed as a historical/superseded tracker on 2026-10-15; that administrative closure does not assert that every original acceptance criterion is complete. Remaining V4 validation is tracked by the active integration and release-readiness work. PR #46 was also closed as historical, not as evidence that its original checklist completed.
