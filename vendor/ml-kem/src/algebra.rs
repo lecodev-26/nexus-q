@@ -321,6 +321,7 @@ pub(crate) trait NttInverse {
 /// One layer of the inverse NTT butterfly.
 ///
 /// See [`ntt_layer`] for the rationale behind the const generics.
+#[cfg(any(not(feature = "experimental-kernels"), test))]
 #[inline(always)]
 fn ntt_inverse_layer<const LEN: usize, const ITERATIONS: usize>(
     f: &mut Array<Elem, U256>,
@@ -344,18 +345,36 @@ impl NttInverse for NttPolynomial {
     type Output = Polynomial;
 
     fn ntt_inverse(&self) -> Polynomial {
+        #[cfg(feature = "experimental-kernels")]
+        {
+            let mut coefficients = core::array::from_fn(|index| self.0[index].0);
+            nexusq_kernels::api::inverse_ntt_mlkem(&mut coefficients);
+            return Polynomial::new(Array::from_fn(|index| Elem::new(coefficients[index])));
+        }
+
+        #[cfg(not(feature = "experimental-kernels"))]
         let mut f: Array<Elem, U256> = self.0.clone();
+        #[cfg(not(feature = "experimental-kernels"))]
         let mut k = 127;
 
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_inverse_layer::<2, 64>(&mut f, &mut k);
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_inverse_layer::<4, 32>(&mut f, &mut k);
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_inverse_layer::<8, 16>(&mut f, &mut k);
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_inverse_layer::<16, 8>(&mut f, &mut k);
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_inverse_layer::<32, 4>(&mut f, &mut k);
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_inverse_layer::<64, 2>(&mut f, &mut k);
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_inverse_layer::<128, 1>(&mut f, &mut k);
 
-        Elem::new(3303) * &Polynomial::new(f)
+        #[cfg(not(feature = "experimental-kernels"))]
+        Elem::new(3303)
+            * &Polynomial::new(f)
     }
 }
 
@@ -471,12 +490,12 @@ const GAMMA: [Elem; 128] = {
 
 #[cfg(test)]
 mod test {
-    #[cfg(feature = "experimental-kernels")]
-    use super::ntt_layer;
     use super::{
         Array, B32, BaseField, Elem, Field, Int, Ntt, NttInverse, NttMatrix, NttPolynomial,
         NttVector, PRF, Polynomial, U256, XOF,
     };
+    #[cfg(feature = "experimental-kernels")]
+    use super::{ntt_inverse_layer, ntt_layer};
 
     use array::{
         ArraySize, Flatten,
@@ -573,6 +592,36 @@ mod test {
             ntt_layer::<2, 64>(&mut expected, &mut k);
 
             assert_eq!(polynomial.ntt().0, expected, "pattern {pattern}");
+        }
+    }
+
+    #[cfg(feature = "experimental-kernels")]
+    #[test]
+    fn experimental_inverse_ntt_matches_scalar_bit_exactly() {
+        for pattern in 0..5_u16 {
+            let polynomial = NttPolynomial::new(Array::from_fn(|index| {
+                let value = match pattern {
+                    0 => 0,
+                    1 => 3328,
+                    2 => (index as u16).wrapping_mul(13) % 3329,
+                    3 => ((255 - index) as u16).wrapping_mul(29) % 3329,
+                    _ => ((index as u16).wrapping_mul(73).wrapping_add(991)) % 3329,
+                };
+                Elem::new(value)
+            }));
+
+            let mut expected: Array<Elem, U256> = polynomial.0;
+            let mut k = 127;
+            ntt_inverse_layer::<2, 64>(&mut expected, &mut k);
+            ntt_inverse_layer::<4, 32>(&mut expected, &mut k);
+            ntt_inverse_layer::<8, 16>(&mut expected, &mut k);
+            ntt_inverse_layer::<16, 8>(&mut expected, &mut k);
+            ntt_inverse_layer::<32, 4>(&mut expected, &mut k);
+            ntt_inverse_layer::<64, 2>(&mut expected, &mut k);
+            ntt_inverse_layer::<128, 1>(&mut expected, &mut k);
+            expected = (Elem::new(3303) * &Polynomial::new(expected)).0;
+
+            assert_eq!(polynomial.ntt_inverse().0, expected, "pattern {pattern}");
         }
     }
 

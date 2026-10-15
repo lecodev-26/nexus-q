@@ -214,6 +214,95 @@ unsafe fn mlkem_ntt_avx2(poly: &mut [u16; 256]) {
     }
 }
 
+/// Run the inverse ML-KEM NTT, including multiplication by 128^-1 modulo q.
+///
+/// Coefficients are canonical `u16` values in `0..3329`. The caller must retain
+/// the scalar fallback unless this function returns `true`.
+pub fn mlkem_inverse_ntt(poly: &mut [u16; 256]) -> bool {
+    if !std::is_x86_feature_detected!("avx2") {
+        return false;
+    }
+    // SAFETY: runtime detection guarantees AVX2 support for this call.
+    unsafe { mlkem_inverse_ntt_avx2(poly) };
+    true
+}
+
+// SAFETY: caller checks AVX2 support; all loads/stores are bounded by the
+// fixed 256-coefficient polynomial and all lane values fit signed i32.
+#[target_feature(enable = "avx2")]
+unsafe fn mlkem_inverse_ntt_avx2(poly: &mut [u16; 256]) {
+    let mut zeta_index = 127;
+    let mut length = 2;
+    while length <= 128 {
+        for start in (0..256).step_by(2 * length) {
+            let zeta = MLKEM_ZETAS[zeta_index];
+            zeta_index -= 1;
+            let mut index = start;
+            while index + 8 <= start + length {
+                // SAFETY: the two butterfly slices each contain eight u16 values.
+                let left16 = unsafe { _mm_loadu_si128(poly.as_ptr().add(index).cast()) };
+                let right16 = unsafe { _mm_loadu_si128(poly.as_ptr().add(index + length).cast()) };
+                let left = _mm256_cvtepu16_epi32(left16);
+                let right = _mm256_cvtepu16_epi32(right16);
+                let sum = _mm256_add_epi32(left, right);
+                let sum_mask = _mm256_cmpgt_epi32(sum, _mm256_set1_epi32(MLKEM_Q - 1));
+                let sum =
+                    _mm256_sub_epi32(sum, _mm256_and_si256(sum_mask, _mm256_set1_epi32(MLKEM_Q)));
+                let difference = _mm256_sub_epi32(right, left);
+                let negative = _mm256_cmpgt_epi32(_mm256_setzero_si256(), difference);
+                let difference = _mm256_add_epi32(
+                    difference,
+                    _mm256_and_si256(negative, _mm256_set1_epi32(MLKEM_Q)),
+                );
+                // SAFETY: this function is AVX2-targeted and products are below 2^24.
+                let product = unsafe {
+                    reduce_mlkem_product(_mm256_mullo_epi32(difference, _mm256_set1_epi32(zeta)))
+                };
+                let mut sums = [0_i32; 8];
+                let mut products = [0_i32; 8];
+                // SAFETY: both arrays have room for eight 32-bit lanes.
+                unsafe {
+                    _mm256_storeu_si256(sums.as_mut_ptr().cast(), sum);
+                    _mm256_storeu_si256(products.as_mut_ptr().cast(), product);
+                }
+                for lane in 0..8 {
+                    poly[index + lane] = sums[lane] as u16;
+                    poly[index + length + lane] = products[lane] as u16;
+                }
+                index += 8;
+            }
+            while index < start + length {
+                let left = i32::from(poly[index]);
+                let right = i32::from(poly[index + length]);
+                poly[index] = ((left + right) % MLKEM_Q) as u16;
+                let difference = (right - left).rem_euclid(MLKEM_Q);
+                poly[index + length] = ((zeta * difference) % MLKEM_Q) as u16;
+                index += 1;
+            }
+        }
+        length *= 2;
+    }
+
+    // 128^-1 mod 3329 = 3303. This final scalar is public and all products
+    // remain within the exact range supported by the Barrett-style reducer.
+    let mut index = 0;
+    while index < 256 {
+        // SAFETY: the remaining input always has at least eight coefficients.
+        let values16 = unsafe { _mm_loadu_si128(poly.as_ptr().add(index).cast()) };
+        let values = _mm256_cvtepu16_epi32(values16);
+        // SAFETY: this function is AVX2-targeted.
+        let scaled =
+            unsafe { reduce_mlkem_product(_mm256_mullo_epi32(values, _mm256_set1_epi32(3303))) };
+        let mut output = [0_i32; 8];
+        // SAFETY: output has room for eight 32-bit lanes.
+        unsafe { _mm256_storeu_si256(output.as_mut_ptr().cast(), scaled) };
+        for lane in 0..8 {
+            poly[index + lane] = output[lane] as u16;
+        }
+        index += 8;
+    }
+}
+
 // AVX2 has no general packed 32x32->64 high-multiply. Compute the high halves
 // of even and odd lanes separately, then interleave the quotient estimates.
 /// # Safety

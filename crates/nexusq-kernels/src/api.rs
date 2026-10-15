@@ -339,6 +339,26 @@ pub fn ntt_mlkem(coefficients: &mut [u16; 256]) {
     }
 }
 
+/// Apply the inverse ML-KEM NTT to 256 canonical coefficients.
+///
+/// AVX2 execution is opt-in through `experimental-avx2`; unsupported CPUs and
+/// forced-scalar configurations use the portable scalar reference transform.
+pub fn inverse_ntt_mlkem(coefficients: &mut [u16; 256]) {
+    #[cfg(all(target_arch = "x86_64", feature = "experimental-avx2"))]
+    if !crate::dispatch::scalar_forced() && crate::x86_64::avx2::mlkem_inverse_ntt(coefficients) {
+        return;
+    }
+
+    let mut signed = [0_i16; 256];
+    for (out, input) in signed.iter_mut().zip(coefficients.iter().copied()) {
+        *out = input as i16;
+    }
+    crate::scalar::mlkem::inverse_ntt(&mut signed);
+    for (out, input) in coefficients.iter_mut().zip(signed) {
+        *out = input as u16;
+    }
+}
+
 /// Apply the selected ML-KEM number-theoretic transform in place.
 #[inline]
 pub fn ntt(poly: &mut Polynomial) {
