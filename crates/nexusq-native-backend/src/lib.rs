@@ -46,14 +46,24 @@ pub unsafe extern "C" fn nq_randombytes(out: *mut u8, len: usize) -> i32 {
     }
 }
 
-/// Map mlkem-native / mldsa-native return codes (both use -3 for RNG failure;
-/// -4/-5 are invalid pk/sk in mlkem-native, -7/-9 invalid key/arg in mldsa-native).
+/// Map error codes shared by the ML-KEM and ML-DSA wrappers. Algorithm-specific
+/// codes must not be conflated: for example, `-6` means ML-KEM PCT failure but
+/// ML-DSA invalid signature. Verification maps its own result explicitly.
 pub(crate) fn map_err(rc: i32) -> Error {
     match rc {
         -3 => Error::Rng,
         -4 | -5 | -7 | -9 => Error::InvalidInput,
-        -6 => Error::InvalidSignature,
         other => Error::Native(other),
+    }
+}
+
+#[cfg(test)]
+mod error_mapping_tests {
+    use super::{map_err, Error};
+
+    #[test]
+    fn algorithm_specific_minus_six_is_not_misclassified() {
+        assert_eq!(map_err(-6), Error::Native(-6));
     }
 }
 
