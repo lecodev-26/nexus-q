@@ -1,5 +1,5 @@
 //! Builds the vendored mlkem-native / mldsa-native (pinned to the commits
-//! imported by AWS-LC ec05f25e) plus the s2n-bignum scalar Keccak routine.
+//! imported by AWS-LC ec05f25e) plus the s2n-bignum Keccak routines AWS-LC uses.
 use std::path::PathBuf;
 
 fn main() {
@@ -11,6 +11,7 @@ fn main() {
     let csrc = root.join("csrc");
     let portable = std::env::var("CARGO_FEATURE_PORTABLE_ONLY").is_ok();
     let c_keccak = std::env::var("CARGO_FEATURE_UPSTREAM_C_KECCAK").is_ok();
+    let upstream_x4 = std::env::var("CARGO_FEATURE_UPSTREAM_X4_KECCAK").is_ok();
     let arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap();
     let os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
     let native = !portable && arch == "x86_64" && os == "linux";
@@ -47,17 +48,24 @@ fn main() {
         if c_keccak {
             b.define("NQ_NO_S2N_KECCAK", None);
         }
+        if upstream_x4 {
+            b.define("NQ_UPSTREAM_X4_KECCAK", None);
+        }
     }
     kem.file(csrc.join("nq_mlkem_all.c"));
     dsa.file(csrc.join("nq_mldsa_all.c"));
     if native {
         kem.file(csrc.join("nq_mlkem_asm.S"));
         dsa.file(csrc.join("nq_mldsa_asm.S"));
+        // s2n-bignum permutations are shared by both libraries (one copy each).
+        if !c_keccak || !upstream_x4 {
+            kem.include(s2n.join("include")).include(&s2n);
+        }
         if !c_keccak {
-            // Shared by both libraries (identical permutation, one copy).
-            kem.include(s2n.join("include"))
-                .include(&s2n)
-                .file(csrc.join("nq_keccak_x1.S"));
+            kem.file(csrc.join("nq_keccak_x1.S"));
+        }
+        if !upstream_x4 {
+            kem.file(csrc.join("nq_keccak_x4.S"));
         }
     }
     kem.compile("nq_mlkem");

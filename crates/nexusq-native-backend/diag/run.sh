@@ -12,8 +12,9 @@ S2N=("-I$vendor/s2n-bignum" "-I$vendor/s2n-bignum/include")
 $CC "${F[@]}" "${KEM[@]}" -c "$crate/csrc/nq_mlkem_all.c" -o "$out/kem.o"
 $CC "${F[@]}" "${KEM[@]}" -c "$crate/csrc/nq_mlkem_asm.S" -o "$out/kemasm.o"
 $CC "${F[@]}" "${KEM[@]}" "${S2N[@]}" -c "$crate/csrc/nq_keccak_x1.S" -o "$out/keccak.o"
+$CC "${F[@]}" "${KEM[@]}" "${S2N[@]}" -c "$crate/csrc/nq_keccak_x4.S" -o "$out/keccak4.o"
 $CC "${F[@]}" "${DSA[@]}" -c "$crate/csrc/nq_mldsa_all.c" -o "$out/dsa.o"
 $CC "${F[@]}" "${DSA[@]}" -c "$crate/csrc/nq_mldsa_asm.S" -o "$out/dsaasm.o"
-$CC -O2 -g "$here/inproc_ab.c" "$out"/kem.o "$out"/kemasm.o "$out"/keccak.o "$out"/dsa.o "$out"/dsaasm.o \
+$CC -O2 -g "$here/inproc_ab.c" "$out"/kem.o "$out"/kemasm.o "$out"/keccak.o "$out"/keccak4.o "$out"/dsa.o "$out"/dsaasm.o \
     "$bld/crypto/libcrypto.a" -lpthread -o "$out/inproc_ab"
 echo "built $out/inproc_ab"
