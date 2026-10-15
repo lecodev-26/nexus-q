@@ -5,5 +5,29 @@
   "buildCommand": null,
   "outputDirectory": "site",
   "cleanUrls": true,
-  "ignoreCommand": "if [ \"${VERCEL_GIT_PULL_REQUEST_ID:-}\" = \"49\" ]; then exit 0; fi; case \"$VERCEL_GIT_COMMIT_REF\" in nexusqv4|v4/issue-23-kernel-work) exit 0 ;; esac; git diff --quiet HEAD^ HEAD -- site/; result=$?; if [ \"$result\" -eq 0 ]; then exit 0; else exit 1; fi"
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- site/; result=$?; if [ \"$result\" -eq 0 ]; then exit 0; else exit 1; fi",
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "nexus-q-topaz.vercel.app"
+        }
+      ],
+      "destination": "https://nexus-q.link/$1",
+      "permanent": true
+    },
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.nexus-q.link"
+        }
+      ],
+      "destination": "https://nexus-q.link/$1",
+      "permanent": true
+    }
+  ]
 }
