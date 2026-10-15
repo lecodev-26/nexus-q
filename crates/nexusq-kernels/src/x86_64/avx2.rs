@@ -50,7 +50,9 @@ fn mldsa_mul_reduce(lhs: u32, rhs: u32) -> u32 {
 }
 
 #[inline]
-fn mldsa_add_mod(lhs: __m256i, rhs: __m256i) -> __m256i {
+#[target_feature(enable = "avx2")]
+// SAFETY: callers must execute this helper only after runtime AVX2 detection.
+unsafe fn mldsa_add_mod(lhs: __m256i, rhs: __m256i) -> __m256i {
     let sum = _mm256_add_epi32(lhs, rhs);
     let mask = _mm256_cmpgt_epi32(sum, _mm256_set1_epi32((MLDSA_Q - 1) as i32));
     _mm256_sub_epi32(
@@ -60,7 +62,9 @@ fn mldsa_add_mod(lhs: __m256i, rhs: __m256i) -> __m256i {
 }
 
 #[inline]
-fn mldsa_sub_mod(lhs: __m256i, rhs: __m256i) -> __m256i {
+#[target_feature(enable = "avx2")]
+// SAFETY: callers must execute this helper only after runtime AVX2 detection.
+unsafe fn mldsa_sub_mod(lhs: __m256i, rhs: __m256i) -> __m256i {
     let difference = _mm256_sub_epi32(lhs, rhs);
     let mask = _mm256_cmpgt_epi32(_mm256_setzero_si256(), difference);
     _mm256_add_epi32(
@@ -81,6 +85,7 @@ pub fn mldsa_ntt(poly: &mut [u32; 256]) -> bool {
 }
 
 #[target_feature(enable = "avx2")]
+// SAFETY: the caller checks AVX2 at runtime before entering this function.
 unsafe fn mldsa_ntt_avx2(poly: &mut [u32; 256]) {
     let mut zeta_index = 1;
     let mut length = 128;
@@ -102,8 +107,10 @@ unsafe fn mldsa_ntt_avx2(poly: &mut [u32; 256]) {
                         _mm256_loadu_si256(products.as_ptr().cast()),
                     )
                 };
-                let sum = mldsa_add_mod(left, product);
-                let difference = mldsa_sub_mod(left, product);
+                // SAFETY: this function is entered only after runtime AVX2 detection.
+                let sum = unsafe { mldsa_add_mod(left, product) };
+                // SAFETY: this function is entered only after runtime AVX2 detection.
+                let difference = unsafe { mldsa_sub_mod(left, product) };
                 // SAFETY: both stores target eight coefficients inside the fixed array.
                 unsafe {
                     _mm256_storeu_si256(poly.as_mut_ptr().add(index).cast(), sum);
@@ -138,6 +145,7 @@ pub fn mldsa_inverse_ntt(poly: &mut [u32; 256]) -> bool {
 }
 
 #[target_feature(enable = "avx2")]
+// SAFETY: the caller checks AVX2 at runtime before entering this function.
 unsafe fn mldsa_inverse_ntt_avx2(poly: &mut [u32; 256]) {
     let mut zeta_index = 255;
     let mut length = 1;
@@ -155,8 +163,10 @@ unsafe fn mldsa_inverse_ntt_avx2(poly: &mut [u32; 256]) {
                         _mm256_loadu_si256(poly.as_ptr().add(index + length).cast()),
                     )
                 };
-                let sum = mldsa_add_mod(left, right);
-                let difference = mldsa_sub_mod(right, left);
+                // SAFETY: this function is entered only after runtime AVX2 detection.
+                let sum = unsafe { mldsa_add_mod(left, right) };
+                // SAFETY: this function is entered only after runtime AVX2 detection.
+                let difference = unsafe { mldsa_sub_mod(right, left) };
                 let mut products = [0_u32; 8];
                 // SAFETY: difference is stored to a bounded eight-lane temporary.
                 unsafe { _mm256_storeu_si256(products.as_mut_ptr().cast(), difference) };
