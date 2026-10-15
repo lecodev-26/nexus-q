@@ -287,8 +287,17 @@ jobs:
             "$NEXUSQ_ITERATIONS" "$NEXUSQ_WARMUPS" "$NEXUSQ_SIGN_SAMPLES_PER_SEED" "$AWSLC_ITERATIONS" "$AWSLC_WARMUPS" \
             | tee arena/results/v4-phase0/measurement-policy.txt
 
-      - name: Test benchmark statistics conventions
+      - name: Test benchmark statistics conventions (reference backend)
         run: cargo test --locked --manifest-path arena/runners/nexusq/Cargo.toml --bin nexusq-arena-runner
+
+      - name: Differential tests for experimental ML-KEM matrix sampling
+        run: cargo test --locked --manifest-path vendor/ml-kem/Cargo.toml --features experimental-kernels
+
+      - name: Differential tests for experimental ML-DSA matrix sampling
+        run: cargo test --manifest-path vendor/ml-dsa/Cargo.toml --features experimental-kernels
+
+      - name: Test benchmark runner with experimental kernels
+        run: cargo test --locked --features experimental-kernels --manifest-path arena/runners/nexusq/Cargo.toml --bin nexusq-arena-runner
 
       - name: Build locked NEXUS-Q Arena runner
         shell: bash
@@ -303,7 +312,7 @@ jobs:
           NEXUSQ_CPU_FREQUENCY_KHZ="$(cat arena/results/v4-phase0/cpu-frequency-khz.txt | grep -E '^[0-9]+$' || true)" \
           NEXUSQ_CPU_GOVERNOR="$(cat arena/results/v4-phase0/cpu-governor.txt)" \
           NEXUSQ_OPT=release \
-          cargo build --locked --release --features cached-verifier --manifest-path arena/runners/nexusq/Cargo.toml
+          cargo build --locked --release --features cached-verifier,experimental-kernels --manifest-path arena/runners/nexusq/Cargo.toml
           cp arena/runners/nexusq/target/release/nexusq-arena-runner arena/results/v4-phase0/nexusq-arena-runner
 
       - name: Fetch pinned AWS-LC source
@@ -359,7 +368,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cargo build --locked --release --features cached-verifier --bin profile_hotspots \
+          cargo build --locked --release --features cached-verifier,experimental-kernels --bin profile_hotspots \
             --manifest-path arena/runners/nexusq/Cargo.toml
           profiler=arena/runners/nexusq/target/release/profile_hotspots
           output=arena/results/v4-phase0/profile-hotspots.txt
@@ -388,7 +397,7 @@ jobs:
           # optimized/inlined Rust callees can be attributed where debug info permits.
           # Never changes the benchmark executable or the enforced 1.5x gate.
           if ! RUSTFLAGS="-C force-frame-pointers=yes -C debuginfo=2" cargo build --locked --release \
-              --features cached-verifier --bin profile_hotspots \
+              --features cached-verifier,experimental-kernels --bin profile_hotspots \
               --manifest-path arena/runners/nexusq/Cargo.toml; then
             printf '%s\n' 'SKIPPED: diagnostic build failed; regression gate remains unchanged.' | tee "$profile_dir/status.txt"
             exit 0

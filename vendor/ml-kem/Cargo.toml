@@ -67,6 +67,7 @@ zeroize = [
     "dep:zeroize",
 ]
 nexusq-kernels = ["dep:nexusq-kernels"]
+experimental-kernels = ["nexusq-kernels/experimental-avx2"]
 
 [lib]
 name = "ml_kem"

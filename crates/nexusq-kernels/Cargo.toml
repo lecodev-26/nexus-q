@@ -11,6 +11,8 @@ repository.workspace = true
 [features]
 default = []
 force-scalar = []
+# Opt-in only after differential tests and the security review pass.
+experimental-avx2 = []
 
 [dev-dependencies]
 module-lattice = { workspace = true }

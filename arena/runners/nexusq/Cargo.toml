@@ -7,6 +7,8 @@ publish = false
 [features]
 default = []
 cached-verifier = []
+# Explicitly opt in to the experimental SHAKE x4 path for differential tests and Arena.
+experimental-kernels = ["ml-dsa/experimental-kernels", "ml-kem/experimental-kernels"]
 
 [dependencies]
 nexusq-core = { path = "../../../crates/nexusq-core" }

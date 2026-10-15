@@ -106,11 +106,11 @@ where
     // four-lane SHAKE128 invocation. The final one to three polynomials use
     // the original scalar reader. This keeps the generic K=3 and K=4 paths
     // bit-identical without padding a batch with semantically fake matrix cells.
-    #[cfg(feature = "nexusq-kernels")]
+    #[cfg(feature = "experimental-kernels")]
     let mut pending: Option<core::array::IntoIter<NttPolynomial, 4>> = None;
 
     let sampled: Array<NttPolynomial, Prod<K, K>> = Array::from_fn(|index| {
-        #[cfg(feature = "nexusq-kernels")]
+        #[cfg(feature = "experimental-kernels")]
         if total - index >= 4 {
             if index % 4 == 0 {
                 let mut encoded = [[0_u8; 34]; 4];
@@ -153,7 +153,7 @@ where
     }))
 }
 
-#[cfg(feature = "nexusq-kernels")]
+#[cfg(feature = "experimental-kernels")]
 fn sample_ntt_x4(inputs: &[[u8; 34]; 4]) -> [NttPolynomial; 4] {
     use nexusq_kernels::api::ShakeX4;
 
@@ -462,7 +462,7 @@ mod test {
         typenum::{U2, U3, U8},
     };
 
-    #[cfg(feature = "nexusq-kernels")]
+    #[cfg(feature = "experimental-kernels")]
     #[test]
     fn four_way_sample_ntt_is_bit_exact_with_scalar_rejection_sampling() {
         use super::sample_ntt_x4;

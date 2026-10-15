@@ -7,7 +7,7 @@
 //! ML-KEM/ML-DSA flows and remains subject to Issue #23 acceptance gates.
 
 use crate::backend::{KernelBackend, ScalarBackend};
-use crate::dispatch::{Backend, SelectionReason, dispatch_info, selected_backend};
+use crate::dispatch::{Backend, selected_backend};
 use crate::scalar::keccak::Shake as ScalarShake;
 use crate::scalar::mlkem::Polynomial;
 
@@ -215,14 +215,13 @@ pub fn keccak_f1600(state: &mut [u64; 25]) {
 /// Apply Keccak-f\[1600\] to four independent states in parallel when an
 /// accelerated four-way kernel is available, otherwise use the scalar oracle.
 ///
-/// The AVX2 implementation is intentionally exposed as a batch primitive; it
-/// is not yet selected for single-state SHAKE or the top-level PQC flows.
+/// AVX2 execution is opt-in via the experimental-avx2 feature; without it,
+/// this API uses the scalar reference implementation even on AVX2-capable CPUs.
 #[inline]
 pub fn keccak_f1600x4(states: &mut [[u64; 25]; 4]) {
-    let force_scalar = dispatch_info().reason == SelectionReason::ForcedScalar;
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(all(target_arch = "x86_64", feature = "experimental-avx2"))]
     {
-        if !force_scalar && crate::x86_64::avx2::keccak_f1600x4(states) {
+        if !crate::dispatch::scalar_forced() && crate::x86_64::avx2::keccak_f1600x4(states) {
             return;
         }
     }

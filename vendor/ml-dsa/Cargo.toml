@@ -72,6 +72,7 @@ rand_core = [
     "signature/rand_core",
 ]
 nexusq-kernels = ["dep:nexusq-kernels"]
+experimental-kernels = ["nexusq-kernels/experimental-avx2"]
 zeroize = [
     "dep:zeroize",
     "hybrid-array/zeroize",
@@ -124,6 +125,7 @@ features = ["ctutils"]
 
 [dependencies.nexusq-kernels]
 version = "2.0.0"
+path = "../../crates/nexusq-kernels"
 optional = true
 
 [dependencies.pkcs8]

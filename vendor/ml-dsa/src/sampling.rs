@@ -184,7 +184,7 @@ fn rej_bounded_poly(rho: &[u8], eta: Eta, r: u16) -> Polynomial {
     a
 }
 
-#[cfg(feature = "nexusq-kernels")]
+#[cfg(feature = "experimental-kernels")]
 fn rej_ntt_poly_from_batch(rho: &[u8], r: u8, s: u8, buf: &[u8; 840]) -> NttPolynomial {
     let mut a = NttPolynomial::default();
     let mut j = 0;
@@ -224,7 +224,7 @@ fn rej_ntt_poly_from_batch(rho: &[u8], r: u8, s: u8, buf: &[u8; 840]) -> NttPoly
 pub(crate) fn expand_a<K: ArraySize, L: ArraySize>(rho: &[u8]) -> NttMatrix<K, L> {
     NttMatrix::new(Array::from_fn(|r| {
         let r = Truncate::truncate(r);
-        #[cfg(feature = "nexusq-kernels")]
+        #[cfg(feature = "experimental-kernels")]
         {
             let mut row: Array<NttPolynomial, L> = Array::from_fn(|_| NttPolynomial::default());
             let mut s = 0;
@@ -237,13 +237,17 @@ pub(crate) fn expand_a<K: ArraySize, L: ArraySize>(rho: &[u8]) -> NttMatrix<K, L
                 }
                 let mut outputs = [[0u8; 840]; 4];
                 let input_refs = [
-                    inputs[0].as_slice(), inputs[1].as_slice(),
-                    inputs[2].as_slice(), inputs[3].as_slice(),
+                    inputs[0].as_slice(),
+                    inputs[1].as_slice(),
+                    inputs[2].as_slice(),
+                    inputs[3].as_slice(),
                 ];
                 let [out0, out1, out2, out3] = &mut outputs;
                 let mut output_refs = [
-                    out0.as_mut_slice(), out1.as_mut_slice(),
-                    out2.as_mut_slice(), out3.as_mut_slice(),
+                    out0.as_mut_slice(),
+                    out1.as_mut_slice(),
+                    out2.as_mut_slice(),
+                    out3.as_mut_slice(),
                 ];
                 nexusq_kernels::api::shake128x4(input_refs, &mut output_refs);
                 for lane in 0..4 {
@@ -267,7 +271,7 @@ pub(crate) fn expand_a<K: ArraySize, L: ArraySize>(rho: &[u8]) -> NttMatrix<K, L
             }
             NttVector::new(row)
         }
-        #[cfg(not(feature = "nexusq-kernels"))]
+        #[cfg(not(feature = "experimental-kernels"))]
         {
             NttVector::new(Array::from_fn(|s| {
                 rej_ntt_poly(rho, r, Truncate::truncate(s))
@@ -340,7 +344,7 @@ mod test {
         }
     }
 
-    #[cfg(feature = "nexusq-kernels")]
+    #[cfg(feature = "experimental-kernels")]
     #[test]
     fn four_way_expand_a_sampling_matches_scalar_rejection_sampling() {
         // Exercise the exact SHAKE inputs used by ExpandA, including nonzero row
