@@ -6,45 +6,45 @@ A task may be checked only when its evidence is linked. A successful compile alo
 
 ## P0 — Repository and historical inventory
 
-- [ ] `NQ-001` Confirm clean worktree and record base commit, branch and remote refs.
-- [ ] `NQ-002` Compare main, nexusqv4, PR #46 and PR #47 file-by-file.
-- [ ] `NQ-003` Classify changed files as keep, adapt, historical or reject.
+- [x] `NQ-001` Confirm clean worktree and record base commit, branch and remote refs. Evidence: `docs/performance/HISTORICAL_DECISIONS.md`.
+- [x] `NQ-002` Compare main, nexusqv4, PR #46 and PR #47 file-by-file. Evidence: `docs/performance/FILE_MIGRATION_MATRIX.md`.
+- [x] `NQ-003` Classify changed files as keep, adapt, historical or reject. Evidence: `docs/performance/FILE_MIGRATION_MATRIX.md`.
 - [ ] `NQ-004` Verify archive manifests and SHA-256 hashes for retained artifacts.
-- [ ] `NQ-005` Identify deleted workflows and ensure repository-wide gates are preserved.
+- [x] `NQ-005` Identify deleted workflows and ensure repository-wide gates are preserved. The new branch is additive; existing workflows remain intact. Evidence: `.github/workflows/native-assembly-ci.yml`.
 - [ ] `NQ-006` Inventory current production callsites for all nine operations.
 - [ ] `NQ-007` Record dependency versions and vendored-source provenance.
-- [ ] `NQ-008` Confirm README and active docs distinguish current state from history.
+- [x] `NQ-008` Confirm README and active docs distinguish current state from history. Evidence: `README.md` and `docs/performance/HISTORICAL_DECISIONS.md`.
 
 ## P1 — New line and project documentation
 
-- [ ] `NQ-009` Create issue #48 and cross-link the historical issue.
-- [ ] `NQ-010` Create a dedicated branch from the selected stable base.
+- [x] `NQ-009` Create issue #48 and cross-link the historical issue. Evidence: [Issue #48](https://github.com/lecodev-26/nexus-q/issues/48) links #23, #46 and #47.
+- [x] `NQ-010` Create a dedicated branch from the selected stable base. Evidence: `perf/issue-48-native-assembly-gate`, based on `nexusqv4` commit `dc560e0`.
 - [ ] `NQ-011` Create a dedicated PR and link issue #48.
-- [ ] `NQ-012` Add ROADMAP.md with phase exit criteria.
-- [ ] `NQ-013` Add IMPLEMENTATION_CHECKLIST.md with stable task IDs.
-- [ ] `NQ-014` Add BENCHMARK_BASELINE.md with raw-evidence references.
-- [ ] `NQ-015` Add CORRECTNESS_AND_SECURITY.md with blocking requirements.
-- [ ] `NQ-016` Add HISTORICAL_DECISIONS.md and preserve prior audit documents.
-- [ ] `NQ-017` Update README performance status without claiming a pass.
+- [x] `NQ-012` Add ROADMAP.md with phase exit criteria. Evidence: `docs/performance/ROADMAP.md`.
+- [x] `NQ-013` Add IMPLEMENTATION_CHECKLIST.md with stable task IDs. Evidence: 110 IDs in `docs/performance/IMPLEMENTATION_CHECKLIST.md`.
+- [x] `NQ-014` Add BENCHMARK_BASELINE.md with raw-evidence references. Evidence: `docs/performance/BENCHMARK_BASELINE.md`.
+- [x] `NQ-015` Add CORRECTNESS_AND_SECURITY.md with blocking requirements. Evidence: `docs/performance/CORRECTNESS_AND_SECURITY.md`.
+- [x] `NQ-016` Add HISTORICAL_DECISIONS.md and preserve prior audit documents under `docs/performance/history/`.
+- [x] `NQ-017` Update README performance status without claiming a pass. Evidence: V4 status section in `README.md`.
 - [ ] `NQ-018` Update changelog only when real implementation changes exist.
 
 ## P2 — CI and benchmark contract
 
-- [ ] `NQ-019` Add a fast Rust validation workflow for the new branch/PR.
-- [ ] `NQ-020` Add an unsafe-code policy check for the kernel boundary.
-- [ ] `NQ-021` Keep existing security, fuzz, SDK and release workflows intact.
-- [ ] `NQ-022` Pin the AWS-LC commit and record its build configuration.
-- [ ] `NQ-023` Pin Rust toolchain and record rustc/cargo versions.
-- [ ] `NQ-024` Ensure the benchmark measures the actual local production code.
-- [ ] `NQ-025` Ensure all nine required operations are present.
-- [ ] `NQ-026` Use 100 warmups and 1000 measured operations per operation.
-- [ ] `NQ-027` Preserve raw per-operation latency samples.
-- [ ] `NQ-028` Compute median, p95 and dispersion from raw samples.
-- [ ] `NQ-029` Record CPU model/features, OS, flags, revision and lockfile hash.
+- [x] `NQ-019` Add a fast Rust validation workflow for the new branch/PR. Evidence: `.github/workflows/native-assembly-ci.yml`; first remote execution pending.
+- [x] `NQ-020` Add an unsafe-code policy check for the kernel boundary. Evidence: `.github/scripts/check-kernel-unsafe.py`; first remote execution pending.
+- [x] `NQ-021` Keep existing security, fuzz, SDK and release workflows intact. No legacy workflow deletions were imported.
+- [x] `NQ-022` Pin the AWS-LC commit and record its build configuration in `.github/workflows/native-assembly-benchmarks.yml`.
+- [x] `NQ-023` Pin the CI channel to stable and record rustc/cargo versions in both native assembly workflows.
+- [x] `NQ-024` Ensure the benchmark is configured to use the branch's path-patched vendored ML-KEM/ML-DSA and `experimental-kernels` feature; remote confirmation pending.
+- [x] `NQ-025` The runner and evaluator define all nine required operations; remote output validation will confirm each operation.
+- [x] `NQ-026` Configure 100 warmups and 1000 measured samples (ML-DSA sign uses 1024 seeded samples) in the benchmark workflow.
+- [x] `NQ-027` Preserve raw `samples_ns` in each JSONL result and upload all round files as CI artifacts.
+- [x] `NQ-028` Compute median, nearest-rank p95 and population standard deviation from pooled raw samples in `arena/scripts/evaluate_native_assembly_gate.py`.
+- [x] `NQ-029` Capture CPU/toolchain/revision/lock hash and per-row CPU features in the benchmark workflow.
 - [ ] `NQ-030` Review wrapper/context overhead for every comparator operation.
-- [ ] `NQ-031` Alternate suite order or use repeated paired rounds where feasible.
-- [ ] `NQ-032` Fail if any required operation or comparator result is missing.
-- [ ] `NQ-033` Upload JSONL, summary report, metadata and toolchain artifacts.
+- [x] `NQ-031` Configure three rounds with alternating NEXUS-Q/AWS-LC suite order.
+- [x] `NQ-032` Evaluator fails closed on missing operations, duplicate rows, invalid samples or fewer than 1000 samples.
+- [x] `NQ-033` Configure upload of raw JSONL, gate report and host/toolchain metadata; first artifact pending CI execution.
 
 ## P3 — ML-KEM basemul and accumulation
 

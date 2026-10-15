@@ -16,19 +16,19 @@ This matrix records intended treatment. “Candidate” means the content still 
 | `docs/V4_ISSUE_23_COMPARATIVE_KERNEL_AUDIT_2026-10-15.md` | Historical + technical reference | Reuse source map and hypotheses; do not present hypotheses as measured attribution. |
 | `docs/OBSERVABILITY.md` | Review | Reuse artifact and metadata practices when still compatible. |
 | `docs/COMMERCIAL_READINESS.md` | Leave unchanged initially | Not part of the kernel-performance scope. |
-| `arena/adapters/aws-lc/runner.c` | Candidate to reuse | Improved sample distributions are valuable; add/verify all nine operations and ensure comparable boundaries. |
-| `arena/runners/nexusq/src/main.rs` | Candidate to reuse | Preserve sample-level output and metadata; verify direct production path and operation coverage. |
+| `arena/adapters/aws-lc/runner.c` | Imported, CI validation pending | Imported in commit `e175fba`; it covers ML-KEM-768/1024 and ML-DSA-65 with raw samples. Comparator-boundary review remains open. |
+| `arena/runners/nexusq/src/main.rs` | Imported, CI validation pending | Imported in commit `e175fba`; path-patched vendor dependencies and `experimental-kernels` are enabled by the standalone manifest. Remote output validation remains pending. |
 | `arena/runners/nexusq/src/bin/hybrid_benchmark.rs` | Review separately | Keep only if it serves the required production-path contract. |
-| `arena/runners/nexusq/Cargo.toml` and `Cargo.lock` | Adapt with harness | Dependencies must resolve to the exact code under test; do not import without matching source and feature wiring. |
-| `arena/protocol.md` | Keep + adapt | Preserve schema/measurement definitions; explicitly document wrapper costs. |
-| `arena/schemas/benchmark-result.schema.json` | Keep + version if needed | Validate every emitted row and required metadata. |
+| `arena/runners/nexusq/Cargo.toml` and `Cargo.lock` | Imported with harness | Imported in commit `e175fba` together with kernel crate, vendored ML-DSA and selected ML-KEM integration changes. Validate on CI. |
+| `arena/protocol.md` | Imported, review pending | Imported in commit `e175fba`; wrapper/context costs still require explicit review. |
+| `arena/schemas/benchmark-result.schema.json` | Imported, CI validation pending | Imported in commit `e175fba`; benchmark workflow currently checks required operations and raw samples. |
 | `arena/adapters/aws-lc/README.md` | Keep + adapt | Preserve pinned source/build instructions and limitations. |
 | `artifact-archive/**` | Preserve as history | Keep raw evidence, hashes and manifests; never treat old results as new results. |
-| `crates/nexusq-kernels/**` | Selective code review | Reuse valid scalar oracle/API/tests; previous intrinsics are baseline candidates, not proof of assembly performance. |
-| `vendor/ml-kem/**` | Selective code review | Keep source provenance and correct call sites; recheck all arithmetic and feature gates. |
-| `vendor/ml-dsa/**` | Candidate to import selectively/whole if required | Preserve upstream licenses and commit; review changes and test vectors. |
+| `crates/nexusq-kernels/**` | Imported baseline; assembly work remains | Imported in commit `e175fba` as scalar/intrinsics baseline. It does not satisfy the new hand-written assembly requirement by itself. |
+| `vendor/ml-kem/**` | Selective changes imported | Selected manifest, algebra, compression and parameter changes imported in `e175fba`; arithmetic and callsite review remains open. |
+| `vendor/ml-dsa/**` | Vendored source imported | Imported in `e175fba` with license files and `UPSTREAM.md`; review experimental changes before relying on them. |
 | `vendor/module-lattice/**` | Preserve/inspect | ML-DSA arithmetic dependencies must stay version-consistent. |
-| `.github/workflows/ci.yml` from old PR | Do not import wholesale | It replaces/deletes unrelated workflows; new CI must be additive and focused. |
+| `.github/workflows/ci.yml` from old PR | Do not import | It replaces/deletes unrelated workflows; new CI is additive and focused. |
 | `.github/workflows/pqc-arena.yml` | Reuse selected logic | Existing matrix includes unnecessary comparators; extract only required NEXUS-Q/AWS-LC work after verifying contracts. |
 | Security, fuzz, SDK and release workflows | Preserve | Specialized performance CI must not remove repository-wide gates. |
 | `.github/workflows/v4-issue23-phase0.yml` | Review | Preserve useful provenance logic if needed; do not keep duplicate triggers unnecessarily. |

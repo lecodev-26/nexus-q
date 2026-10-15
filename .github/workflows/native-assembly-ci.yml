@@ -1,0 +1,79 @@
+name: NEXUS-Q Native Assembly CI
+
+on:
+  push:
+    branches: ["perf/issue-48-native-assembly-gate"]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/**"
+      - "vendor/**"
+      - "arena/runners/nexusq/**"
+      - "arena/scripts/**"
+      - ".github/scripts/**"
+      - ".github/workflows/native-assembly-*.yml"
+      - "docs/performance/**"
+  pull_request:
+    branches: ["nexusqv4"]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/**"
+      - "vendor/**"
+      - "arena/runners/nexusq/**"
+      - "arena/scripts/**"
+      - ".github/scripts/**"
+      - ".github/workflows/native-assembly-*.yml"
+      - "docs/performance/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-assembly-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust-validation:
+    name: Rust format, check, clippy, tests, build and docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Record tested revision and toolchain
+        run: |
+          git rev-parse HEAD
+          rustc -Vv
+          cargo -V
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Check workspace and all targets
+        run: cargo check --workspace --all-targets --locked
+      - name: Run Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Run workspace tests
+        run: cargo test --workspace --locked
+      - name: Build workspace
+        run: cargo build --workspace --all-targets --locked
+      - name: Build public documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --workspace --no-deps --locked --jobs 1
+      - name: Check patch whitespace
+        run: git diff --check origin/nexusqv4...HEAD
+
+  kernel-boundary:
+    name: Kernel unsafe-code boundary
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enforce unsafe-code policy
+        run: python3 .github/scripts/check-kernel-unsafe.py

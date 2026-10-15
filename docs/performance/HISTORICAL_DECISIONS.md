@@ -3,7 +3,7 @@
 This new performance initiative is tracked by [Issue #48](https://github.com/lecodev-26/nexus-q/issues/48). The previous V4 implementation line is preserved for reference in [PR #46](https://github.com/lecodev-26/nexus-q/pull/46), [PR #47](https://github.com/lecodev-26/nexus-q/pull/47), and [Issue #23](https://github.com/lecodev-26/nexus-q/issues/23).
 
 ## New-line baseline
-The dedicated branch `perf/issue-48-native-assembly-gate` was created from `nexusqv4` at base commit `dc560e0817d8d3a39b69f0c7811bcaab57b23cda`. The selected baseline is intentionally separate from the 153-commit PR #46 branch; reusable components are imported selectively and recorded in `FILE_MIGRATION_MATRIX.md`.
+The dedicated branch `perf/issue-48-native-assembly-gate` was created from `nexusqv4` at base commit `dc560e0817d8d3a39b69f0c7811bcaab57b23cda`. The selected baseline is intentionally separate from the 153-commit PR #46 branch. The documentation/history baseline is commit `c3bba13`; reviewed kernel/benchmark components were imported selectively in commit `e175fba` and are recorded in `FILE_MIGRATION_MATRIX.md`. The new CI and evaluator are being added as a separate commit.
 
 ## Why the plan was reset
 The previous line established useful scalar kernels, experimental AVX2 paths, vendored RustCrypto integration, benchmark sampling and CI evidence, but the recorded production performance gate remained red. The new line makes native assembly an explicit implementation requirement from the first new optimized kernel and isolates a dedicated performance-focused CI.
