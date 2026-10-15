@@ -560,13 +560,25 @@ mod tests {
             let lhs = core::array::from_fn(|i| match pattern {
                 0 => 0,
                 1 => 3328,
-                2 => if i % 2 == 0 { 0 } else { 3328 },
+                2 => {
+                    if i % 2 == 0 {
+                        0
+                    } else {
+                        3328
+                    }
+                }
                 _ => ((i * 313 + 3328) % 3329) as u16,
             });
             let rhs = core::array::from_fn(|i| match pattern {
                 0 => 3328,
                 1 => 3328,
-                2 => if i % 2 == 0 { 3328 } else { 0 },
+                2 => {
+                    if i % 2 == 0 {
+                        3328
+                    } else {
+                        0
+                    }
+                }
                 _ => ((i * 811 + 17) % 3329) as u16,
             });
 
