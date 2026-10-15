@@ -1,6 +1,9 @@
 /* FIPS202 backend for NEXUS-Q on x86-64 (MLD):
- *  - 4-way: upstream AVX2 backend (same algorithm/signature as s2n-bignum
- *    sha3_keccak4_f1600_alt used by AWS-LC), runtime-gated on AVX2.
+ *  - 4-way: upstream AVX2 backend, runtime-gated on AVX2. AWS-LC instead uses
+ *    s2n-bignum sha3_keccak4_f1600_alt (same signature and state layout,
+ *    different code). Measured on GitHub runners, the s2n routine was ~1%
+ *    slower on AMD EPYC 7763 and neutral on Zen 4 (runs 38798035934,
+ *    38798036136), so upstream's routine is kept (see NATIVE_BACKEND.md, D9).
  *  - 1-way: s2n-bignum sha3_keccak_f1600, the routine AWS-LC uses on x86-64.
  *    Baseline x86-64 instructions only, so no capability check is needed. */
 #ifndef NQ_FIPS202_X86_64_MLD_H
