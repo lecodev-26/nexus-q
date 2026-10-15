@@ -62,3 +62,12 @@ doc = false
 bench = false
 
 [workspace]
+
+# This directory is an independent Cargo workspace, so it must repeat the
+# workspace's local PQC patches. Otherwise fuzz builds resolve crates.io
+# ml-dsa, which does not provide NEXUS-Q's `nexusq-kernels` feature.
+[patch.crates-io]
+ml-dsa = { path = "../vendor/ml-dsa" }
+ml-kem = { path = "../vendor/ml-kem" }
+module-lattice = { path = "../vendor/module-lattice" }
+nexusq-kernels = { path = "../crates/nexusq-kernels" }
