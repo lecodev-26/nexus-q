@@ -216,10 +216,11 @@ unsafe fn mlkem_ntt_avx2(poly: &mut [u16; 256]) {
 
 // AVX2 has no general packed 32x32->64 high-multiply. Compute the high halves
 // of even and odd lanes separately, then interleave the quotient estimates.
-///
 /// # Safety
 /// The caller must execute on a CPU supporting AVX2.
 #[target_feature(enable = "avx2")]
+// SAFETY: called only from the AVX2-targeted NTT routine after runtime feature
+// detection. It performs no memory access or pointer arithmetic.
 unsafe fn reduce_mlkem_product(value: __m256i) -> __m256i {
     let reciprocal = _mm256_set1_epi32(MLKEM_RECIPROCAL);
     let even_products = _mm256_mul_epu32(value, reciprocal);
