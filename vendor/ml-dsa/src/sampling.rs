@@ -340,6 +340,38 @@ mod test {
         }
     }
 
+    #[cfg(feature = "nexusq-kernels")]
+    #[test]
+    fn four_way_expand_a_sampling_matches_scalar_rejection_sampling() {
+        // Exercise the exact SHAKE inputs used by ExpandA, including nonzero row
+        // and column coordinates, and compare every coefficient bit-for-bit.
+        let rho = core::array::from_fn::<_, 32, _>(|i| (i as u8).wrapping_mul(17));
+        let coordinates = [(0_u8, 0_u8), (0, 1), (2, 3), (5, 1)];
+        let mut inputs = [[0_u8; 34]; 4];
+        for (lane, (row, column)) in coordinates.into_iter().enumerate() {
+            inputs[lane][..32].copy_from_slice(&rho);
+            inputs[lane][32] = column;
+            inputs[lane][33] = row;
+        }
+
+        let input_refs = core::array::from_fn(|lane| inputs[lane].as_slice());
+        let mut outputs = [[0_u8; 840]; 4];
+        let [out0, out1, out2, out3] = &mut outputs;
+        let mut output_refs = [
+            out0.as_mut_slice(),
+            out1.as_mut_slice(),
+            out2.as_mut_slice(),
+            out3.as_mut_slice(),
+        ];
+        nexusq_kernels::api::shake128x4(input_refs, &mut output_refs);
+
+        for (lane, (row, column)) in coordinates.into_iter().enumerate() {
+            let actual = rej_ntt_poly_from_batch(&rho, row, column, &outputs[lane]);
+            let expected = rej_ntt_poly(&rho, row, column);
+            assert_eq!(actual, expected, "ExpandA coordinates ({row}, {column})");
+        }
+    }
+
     // Verify that RejNTTPoly produces samples that are in the proper range, and roughly uniform.
     // For the "roughly uniform" criterion,
     #[test]
