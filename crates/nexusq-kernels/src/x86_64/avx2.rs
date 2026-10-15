@@ -5,8 +5,11 @@
 //! calls. The scalar implementation remains the reference and fallback.
 
 use core::arch::x86_64::{
-    __m256i, _mm256_andnot_si256, _mm256_or_si256, _mm256_set_epi64x, _mm256_set1_epi64x,
-    _mm256_sllv_epi64, _mm256_srlv_epi64, _mm256_storeu_si256, _mm256_xor_si256,
+    __m256i, _mm_loadu_si128, _mm256_add_epi32, _mm256_and_si256, _mm256_andnot_si256,
+    _mm256_blend_epi32, _mm256_cmpgt_epi32, _mm256_cvtepu16_epi32, _mm256_mul_epu32,
+    _mm256_mullo_epi32, _mm256_or_si256, _mm256_set_epi64x, _mm256_set1_epi32, _mm256_set1_epi64x,
+    _mm256_setzero_si256, _mm256_sllv_epi64, _mm256_srli_epi64, _mm256_srlv_epi64,
+    _mm256_storeu_si256, _mm256_sub_epi32, _mm256_xor_si256,
 };
 
 use crate::scalar::keccak::{ROTATION_OFFSETS, ROUND_CONSTANTS};
@@ -102,8 +105,141 @@ unsafe fn keccak_f1600x4_avx2(states: &mut [[u64; 25]; 4]) {
     }
 }
 
-// SAFETY: The caller must execute with AVX2 enabled; all current callers are
-// inside `keccak_f1600x4_avx2`, which carries that target feature.
+/// Run the forward ML-KEM NTT over canonical coefficients using AVX2 butterflies.
+///
+/// The public wrapper performs runtime AVX2 detection. Coefficients and twiddle
+/// factors are in `0..3329`; all SIMD arithmetic is 32-bit, so products remain
+/// below 2^24 before Barrett-style reduction. Stages with fewer than eight
+/// butterflies per group use the scalar constant-time arithmetic fallback.
+pub fn mlkem_ntt(poly: &mut [u16; 256]) -> bool {
+    if !std::is_x86_feature_detected!("avx2") {
+        return false;
+    }
+    // SAFETY: runtime detection guarantees AVX2 support for this call.
+    unsafe { mlkem_ntt_avx2(poly) };
+    true
+}
+
+const MLKEM_Q: i32 = 3329;
+const MLKEM_RECIPROCAL: i32 = 1_290_167; // floor(2^32 / 3329)
+
+const fn mlkem_zetas() -> [i32; 128] {
+    let mut table = [0_i32; 128];
+    let mut index = 0;
+    while index < table.len() {
+        let mut source = index as u8;
+        let mut reversed = 0_u8;
+        let mut bit = 0;
+        while bit < 7 {
+            reversed = (reversed << 1) | (source & 1);
+            source >>= 1;
+            bit += 1;
+        }
+        let mut exponent = reversed as u32;
+        let mut result = 1_u32;
+        let mut factor = 17_u32;
+        while exponent != 0 {
+            if exponent & 1 != 0 {
+                result = (result * factor) % MLKEM_Q as u32;
+            }
+            factor = (factor * factor) % MLKEM_Q as u32;
+            exponent >>= 1;
+        }
+        table[index] = result as i32;
+        index += 1;
+    }
+    table
+}
+
+const MLKEM_ZETAS: [i32; 128] = mlkem_zetas();
+
+// SAFETY: caller must guarantee AVX2 support. All vector values remain small
+// nonnegative signed i32 values, and every memory operation is bounded by the
+// fixed 256-coefficient polynomial.
+#[target_feature(enable = "avx2")]
+unsafe fn mlkem_ntt_avx2(poly: &mut [u16; 256]) {
+    let mut zeta_index = 1;
+    let mut length = 128;
+    while length >= 2 {
+        for start in (0..256).step_by(2 * length) {
+            let zeta = MLKEM_ZETAS[zeta_index];
+            zeta_index += 1;
+            let mut index = start;
+            while index + 8 <= start + length {
+                // Load eight u16 coefficients and widen them to eight i32 lanes.
+                // SAFETY: each slice covers exactly eight readable coefficients.
+                let left16 = unsafe { _mm_loadu_si128(poly.as_ptr().add(index).cast()) };
+                // SAFETY: the right-hand butterfly slice also has eight coefficients.
+                let right16 = unsafe { _mm_loadu_si128(poly.as_ptr().add(index + length).cast()) };
+                let left = _mm256_cvtepu16_epi32(left16);
+                let right = _mm256_cvtepu16_epi32(right16);
+                // SAFETY: this function is itself AVX2-targeted and the runtime
+                // wrapper checks AVX2 before entering it.
+                let product = unsafe {
+                    reduce_mlkem_product(_mm256_mullo_epi32(right, _mm256_set1_epi32(zeta)))
+                };
+                let sum = _mm256_add_epi32(left, product);
+                let sum_mask = _mm256_cmpgt_epi32(sum, _mm256_set1_epi32(MLKEM_Q - 1));
+                let sum =
+                    _mm256_sub_epi32(sum, _mm256_and_si256(sum_mask, _mm256_set1_epi32(MLKEM_Q)));
+                let difference = _mm256_sub_epi32(left, product);
+                let negative = _mm256_cmpgt_epi32(_mm256_setzero_si256(), difference);
+                let difference = _mm256_add_epi32(
+                    difference,
+                    _mm256_and_si256(negative, _mm256_set1_epi32(MLKEM_Q)),
+                );
+                let mut sums = [0_i32; 8];
+                let mut differences = [0_i32; 8];
+                // SAFETY: both temporary arrays provide 32 writable bytes.
+                unsafe {
+                    _mm256_storeu_si256(sums.as_mut_ptr().cast(), sum);
+                    _mm256_storeu_si256(differences.as_mut_ptr().cast(), difference);
+                }
+                for lane in 0..8 {
+                    poly[index + lane] = sums[lane] as u16;
+                    poly[index + length + lane] = differences[lane] as u16;
+                }
+                index += 8;
+            }
+            while index < start + length {
+                let left = i32::from(poly[index]);
+                let right = i32::from(poly[index + length]);
+                let product = (zeta * right) % MLKEM_Q;
+                poly[index] = ((left + product) % MLKEM_Q) as u16;
+                poly[index + length] = (left - product).rem_euclid(MLKEM_Q) as u16;
+                index += 1;
+            }
+        }
+        length /= 2;
+    }
+}
+
+// AVX2 has no general packed 32x32->64 high-multiply. Compute the high halves
+// of even and odd lanes separately, then interleave the quotient estimates.
+///
+/// # Safety
+/// The caller must execute on a CPU supporting AVX2.
+#[target_feature(enable = "avx2")]
+unsafe fn reduce_mlkem_product(value: __m256i) -> __m256i {
+    let reciprocal = _mm256_set1_epi32(MLKEM_RECIPROCAL);
+    let even_products = _mm256_mul_epu32(value, reciprocal);
+    let odd_products = _mm256_mul_epu32(_mm256_srli_epi64(value, 32), reciprocal);
+    let even_quotients = _mm256_srli_epi64(even_products, 32);
+    let odd_quotients = _mm256_srli_epi64(odd_products, 32);
+    let quotient = _mm256_blend_epi32(even_quotients, odd_quotients, 0b1010_1010);
+    let remainder = _mm256_sub_epi32(
+        value,
+        _mm256_mullo_epi32(quotient, _mm256_set1_epi32(MLKEM_Q)),
+    );
+    let needs_subtract = _mm256_cmpgt_epi32(remainder, _mm256_set1_epi32(MLKEM_Q - 1));
+    _mm256_sub_epi32(
+        remainder,
+        _mm256_and_si256(needs_subtract, _mm256_set1_epi32(MLKEM_Q)),
+    )
+}
+
+// SAFETY: The caller must execute with AVX2 enabled; callers are inside an
+// AVX2-targeted kernel after the public wrapper's runtime feature check.
 #[target_feature(enable = "avx2")]
 #[inline]
 unsafe fn rotate_left_64(value: __m256i, amount: u32) -> __m256i {

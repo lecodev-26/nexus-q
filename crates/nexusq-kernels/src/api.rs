@@ -317,6 +317,28 @@ pub fn shake256(input: &[u8], output: &mut [u8]) {
     }
 }
 
+/// Apply the forward ML-KEM NTT to 256 canonical coefficients.
+///
+/// The AVX2 implementation is available only when `experimental-avx2` is
+/// enabled and the current CPU supports AVX2. Other configurations use the
+/// portable scalar oracle. This entry point is intended for the vendored
+/// ML-KEM adapter; ML-DSA uses a different modulus and transform contract.
+pub fn ntt_mlkem(coefficients: &mut [u16; 256]) {
+    #[cfg(all(target_arch = "x86_64", feature = "experimental-avx2"))]
+    if !crate::dispatch::scalar_forced() && crate::x86_64::avx2::mlkem_ntt(coefficients) {
+        return;
+    }
+
+    let mut signed = [0_i16; 256];
+    for (out, input) in signed.iter_mut().zip(coefficients.iter().copied()) {
+        *out = input as i16;
+    }
+    crate::scalar::mlkem::ntt(&mut signed);
+    for (out, input) in coefficients.iter_mut().zip(signed) {
+        *out = input as u16;
+    }
+}
+
 /// Apply the selected ML-KEM number-theoretic transform in place.
 #[inline]
 pub fn ntt(poly: &mut Polynomial) {

@@ -269,17 +269,34 @@ impl Ntt for Polynomial {
     type Output = NttPolynomial;
 
     fn ntt(&self) -> NttPolynomial {
+        #[cfg(feature = "experimental-kernels")]
+        {
+            let mut coefficients = core::array::from_fn(|index| self.0[index].0);
+            nexusq_kernels::api::ntt_mlkem(&mut coefficients);
+            return NttPolynomial::new(Array::from_fn(|index| Elem::new(coefficients[index])));
+        }
+
+        #[cfg(not(feature = "experimental-kernels"))]
         let mut k = 1;
+        #[cfg(not(feature = "experimental-kernels"))]
         let mut f = self.0;
 
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_layer::<128, 1>(&mut f, &mut k);
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_layer::<64, 2>(&mut f, &mut k);
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_layer::<32, 4>(&mut f, &mut k);
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_layer::<16, 8>(&mut f, &mut k);
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_layer::<8, 16>(&mut f, &mut k);
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_layer::<4, 32>(&mut f, &mut k);
+        #[cfg(not(feature = "experimental-kernels"))]
         ntt_layer::<2, 64>(&mut f, &mut k);
 
+        #[cfg(not(feature = "experimental-kernels"))]
         f.into()
     }
 }
@@ -524,6 +541,35 @@ mod test {
         assert_eq!((&f + &g), sum);
         assert_eq!((&sum - &g), f);
         assert_eq!(Elem::new(3) * &f, sum);
+    }
+
+    #[cfg(feature = "experimental-kernels")]
+    #[test]
+    fn experimental_forward_ntt_matches_scalar_bit_exactly() {
+        for pattern in 0..5_u16 {
+            let polynomial = Polynomial::new(Array::from_fn(|index| {
+                let value = match pattern {
+                    0 => 0,
+                    1 => 3328,
+                    2 => (index as u16).wrapping_mul(13) % 3329,
+                    3 => ((255 - index) as u16).wrapping_mul(29) % 3329,
+                    _ => ((index as u16).wrapping_mul(73).wrapping_add(991)) % 3329,
+                };
+                Elem::new(value)
+            }));
+
+            let mut expected = polynomial.0;
+            let mut k = 1;
+            ntt_layer::<128, 1>(&mut expected, &mut k);
+            ntt_layer::<64, 2>(&mut expected, &mut k);
+            ntt_layer::<32, 4>(&mut expected, &mut k);
+            ntt_layer::<16, 8>(&mut expected, &mut k);
+            ntt_layer::<8, 16>(&mut expected, &mut k);
+            ntt_layer::<4, 32>(&mut expected, &mut k);
+            ntt_layer::<2, 64>(&mut expected, &mut k);
+
+            assert_eq!(polynomial.ntt().0, expected, "pattern {pattern}");
+        }
     }
 
     #[test]
