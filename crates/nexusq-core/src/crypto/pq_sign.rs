@@ -12,6 +12,7 @@ use ml_dsa::{
     Verifier as _,
 };
 use slh_dsa::Shake128f;
+use slh_dsa::signature::{Keypair as _, Signer as _, Verifier as _};
 use slh_dsa::{SigningKey as SlhSigningKey, VerifyingKey as SlhVerifyingKey};
 use zeroize::Zeroizing;
 
