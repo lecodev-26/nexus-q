@@ -1,5 +1,9 @@
 //! ML-KEM-1024 + X25519 hybrid key encapsulation.
-use ml_kem::kem::{Decapsulate, Encapsulate, Kem};
+#[cfg(feature = "native-backend")]
+use ml_kem::ExpandedKeyEncoding as _;
+use ml_kem::kem::Kem;
+#[cfg(not(feature = "native-backend"))]
+use ml_kem::kem::{Decapsulate as _, Encapsulate as _};
 use ml_kem::{DecapsulationKey1024, EncapsulationKey1024, KeyExport, MlKem1024};
 use sha3::{Digest, Sha3_256};
 use x25519_dalek::{EphemeralSecret, PublicKey as X25519Public, StaticSecret};
@@ -73,15 +77,26 @@ pub fn encapsulate(
     }
     let (ml_pk, x_pk) = public_key.split_at(1568);
     let arr: [u8; 1568] = ml_pk.try_into().map_err(|_| KemError::InvalidPublicKey)?;
-    let key = ml_kem::Key::<EncapsulationKey1024>::from(arr);
-    let ml_pk = EncapsulationKey1024::new(&key).map_err(|_| KemError::InvalidPublicKey)?;
-    let (ct, ml_ss) = ml_pk.encapsulate();
+    #[cfg(feature = "native-backend")]
+    let (ct_bytes, ml_ss_bytes) = {
+        let ml_pk = nexusq_native_backend::mlkem1024::EncapsulationKey::from_bytes(&arr)
+            .map_err(|_| KemError::InvalidPublicKey)?;
+        let (ct, ss) = ml_pk.encapsulate().map_err(|_| KemError::Encapsulate)?;
+        (ct.0.to_vec(), *ss.as_bytes())
+    };
+    #[cfg(not(feature = "native-backend"))]
+    let (ct_bytes, ml_ss_bytes) = {
+        let key = ml_kem::Key::<EncapsulationKey1024>::from(arr);
+        let ml_pk = EncapsulationKey1024::new(&key).map_err(|_| KemError::InvalidPublicKey)?;
+        let (ct, ss) = ml_pk.encapsulate();
+        (ct.as_slice().to_vec(), <[u8; 32]>::from(ss))
+    };
     let x_arr: [u8; 32] = x_pk.try_into().map_err(|_| KemError::InvalidPublicKey)?;
     let eph = EphemeralSecret::random();
     let eph_pub = X25519Public::from(&eph);
     let x_ss = eph.diffie_hellman(&X25519Public::from(x_arr));
     let mut input = Zeroizing::new(Vec::with_capacity(64 + 32 + 32 + INFO.len()));
-    input.extend_from_slice(ml_ss.as_slice());
+    input.extend_from_slice(&ml_ss_bytes);
     input.extend_from_slice(x_ss.as_bytes());
     input.extend_from_slice(eph_pub.as_bytes());
     input.extend_from_slice(x_pk);
@@ -92,7 +107,7 @@ pub fn encapsulate(
     // The ciphertext carries the same X25519 ephemeral public key that was
     // authenticated by the combiner above.
     let mut out_ct = Vec::with_capacity(CIPHERTEXT_LEN);
-    out_ct.extend_from_slice(ct.as_slice());
+    out_ct.extend_from_slice(&ct_bytes);
     out_ct.extend_from_slice(eph_pub.as_bytes());
     Ok((out_ct, out))
 }
@@ -107,14 +122,39 @@ pub fn decapsulate(
     }
     let (ml_ct, x_pub) = ciphertext.split_at(1568);
     let ct_arr: [u8; 1568] = ml_ct.try_into().map_err(|_| KemError::InvalidCiphertext)?;
-    let ct: ml_kem::ml_kem_1024::Ciphertext = ct_arr.into();
-    let ml_ss = pair.ml_kem_secret.decapsulate(&ct);
+    #[cfg(feature = "native-backend")]
+    let ml_ss_bytes = {
+        // Reuse the already-expanded FIPS key; do not repeat key generation on
+        // each decapsulation. This representation is identical to the native ABI.
+        #[allow(deprecated)]
+        let encoded_secret = pair.ml_kem_secret.to_expanded_bytes();
+        let native_bytes: Zeroizing<[u8; 3168]> = Zeroizing::new(
+            encoded_secret
+                .as_slice()
+                .try_into()
+                .expect("ML-KEM-1024 expanded secret key is 3168 bytes"),
+        );
+        let native_secret =
+            nexusq_native_backend::mlkem1024::DecapsulationKey::from_bytes(native_bytes.as_slice())
+                .map_err(|_| KemError::Decapsulate)?;
+        let native_ct = nexusq_native_backend::mlkem1024::Ciphertext(ct_arr);
+        let ss = native_secret
+            .decapsulate(&native_ct)
+            .map_err(|_| KemError::Decapsulate)?;
+        *ss.as_bytes()
+    };
+    #[cfg(not(feature = "native-backend"))]
+    let ml_ss_bytes = {
+        let ct: ml_kem::ml_kem_1024::Ciphertext = ct_arr.into();
+        let ss = pair.ml_kem_secret.decapsulate(&ct);
+        <[u8; 32]>::from(ss)
+    };
     let x_arr: [u8; 32] = x_pub.try_into().map_err(|_| KemError::InvalidCiphertext)?;
     let x_ss = pair
         .x25519_secret
         .diffie_hellman(&X25519Public::from(x_arr));
     let mut input = Zeroizing::new(Vec::with_capacity(64 + 32 + 32 + INFO.len()));
-    input.extend_from_slice(ml_ss.as_slice());
+    input.extend_from_slice(&ml_ss_bytes);
     input.extend_from_slice(x_ss.as_bytes());
     input.extend_from_slice(x_pub);
     let recipient_pk_x = X25519Public::from(&pair.x25519_secret);
@@ -135,6 +175,56 @@ mod tests {
         let pair = generate();
         assert_eq!(pair.public_key_bytes().len(), PUBLIC_KEY_LEN);
         assert_eq!(pair.secret_key_bytes().len(), SECRET_KEY_LEN);
+    }
+
+    #[cfg(feature = "native-backend")]
+    #[test]
+    fn native_ml_kem_1024_interoperates_with_rustcrypto() {
+        use ml_kem::kem::{Decapsulate as _, Encapsulate as _};
+
+        let pair = generate();
+        let public_key = pair.public_key_bytes();
+        let recipient_x = &public_key[1568..];
+
+        // Native encapsulation, RustCrypto decapsulation, same hybrid transcript.
+        let (native_ciphertext, native_secret) = encapsulate(&public_key).unwrap();
+        let native_ml_ct: [u8; 1568] = native_ciphertext[..1568].try_into().unwrap();
+        let native_ml_ct: ml_kem::ml_kem_1024::Ciphertext = native_ml_ct.into();
+        let rustcrypto_ml_secret = pair.ml_kem_secret.decapsulate(&native_ml_ct);
+        let eph_bytes: [u8; 32] = native_ciphertext[1568..].try_into().unwrap();
+        let x_secret = pair
+            .x25519_secret
+            .diffie_hellman(&X25519Public::from(eph_bytes));
+        let mut transcript = Zeroizing::new(Vec::new());
+        transcript.extend_from_slice(rustcrypto_ml_secret.as_slice());
+        transcript.extend_from_slice(x_secret.as_bytes());
+        transcript.extend_from_slice(&eph_bytes);
+        transcript.extend_from_slice(recipient_x);
+        transcript.extend_from_slice(INFO);
+        let expected = Sha3_256::digest(&transcript);
+        assert_eq!(native_secret.as_slice(), expected.as_slice());
+
+        // RustCrypto encapsulation, native decapsulation.
+        let pk_bytes: [u8; 1568] = public_key[..1568].try_into().unwrap();
+        let pk_array = ml_kem::Key::<EncapsulationKey1024>::from(pk_bytes);
+        let rustcrypto_pk = EncapsulationKey1024::new(&pk_array).unwrap();
+        let (rustcrypto_ml_ct, rustcrypto_ml_secret) = rustcrypto_pk.encapsulate();
+        let eph = EphemeralSecret::random();
+        let eph_public = X25519Public::from(&eph);
+        let x_secret = eph.diffie_hellman(&X25519Public::from(
+            <[u8; 32]>::try_from(recipient_x).unwrap(),
+        ));
+        let mut transcript = Zeroizing::new(Vec::new());
+        transcript.extend_from_slice(rustcrypto_ml_secret.as_slice());
+        transcript.extend_from_slice(x_secret.as_bytes());
+        transcript.extend_from_slice(eph_public.as_bytes());
+        transcript.extend_from_slice(recipient_x);
+        transcript.extend_from_slice(INFO);
+        let expected = Sha3_256::digest(&transcript);
+        let mut ciphertext = rustcrypto_ml_ct.as_slice().to_vec();
+        ciphertext.extend_from_slice(eph_public.as_bytes());
+        let native_decapsulated = decapsulate(&pair, &ciphertext).unwrap();
+        assert_eq!(native_decapsulated.as_slice(), expected.as_slice());
     }
 
     #[test]

@@ -10,8 +10,12 @@
 //! is broken, X25519 still holds; if X25519 is broken by a quantum
 //! adversary, ML-KEM still holds.
 
+#[cfg(feature = "native-backend")]
+use ml_kem::ExpandedKeyEncoding as _;
 use ml_kem::FromSeed as _;
-use ml_kem::kem::{Decapsulate, Encapsulate, Kem};
+use ml_kem::kem::Kem;
+#[cfg(not(feature = "native-backend"))]
+use ml_kem::kem::{Decapsulate as _, Encapsulate as _};
 use ml_kem::{DecapsulationKey768, EncapsulationKey768, KeyExport, MlKem768};
 use sha3::digest::{ExtendableOutput, Update, XofReader};
 use sha3::{Digest, Sha3_256, Shake256};
@@ -104,8 +108,23 @@ pub mod ml_kem_768 {
     pub fn encapsulate(
         public: &EncapsulationKey768,
     ) -> (Vec<u8>, Zeroizing<[u8; SHARED_SECRET_LEN]>) {
-        let (ct, ss) = public.encapsulate();
-        (ct.as_slice().to_vec(), Zeroizing::new(ss.into()))
+        #[cfg(feature = "native-backend")]
+        {
+            let encoded = public.to_bytes();
+            let native_public = nexusq_native_backend::mlkem768::EncapsulationKey::from_bytes(
+                encoded.as_slice(),
+            )
+            .expect("RustCrypto-produced ML-KEM-768 public key must be valid for native backend");
+            let (ct, ss) = native_public
+                .encapsulate()
+                .expect("native ML-KEM-768 encapsulation failed");
+            return (ct.0.to_vec(), Zeroizing::new(*ss.as_bytes()));
+        }
+        #[cfg(not(feature = "native-backend"))]
+        {
+            let (ct, ss) = public.encapsulate();
+            (ct.as_slice().to_vec(), Zeroizing::new(ss.into()))
+        }
     }
 
     /// Decapsulates `ciphertext` with `secret`.
@@ -123,9 +142,35 @@ pub mod ml_kem_768 {
         let arr: [u8; CIPHERTEXT_LEN] = ciphertext
             .try_into()
             .map_err(|_| KemError::InvalidCiphertext)?;
-        let ct: ml_kem::ml_kem_768::Ciphertext = arr.into();
-        let ss = secret.decapsulate(&ct);
-        Ok(Zeroizing::new(ss.into()))
+        #[cfg(feature = "native-backend")]
+        {
+            // Use the already-expanded FIPS key material rather than re-running
+            // KeyGen_internal on every decapsulation. The RustCrypto key owns a
+            // valid expanded representation derived from the same seed.
+            #[allow(deprecated)]
+            let encoded_secret = secret.to_expanded_bytes();
+            let native_bytes: Zeroizing<[u8; 2400]> = Zeroizing::new(
+                encoded_secret
+                    .as_slice()
+                    .try_into()
+                    .expect("ML-KEM-768 expanded secret key is 2400 bytes"),
+            );
+            let native_secret = nexusq_native_backend::mlkem768::DecapsulationKey::from_bytes(
+                native_bytes.as_slice(),
+            )
+            .map_err(|_| KemError::Decapsulate)?;
+            let native_ct = nexusq_native_backend::mlkem768::Ciphertext(arr);
+            let ss = native_secret
+                .decapsulate(&native_ct)
+                .map_err(|_| KemError::Decapsulate)?;
+            return Ok(Zeroizing::new(*ss.as_bytes()));
+        }
+        #[cfg(not(feature = "native-backend"))]
+        {
+            let ct: ml_kem::ml_kem_768::Ciphertext = arr.into();
+            let ss = secret.decapsulate(&ct);
+            Ok(Zeroizing::new(ss.into()))
+        }
     }
 }
 
@@ -309,6 +354,26 @@ mod tests {
         assert_eq!(ct.len(), ml_kem_768::CIPHERTEXT_LEN);
         let ss2 = ml_kem_768::decapsulate(&sk, &ct).unwrap();
         assert_eq!(ss1.as_ref(), ss2.as_ref());
+    }
+
+    #[cfg(feature = "native-backend")]
+    #[test]
+    fn native_ml_kem_768_interoperates_with_rustcrypto() {
+        use ml_kem::kem::{Decapsulate as _, Encapsulate as _};
+
+        let (secret, public) = ml_kem_768::generate();
+
+        // RustCrypto encapsulates; the feature-enabled public API decapsulates natively.
+        let (rust_ct, rust_ss) = public.encapsulate();
+        let native_decapsulated = ml_kem_768::decapsulate(&secret, rust_ct.as_slice()).unwrap();
+        assert_eq!(rust_ss.as_slice(), native_decapsulated.as_ref());
+
+        // The public API encapsulates natively; RustCrypto decapsulates.
+        let (native_ct, native_ss) = ml_kem_768::encapsulate(&public);
+        let ct_array: [u8; ml_kem_768::CIPHERTEXT_LEN] = native_ct.as_slice().try_into().unwrap();
+        let rust_ct: ml_kem::ml_kem_768::Ciphertext = ct_array.into();
+        let rust_decapsulated = secret.decapsulate(&rust_ct);
+        assert_eq!(native_ss.as_ref(), rust_decapsulated.as_slice());
     }
 
     #[test]

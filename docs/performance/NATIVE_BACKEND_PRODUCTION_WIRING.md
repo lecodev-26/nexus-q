@@ -1,6 +1,6 @@
 # Native backend production-wiring workstream
 
-> **Status:** Draft implementation plan. The native backend remains experimental and is not selected by production cryptographic paths unless this workstream is completed, reviewed, and explicitly enabled.
+> **Status:** Implementation in progress on PR #55. The `nexusq-core` opt-in feature now routes ML-KEM-768/1024 encapsulation and decapsulation plus ML-DSA-65 signing/verification through the native backend. This branch is not merge-ready until CI, differential/interoperability checks, security review and production-path performance evidence pass.
 
 ## Objective
 
@@ -39,4 +39,4 @@ This PR must remain a draft while the implementation or required evidence is inc
 
 ## Current known limitation
 
-The V4 native backend is an isolated experimental crate. At the time this plan was written, the production cryptographic paths in `nexusq-core`, CLI, and SDKs are not wired to it. The measured isolated backend gate does not establish production-path equivalence, security review, or release readiness.
+The native backend is still experimental. This PR wires the selected `nexusq-core` ML-KEM-768/1024 and ML-DSA-65 call paths behind an opt-in feature, but that code has not yet been verified by the real CI for this branch. CLI and SDK consumers do not enable the feature by default; downstream feature forwarding and packageability must be reviewed separately. The measured isolated backend gate does not establish production-path equivalence, security review, or release readiness.

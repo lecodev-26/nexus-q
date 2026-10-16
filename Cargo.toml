@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-exclude = ["arena/runners/nexusq", "vendor/ml-dsa", "vendor/ml-kem", "vendor/module-lattice"]
+exclude = ["arena/runners/nexusq", "crates/nexusq-native-backend", "vendor/ml-dsa", "vendor/ml-kem", "vendor/module-lattice"]
 members = [
     "crates/nexusq-core",
     "crates/nexusq-kernels",

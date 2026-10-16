@@ -8,7 +8,15 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[features]
+default = []
+# Experimental native ML-KEM/ML-DSA implementation. Explicit opt-in only.
+native-backend = ["dep:nexusq-native-backend"]
+# Exercises the same API using the backend's portable C implementation only.
+native-backend-portable = ["native-backend", "nexusq-native-backend/portable-only"]
+
 [dependencies]
+nexusq-native-backend = { path = "../nexusq-native-backend", version = "0.1.0", optional = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 zeroize = { workspace = true }
