@@ -2,10 +2,13 @@
 #[cfg(feature = "native-backend")]
 #[allow(deprecated)]
 use ml_kem::ExpandedKeyEncoding as _;
+#[cfg(not(feature = "native-backend"))]
+use ml_kem::MlKem1024;
+#[cfg(not(feature = "native-backend"))]
 use ml_kem::kem::Kem;
 #[cfg(not(feature = "native-backend"))]
 use ml_kem::kem::{Decapsulate as _, Encapsulate as _};
-use ml_kem::{DecapsulationKey1024, EncapsulationKey1024, KeyExport, MlKem1024};
+use ml_kem::{DecapsulationKey1024, EncapsulationKey1024, KeyExport};
 use sha3::{Digest, Sha3_256};
 use x25519_dalek::{EphemeralSecret, PublicKey as X25519Public, StaticSecret};
 use zeroize::Zeroizing;
@@ -76,7 +79,7 @@ pub fn generate() -> KeyPair {
         #[allow(deprecated)]
         let secret = DecapsulationKey1024::from_expanded_bytes(&expanded)
             .expect("native ML-KEM-1024 key must satisfy the RustCrypto key checks");
-        let public_bytes: [u8; 1568] = *native_public.as_bytes();
+        let public_bytes: [u8; 1568] = native_public.0;
         let public_key = ml_kem::Key::<EncapsulationKey1024>::from(public_bytes);
         let public = EncapsulationKey1024::new(&public_key)
             .expect("native ML-KEM-1024 public key must satisfy the RustCrypto key checks");
