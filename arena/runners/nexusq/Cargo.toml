@@ -7,6 +7,9 @@ publish = false
 [features]
 default = []
 cached-verifier = []
+# Benchmark the public nexusq-core crypto API with the production feature boundary.
+native-backend = ["nexusq-core/native-backend"]
+native-backend-portable = ["nexusq-core/native-backend-portable"]
 # Explicitly opt in to the experimental SHAKE x4 path for differential tests and Arena.
 experimental-kernels = ["ml-dsa/experimental-kernels", "ml-kem/experimental-kernels"]
 

@@ -217,7 +217,10 @@
             "rustcrypto_ml_dsa_operation",
             "cached_ml_dsa_verifier_operation",
             "aws_lc_evp_primitive_operation",
-            "reference_implementation_operation"
+            "reference_implementation_operation",
+            "nexusq_core_public_api",
+            "nexusq_core_hybrid_public_api",
+            "aws_lc_nexusq_hybrid_api_comparator"
           ]
         },
         "comparison_contract": {
