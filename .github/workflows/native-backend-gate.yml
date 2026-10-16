@@ -26,6 +26,13 @@ on:
       - ".github/scripts/check-native-backend-unsafe.py"
   pull_request:
     paths:
+      # The integration PR changes the core call sites and feature wiring;
+      # run this backend's upstream, differential, constant-time and perf gates.
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/nexusq-core/**"
+      - ".github/workflows/security-ci.yml"
+      - ".github/workflows/native-backend-gate.yml"
       - "crates/nexusq-native-backend/**"
       - "arena/runners/nexusq-native/**"
       - "vendor/mlkem-native/**"

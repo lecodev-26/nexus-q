@@ -48,10 +48,13 @@ jobs:
           path: cargo-metadata.json
 
   fuzz-build:
-    name: Fuzz harness build (main only)
+    name: Fuzz harness build (main + native backend PR #55)
     runs-on: ubuntu-latest
-    # Per release policy, even fuzz-target compilation runs only on main.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Keep normal fuzz campaigns on main, but require this PR's fuzz harnesses
+    # to compile before the native backend wiring can merge.
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.event.pull_request.number == 55)
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
@@ -76,7 +79,11 @@ jobs:
   fuzz-soak-vault:
     name: 4-hour fuzz soak - vault parser
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # PR #55 must finish the same four-hour campaign before merge; main keeps
+    # its normal post-merge campaign as an independent verification.
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.event.pull_request.number == 55)
     timeout-minutes: 250
     steps:
       - uses: actions/checkout@v4
@@ -90,7 +97,11 @@ jobs:
   fuzz-soak-envelope:
     name: 4-hour fuzz soak - envelope parser
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # PR #55 must finish the same four-hour campaign before merge; main keeps
+    # its normal post-merge campaign as an independent verification.
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.event.pull_request.number == 55)
     timeout-minutes: 250
     steps:
       - uses: actions/checkout@v4
