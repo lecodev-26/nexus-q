@@ -1,0 +1,92 @@
+name: NEXUS-Q Gate A/A control (informational)
+
+# Control experiment for the native-assembly gate protocol, not a verdict.
+# AWS-LC is benchmarked against ITSELF with exactly the gate protocol
+# (same pinned build, same adapter, same env, 1000 iterations + 100 warmups,
+# alternating order) and judged by the UNMODIFIED evaluator. The second
+# AWS-LC instance is only relabelled "nexusq" in a copy of its JSONL so the
+# evaluator accepts it. Any FAIL here is a false failure of the protocol on
+# hosted runners, i.e. an estimate of how often runner noise alone breaks
+# the 1.5x p95 limit. The threshold and the gate itself are not changed.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["perf/native-backend-hybrid"]
+    paths:
+      - ".github/workflows/native-backend-aa-control.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-backend-aa-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  AWSLC_COMMIT: ec05f25ef5bcb1bf03d2e2f44ba57973a878e0ba
+
+jobs:
+  aa:
+    name: A/A replica ${{ matrix.replica }} (AWS-LC vs AWS-LC, 12 rounds)
+    strategy:
+      fail-fast: false
+      matrix:
+        replica: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build pinned AWS-LC and adapter (same commands as the gate)
+        run: |
+          sudo apt-get update && sudo apt-get install -y cmake ninja-build build-essential
+          lscpu | sed -n 's/^Model name:[[:space:]]*//p'
+          git init .arena-aws-lc
+          git -C .arena-aws-lc remote add origin https://github.com/aws/aws-lc.git
+          git -C .arena-aws-lc fetch --depth 1 origin "$AWSLC_COMMIT"
+          git -C .arena-aws-lc checkout --detach "$AWSLC_COMMIT"
+          cmake -S .arena-aws-lc -B .arena-aws-lc-build -GNinja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+          cmake --build .arena-aws-lc-build --parallel 2
+          cc -D_POSIX_C_SOURCE=200809L -std=c11 -O3 -Wall -Wextra -Werror -I"$GITHUB_WORKSPACE/.arena-aws-lc/include" arena/adapters/aws-lc/runner.c -L"$GITHUB_WORKSPACE/.arena-aws-lc-build/crypto" -Wl,-rpath,"$GITHUB_WORKSPACE/.arena-aws-lc-build/crypto" -lcrypto -lm -o arena-aws-lc-runner
+      - name: 12 alternating A/B rounds of the same binary
+        env:
+          AWSLC_ITERATIONS: "1000"
+          AWSLC_WARMUPS: "100"
+          ARENA_OPT: release
+          AWSLC_VERSION: ${{ env.AWSLC_COMMIT }}
+        run: |
+          set -euo pipefail
+          out=aa; mkdir -p $out
+          export ARENA_CPU="$(lscpu | sed -n 's/^Model name:[[:space:]]*//p' | head -1)"
+          export ARENA_CPU_FEATURES="$(grep -m1 '^flags' /proc/cpuinfo | cut -d: -f2 | xargs | tr ' ' ',')"
+          export ARENA_CPU_FREQUENCY_KHZ="$(awk -F: '/cpu MHz/ {gsub(/ /,"",$2); printf "%d", $2*1000; exit}' /proc/cpuinfo)"
+          export ARENA_CPU_GOVERNOR="unknown-hosted-runner" ARENA_TARGET="x86_64-linux-gnu" ARENA_OS="Ubuntu"
+          for round in $(seq 1 12); do
+            if [ $((round % 2)) = 0 ]; then order="b a"; else order="a b"; fi
+            for x in $order; do
+              export ARENA_RUN_ORDER="round-${round}-$x"
+              ./arena-aws-lc-runner > "$out/$x-round-${round}.jsonl"
+            done
+            # Relabel instance B as "nexusq" (label only; samples untouched).
+            python3 -c "import json,sys;[print(json.dumps({**r,'implementation':{**r['implementation'],'id':'nexusq'}})) for r in map(json.loads,open(sys.argv[1]))]" \
+              "$out/b-round-${round}.jsonl" > "$out/b-as-nexusq-round-${round}.jsonl"
+          done
+      - name: Unmodified evaluator on the official window (rounds 1-3) and on all four 3-round windows
+        run: |
+          out=aa
+          for w in 0 1 2 3; do
+            r1=$((3*w+1)); r2=$((3*w+2)); r3=$((3*w+3))
+            python3 arena/scripts/evaluate_native_assembly_gate.py $out/aa-window-$w.json \
+              $out/b-as-nexusq-round-$r1.jsonl $out/b-as-nexusq-round-$r2.jsonl $out/b-as-nexusq-round-$r3.jsonl -- \
+              $out/a-round-$r1.jsonl $out/a-round-$r2.jsonl $out/a-round-$r3.jsonl > /dev/null || true
+            python3 - "$out/aa-window-$w.json" "$w" "$(lscpu | sed -n 's/^Model name:[[:space:]]*//p')" <<'PY'
+          import json, sys
+          r = json.load(open(sys.argv[1]))
+          worst = max(r["results"], key=lambda x: max(x["median_ratio_nexusq_over_aws_lc"], 1 / x["median_ratio_nexusq_over_aws_lc"], x["p95_ratio_nexusq_over_aws_lc"], 1 / x["p95_ratio_nexusq_over_aws_lc"]))
+          mx = max(max(x["p95_ratio_nexusq_over_aws_lc"], 1 / x["p95_ratio_nexusq_over_aws_lc"]) for x in r["results"])
+          print(f"AA window {sys.argv[2]} (rounds {3*int(sys.argv[2])+1}-{3*int(sys.argv[2])+3}) | {sys.argv[3]} | {r['status']} | worst |p95 ratio| (either direction) {mx:.3f} at {worst['algorithm']}-{worst['parameter_set']} {worst['operation']}")
+          for x in r["results"]:
+              if not x["pass"]:
+                  print(f"   FALSE FAIL: {x['algorithm']}-{x['parameter_set']} {x['operation']} median {x['median_ratio_nexusq_over_aws_lc']:.3f} p95 {x['p95_ratio_nexusq_over_aws_lc']:.3f}")
+          PY
+          done | tee -a "$GITHUB_STEP_SUMMARY"

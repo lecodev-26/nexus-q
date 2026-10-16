@@ -24,6 +24,7 @@ hazmat = []
 pem = ["pkcs8/pem"]
 pkcs8 = ["dep:const-oid", "dep:pkcs8"]
 zeroize = ["module-lattice/zeroize", "dep:zeroize"]
+nexusq-kernels = ["dep:nexusq-kernels"]
 
 [dependencies]
 array = { version = "0.4.8", package = "hybrid-array", features = ["ctutils", "extra-sizes"] }
@@ -31,6 +32,7 @@ module-lattice = { version = "0.2.3", features = ["ctutils"] }
 kem = "0.3"
 rand_core = "0.10"
 sha3 = { version = "0.11", default-features = false }
+nexusq-kernels = { version = "2.0.0", path = "../../crates/nexusq-kernels", optional = true }
 
 # optional dependencies
 const-oid = { version = "0.10.1", optional = true, default-features = false, features = ["db"] }

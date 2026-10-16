@@ -57,6 +57,8 @@ fn emit(
             "latency_ns": latency_ns,
             "throughput_ops_s": 1e9 / latency_ns,
             "memory_bytes": null,
+            "measurement_scope": "reference_implementation_operation",
+            "comparison_contract": "fips_operation_v1",
             "measurement_method": "std::time::Instant mean wall-clock latency"
         },
         "sizes": {

@@ -42,7 +42,7 @@ static void emit(const char* algorithm, const char* parameter, const char* op,
              << env_or("ARENA_OPT", "release") << "\",\"harness_version\":\"arena-v1\"},\"measurement\":{\"iterations\":"
              << ITERATIONS << ",\"warmups\":" << WARMUPS << ",\"measurement_timestamp_unix_ns\":" << now << ",\"latency_ns\":"
              << latency_ns << ",\"throughput_ops_s\":" << (1e9 / latency_ns)
-             << ",\"memory_bytes\":null,\"measurement_method\":\"steady_clock mean wall-clock latency\"},\"sizes\":{\"public_key_bytes\":"
+             << ",\"memory_bytes\":null,\"measurement_scope\":\"reference_implementation_operation\",\"comparison_contract\":\"fips_operation_v1\",\"measurement_method\":\"steady_clock mean wall-clock latency\"},\"sizes\":{\"public_key_bytes\":"
              << pk << ",\"secret_key_bytes\":" << sk << ",\"ciphertext_bytes\":"
              << (has_ct ? std::to_string(ct) : "null") << ",\"signature_bytes\":"
              << (has_sig ? std::to_string(sig) : "null") << "}}\n";

@@ -2,7 +2,7 @@
 //!
 //! One module per top-level subcommand. Each exposes a `run`
 //! function that receives its parsed arguments and the global CLI
-//! state, and returns a [`CliError`](crate::error::CliError) on
+//! state, and returns a [`CliError`] on
 //! failure.
 //!
 //! The commands are thin: they translate the CLI's vocabulary into

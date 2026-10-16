@@ -134,7 +134,9 @@
         "iterations",
         "warmups",
         "latency_ns",
-        "measurement_timestamp_unix_ns"
+        "measurement_timestamp_unix_ns",
+        "measurement_scope",
+        "comparison_contract"
       ],
       "properties": {
         "iterations": {
@@ -180,6 +182,17 @@
             "minimum": 1
           }
         },
+        "cycle_counter_source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "samples_cycles": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
         "statistics": {
           "$ref": "#/$defs/sampleStatistics"
         },
@@ -196,6 +209,23 @@
           "items": {
             "$ref": "#/$defs/seedSample"
           }
+        },
+        "measurement_scope": {
+          "type": "string",
+          "enum": [
+            "rustcrypto_ml_kem_operation",
+            "rustcrypto_ml_dsa_operation",
+            "cached_ml_dsa_verifier_operation",
+            "aws_lc_evp_primitive_operation",
+            "reference_implementation_operation"
+          ]
+        },
+        "comparison_contract": {
+          "type": "string",
+          "enum": [
+            "fips_operation_v1",
+            "cached_verification_diagnostic_v1"
+          ]
         }
       },
       "additionalProperties": false

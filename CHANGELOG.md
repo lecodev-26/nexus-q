@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — 2026-10-15
+
+- Merged the experimental native backend and aligned ML-KEM x4 sponge-I/O optimization into `nexusqv4` (PR #51 into PR #50, then PR #50 into `nexusqv4`).
+- Recorded the successful pre-integration 1.5× median-and-p95 gate run (6/6 replicas); full CI/gate validation of merge commit `05a0d19a01dfdba2bb74b6f8d90c17718f4fcf87` remains pending.
+- Clarified that the backend is not yet wired into `nexusq-core` and no v1.0.0 publication/readiness claim is made.
+
+
 All notable changes are recorded here. The project remains in engineering/release preparation; entries before a stable public
 release describe the repository state rather than a promise of API stability.
 

@@ -51,9 +51,9 @@ Both views are useful; neither replaces the other.
 
 ## 4. Statistical policy
 
-The first implementation records mean latency in nanoseconds plus sample count. Future harnesses may add median, p95/p99, standard deviation and confidence intervals.
+The normalized result schema records per-operation latency samples and summary statistics including minimum, median, p95, and standard deviation where required by the active harness contract. The V4 Issue #23 gate uses the median and p95, checks sample/warmup counts and provenance, and evaluates each conventional operation independently; cached ML-DSA verification is a separate diagnostic record. Older historical Arena artifacts may contain a different statistic set, so compare only artifacts whose schema, sample policy, measurement scope, and environment are compatible.
 
-Results from different benchmark runs must not be merged into one number unless the environment is compatible.
+Results from different benchmark runs must not be merged into one number unless the environment and measurement contract are compatible.
 
 ## 5. Memory
 
@@ -119,7 +119,7 @@ External adapters may be CI_READY without having produced a benchmark result. CI
 
 ## 11. Reproducibility
 
-A future Arena release must pin:
+Every accepted or published Arena measurement must identify and preserve:
 
 - source revision
 - benchmark harness revision

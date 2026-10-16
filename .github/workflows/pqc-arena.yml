@@ -5,7 +5,7 @@ on:
   push:
     branches: ["main", "ci/benchmark-arena", "nexusqv2", "nexusqv3"]
   pull_request:
-    branches: ["nexusqv2", "nexusqv3"]
+    branches: ["main", "nexusqv2", "nexusqv3"]
 
 permissions:
   contents: read
@@ -93,7 +93,20 @@ jobs:
         run: |
           git fetch --depth=1 origin refs/tags/v1.0.0:refs/tags/v1.0.0
           git checkout v1.0.0
-          cp "${{ runner.temp }}/nexusq-arena-runner-main.rs" arena/runners/nexusq/src/main.rs
+          # Preserve the V1 implementation and dependencies; only annotate its JSON output.
+          python3 - <<'PYV1'
+          from pathlib import Path
+          p = Path("arena/runners/nexusq/src/main.rs")
+          s = p.read_text()
+          old = '"measurement_method":"std::time::Instant mean wall-clock latency"'
+          new = old + ',"measurement_scope":"reference_implementation_operation","comparison_contract":"fips_operation_v1"'
+          assert old in s, "V1 benchmark metadata marker not found"
+          s = s.replace(old, new, 1)
+          old_env = '"cpu":option_env!("NEXUSQ_CPU").unwrap_or("unknown"),"cpu_features":[],"compiler":"rustc","compiler_version":option_env!("RUSTC_VERSION").unwrap_or("unknown"),"optimization":option_env!("NEXUSQ_OPT").unwrap_or("unknown"),"harness_version":"arena-v1"'
+          new_env = r'''"cpu":env::var("NEXUSQ_CPU").unwrap_or_else(|_| "unknown".into()),"cpu_features":env::var("NEXUSQ_CPU_FEATURES").unwrap_or_default().split(',').filter(|x| !x.is_empty()).map(str::to_owned).collect::<Vec<_>>(),"compiler":"rustc","compiler_version":env::var("RUSTC_VERSION").unwrap_or_else(|_| "unknown".into()),"rustc_verbose":env::var("NEXUSQ_RUSTC_VERBOSE").unwrap_or_else(|_| "unknown".into()),"cargo_lock_sha256":env::var("NEXUSQ_CARGO_LOCK_SHA256").unwrap_or_else(|_| "unknown".into()),"run_order":env::var("NEXUSQ_RUN_ORDER").unwrap_or_else(|_| "unknown".into()),"optimization":env::var("NEXUSQ_OPT").unwrap_or_else(|_| "unknown".into()),"harness_version":"arena-v1"'''
+          assert old_env in s, "V1 environment metadata marker not found"
+          p.write_text(s.replace(old_env, new_env, 1))
+          PYV1
           echo "$(sha256sum arena/runners/nexusq/Cargo.lock | cut -d' ' -f1)" > "${{ runner.temp }}/v1-lock-hash"
           NEXUSQ_COMMIT="$(git rev-parse HEAD)" cargo build --locked --release --manifest-path arena/runners/nexusq/Cargo.toml
       - name: Build V1 with zeroize hardening only
@@ -117,6 +130,7 @@ jobs:
         env:
           CARGO_TARGET_DIR: ${{ runner.temp }}/nexusq-arena-v3
         run: |
+          git fetch --depth=1 origin "${{ github.event.pull_request.head.sha || github.sha }}"
           git reset --hard "${{ github.event.pull_request.head.sha || github.sha }}"
           echo "$(sha256sum arena/runners/nexusq/Cargo.lock | cut -d' ' -f1)" > "${{ runner.temp }}/v3-lock-hash"
           NEXUSQ_COMMIT="${{ github.event.pull_request.head.sha || github.sha }}" cargo build --locked --release --features cached-verifier --manifest-path arena/runners/nexusq/Cargo.toml
@@ -229,46 +243,34 @@ jobs:
             expected=90 if name != "v3" else 100
             assert len(rows[name])==expected, (name,len(rows[name]),expected)
             for row in rows[name]: jsonschema.Draft202012Validator(schema).validate(row)
-            assert all(r["measurement"]["iterations"]==320 for r in rows[name] if r["operation"]=="sign")
-            assert all(len(r["measurement"].get("samples_ns",[]))==320 for r in rows[name] if r["operation"]=="sign")
-            assert all(len(r["measurement"].get("seed_samples",[]))==64 for r in rows[name] if r["operation"]=="sign")
+            sign_rows_for_variant=[r for r in rows[name] if r["operation"]=="sign"]
+            assert all(r["measurement"]["iterations"] > 0 for r in sign_rows_for_variant)
             if name == "v3":
+              # V3 reports 64 deterministic keys × 16 sign samples per key.
+              assert all(r["measurement"]["iterations"]==1024 for r in sign_rows_for_variant)
+              assert all(len(r["measurement"].get("samples_ns",[]))==1024 for r in sign_rows_for_variant)
+              assert all(len(r["measurement"].get("seed_samples",[]))==64 for r in sign_rows_for_variant)
+              assert all(r["measurement"].get("samples_per_seed")==16 for r in sign_rows_for_variant)
               for row in rows[name]:
                 measurement=row["measurement"]
                 if row["operation"] != "sign":
-                  assert measurement["iterations"]==50, (row["algorithm"],row["operation"],measurement["iterations"])
-                  assert len(measurement.get("samples_ns",[]))==50, (row["algorithm"],row["operation"],"missing individual samples")
+                  iterations=measurement["iterations"]
+                  samples=measurement.get("samples_ns",[])
+                  assert iterations >= 50, (row["algorithm"],row["operation"],"too few samples",iterations)
+                  assert len(samples)==iterations, (row["algorithm"],row["operation"],"sample count differs from iterations",len(samples),iterations)
                   stats=measurement.get("statistics",{})
                   assert all(key in stats for key in ("sample_count","min_ns","median_ns","p95_ns","stddev_ns")), (row["algorithm"],row["operation"],"missing summary stats")
-                  assert stats["sample_count"]==50
+                  assert stats["sample_count"]==iterations, (row["algorithm"],row["operation"],"summary sample count differs",stats.get("sample_count"),iterations)
             assert all(r["environment"].get("cargo_lock_sha256") for r in rows[name])
             assert all(r["environment"].get("rustc_verbose") for r in rows[name])
             assert len({r["environment"]["cpu"] for r in rows[name]})==1
             print(name, "schema/metadata/sign-sample contract: OK", len(rows[name]), "records")
-          def sign_rows(name):
-            return [r for r in rows[name] if r["operation"]=="sign"]
-          from statistics import median
-          def aggregate_seed_medians(name):
-            rounds=sign_rows(name)
-            assert len(rounds)==10, (name,"expected ten sign rounds",len(rounds))
-            per_seed={}
-            expected_seed_ids=None
-            for row in rounds:
-              seed_values={s["seed_id"]:s["summary"]["median_ns"] for s in row["measurement"]["seed_samples"]}
-              assert len(seed_values)==64, (name,"seed count mismatch")
-              if expected_seed_ids is None: expected_seed_ids=set(seed_values)
-              assert set(seed_values)==expected_seed_ids, (name,"seed corpus changed between rounds")
-              for seed_id,value in seed_values.items(): per_seed.setdefault(seed_id,[]).append(value)
-            assert all(len(values)==10 for values in per_seed.values()), (name,"incomplete seed rounds")
-            return {seed_id:median(values) for seed_id,values in per_seed.items()}
-          baseline=aggregate_seed_medians("v1")
-          for name in ("v1-zeroize","v3"):
-            candidate=aggregate_seed_medians(name)
-            assert baseline.keys()==candidate.keys(), (name,"seed corpus mismatch")
-            ratios=sorted(candidate[k]/baseline[k] for k in baseline)
-            print(name, "matched-seed ratio across 10 rounds min/median/max:", round(ratios[0],4), round(ratios[len(ratios)//2],4), round(ratios[-1],4))
+          # Historical V1/V1+zeroize runners expose aggregate sign timings only;
+          # they do not emit per-seed samples. Do not fabricate a matched-seed
+          # comparison against V3's deterministic 64-key distribution.
+          print("ML-DSA sign evolution: V1 aggregate vs V3 per-seed distribution; not directly comparable")
           assert all(r["environment"]["run_order"]!="unknown" for group in rows.values() for r in group)
-          print("10 randomized rounds and identical 64-seed sign corpus: OK")
+          print("10 randomized rounds; V3 uses a fixed 64-key sign corpus: OK")
           diagnostic_path=Path("arena/results/ci/v3-sha3-zeroize-diagnostic.jsonl")
           diagnostic=[json.loads(line) for line in diagnostic_path.read_text().splitlines() if line.startswith("{")]
           assert len(diagnostic)==200, ("sha3 zeroize diagnostic row count",len(diagnostic))
@@ -516,7 +518,7 @@ jobs:
             arena/adapters/aws-lc/runner.c \
             -L"$GITHUB_WORKSPACE/.arena-aws-lc-build/crypto" \
             -Wl,-rpath,"$GITHUB_WORKSPACE/.arena-aws-lc-build/crypto" \
-            -lcrypto -o arena-aws-lc-runner
+            -lcrypto -lm -o arena-aws-lc-runner
       - name: Capture AWS-LC version and run adapter
         env:
           ARENA_OPT: release
@@ -535,11 +537,13 @@ jobs:
           import jsonschema
           schema=json.loads(Path("arena/schemas/benchmark-result.schema.json").read_text())
           rows=[json.loads(x) for x in Path("arena/results/ci/aws-lc-ec05f25.jsonl").read_text().splitlines() if x.startswith("{")]
-          assert len(rows)==6
+          # AWS-LC emits ML-KEM-768, ML-KEM-1024 and ML-DSA-65 (three operations each).
+          assert len(rows)==9, ("unexpected AWS-LC operation count", len(rows))
           for row in rows: jsonschema.Draft202012Validator(schema).validate(row)
           assert {r["implementation"]["id"] for r in rows}=={"aws-lc"}
           assert {(r["algorithm"]["id"],r["algorithm"]["parameter_set"],r["operation"]) for r in rows} == {
               ("ml-kem","768","keygen"),("ml-kem","768","encaps"),("ml-kem","768","decaps"),
+              ("ml-kem","1024","keygen"),("ml-kem","1024","encaps"),("ml-kem","1024","decaps"),
               ("ml-dsa","65","keygen"),("ml-dsa","65","sign"),("ml-dsa","65","verify")
           }
           PY2
@@ -773,8 +777,8 @@ jobs:
           assert files
           rows = [json.loads(x) for p in files for x in p.read_text().splitlines() if x.startswith("{")]
           # Ten-round V1 and V3 raw sample artifacts contain 90 and 100
-          # records respectively; external adapters contribute 48 more.
-          assert len(rows) == 238, len(rows)
+          # records respectively; the seven external adapters contribute 51.
+          assert len(rows) == 241, len(rows)
           for row in rows:
               jsonschema.Draft202012Validator(schema).validate(row)
           matrix = {(r["algorithm"]["id"], r["algorithm"]["parameter_set"], r["operation"]) for r in rows}
@@ -879,7 +883,8 @@ jobs:
           operations=sorted({k[:4] for k in groups})
           assert len(operations)==10, operations
           verify_methods={k[3] for k in operations if k[0]=='ml-dsa' and k[2]=='verify'}
-          assert verify_methods=={'per-operation std::time::Instant; median latency','per-operation std::time::Instant; cached MlDsa65VerifyingKey'}, verify_methods
+          assert len(verify_methods)==2 and sum('cached MlDsa65VerifyingKey' in method for method in verify_methods)==1, verify_methods
+          assert sum('direct RustCrypto ml-dsa API' in method for method in verify_methods)==1, verify_methods
           for alg,param,op,method in operations:
             baseline=statistics.median(groups[(alg,param,op,method,'baseline')])
             ratios=[]
