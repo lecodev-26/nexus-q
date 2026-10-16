@@ -1,6 +1,8 @@
-# NEXUS-Q Native Assembly Performance Roadmap
+# NEXUS-Q Native Assembly Performance Roadmap — Historical Plan
 
-**Tracking issue:** [#48](https://github.com/lecodev-26/nexus-q/issues/48)
+> **Status (2026-10-16): archived planning record, not the active roadmap.** Issue #48 is closed by project decision and its temporary branches have been removed. V4 backend work was integrated into `main` by PR #54 and the official measured-backend 1.5× median/p95 gate passed. Production-path wiring into `nexusq-core`, CLI and SDKs is still unfinished and will be handled as separate engineering work. The checklist below preserves the original approach and must not be read as a current issue tracker or as proof that every item is complete.
+
+**Historical tracking issue:** [#48](https://github.com/lecodev-26/nexus-q/issues/48)
 **Historical line:** [Issue #23](https://github.com/lecodev-26/nexus-q/issues/23), [PR #46](https://github.com/lecodev-26/nexus-q/pull/46), [PR #47](https://github.com/lecodev-26/nexus-q/pull/47)
 **First target:** x86-64 AVX2, Rust integration plus native assembly from the first new optimized kernel.
 

@@ -1,10 +1,11 @@
 # Changelog
 
-## Unreleased — 2026-10-15
+## Unreleased — 2026-10-16
 
-- Merged the experimental native backend and aligned ML-KEM x4 sponge-I/O optimization into `nexusqv4` (PR #51 into PR #50, then PR #50 into `nexusqv4`).
-- Recorded the successful pre-integration 1.5× median-and-p95 gate run (6/6 replicas); full CI/gate validation of merge commit `05a0d19a01dfdba2bb74b6f8d90c17718f4fcf87` remains pending.
-- Clarified that the backend is not yet wired into `nexusq-core` and no v1.0.0 publication/readiness claim is made.
+- Integrated the experimental native backend engineering work into `main` through [PR #54](https://github.com/lecodev-26/nexus-q/pull/54), commit `1c03968e9b8d5578020e571e2f25edc5a7165607`.
+- Added the annotated engineering tag [`v4-engineering-2026-10-16`](https://github.com/lecodev-26/nexus-q/tree/v4-engineering-2026-10-16) and a draft GitHub release (visible from the repository Releases page); the draft is intentionally not published as a stable release.
+- The reviewed native-backend CI passed the 1.5× median-and-p95 gate without relaxing its threshold. This is benchmark evidence for the isolated backend, not proof of production-path integration or end-to-end application performance.
+- Documented that the native backend remains experimental and is not yet wired into `nexusq-core`, CLI, or SDK production cryptographic paths. No independent audit, FIPS validation, production-readiness, or v1.0 release claim is made.
 
 
 All notable changes are recorded here. The project remains in engineering/release preparation; entries before a stable public

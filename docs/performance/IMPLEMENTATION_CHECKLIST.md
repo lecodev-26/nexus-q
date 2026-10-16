@@ -1,6 +1,8 @@
-# Native Assembly Implementation Checklist
+# Native Assembly Implementation Checklist — Historical Record
 
-Tracking issue: [#48](https://github.com/lecodev-26/nexus-q/issues/48).
+> **Archived status (2026-10-16):** this checklist belonged to the now-closed Issue #48 initiative. The V4 backend has been integrated into `main`, but it is still experimental and is not wired into `nexusq-core`, CLI, or SDK production cryptographic paths. Do not use the old checkboxes as a live status dashboard: they document the original task plan and evidence references, not the completion state of the current repository. Future production-path integration will use a separate workstream.
+
+Historical tracking issue: [#48](https://github.com/lecodev-26/nexus-q/issues/48).
 
 A task may be checked only when its evidence is linked. A successful compile alone does not complete an optimization task. Status keys: `[ ]` pending, `[~]` in progress, `[!]` blocked, `[x]` verified complete.
 

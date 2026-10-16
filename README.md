@@ -12,7 +12,7 @@
 
 </div>
 
-> **Version status (2026-10-15):** V1 (`v1.0.0`) and V2 (`v2.0.0`) remain frozen baselines; V3 is integrated into `main`. V4 native-backend work has now been merged into `nexusqv4` by [PR #50](https://github.com/lecodev-26/nexus-q/pull/50), including the aligned ML-KEM x4 sponge-I/O change from [PR #51](https://github.com/lecodev-26/nexus-q/pull/51). The official 1.5× median-and-p95 gate passed on the tested pre-integration head in [CI run 38808489339](https://github.com/lecodev-26/nexus-q/actions/runs/38808489339) (6/6 replicas; 11/11 jobs). **The merged `nexusqv4` integration still requires its own complete green CI, documentation review, and four-hour fuzz campaign.** The native backend remains experimental and is not wired into `nexusq-core` production crypto paths; no independent audit, FIPS 140-3 validation, or v1.0.0 readiness is claimed. See [`docs/performance/NATIVE_BACKEND.md`](docs/performance/NATIVE_BACKEND.md) and [`docs/V3_V4_ROADMAP.md`](docs/V3_V4_ROADMAP.md).
+> **Current project status (2026-10-16):** V1 (`v1.0.0`), V2 (`v2.0.0`) and V3 (`v3-engineering-2026-10-09`) are retained engineering baselines. V4 native-backend work is integrated into `main` by [PR #54](https://github.com/lecodev-26/nexus-q/pull/54) at commit [`1c03968`](https://github.com/lecodev-26/nexus-q/commit/1c03968e9b8d5578020e571e2f25edc5a7165607), and tagged [`v4-engineering-2026-10-16`](https://github.com/lecodev-26/nexus-q/tree/v4-engineering-2026-10-16) as an **engineering snapshot**, not a stable production release. The official 1.5× median-and-p95 performance gate passed in the reviewed native-backend CI; the benchmark result applies to the measured backend operations and does not mean the backend is connected to the application production paths. **The native backend remains experimental and is not yet wired into `nexusq-core`, CLI, or SDK production cryptographic paths.** Do not infer an independent audit, FIPS 140-3 validation, production readiness, or v1.0 release readiness. See [`docs/performance/NATIVE_BACKEND.md`](docs/performance/NATIVE_BACKEND.md) and [`docs/V3_V4_ROADMAP.md`](docs/V3_V4_ROADMAP.md).
 
 <div align="center">
 
@@ -184,18 +184,19 @@ The ML-DSA-only zeroize control does not prove SHA3/SHAKE zeroization is the cau
 
 </div>
 
-<div align="center">
-
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/dark/versions.svg"><img src="assets/light/versions.svg" alt="V1 frozen baseline, V2 frozen, V3 current release, V4 planned" width="100%"></picture>
-
-</div>
+| Line | Reference | Current meaning | Status |
+|---|---|---|---|
+| V1 | [`v1.0.0`](https://github.com/lecodev-26/nexus-q/releases/tag/v1.0.0) | Original frozen baseline | Historical engineering baseline |
+| V2 | [`v2.0.0`](https://github.com/lecodev-26/nexus-q/releases/tag/v2.0.0) · `nexusqv2` | Security/correctness engineering line | Frozen |
+| V3 | [`v3-engineering-2026-10-09`](https://github.com/lecodev-26/nexus-q/releases/tag/v3-engineering-2026-10-09) · `nexusqv3` | Hardened implementation and benchmark evidence | Engineering release |
+| V4 | [`v4-engineering-2026-10-16`](https://github.com/lecodev-26/nexus-q/tree/v4-engineering-2026-10-16) · `nexusqv4` | Experimental native backend and performance work | Engineering snapshot; production paths not yet wired |
 
 <details>
-<summary><b>V3 engineering release and V4 status</b></summary>
+<summary><b>V3 engineering release and V4 snapshot</b></summary>
 
-V3 consolidates the hardened implementation, the reproducible PQC Benchmark Arena, dependency/profile diagnostics, corrected benchmark sampling and archived evidence. The V3 GitHub release is an engineering release, not a claim of independent audit, certification, or registry publication. The four-hour fuzz soaks are tracked separately in `main` CI. The latest recovered V1/V2/V3 artifacts and checksums are tracked in [`artifact-archive/README.md`](artifact-archive/README.md).
+V3 consolidates the hardened implementation, reproducible PQC Benchmark Arena, dependency/profile diagnostics, corrected benchmark sampling and archived evidence. Its GitHub release is an engineering release, not a claim of independent audit, certification, or registry publication. V1/V2/V3 artifacts and checksums are indexed in [`artifact-archive/README.md`](artifact-archive/README.md).
 
-V4 native-assembly performance work is an active development line, not a release. The assembly-first implementation plan and 1.5x AWS-LC milestone are tracked by [Issue #48](https://github.com/lecodev-26/nexus-q/issues/48); [Issue #23](https://github.com/lecodev-26/nexus-q/issues/23) and [PR #46](https://github.com/lecodev-26/nexus-q/pull/46) remain historical technical context. Native x86-64 AVX2 assembly is required from the first new optimized kernel, with Rust integration, explicit runtime dispatch, a portable scalar fallback, differential tests, cryptographic vectors, security review, and controlled same-host benchmarks. The performance gate remains unsatisfied until every required operation passes both median and p95 thresholds. See [`docs/performance/ROADMAP.md`](docs/performance/ROADMAP.md).
+V4 is now represented by the `v4-engineering-2026-10-16` engineering tag and is integrated into `main`. The native backend and its benchmark harness are present, and the official 1.5× median-and-p95 gate passed in the reviewed CI evidence. **This is not production-path integration:** the backend is not yet wired into `nexusq-core`, the CLI, or SDK cryptographic operations. It remains experimental, and further integration, correctness/security review and end-to-end measurement are still engineering work. The former Issue #48 tracking item is closed; its checklist is retained as historical engineering evidence under [`docs/performance/`](docs/performance/).
 
 </details>
 
@@ -277,7 +278,7 @@ User-facing documentation starts at [`docs/user/README.md`](docs/user/README.md)
 
 </div>
 
-V1, V2 and V3 are engineering version lines. A GitHub release does not imply independent security audit, certification, production readiness, or publication to crates.io/PyPI/other registries. V3 preserves zeroization and accepts the currently observed performance tradeoff. The V3 release carries the retained benchmark evidence archive. Review the latest `main` CI and four-hour fuzz-soak outcomes before declaring the final validation cycle complete.
+V1–V4 are engineering version lines/snapshots, not proof of production readiness. A GitHub release does not imply an independent security audit, certification, FIPS validation, or publication to crates.io/PyPI/other registries. The V4 backend remains experimental and is not connected to the production cryptographic paths of `nexusq-core`, CLI, or SDKs. The performance gate result applies to the benchmarked backend and must not be read as an end-to-end application performance claim. Check [current `main` CI](https://github.com/lecodev-26/nexus-q/actions) before relying on any validation statement.
 
 | ✅ Claimed and evidenced | ❌ Not claimed |
 |---|---|

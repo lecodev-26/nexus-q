@@ -2,6 +2,8 @@
 
 NEXUS-Q is a Rust-based cryptographic security engine with a CLI, library API, authenticated HTTP server, and native bindings.
 
+**Project status (2026-10-16):** the V4 native backend is an experimental engineering snapshot. It is not yet wired into `nexusq-core`, CLI, or SDK production cryptographic paths. The repository and its engineering releases do not claim production readiness, independent audit, or FIPS validation.
+
 This guide describes the current implemented surface. Features described as CI-only, planned, hardware-dependent, or future are not presented as available local features.
 
 ## Start here
