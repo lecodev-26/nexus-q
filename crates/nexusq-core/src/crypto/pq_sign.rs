@@ -12,6 +12,7 @@ use ml_dsa::{
     Verifier as _,
 };
 use slh_dsa::Shake128f;
+use slh_dsa::{Keypair as _, Signer as _, Verifier as _};
 use slh_dsa::{SigningKey as SlhSigningKey, VerifyingKey as SlhVerifyingKey};
 use zeroize::Zeroizing;
 
@@ -71,18 +72,21 @@ pub struct MlDsa65VerifyingKey {
 impl MlDsa65VerifyingKey {
     /// Decode and precompute a serialized ML-DSA-65 public key.
     pub fn from_public_key(bytes: &[u8]) -> Result<Self, PqSignError> {
-        let enc = ml_dsa::EncodedVerifyingKey::<MlDsa65>::try_from(bytes)
-            .map_err(|_| PqSignError::InvalidKey)?;
         #[cfg(not(feature = "native-backend"))]
-        let verifying = ml_dsa::VerifyingKey::<MlDsa65>::decode(&enc);
+        {
+            let enc = ml_dsa::EncodedVerifyingKey::<MlDsa65>::try_from(bytes)
+                .map_err(|_| PqSignError::InvalidKey)?;
+            let verifying = ml_dsa::VerifyingKey::<MlDsa65>::decode(&enc);
+            Ok(Self { verifying })
+        }
         #[cfg(feature = "native-backend")]
-        let _ = ml_dsa::VerifyingKey::<MlDsa65>::decode(&enc);
-        Ok(Self {
-            #[cfg(not(feature = "native-backend"))]
-            verifying,
-            #[cfg(feature = "native-backend")]
-            public_key: bytes.to_vec(),
-        })
+        {
+            let _ = nexusq_native_backend::mldsa65::VerifyingKey::from_bytes(bytes)
+                .map_err(|_| PqSignError::InvalidKey)?;
+            Ok(Self {
+                public_key: bytes.to_vec(),
+            })
+        }
     }
 
     /// Verify a signature using the cached public-key state.

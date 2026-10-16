@@ -11,6 +11,7 @@
 //! adversary, ML-KEM still holds.
 
 #[cfg(feature = "native-backend")]
+#[allow(deprecated)]
 use ml_kem::ExpandedKeyEncoding as _;
 use ml_kem::FromSeed as _;
 use ml_kem::kem::Kem;
