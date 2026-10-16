@@ -97,12 +97,12 @@ impl MlDsa65VerifyingKey {
             let native_key =
                 nexusq_native_backend::mldsa65::VerifyingKey::from_bytes(&self.public_key)
                     .map_err(|_| PqSignError::InvalidKey)?;
-            return native_key
+            native_key
                 .verify(message, &[], signature)
                 .map_err(|error| match error {
                     nexusq_native_backend::Error::InvalidSignature => PqSignError::InvalidSignature,
                     _ => PqSignError::VerificationFailed,
-                });
+                })
         }
         #[cfg(not(feature = "native-backend"))]
         {
@@ -126,11 +126,11 @@ impl MlDsa65KeyPair {
             let (native_signing, verifying) =
                 nexusq_native_backend::mldsa65::generate_from_seed(&seed)
                     .expect("native ML-DSA-65 key expansion failed");
-            return Self {
+            Self {
                 native_signing,
                 seed,
                 public_key: verifying.0.to_vec(),
-            };
+            }
         }
         #[cfg(not(feature = "native-backend"))]
         {
@@ -149,11 +149,11 @@ impl MlDsa65KeyPair {
             let (native_signing, verifying) =
                 nexusq_native_backend::mldsa65::generate_from_seed(&seed)
                     .map_err(|_| PqSignError::InvalidKey)?;
-            return Ok(Self {
+            Ok(Self {
                 native_signing,
                 seed,
                 public_key: verifying.0.to_vec(),
-            });
+            })
         }
         #[cfg(not(feature = "native-backend"))]
         {
@@ -167,7 +167,7 @@ impl MlDsa65KeyPair {
     pub fn secret_key(&self) -> Zeroizing<Vec<u8>> {
         #[cfg(feature = "native-backend")]
         {
-            return Zeroizing::new(self.seed.to_vec());
+            Zeroizing::new(self.seed.to_vec())
         }
         #[cfg(not(feature = "native-backend"))]
         {
@@ -180,7 +180,7 @@ impl MlDsa65KeyPair {
     pub fn public_key(&self) -> Vec<u8> {
         #[cfg(feature = "native-backend")]
         {
-            return self.public_key.clone();
+            self.public_key.clone()
         }
         #[cfg(not(feature = "native-backend"))]
         {
@@ -193,12 +193,11 @@ impl MlDsa65KeyPair {
     pub fn sign(&self, message: &[u8]) -> Vec<u8> {
         #[cfg(feature = "native-backend")]
         {
-            return self
-                .native_signing
+            self.native_signing
                 .sign(message, &[])
                 .expect("native ML-DSA-65 signing failed")
                 .0
-                .to_vec();
+                .to_vec()
         }
         #[cfg(not(feature = "native-backend"))]
         {
@@ -222,12 +221,12 @@ pub fn ml_dsa_65_verify(
     {
         let native_key = nexusq_native_backend::mldsa65::VerifyingKey::from_bytes(public_key)
             .map_err(|_| PqSignError::InvalidKey)?;
-        return native_key
+        native_key
             .verify(message, &[], signature)
             .map_err(|error| match error {
                 nexusq_native_backend::Error::InvalidSignature => PqSignError::InvalidSignature,
                 _ => PqSignError::VerificationFailed,
-            });
+            })
     }
     #[cfg(not(feature = "native-backend"))]
     {

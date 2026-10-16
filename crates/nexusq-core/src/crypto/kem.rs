@@ -119,7 +119,7 @@ pub mod ml_kem_768 {
             let (ct, ss) = native_public
                 .encapsulate()
                 .expect("native ML-KEM-768 encapsulation failed");
-            return (ct.0.to_vec(), Zeroizing::new(*ss.as_bytes()));
+            (ct.0.to_vec(), Zeroizing::new(*ss.as_bytes()))
         }
         #[cfg(not(feature = "native-backend"))]
         {
@@ -164,7 +164,7 @@ pub mod ml_kem_768 {
             let ss = native_secret
                 .decapsulate(&native_ct)
                 .map_err(|_| KemError::Decapsulate)?;
-            return Ok(Zeroizing::new(*ss.as_bytes()));
+            Ok(Zeroizing::new(*ss.as_bytes()))
         }
         #[cfg(not(feature = "native-backend"))]
         {
