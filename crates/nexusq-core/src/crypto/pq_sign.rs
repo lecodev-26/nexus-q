@@ -97,12 +97,12 @@ impl MlDsa65VerifyingKey {
             let native_key =
                 nexusq_native_backend::mldsa65::VerifyingKey::from_bytes(&self.public_key)
                     .map_err(|_| PqSignError::InvalidKey)?;
+            if signature.len() != ML_DSA_65_SIGNATURE_LEN {
+                return Err(PqSignError::InvalidSignature);
+            }
             native_key
                 .verify(message, &[], signature)
-                .map_err(|error| match error {
-                    nexusq_native_backend::Error::InvalidSignature => PqSignError::InvalidSignature,
-                    _ => PqSignError::VerificationFailed,
-                })
+                .map_err(|_| PqSignError::VerificationFailed)
         }
         #[cfg(not(feature = "native-backend"))]
         {
@@ -221,12 +221,12 @@ pub fn ml_dsa_65_verify(
     {
         let native_key = nexusq_native_backend::mldsa65::VerifyingKey::from_bytes(public_key)
             .map_err(|_| PqSignError::InvalidKey)?;
+        if signature.len() != ML_DSA_65_SIGNATURE_LEN {
+            return Err(PqSignError::InvalidSignature);
+        }
         native_key
             .verify(message, &[], signature)
-            .map_err(|error| match error {
-                nexusq_native_backend::Error::InvalidSignature => PqSignError::InvalidSignature,
-                _ => PqSignError::VerificationFailed,
-            })
+            .map_err(|_| PqSignError::VerificationFailed)
     }
     #[cfg(not(feature = "native-backend"))]
     {
