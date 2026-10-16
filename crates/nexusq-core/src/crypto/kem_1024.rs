@@ -61,6 +61,28 @@ impl KeyPair {
 /// Generate a fresh key pair.
 #[must_use]
 pub fn generate() -> KeyPair {
+    #[cfg(feature = "native-backend")]
+    let (ml_kem_secret, ml_kem_public) = {
+        // Generate ML-KEM material natively, then adapt the expanded FIPS key
+        // into the stable public RustCrypto key types used by this API.
+        let (native_secret, native_public) = nexusq_native_backend::mlkem1024::generate()
+            .expect("native ML-KEM-1024 key generation failed");
+        #[allow(deprecated)]
+        let expanded: ml_kem::ml_kem_1024::ExpandedDecapsulationKey = native_secret
+            .as_bytes()
+            .as_slice()
+            .try_into()
+            .expect("native ML-KEM-1024 expanded key has the specified length");
+        #[allow(deprecated)]
+        let secret = DecapsulationKey1024::from_expanded_bytes(&expanded)
+            .expect("native ML-KEM-1024 key must satisfy the RustCrypto key checks");
+        let public_bytes: [u8; 1568] = *native_public.as_bytes();
+        let public_key = ml_kem::Key::<EncapsulationKey1024>::from(public_bytes);
+        let public = EncapsulationKey1024::new(&public_key)
+            .expect("native ML-KEM-1024 public key must satisfy the RustCrypto key checks");
+        (secret, public)
+    };
+    #[cfg(not(feature = "native-backend"))]
     let (ml_kem_secret, ml_kem_public) = MlKem1024::generate_keypair();
     KeyPair {
         ml_kem_secret,

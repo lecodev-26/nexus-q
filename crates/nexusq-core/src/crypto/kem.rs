@@ -79,7 +79,30 @@ pub mod ml_kem_768 {
     /// Panics if the OS RNG fails.
     #[must_use]
     pub fn generate() -> (DecapsulationKey768, EncapsulationKey768) {
-        MlKem768::generate_keypair()
+        #[cfg(feature = "native-backend")]
+        {
+            // Keep the public API's RustCrypto key types, but generate the FIPS
+            // key material through the native backend. The expanded secret-key
+            // encoding is the compatibility bridge between the two APIs.
+            let (native_secret, native_public) = nexusq_native_backend::mlkem768::generate()
+                .expect("native ML-KEM-768 key generation failed");
+            #[allow(deprecated)]
+            let expanded: ml_kem::ml_kem_768::ExpandedDecapsulationKey = native_secret
+                .as_bytes()
+                .as_slice()
+                .try_into()
+                .expect("native ML-KEM-768 expanded key has the specified length");
+            #[allow(deprecated)]
+            let secret = DecapsulationKey768::from_expanded_bytes(&expanded)
+                .expect("native ML-KEM-768 key must satisfy the RustCrypto key checks");
+            let public = public_key_from_bytes(native_public.0.as_slice())
+                .expect("native ML-KEM-768 public key must satisfy the RustCrypto key checks");
+            (secret, public)
+        }
+        #[cfg(not(feature = "native-backend"))]
+        {
+            MlKem768::generate_keypair()
+        }
     }
 
     /// Serializes a public key to bytes.
