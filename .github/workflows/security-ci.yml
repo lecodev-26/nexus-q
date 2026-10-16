@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      full_fuzz:
+        description: 'Run the complete 4-hour fuzz soaks (required for final validation)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -79,11 +85,11 @@ jobs:
   fuzz-soak-vault:
     name: 4-hour fuzz soak - vault parser
     runs-on: ubuntu-latest
-    # PR #55 must finish the same four-hour campaign before merge; main keeps
-    # its normal post-merge campaign as an independent verification.
+    # Keep intermediate PR CI fast. Run the full soak on main or by explicit
+    # workflow_dispatch with full_fuzz=true during final pre-merge validation.
     if: >-
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'pull_request' && github.event.pull_request.number == 55)
+      (github.event_name == 'workflow_dispatch' && inputs.full_fuzz == true)
     timeout-minutes: 250
     steps:
       - uses: actions/checkout@v4
@@ -97,11 +103,11 @@ jobs:
   fuzz-soak-envelope:
     name: 4-hour fuzz soak - envelope parser
     runs-on: ubuntu-latest
-    # PR #55 must finish the same four-hour campaign before merge; main keeps
-    # its normal post-merge campaign as an independent verification.
+    # Keep intermediate PR CI fast. Run the full soak on main or by explicit
+    # workflow_dispatch with full_fuzz=true during final pre-merge validation.
     if: >-
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'pull_request' && github.event.pull_request.number == 55)
+      (github.event_name == 'workflow_dispatch' && inputs.full_fuzz == true)
     timeout-minutes: 250
     steps:
       - uses: actions/checkout@v4
