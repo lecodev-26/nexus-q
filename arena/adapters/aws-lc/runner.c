@@ -257,7 +257,7 @@ static void emit(const char *algorithm, const char *parameter, const char *opera
            env_or("ARENA_OPT", "release"), env_or("ARENA_RUN_ORDER", "unknown"),
            count, warmup_count, timestamp,
            (unsigned long long)stats.median_ns,
-           1e9 / (double)stats.median_ns, cycle_counter_source(), active_measurement_method, active_measurement_scope);
+           1e9 / (double)stats.median_ns, active_measurement_method, active_measurement_scope, cycle_counter_source());
 
     for (int i = 0; i < count; ++i) {
         printf("%s%llu", i ? "," : "", (unsigned long long)samples[i]);
