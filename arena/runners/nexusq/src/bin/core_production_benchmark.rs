@@ -173,21 +173,37 @@ fn main() {
         &*ss_ser, &*recovered_ser,
         "ML-KEM-1024 hybrid serialized pre-benchmark round trip failed"
     );
+    // Preallocate ciphertext/secret buffers outside the timed samples so the
+    // gate matches AWS-LC (EVP context + output buffers kept outside the loop).
+    let mut ct_buf = [0u8; kem_1024::CIPHERTEXT_LEN];
+    let mut ss_buf = zeroize::Zeroizing::new([0u8; 32]);
+    pair1024
+        .encapsulate_prepared_into(&mut ct_buf, &mut ss_buf)
+        .expect("prepared encaps setup");
+    let recovered_setup = kem_1024::decapsulate(&pair1024, &ct_buf).unwrap();
+    assert_eq!(
+        &*ss_buf, &*recovered_setup,
+        "ML-KEM-1024 hybrid prepared pre-benchmark round trip failed"
+    );
     measure(
         "encaps",
         "ml-kem",
         "1024",
         || {
-            black_box(pair1024.encapsulate_prepared().unwrap());
+            pair1024
+                .encapsulate_prepared_into(&mut ct_buf, &mut ss_buf)
+                .unwrap();
+            black_box((&ct_buf, &ss_buf));
         },
         warmups,
         iterations,
     );
-    let (ct1024, ss1024) = pair1024.encapsulate_prepared().unwrap();
+    let ct1024 = ct_buf.to_vec();
+    let ss1024 = ss_buf.clone();
     let recovered1024 = kem_1024::decapsulate(&pair1024, &ct1024).unwrap();
     assert_eq!(
         &*ss1024, &*recovered1024,
-        "ML-KEM-1024 hybrid prepared pre-benchmark round trip failed"
+        "ML-KEM-1024 hybrid prepared post-setup round trip failed"
     );
     measure(
         "decaps",

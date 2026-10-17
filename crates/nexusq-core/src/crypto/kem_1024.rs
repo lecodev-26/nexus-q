@@ -71,44 +71,64 @@ impl KeyPair {
     pub fn encapsulate_prepared(
         &self,
     ) -> Result<(Vec<u8>, Zeroizing<[u8; SHARED_SECRET_LEN]>), KemError> {
+        let mut ct = [0u8; CIPHERTEXT_LEN];
+        let mut ss = Zeroizing::new([0u8; SHARED_SECRET_LEN]);
+        self.encapsulate_prepared_into(&mut ct, &mut ss)?;
+        Ok((ct.to_vec(), ss))
+    }
+
+    /// Encapsulate into caller-provided buffers (AWS-LC prepared-context model).
+    ///
+    /// Ciphertext and shared-secret storage are supplied by the caller so the
+    /// timed path does not allocate, matching the AWS-LC hybrid comparator.
+    pub fn encapsulate_prepared_into(
+        &self,
+        ciphertext_out: &mut [u8; CIPHERTEXT_LEN],
+        shared_secret_out: &mut Zeroizing<[u8; SHARED_SECRET_LEN]>,
+    ) -> Result<(), KemError> {
         #[cfg(feature = "native-backend")]
-        let (ct_bytes, ml_ss_bytes) = {
+        let ml_ss_bytes = {
             let (ct, ss) = self
                 .native_ml_kem_public
                 .encapsulate()
                 .map_err(|_| KemError::Encapsulate)?;
-            (ct.0.to_vec(), *ss.as_bytes())
+            ciphertext_out[..1568].copy_from_slice(&ct.0);
+            *ss.as_bytes()
         };
         #[cfg(not(feature = "native-backend"))]
-        let (ct_bytes, ml_ss_bytes) = {
+        let ml_ss_bytes = {
             let (ct, ss) = self.ml_kem_public.encapsulate();
-            (ct.as_slice().to_vec(), <[u8; 32]>::from(ss))
+            ciphertext_out[..1568].copy_from_slice(ct.as_slice());
+            <[u8; 32]>::from(ss)
         };
         let eph = EphemeralSecret::random();
         let eph_pub = X25519Public::from(&eph);
         let x_ss = eph.diffie_hellman(&self.x25519_public);
-        let mut hasher = Sha3_256::new();
-        hasher.update(ml_ss_bytes);
-        hasher.update(x_ss.as_bytes());
-        hasher.update(eph_pub.as_bytes());
-        hasher.update(self.x25519_public.as_bytes());
-        hasher.update(INFO);
-        let digest = hasher.finalize();
-        let mut out = Zeroizing::new([0u8; SHARED_SECRET_LEN]);
-        out.copy_from_slice(&digest);
-        let mut out_ct = Vec::with_capacity(CIPHERTEXT_LEN);
-        out_ct.extend_from_slice(&ct_bytes);
-        out_ct.extend_from_slice(eph_pub.as_bytes());
-        Ok((out_ct, out))
+        ciphertext_out[1568..].copy_from_slice(eph_pub.as_bytes());
+        // One-shot transcript hash on a stack buffer (same layout as AWS-LC).
+        let mut transcript = [0u8; 32 + 32 + 32 + 32 + INFO.len()];
+        transcript[0..32].copy_from_slice(&ml_ss_bytes);
+        transcript[32..64].copy_from_slice(x_ss.as_bytes());
+        transcript[64..96].copy_from_slice(eph_pub.as_bytes());
+        transcript[96..128].copy_from_slice(self.x25519_public.as_bytes());
+        transcript[128..].copy_from_slice(INFO);
+        let digest = Sha3_256::digest(transcript);
+        shared_secret_out.copy_from_slice(&digest);
+        Ok(())
     }
 }
 
 /// Generate a fresh key pair.
 #[must_use]
 pub fn generate() -> KeyPair {
+    // One CSPRNG draw for (d||z) and the X25519 scalar (matches AWS-LC hybrid
+    // keygen cost model more closely than two independent RNG calls).
+    let mut seed_material = Zeroizing::new([0u8; 96]);
+    getrandom::fill(seed_material.as_mut()).expect("OS RNG failed");
     let mut seed = Zeroizing::new([0u8; 64]);
-    getrandom::fill(seed.as_mut()).expect("OS RNG failed");
-    let x25519_secret = StaticSecret::random();
+    seed.copy_from_slice(&seed_material[..64]);
+    let x_seed: [u8; 32] = seed_material[64..].try_into().expect("32 bytes");
+    let x25519_secret = StaticSecret::from(x_seed);
     let x25519_public = X25519Public::from(&x25519_secret);
     #[cfg(feature = "native-backend")]
     let (ml_kem_secret, ml_kem_public, native_ml_kem_secret, native_ml_kem_public) = {
@@ -219,14 +239,14 @@ pub fn decapsulate(
     let x_ss = pair
         .x25519_secret
         .diffie_hellman(&X25519Public::from(x_arr));
-    // Use the cached recipient public key; transcript bytes stay identical.
-    let mut hasher = Sha3_256::new();
-    hasher.update(ml_ss_bytes);
-    hasher.update(x_ss.as_bytes());
-    hasher.update(x_pub);
-    hasher.update(pair.x25519_public.as_bytes());
-    hasher.update(INFO);
-    let digest = hasher.finalize();
+    // Use the cached recipient public key; one-shot stack transcript.
+    let mut transcript = [0u8; 32 + 32 + 32 + 32 + INFO.len()];
+    transcript[0..32].copy_from_slice(&ml_ss_bytes);
+    transcript[32..64].copy_from_slice(x_ss.as_bytes());
+    transcript[64..96].copy_from_slice(x_pub);
+    transcript[96..128].copy_from_slice(pair.x25519_public.as_bytes());
+    transcript[128..].copy_from_slice(INFO);
+    let digest = Sha3_256::digest(transcript);
     let mut out = Zeroizing::new([0u8; SHARED_SECRET_LEN]);
     out.copy_from_slice(&digest);
     Ok(out)
