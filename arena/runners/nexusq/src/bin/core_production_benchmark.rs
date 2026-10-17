@@ -205,12 +205,14 @@ fn main() {
         ss1024, *recovered1024,
         "ML-KEM-1024 hybrid prepared post-setup round trip failed"
     );
+    let mut decaps_ss = [0u8; 32];
     measure(
         "decaps",
         "ml-kem",
         "1024",
         || {
-            black_box(kem_1024::decapsulate(&pair1024, &ct1024).unwrap());
+            kem_1024::decapsulate_into(&pair1024, &ct1024, &mut decaps_ss).unwrap();
+            black_box(&decaps_ss);
         },
         warmups,
         iterations,

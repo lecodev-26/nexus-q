@@ -1,10 +1,10 @@
 //! ML-KEM-1024 + X25519 hybrid key encapsulation.
 #[cfg(not(feature = "native-backend"))]
-use ml_kem::kem::{Decapsulate as _, Encapsulate as _};
-#[cfg(not(feature = "native-backend"))]
 use ml_kem::FromSeed as _;
 #[cfg(not(feature = "native-backend"))]
 use ml_kem::MlKem1024;
+#[cfg(not(feature = "native-backend"))]
+use ml_kem::kem::{Decapsulate as _, Encapsulate as _};
 use ml_kem::{DecapsulationKey1024, EncapsulationKey1024, KeyExport};
 use sha3::{Digest, Sha3_256};
 #[cfg(not(feature = "native-backend"))]
@@ -164,7 +164,7 @@ impl KeyPair {
 fn hybrid_x25519_ephemeral(peer_public: &[u8; 32]) -> ([u8; 32], [u8; 32]) {
     #[cfg(feature = "native-backend")]
     {
-        use ring::agreement::{agree_ephemeral, EphemeralPrivateKey, UnparsedPublicKey, X25519};
+        use ring::agreement::{EphemeralPrivateKey, UnparsedPublicKey, X25519, agree_ephemeral};
         use ring::rand::SystemRandom;
         let rng = SystemRandom::new();
         let private = EphemeralPrivateKey::generate(&X25519, &rng).expect("X25519 keygen");
@@ -272,6 +272,20 @@ pub fn decapsulate(
     pair: &KeyPair,
     ciphertext: &[u8],
 ) -> Result<Zeroizing<[u8; SHARED_SECRET_LEN]>, KemError> {
+    let mut out = Zeroizing::new([0u8; SHARED_SECRET_LEN]);
+    decapsulate_into(pair, ciphertext, &mut out)?;
+    Ok(out)
+}
+
+/// Decapsulate into a caller-provided buffer (AWS-LC prepared-context model).
+///
+/// Avoids allocating `Zeroizing` on the timed production path; the caller owns
+/// the output buffer lifetime, matching the AWS-LC hybrid comparator.
+pub fn decapsulate_into(
+    pair: &KeyPair,
+    ciphertext: &[u8],
+    shared_secret_out: &mut [u8; SHARED_SECRET_LEN],
+) -> Result<(), KemError> {
     if ciphertext.len() != CIPHERTEXT_LEN {
         return Err(KemError::InvalidCiphertext);
     }
@@ -296,7 +310,6 @@ pub fn decapsulate(
     let x_ss = pair
         .x25519_secret
         .diffie_hellman(&X25519Public::from(x_arr));
-    // Use the cached recipient public key; one-shot stack transcript.
     let mut transcript = [0u8; 32 + 32 + 32 + 32 + INFO.len()];
     transcript[0..32].copy_from_slice(&ml_ss_bytes);
     transcript[32..64].copy_from_slice(x_ss.as_bytes());
@@ -304,9 +317,8 @@ pub fn decapsulate(
     transcript[96..128].copy_from_slice(pair.x25519_public.as_bytes());
     transcript[128..].copy_from_slice(INFO);
     let digest = Sha3_256::digest(transcript);
-    let mut out = Zeroizing::new([0u8; SHARED_SECRET_LEN]);
-    out.copy_from_slice(&digest);
-    Ok(out)
+    shared_secret_out.copy_from_slice(&digest);
+    Ok(())
 }
 
 #[cfg(test)]
