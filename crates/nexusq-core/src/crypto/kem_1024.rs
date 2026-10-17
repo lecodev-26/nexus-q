@@ -72,9 +72,9 @@ impl KeyPair {
         &self,
     ) -> Result<(Vec<u8>, Zeroizing<[u8; SHARED_SECRET_LEN]>), KemError> {
         let mut ct = [0u8; CIPHERTEXT_LEN];
-        let mut ss = Zeroizing::new([0u8; SHARED_SECRET_LEN]);
+        let mut ss = [0u8; SHARED_SECRET_LEN];
         self.encapsulate_prepared_into(&mut ct, &mut ss)?;
-        Ok((ct.to_vec(), ss))
+        Ok((ct.to_vec(), Zeroizing::new(ss)))
     }
 
     /// Encapsulate into caller-provided buffers (AWS-LC prepared-context model).
@@ -84,7 +84,7 @@ impl KeyPair {
     pub fn encapsulate_prepared_into(
         &self,
         ciphertext_out: &mut [u8; CIPHERTEXT_LEN],
-        shared_secret_out: &mut Zeroizing<[u8; SHARED_SECRET_LEN]>,
+        shared_secret_out: &mut [u8; SHARED_SECRET_LEN],
     ) -> Result<(), KemError> {
         #[cfg(feature = "native-backend")]
         let ml_ss_bytes = {

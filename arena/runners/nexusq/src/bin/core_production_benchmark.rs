@@ -176,13 +176,13 @@ fn main() {
     // Preallocate ciphertext/secret buffers outside the timed samples so the
     // gate matches AWS-LC (EVP context + output buffers kept outside the loop).
     let mut ct_buf = [0u8; kem_1024::CIPHERTEXT_LEN];
-    let mut ss_buf = zeroize::Zeroizing::new([0u8; 32]);
+    let mut ss_buf = [0u8; 32];
     pair1024
         .encapsulate_prepared_into(&mut ct_buf, &mut ss_buf)
         .expect("prepared encaps setup");
     let recovered_setup = kem_1024::decapsulate(&pair1024, &ct_buf).unwrap();
     assert_eq!(
-        &*ss_buf, &*recovered_setup,
+        ss_buf, *recovered_setup,
         "ML-KEM-1024 hybrid prepared pre-benchmark round trip failed"
     );
     measure(
@@ -199,10 +199,10 @@ fn main() {
         iterations,
     );
     let ct1024 = ct_buf.to_vec();
-    let ss1024 = ss_buf.clone();
+    let ss1024 = ss_buf;
     let recovered1024 = kem_1024::decapsulate(&pair1024, &ct1024).unwrap();
     assert_eq!(
-        &*ss1024, &*recovered1024,
+        ss1024, *recovered1024,
         "ML-KEM-1024 hybrid prepared post-setup round trip failed"
     );
     measure(
