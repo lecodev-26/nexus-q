@@ -1,13 +1,15 @@
 //! ML-KEM-1024 + X25519 hybrid key encapsulation.
 #[cfg(not(feature = "native-backend"))]
+use ml_kem::kem::{Decapsulate as _, Encapsulate as _};
+#[cfg(not(feature = "native-backend"))]
 use ml_kem::FromSeed as _;
 #[cfg(not(feature = "native-backend"))]
 use ml_kem::MlKem1024;
-#[cfg(not(feature = "native-backend"))]
-use ml_kem::kem::{Decapsulate as _, Encapsulate as _};
 use ml_kem::{DecapsulationKey1024, EncapsulationKey1024, KeyExport};
 use sha3::{Digest, Sha3_256};
-use x25519_dalek::{EphemeralSecret, PublicKey as X25519Public, StaticSecret};
+#[cfg(not(feature = "native-backend"))]
+use x25519_dalek::EphemeralSecret;
+use x25519_dalek::{PublicKey as X25519Public, StaticSecret};
 use zeroize::Zeroizing;
 
 use super::kem::{KemError, SHARED_SECRET_LEN};
@@ -130,10 +132,10 @@ fn hybrid_x25519_ephemeral(peer_public: &[u8; 32]) -> ([u8; 32], [u8; 32]) {
         let mut eph_pub = [0u8; 32];
         eph_pub.copy_from_slice(public.as_ref());
         let peer = UnparsedPublicKey::new(&X25519, peer_public);
-        let mut ss = [0u8; 32];
-        agree_ephemeral(private, &peer, ring::error::Unspecified, |key_material| {
-            ss.copy_from_slice(key_material);
-            Ok(ss)
+        let ss = agree_ephemeral(private, &peer, |key_material| {
+            let mut out = [0u8; 32];
+            out.copy_from_slice(key_material);
+            out
         })
         .expect("X25519 agree");
         (eph_pub, ss)
