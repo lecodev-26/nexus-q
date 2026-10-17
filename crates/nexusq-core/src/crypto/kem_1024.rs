@@ -373,6 +373,7 @@ pub fn decapsulate_into(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "native-backend")]
     use x25519_dalek::EphemeralSecret;
 
     #[test]
