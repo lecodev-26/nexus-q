@@ -146,7 +146,7 @@ fn ed25519_serialization_and_malformed_signature_regression() {
 
 #[test]
 fn ml_dsa_public_api_seed_derivation_matches_rustcrypto() {
-    use ml_dsa::{Keypair as _, MlDsa65};
+    use ml_dsa::{KeyExport as _, Keypair as _, MlDsa65};
 
     let seed = [0x42u8; 32];
     let wrapper = MlDsa65KeyPair::from_secret_key(&seed).unwrap();
@@ -162,7 +162,7 @@ fn ml_dsa_public_api_seed_derivation_matches_rustcrypto() {
 
 #[test]
 fn ml_kem_1024_public_api_seed_derivation_matches_rustcrypto() {
-    use ml_kem::{FromSeed as _, KeyExport as _, MlKem1024};
+    use ml_kem::{ExpandedKeyEncoding as _, FromSeed as _, KeyExport as _, MlKem1024};
 
     let pair = kem_1024::generate();
     let serialized_secret = pair.secret_key_bytes();
