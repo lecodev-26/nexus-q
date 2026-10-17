@@ -101,20 +101,49 @@ impl KeyPair {
             ciphertext_out[..1568].copy_from_slice(ct.as_slice());
             <[u8; 32]>::from(ss)
         };
-        let eph = EphemeralSecret::random();
-        let eph_pub = X25519Public::from(&eph);
-        let x_ss = eph.diffie_hellman(&self.x25519_public);
-        ciphertext_out[1568..].copy_from_slice(eph_pub.as_bytes());
+        let (eph_pub_bytes, x_ss_bytes) = hybrid_x25519_ephemeral(self.x25519_public.as_bytes());
+        ciphertext_out[1568..].copy_from_slice(&eph_pub_bytes);
         // One-shot transcript hash on a stack buffer (same layout as AWS-LC).
         let mut transcript = [0u8; 32 + 32 + 32 + 32 + INFO.len()];
         transcript[0..32].copy_from_slice(&ml_ss_bytes);
-        transcript[32..64].copy_from_slice(x_ss.as_bytes());
-        transcript[64..96].copy_from_slice(eph_pub.as_bytes());
+        transcript[32..64].copy_from_slice(&x_ss_bytes);
+        transcript[64..96].copy_from_slice(&eph_pub_bytes);
         transcript[96..128].copy_from_slice(self.x25519_public.as_bytes());
         transcript[128..].copy_from_slice(INFO);
         let digest = Sha3_256::digest(transcript);
         shared_secret_out.copy_from_slice(&digest);
         Ok(())
+    }
+}
+
+/// Ephemeral X25519: (ephemeral_public, shared_secret).
+/// Under `native-backend`, prefer ring's assembly-backed X25519 to match AWS-LC.
+#[inline]
+fn hybrid_x25519_ephemeral(peer_public: &[u8; 32]) -> ([u8; 32], [u8; 32]) {
+    #[cfg(feature = "native-backend")]
+    {
+        use ring::agreement::{agree_ephemeral, EphemeralPrivateKey, UnparsedPublicKey, X25519};
+        use ring::rand::SystemRandom;
+        let rng = SystemRandom::new();
+        let private = EphemeralPrivateKey::generate(&X25519, &rng).expect("X25519 keygen");
+        let public = private.compute_public_key().expect("X25519 public");
+        let mut eph_pub = [0u8; 32];
+        eph_pub.copy_from_slice(public.as_ref());
+        let peer = UnparsedPublicKey::new(&X25519, peer_public);
+        let mut ss = [0u8; 32];
+        agree_ephemeral(private, &peer, ring::error::Unspecified, |key_material| {
+            ss.copy_from_slice(key_material);
+            Ok(ss)
+        })
+        .expect("X25519 agree");
+        (eph_pub, ss)
+    }
+    #[cfg(not(feature = "native-backend"))]
+    {
+        let eph = EphemeralSecret::random();
+        let eph_pub = X25519Public::from(&eph);
+        let x_ss = eph.diffie_hellman(&X25519Public::from(*peer_public));
+        (*eph_pub.as_bytes(), *x_ss.as_bytes())
     }
 }
 
@@ -188,25 +217,19 @@ pub fn encapsulate(
         (ct.as_slice().to_vec(), <[u8; 32]>::from(ss))
     };
     let x_arr: [u8; 32] = x_pk.try_into().map_err(|_| KemError::InvalidPublicKey)?;
-    let eph = EphemeralSecret::random();
-    let eph_pub = X25519Public::from(&eph);
-    let x_ss = eph.diffie_hellman(&X25519Public::from(x_arr));
-    // Hash the transcript incrementally: the previous Vec-backed transcript
-    // allocated and copied secret material on every encapsulation.
-    let mut hasher = Sha3_256::new();
-    hasher.update(ml_ss_bytes);
-    hasher.update(x_ss.as_bytes());
-    hasher.update(eph_pub.as_bytes());
-    hasher.update(x_pk);
-    hasher.update(INFO);
-    let digest = hasher.finalize();
+    let (eph_pub_bytes, x_ss_bytes) = hybrid_x25519_ephemeral(&x_arr);
+    let mut transcript = [0u8; 32 + 32 + 32 + 32 + INFO.len()];
+    transcript[0..32].copy_from_slice(&ml_ss_bytes);
+    transcript[32..64].copy_from_slice(&x_ss_bytes);
+    transcript[64..96].copy_from_slice(&eph_pub_bytes);
+    transcript[96..128].copy_from_slice(x_pk);
+    transcript[128..].copy_from_slice(INFO);
+    let digest = Sha3_256::digest(transcript);
     let mut out = Zeroizing::new([0u8; SHARED_SECRET_LEN]);
     out.copy_from_slice(&digest);
-    // The ciphertext carries the same X25519 ephemeral public key that was
-    // authenticated by the combiner above.
     let mut out_ct = Vec::with_capacity(CIPHERTEXT_LEN);
     out_ct.extend_from_slice(&ct_bytes);
-    out_ct.extend_from_slice(eph_pub.as_bytes());
+    out_ct.extend_from_slice(&eph_pub_bytes);
     Ok((out_ct, out))
 }
 
