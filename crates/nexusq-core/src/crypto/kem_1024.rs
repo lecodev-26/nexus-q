@@ -49,6 +49,11 @@ pub struct KeyPair {
     /// Cached native public key so prepared encapsulation avoids from_bytes.
     #[cfg(feature = "native-backend")]
     native_ml_kem_public: nexusq_native_backend::mlkem1024::EncapsulationKey,
+    /// Prepared AWS-LC X25519 private key. Decapsulation uses the same
+    /// assembly X25519 as encapsulation and the AWS-LC comparator, instead of
+    /// the pure-Rust x25519-dalek scalar multiplication.
+    #[cfg(feature = "native-backend")]
+    aws_x25519_secret: aws_lc_rs::agreement::PrivateKey,
     /// Lazily materialised RustCrypto keys for interop accessors under native-backend.
     #[cfg(feature = "native-backend")]
     rustcrypto_keys: std::sync::OnceLock<(DecapsulationKey1024, EncapsulationKey1024)>,
@@ -209,6 +214,19 @@ pub fn generate() -> KeyPair {
     seed.copy_from_slice(&seed_material[..64]);
     let x_seed: [u8; 32] = seed_material[64..].try_into().expect("32 bytes");
     let x25519_secret = StaticSecret::from(x_seed);
+    // Under native-backend the X25519 public key is derived once by AWS-LC
+    // (assembly) and the prepared private key is kept for decapsulation. This
+    // replaces the dalek base-point multiplication, so keygen does not pay twice.
+    #[cfg(feature = "native-backend")]
+    let (aws_x25519_secret, x25519_public) = {
+        use aws_lc_rs::agreement::{PrivateKey, X25519};
+        let sk = PrivateKey::from_private_key(&X25519, &x_seed).expect("X25519 private key");
+        let pk = sk.compute_public_key().expect("X25519 public key");
+        let mut pub_bytes = [0u8; 32];
+        pub_bytes.copy_from_slice(pk.as_ref());
+        (sk, X25519Public::from(pub_bytes))
+    };
+    #[cfg(not(feature = "native-backend"))]
     let x25519_public = X25519Public::from(&x25519_secret);
     #[cfg(feature = "native-backend")]
     let (native_ml_kem_secret, native_ml_kem_public) = {
@@ -231,6 +249,8 @@ pub fn generate() -> KeyPair {
         native_ml_kem_secret,
         #[cfg(feature = "native-backend")]
         native_ml_kem_public,
+        #[cfg(feature = "native-backend")]
+        aws_x25519_secret,
         #[cfg(feature = "native-backend")]
         rustcrypto_keys: std::sync::OnceLock::new(),
     }
@@ -316,12 +336,32 @@ pub fn decapsulate_into(
         <[u8; 32]>::from(ss)
     };
     let x_arr: [u8; 32] = x_pub.try_into().map_err(|_| KemError::InvalidCiphertext)?;
-    let x_ss = pair
+    #[cfg(feature = "native-backend")]
+    let x_ss_bytes: [u8; 32] = {
+        use aws_lc_rs::agreement::{UnparsedPublicKey, X25519, agree};
+        let peer = UnparsedPublicKey::new(&X25519, x_pub);
+        agree(&pair.aws_x25519_secret, peer, (), |key_material| {
+            let mut out = [0u8; 32];
+            out.copy_from_slice(key_material);
+            Ok(out)
+        })
+        // AWS-LC rejects low-order peer points; keep the previous dalek
+        // semantics (all-zero shared secret) so behaviour is unchanged.
+        .unwrap_or_else(|()| {
+            *pair
+                .x25519_secret
+                .diffie_hellman(&X25519Public::from(x_arr))
+                .as_bytes()
+        })
+    };
+    #[cfg(not(feature = "native-backend"))]
+    let x_ss_bytes: [u8; 32] = *pair
         .x25519_secret
-        .diffie_hellman(&X25519Public::from(x_arr));
+        .diffie_hellman(&X25519Public::from(x_arr))
+        .as_bytes();
     let mut transcript = [0u8; 32 + 32 + 32 + 32 + INFO.len()];
     transcript[0..32].copy_from_slice(&ml_ss_bytes);
-    transcript[32..64].copy_from_slice(x_ss.as_bytes());
+    transcript[32..64].copy_from_slice(&x_ss_bytes);
     transcript[64..96].copy_from_slice(x_pub);
     transcript[96..128].copy_from_slice(pair.x25519_public.as_bytes());
     transcript[128..].copy_from_slice(INFO);
