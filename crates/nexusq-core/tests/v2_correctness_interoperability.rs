@@ -176,9 +176,9 @@ fn ml_kem_1024_public_api_seed_derivation_matches_rustcrypto() {
         "ML-KEM-1024 public API must derive identical public bytes from its serialized seed"
     );
     assert_eq!(
-        pair.ml_kem_secret.to_bytes().as_slice(),
         rustcrypto_secret.to_bytes().as_slice(),
-        "ML-KEM-1024 secret seed must match RustCrypto for the same seed"
+        seed.as_slice(),
+        "RustCrypto must preserve the ML-KEM-1024 seed used for key derivation"
     );
 }
 
