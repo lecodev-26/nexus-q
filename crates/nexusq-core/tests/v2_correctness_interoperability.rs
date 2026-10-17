@@ -145,6 +145,44 @@ fn ed25519_serialization_and_malformed_signature_regression() {
 }
 
 #[test]
+fn ml_dsa_public_api_seed_derivation_matches_rustcrypto() {
+    use ml_dsa::{Keypair as _, MlDsa65};
+
+    let seed = [0x42u8; 32];
+    let wrapper = MlDsa65KeyPair::from_secret_key(&seed).unwrap();
+    let rustcrypto = ml_dsa::SigningKey::<MlDsa65>::new(&seed.into());
+
+    assert_eq!(wrapper.secret_key().as_slice(), seed.as_slice());
+    assert_eq!(
+        wrapper.public_key(),
+        rustcrypto.verifying_key().to_bytes().as_slice(),
+        "ML-DSA public API must derive identical public bytes from the same seed"
+    );
+}
+
+#[test]
+fn ml_kem_1024_public_api_seed_derivation_matches_rustcrypto() {
+    use ml_kem::{FromSeed as _, KeyExport as _, MlKem1024};
+
+    let pair = kem_1024::generate();
+    let serialized_secret = pair.secret_key_bytes();
+    let seed: [u8; 64] = serialized_secret[..64].try_into().unwrap();
+    let (rustcrypto_secret, rustcrypto_public) = MlKem1024::from_seed(&seed.into());
+    let wrapper_public = pair.public_key_bytes();
+
+    assert_eq!(
+        &wrapper_public[..1568],
+        rustcrypto_public.to_bytes().as_slice(),
+        "ML-KEM-1024 public API must derive identical public bytes from its serialized seed"
+    );
+    assert_eq!(
+        pair.ml_kem_secret.to_expanded_bytes().as_slice(),
+        rustcrypto_secret.to_expanded_bytes().as_slice(),
+        "ML-KEM-1024 expanded secret key must match RustCrypto for the same seed"
+    );
+}
+
+#[test]
 fn canonical_kem_sizes_remain_stable() {
     assert_eq!(ml_kem_768::PUBLIC_KEY_LEN, 1184);
     assert_eq!(ml_kem_768::CIPHERTEXT_LEN, 1088);
