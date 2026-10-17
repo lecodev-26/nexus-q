@@ -160,6 +160,20 @@ where
         P::concat_ek(t_hat, self.rho.clone())
     }
 
+    /// Decode an encapsulation key produced by a trusted ML-KEM key-generation backend.
+    ///
+    /// Unlike `from_bytes`, this skips the FIPS 203 modulus check. Callers must only use
+    /// bytes returned by a successful, trusted key-generation operation; never use this
+    /// method for externally supplied public keys.
+    #[doc(hidden)]
+    pub(crate) fn from_generated_bytes(enc: &EncodedEncryptionKey<P>) -> Self {
+        let (t_hat, rho) = P::split_ek(enc);
+        Self {
+            t_hat: P::decode_u12(t_hat),
+            rho: rho.clone(),
+        }
+    }
+
     /// Parse an encryption key from a byte array `(t_hat || rho)`.
     ///
     /// # Errors

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-exclude = ["arena/runners/nexusq", "vendor/ml-dsa", "vendor/ml-kem", "vendor/module-lattice"]
+exclude = ["arena/runners/nexusq", "crates/nexusq-native-backend", "vendor/ml-dsa", "vendor/ml-kem", "vendor/module-lattice"]
 members = [
     "crates/nexusq-core",
     "crates/nexusq-kernels",
@@ -50,6 +50,7 @@ module-lattice = "0.2.3"
 ml-dsa = { version = "0.1.1", features = ["zeroize", "nexusq-kernels"] }
 slh-dsa = { version = "0.2.0-rc.5", features = ["zeroize"] }
 x25519-dalek = { version = "3", features = ["getrandom", "static_secrets", "zeroize"] }
+aws-lc-rs = { version = "1", default-features = false, features = ["aws-lc-sys"] }
 ed25519-dalek = { version = "3", features = ["rand_core", "zeroize"] }
 rand_core = { version = "0.9", features = ["os_rng"] }
 hybrid-array = "0.4"

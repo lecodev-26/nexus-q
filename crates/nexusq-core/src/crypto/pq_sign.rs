@@ -4,11 +4,16 @@
 //! has stable identifiers and sizes. ML-DSA-65 is the primary PQ signature;
 //! SLH-DSA-SHAKE-128f is retained as a conservative hash-based alternative.
 
+#[cfg(not(feature = "native-backend"))]
+use ml_dsa::MlDsa65;
+#[cfg(not(feature = "native-backend"))]
 use ml_dsa::{
-    Generate as _, KeyExport as _, KeyInit as _, Keypair as _, MlDsa65, SignatureEncoding as _,
-    Signer as _, Verifier as _,
+    Generate as _, KeyExport as _, KeyInit as _, Keypair as _, SignatureEncoding as _, Signer as _,
+    Verifier as _,
 };
 use slh_dsa::Shake128f;
+#[cfg(feature = "native-backend")]
+use slh_dsa::signature::{Keypair as _, Signer as _, Verifier as _};
 use slh_dsa::{SigningKey as SlhSigningKey, VerifyingKey as SlhVerifyingKey};
 use zeroize::Zeroizing;
 
@@ -43,7 +48,14 @@ pub enum PqSignError {
 
 /// ML-DSA-65 key pair.
 pub struct MlDsa65KeyPair {
+    #[cfg(not(feature = "native-backend"))]
     signing: ml_dsa::SigningKey<MlDsa65>,
+    #[cfg(feature = "native-backend")]
+    native_signing: nexusq_native_backend::mldsa65::SigningKey,
+    #[cfg(feature = "native-backend")]
+    seed: Zeroizing<[u8; ML_DSA_65_SECRET_KEY_LEN]>,
+    #[cfg(feature = "native-backend")]
+    public_key: Vec<u8>,
 }
 
 /// Reusable ML-DSA-65 verifier with precomputed public-key state.
@@ -52,26 +64,54 @@ pub struct MlDsa65KeyPair {
 /// Reusing it avoids rebuilding that state and its heap allocations for every
 /// verification operation. The existing `ml_dsa_65_verify` API remains unchanged.
 pub struct MlDsa65VerifyingKey {
+    #[cfg(not(feature = "native-backend"))]
     verifying: ml_dsa::VerifyingKey<MlDsa65>,
+    #[cfg(feature = "native-backend")]
+    public_key: Vec<u8>,
 }
 
 impl MlDsa65VerifyingKey {
     /// Decode and precompute a serialized ML-DSA-65 public key.
     pub fn from_public_key(bytes: &[u8]) -> Result<Self, PqSignError> {
-        let enc = ml_dsa::EncodedVerifyingKey::<MlDsa65>::try_from(bytes)
-            .map_err(|_| PqSignError::InvalidKey)?;
-        Ok(Self {
-            verifying: ml_dsa::VerifyingKey::<MlDsa65>::decode(&enc),
-        })
+        #[cfg(not(feature = "native-backend"))]
+        {
+            let enc = ml_dsa::EncodedVerifyingKey::<MlDsa65>::try_from(bytes)
+                .map_err(|_| PqSignError::InvalidKey)?;
+            let verifying = ml_dsa::VerifyingKey::<MlDsa65>::decode(&enc);
+            Ok(Self { verifying })
+        }
+        #[cfg(feature = "native-backend")]
+        {
+            let _ = nexusq_native_backend::mldsa65::VerifyingKey::from_bytes(bytes)
+                .map_err(|_| PqSignError::InvalidKey)?;
+            Ok(Self {
+                public_key: bytes.to_vec(),
+            })
+        }
     }
 
     /// Verify a signature using the cached public-key state.
     pub fn verify(&self, message: &[u8], signature: &[u8]) -> Result<(), PqSignError> {
-        let sig = ml_dsa::Signature::<MlDsa65>::try_from(signature)
-            .map_err(|_| PqSignError::InvalidSignature)?;
-        self.verifying
-            .verify(message, &sig)
-            .map_err(|_| PqSignError::VerificationFailed)
+        #[cfg(feature = "native-backend")]
+        {
+            let native_key =
+                nexusq_native_backend::mldsa65::VerifyingKey::from_bytes(&self.public_key)
+                    .map_err(|_| PqSignError::InvalidKey)?;
+            if signature.len() != ML_DSA_65_SIGNATURE_LEN {
+                return Err(PqSignError::InvalidSignature);
+            }
+            native_key
+                .verify(message, &[], signature)
+                .map_err(|_| PqSignError::VerificationFailed)
+        }
+        #[cfg(not(feature = "native-backend"))]
+        {
+            let sig = ml_dsa::Signature::<MlDsa65>::try_from(signature)
+                .map_err(|_| PqSignError::InvalidSignature)?;
+            self.verifying
+                .verify(message, &sig)
+                .map_err(|_| PqSignError::VerificationFailed)
+        }
     }
 }
 
@@ -79,8 +119,24 @@ impl MlDsa65KeyPair {
     /// Generate a new key pair.
     #[must_use]
     pub fn generate() -> Self {
-        Self {
-            signing: ml_dsa::SigningKey::<MlDsa65>::generate(),
+        #[cfg(feature = "native-backend")]
+        {
+            let mut seed = Zeroizing::new([0u8; ML_DSA_65_SECRET_KEY_LEN]);
+            getrandom::fill(seed.as_mut()).expect("OS RNG failed");
+            let (native_signing, verifying) =
+                nexusq_native_backend::mldsa65::generate_from_seed(&seed)
+                    .expect("native ML-DSA-65 key expansion failed");
+            Self {
+                native_signing,
+                seed,
+                public_key: verifying.0.to_vec(),
+            }
+        }
+        #[cfg(not(feature = "native-backend"))]
+        {
+            Self {
+                signing: ml_dsa::SigningKey::<MlDsa65>::generate(),
+            }
         }
     }
 
@@ -88,32 +144,70 @@ impl MlDsa65KeyPair {
     pub fn from_secret_key(bytes: &[u8]) -> Result<Self, PqSignError> {
         let seed: Zeroizing<[u8; ML_DSA_65_SECRET_KEY_LEN]> =
             Zeroizing::new(bytes.try_into().map_err(|_| PqSignError::InvalidKey)?);
-        Ok(Self {
-            signing: ml_dsa::SigningKey::<MlDsa65>::new(&(*seed).into()),
-        })
+        #[cfg(feature = "native-backend")]
+        {
+            let (native_signing, verifying) =
+                nexusq_native_backend::mldsa65::generate_from_seed(&seed)
+                    .map_err(|_| PqSignError::InvalidKey)?;
+            Ok(Self {
+                native_signing,
+                seed,
+                public_key: verifying.0.to_vec(),
+            })
+        }
+        #[cfg(not(feature = "native-backend"))]
+        {
+            let signing = ml_dsa::SigningKey::<MlDsa65>::new(&(*seed).into());
+            Ok(Self { signing })
+        }
     }
 
     /// Return the signing seed as zeroizing bytes.
     #[must_use]
     pub fn secret_key(&self) -> Zeroizing<Vec<u8>> {
-        Zeroizing::new(self.signing.to_bytes().as_slice().to_vec())
+        #[cfg(feature = "native-backend")]
+        {
+            Zeroizing::new(self.seed.to_vec())
+        }
+        #[cfg(not(feature = "native-backend"))]
+        {
+            Zeroizing::new(self.signing.to_bytes().as_slice().to_vec())
+        }
     }
 
     /// Return the encoded public key.
     #[must_use]
     pub fn public_key(&self) -> Vec<u8> {
-        self.signing.verifying_key().to_bytes().as_slice().to_vec()
+        #[cfg(feature = "native-backend")]
+        {
+            self.public_key.clone()
+        }
+        #[cfg(not(feature = "native-backend"))]
+        {
+            self.signing.verifying_key().to_bytes().as_slice().to_vec()
+        }
     }
 
     /// Sign a message.
     #[must_use]
     pub fn sign(&self, message: &[u8]) -> Vec<u8> {
-        self.signing
-            .try_sign(message)
-            .expect("ML-DSA signing cannot fail")
-            .to_bytes()
-            .as_slice()
-            .to_vec()
+        #[cfg(feature = "native-backend")]
+        {
+            self.native_signing
+                .sign(message, &[])
+                .expect("native ML-DSA-65 signing failed")
+                .0
+                .to_vec()
+        }
+        #[cfg(not(feature = "native-backend"))]
+        {
+            self.signing
+                .try_sign(message)
+                .expect("ML-DSA signing cannot fail")
+                .to_bytes()
+                .as_slice()
+                .to_vec()
+        }
     }
 }
 
@@ -123,13 +217,27 @@ pub fn ml_dsa_65_verify(
     message: &[u8],
     signature: &[u8],
 ) -> Result<(), PqSignError> {
-    let enc = ml_dsa::EncodedVerifyingKey::<MlDsa65>::try_from(public_key)
-        .map_err(|_| PqSignError::InvalidKey)?;
-    let vk = ml_dsa::VerifyingKey::<MlDsa65>::decode(&enc);
-    let sig = ml_dsa::Signature::<MlDsa65>::try_from(signature)
-        .map_err(|_| PqSignError::InvalidSignature)?;
-    vk.verify(message, &sig)
-        .map_err(|_| PqSignError::VerificationFailed)
+    #[cfg(feature = "native-backend")]
+    {
+        let native_key = nexusq_native_backend::mldsa65::VerifyingKey::from_bytes(public_key)
+            .map_err(|_| PqSignError::InvalidKey)?;
+        if signature.len() != ML_DSA_65_SIGNATURE_LEN {
+            return Err(PqSignError::InvalidSignature);
+        }
+        native_key
+            .verify(message, &[], signature)
+            .map_err(|_| PqSignError::VerificationFailed)
+    }
+    #[cfg(not(feature = "native-backend"))]
+    {
+        let enc = ml_dsa::EncodedVerifyingKey::<MlDsa65>::try_from(public_key)
+            .map_err(|_| PqSignError::InvalidKey)?;
+        let vk = ml_dsa::VerifyingKey::<MlDsa65>::decode(&enc);
+        let sig = ml_dsa::Signature::<MlDsa65>::try_from(signature)
+            .map_err(|_| PqSignError::InvalidSignature)?;
+        vk.verify(message, &sig)
+            .map_err(|_| PqSignError::VerificationFailed)
+    }
 }
 
 /// SLH-DSA-SHAKE-128f key pair.
@@ -211,6 +319,37 @@ mod tests {
         assert_eq!(sig.len(), ML_DSA_65_SIGNATURE_LEN);
         ml_dsa_65_verify(&pair.public_key(), msg, &sig).unwrap();
         assert!(ml_dsa_65_verify(&pair.public_key(), b"tampered", &sig).is_err());
+    }
+
+    #[cfg(feature = "native-backend")]
+    #[test]
+    fn native_ml_dsa_signatures_interoperate_with_rustcrypto() {
+        use ml_dsa::{KeyInit as _, MlDsa65, SignatureEncoding as _, Signer as _, Verifier as _};
+
+        let pair = MlDsa65KeyPair::generate();
+        let message = b"native-rustcrypto-interoperability";
+        let public = pair.public_key();
+        let encoded = ml_dsa::EncodedVerifyingKey::<MlDsa65>::try_from(public.as_slice()).unwrap();
+        let rustcrypto_verifier = ml_dsa::VerifyingKey::<MlDsa65>::decode(&encoded);
+
+        let native_signature = pair.sign(message);
+        let decoded_native =
+            ml_dsa::Signature::<MlDsa65>::try_from(native_signature.as_slice()).unwrap();
+        rustcrypto_verifier
+            .verify(message, &decoded_native)
+            .unwrap();
+
+        let encoded_seed = pair.secret_key();
+        let seed: Zeroizing<[u8; ML_DSA_65_SECRET_KEY_LEN]> =
+            Zeroizing::new(encoded_seed.as_slice().try_into().unwrap());
+        let rustcrypto_signing = ml_dsa::SigningKey::<MlDsa65>::new(&(*seed).into());
+        let rustcrypto_signature = rustcrypto_signing
+            .try_sign(message)
+            .unwrap()
+            .to_bytes()
+            .as_slice()
+            .to_vec();
+        ml_dsa_65_verify(&public, message, &rustcrypto_signature).unwrap();
     }
 
     #[test]
