@@ -162,7 +162,7 @@ fn ml_dsa_public_api_seed_derivation_matches_rustcrypto() {
 
 #[test]
 fn ml_kem_1024_public_api_seed_derivation_matches_rustcrypto() {
-    use ml_kem::{ExpandedKeyEncoding as _, FromSeed as _, KeyExport as _, MlKem1024};
+    use ml_kem::{FromSeed as _, KeyExport as _, MlKem1024};
 
     let pair = kem_1024::generate();
     let serialized_secret = pair.secret_key_bytes();
@@ -176,9 +176,9 @@ fn ml_kem_1024_public_api_seed_derivation_matches_rustcrypto() {
         "ML-KEM-1024 public API must derive identical public bytes from its serialized seed"
     );
     assert_eq!(
-        pair.ml_kem_secret.to_expanded_bytes().as_slice(),
-        rustcrypto_secret.to_expanded_bytes().as_slice(),
-        "ML-KEM-1024 expanded secret key must match RustCrypto for the same seed"
+        pair.ml_kem_secret.to_bytes().as_slice(),
+        rustcrypto_secret.to_bytes().as_slice(),
+        "ML-KEM-1024 secret seed must match RustCrypto for the same seed"
     );
 }
 
