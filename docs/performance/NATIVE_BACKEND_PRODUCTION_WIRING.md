@@ -1,6 +1,6 @@
 # Native backend production-wiring workstream
 
-> **Status:** On PR #55 commit `036b8e802c2fd83c6d12b7c594185d32359175dc`, Security and Release Gates, SDK CI, and PQC Benchmark Arena all completed successfully. The `nexusq-core` opt-in feature routes ML-KEM-768/1024 encapsulation and decapsulation plus ML-DSA-65 signing/verification through the native backend. This branch is not merge-ready: both four-hour fuzz soaks and the fuzz harness build were skipped by main-only conditions, and the current benchmark run does not yet prove the 1.5x median-and-p95 gate on the core production call paths.
+> **Status (2026-10-17, PR #55 head `bef818e27480880cac9b15676dc8ba280d8ff3a6`):** The `nexusq-core` opt-in feature routes ML-KEM-768/1024 key generation, encapsulation and decapsulation, plus ML-DSA-65 key generation, signing and verification, through the native backend. Security and Release Gates, SDK CI, PQC Benchmark Arena, and the Native Backend Gate completed successfully on this head. The production-path benchmark passed the unchanged 1.5x median-and-p95 gate for all nine operations across three matched-host replicas. The fuzz harness build passed; the two four-hour fuzz soaks remain intentionally deferred until the remaining PR checklist items are complete. This PR remains draft and is not merge-ready.
 
 ## Objective
 
@@ -28,10 +28,34 @@ Integrate the isolated `nexusq-native-backend` behind an explicit, opt-in Cargo 
 - Formatting, locked workspace checks, clippy, and focused core/backend tests.
 - Known-answer and differential vectors against the existing RustCrypto path and the relevant upstream tests.
 - Feature-off, feature-on, and portable-only builds; include target/feature combinations supported by CI.
-- Fuzzing and security regression workflows complete with no unexplained skips or failures. PR run `38934004191` passed Rust security gates and secret scanning, but its fuzz harness build and both four-hour fuzz soaks were skipped because the workflow only permitted pushes to `main`. The workflow is being adjusted so PR #55 must build the fuzz harnesses and complete both four-hour campaigns before merge; main will still run its independent post-merge campaigns.
-- Full comparative Arena evidence and the unchanged 1.5x median-and-p95 gate on the actual production call paths, not only isolated backend calls. Current Arena run `38934004202` passed registry validation, configured reference adapters, controlled V1/V1+zeroize/V3 benchmarks, and normalized-output validation. The legacy V2-10 evidence job was skipped because it only applies to the frozen `nexusqv2` release line. The dedicated native backend gate must also be triggered for core feature-wiring changes, and its evidence must be reviewed against the core production call path before this requirement can be considered satisfied.
+- Fuzzing and security regression workflows complete with no unexplained skips or failures. The fuzz harness build passed on the current PR head. The two four-hour fuzz soaks are intentionally deferred until the remaining PR checklist items are complete; run and review them before merge.
+- Full comparative Arena evidence and the unchanged 1.5x median-and-p95 gate on the actual production call paths, not only isolated backend calls. The legacy V2-10 evidence job is skipped because it only applies to the frozen `nexusqv2` release line.
 - Review of secret lifetimes/zeroization, C ABI boundaries, error handling, target dispatch, dependency/license provenance, and generated binaries.
 - User documentation that states the feature's experimental status, enablement, fallback behavior, platform support, and limitations.
+
+## Production-path performance evidence (PR #55)
+
+Run: [Native Backend Gate, run 39050671654](https://github.com/lecodev-26/nexus-q/actions/runs/39050671654) · [production benchmark artifact](https://github.com/lecodev-26/nexus-q/actions/runs/39050671654/artifacts/12106694070)
+
+- Measured commit: `bef818e27480880cac9b15676dc8ba280d8ff3a6`
+- Host: Intel Xeon Platinum 8573C, Ubuntu 24.04 GitHub-hosted runner.
+- Protocol: three matched-host replicas; rotating implementation order; 100 warmups and 1,000 samples per operation and implementation per replica.
+- Comparison: `nexusq-core` with the opt-in native backend versus RustCrypto (feature off) and AWS-LC, within the same CI benchmark job.
+- Verdict: all nine operations pass the unchanged `native/AWS-LC <= 1.5x` limit for both median and p95 in all three replicas. Median and p95 are reported separately; no cross-replica averages are used. The evaluator and threshold were not modified.
+
+| Operation | Replica 1 median / p95 | Replica 2 median / p95 | Replica 3 median / p95 |
+|---|---:|---:|---:|
+| ML-KEM-768 keygen | 1.185x / 1.193x | 1.231x / 1.097x | 1.208x / 1.182x |
+| ML-KEM-768 encaps | 1.008x / 1.038x | 1.018x / 0.878x | 1.079x / 1.068x |
+| ML-KEM-768 decaps | 1.064x / 1.047x | 1.070x / 1.075x | 1.140x / 1.124x |
+| ML-KEM-1024 keygen | 1.135x / 1.119x | 1.119x / 1.120x | 1.152x / 1.138x |
+| ML-KEM-1024 encaps | 1.020x / 0.992x | 1.046x / 1.033x | 1.048x / 1.036x |
+| ML-KEM-1024 decaps | 1.026x / 1.035x | 1.000x / 0.924x | 1.024x / 1.022x |
+| ML-DSA-65 keygen | 1.020x / 1.015x | 1.028x / 1.041x | 1.030x / 1.038x |
+| ML-DSA-65 sign | 0.973x / 0.928x | 0.937x / 0.898x | 0.916x / 0.902x |
+| ML-DSA-65 verify | 1.062x / 1.050x | 1.053x / 1.017x | 1.084x / 1.096x |
+
+The largest observed median ratio is 1.231x (ML-KEM-768 keygen, replica 2); the largest p95 ratio is 1.193x (ML-KEM-768 keygen, replica 1). These are ratios against AWS-LC from this specified hosted-runner protocol, not universal latency guarantees or evidence of being faster than AWS-LC. Raw results are retained in the linked CI artifact.
 
 ## Rollout and merge policy
 
@@ -39,4 +63,4 @@ This PR must remain a draft while the implementation or required evidence is inc
 
 ## Current known limitation
 
-The native backend is still experimental. PR #55 commit `036b8e802c2fd83c6d12b7c594185d32359175dc` passed Security and Release Gates (`38934004191`), SDK CI (`38934004213`), and PQC Benchmark Arena (`38934004202`), but the fuzz harness build and both four-hour fuzz soaks were skipped by the workflow's main-only condition. This change updates those conditions so PR #55 must run them, and updates the native-backend gate path filters so changes to `nexusq-core` feature wiring trigger the upstream, differential, constant-time, and performance jobs. The resulting benchmark artifacts still require review to determine whether they measure the core production call path or only the isolated backend primitive. CLI and SDK consumers do not enable the feature by default; downstream feature forwarding and packageability must be reviewed separately. The current Arena run does not prove the 1.5x median-and-p95 gate for the core production call paths, so that evidence remains a merge blocker.
+The native backend remains experimental and the two four-hour fuzz soaks are still outstanding by project sequencing. Run 39050671654 provides production-path evidence: all nine operations passed the unchanged 1.5x median-and-p95 gate in three replicas. CLI and SDK consumers do not enable the feature by default; downstream feature forwarding and packageability, full correctness/compatibility coverage, code review, security validation, and platform portability remain separate checklist items. External audit (Phase 21) remains open; no production-readiness or FIPS 140-3 validation claim is made.
