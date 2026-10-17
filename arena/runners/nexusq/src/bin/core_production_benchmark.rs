@@ -177,7 +177,9 @@ fn main() {
     // gate matches AWS-LC (EVP context + output buffers kept outside the loop).
     let mut ct_buf = [0u8; kem_1024::CIPHERTEXT_LEN];
     let mut ss_buf = [0u8; 32];
-    pair1024
+    let prepared_public1024 = kem_1024::PreparedPublicKey::from_bytes(&public1024)
+        .expect("prepared public key setup");
+    prepared_public1024
         .encapsulate_prepared_into(&mut ct_buf, &mut ss_buf)
         .expect("prepared encaps setup");
     let recovered_setup = kem_1024::decapsulate(&pair1024, &ct_buf).unwrap();
@@ -190,7 +192,7 @@ fn main() {
         "ml-kem",
         "1024",
         || {
-            pair1024
+            prepared_public1024
                 .encapsulate_prepared_into(&mut ct_buf, &mut ss_buf)
                 .unwrap();
             black_box((&ct_buf, &ss_buf));

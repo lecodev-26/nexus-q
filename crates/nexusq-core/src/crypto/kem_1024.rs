@@ -2,8 +2,6 @@
 #[cfg(not(feature = "native-backend"))]
 use ml_kem::FromSeed as _;
 #[cfg(not(feature = "native-backend"))]
-use ml_kem::KeyExport;
-#[cfg(not(feature = "native-backend"))]
 use ml_kem::MlKem1024;
 #[cfg(not(feature = "native-backend"))]
 use ml_kem::kem::{Decapsulate as _, Encapsulate as _};
@@ -27,13 +25,11 @@ const INFO: &[u8] = b"nexusq-hybrid-kem-1024-v2";
 /// A versioned NEXUS-Q-specific ML-KEM-1024/X25519 hybrid key pair.
 /// This is not the X-Wing construction.
 pub struct KeyPair {
-    /// ML-KEM secret key (RustCrypto). Under `native-backend` this is built
-    /// lazily so `generate()` matches the AWS-LC hybrid keygen cost model
-    /// (native ML-KEM + X25519 only; no dual-representation parse on the hot path).
-    #[cfg(not(feature = "native-backend"))]
+    /// ML-KEM secret key (RustCrypto). Kept public for source compatibility
+    /// across `native-backend` feature configurations.
     pub ml_kem_secret: DecapsulationKey1024,
-    /// ML-KEM public key (RustCrypto).
-    #[cfg(not(feature = "native-backend"))]
+    /// ML-KEM public key (RustCrypto). Kept public for source compatibility
+    /// across `native-backend` feature configurations.
     pub ml_kem_public: EncapsulationKey1024,
     /// X25519 secret key.
     pub x25519_secret: StaticSecret,
@@ -54,9 +50,6 @@ pub struct KeyPair {
     /// the pure-Rust x25519-dalek scalar multiplication.
     #[cfg(feature = "native-backend")]
     aws_x25519_secret: aws_lc_rs::agreement::PrivateKey,
-    /// Lazily materialised RustCrypto keys for interop accessors under native-backend.
-    #[cfg(feature = "native-backend")]
-    rustcrypto_keys: std::sync::OnceLock<(DecapsulationKey1024, EncapsulationKey1024)>,
 }
 
 impl KeyPair {
@@ -76,30 +69,11 @@ impl KeyPair {
         out
     }
 
-    /// RustCrypto decapsulation key (materialised on first use under native-backend).
-    #[cfg(feature = "native-backend")]
-    pub fn ml_kem_secret(&self) -> &DecapsulationKey1024 {
-        &self.rustcrypto_keys_get().0
-    }
-
-    /// RustCrypto encapsulation key (materialised on first use under native-backend).
-    #[cfg(feature = "native-backend")]
-    pub fn ml_kem_public(&self) -> &EncapsulationKey1024 {
-        &self.rustcrypto_keys_get().1
-    }
-
-    #[cfg(feature = "native-backend")]
-    fn rustcrypto_keys_get(&self) -> &(DecapsulationKey1024, EncapsulationKey1024) {
-        self.rustcrypto_keys.get_or_init(|| {
-            #[allow(deprecated)]
-            let expanded: ml_kem::ml_kem_1024::ExpandedDecapsulationKey = self
-                .native_ml_kem_secret
-                .as_bytes()
-                .as_slice()
-                .try_into()
-                .expect("native ML-KEM-1024 expanded key has the specified length");
-            DecapsulationKey1024::from_generated_expanded_bytes_with_public(&expanded)
-        })
+    /// Prepare the public half once for repeated encapsulations. The returned
+    /// object contains public material only and can be used by a sender without
+    /// retaining the recipient's private key.
+    pub fn prepare_public_key(&self) -> Result<PreparedPublicKey, KemError> {
+        PreparedPublicKey::from_bytes(&self.public_key_bytes())
     }
 
     /// Serialize the secret half.
@@ -111,12 +85,48 @@ impl KeyPair {
         out.extend_from_slice(x_bytes.as_ref());
         out
     }
+}
 
-    /// Encapsulate using the already-loaded public material of this key pair.
-    ///
-    /// Matches the production model where a long-lived recipient key is kept
-    /// prepared (same idea as an AWS-LC EVP context). Wire format and shared
-    /// secret are identical to [`encapsulate`].
+/// Reusable, public-only ML-KEM-1024/X25519 recipient key material.
+/// It deliberately contains no secret key, so senders need not hold recipient secrets.
+pub struct PreparedPublicKey {
+    #[cfg(feature = "native-backend")]
+    native_ml_kem_public: nexusq_native_backend::mlkem1024::EncapsulationKey,
+    #[cfg(not(feature = "native-backend"))]
+    ml_kem_public: EncapsulationKey1024,
+    x25519_public: X25519Public,
+}
+
+impl PreparedPublicKey {
+    /// Parse the serialized hybrid public key once before reuse. The backend
+    /// retains its normal per-operation validity checks for the ML-KEM key.
+    pub fn from_bytes(public_key: &[u8]) -> Result<Self, KemError> {
+        if public_key.len() != PUBLIC_KEY_LEN {
+            return Err(KemError::InvalidPublicKey);
+        }
+        let (ml_pk, x_pk) = public_key.split_at(1568);
+        let ml_pk_bytes: [u8; 1568] = ml_pk.try_into().map_err(|_| KemError::InvalidPublicKey)?;
+        let x_pk_bytes: [u8; 32] = x_pk.try_into().map_err(|_| KemError::InvalidPublicKey)?;
+        #[cfg(feature = "native-backend")]
+        let native_ml_kem_public =
+            nexusq_native_backend::mlkem1024::EncapsulationKey::from_bytes(&ml_pk_bytes)
+                .map_err(|_| KemError::InvalidPublicKey)?;
+        #[cfg(not(feature = "native-backend"))]
+        let ml_kem_public = {
+            let key = ml_kem::Key::<EncapsulationKey1024>::from(ml_pk_bytes);
+            EncapsulationKey1024::new(&key).map_err(|_| KemError::InvalidPublicKey)?
+        };
+        Ok(Self {
+            #[cfg(feature = "native-backend")]
+            native_ml_kem_public,
+            #[cfg(not(feature = "native-backend"))]
+            ml_kem_public,
+            x25519_public: X25519Public::from(x_pk_bytes),
+        })
+    }
+
+    /// Encapsulate using the prepared public key. Wire format and shared secret
+    /// are identical to [`encapsulate`].
     pub fn encapsulate_prepared(
         &self,
     ) -> Result<(Vec<u8>, Zeroizing<[u8; SHARED_SECRET_LEN]>), KemError> {
@@ -126,10 +136,7 @@ impl KeyPair {
         Ok((ct.to_vec(), Zeroizing::new(ss)))
     }
 
-    /// Encapsulate into caller-provided buffers (AWS-LC prepared-context model).
-    ///
-    /// Ciphertext and shared-secret storage are supplied by the caller so the
-    /// timed path does not allocate, matching the AWS-LC hybrid comparator.
+    /// Encapsulate into caller-provided buffers; no output allocation is needed.
     pub fn encapsulate_prepared_into(
         &self,
         ciphertext_out: &mut [u8; CIPHERTEXT_LEN],
@@ -229,18 +236,26 @@ pub fn generate() -> KeyPair {
     #[cfg(not(feature = "native-backend"))]
     let x25519_public = X25519Public::from(&x25519_secret);
     #[cfg(feature = "native-backend")]
-    let (native_ml_kem_secret, native_ml_kem_public) = {
-        // Match AWS-LC hybrid keygen: native ML-KEM + X25519 only.
-        // RustCrypto dual representation is deferred until interop accessors run.
-        nexusq_native_backend::mlkem1024::generate_derand(&seed)
-            .expect("native ML-KEM-1024 key generation failed")
+    let (native_ml_kem_secret, native_ml_kem_public, ml_kem_secret, ml_kem_public) = {
+        let (native_secret, native_public) =
+            nexusq_native_backend::mlkem1024::generate_derand(&seed)
+                .expect("native ML-KEM-1024 key generation failed");
+        // These public RustCrypto fields are part of the existing API. Build
+        // them from trusted generated bytes without repeating input validation.
+        #[allow(deprecated)]
+        let expanded: ml_kem::ml_kem_1024::ExpandedDecapsulationKey = native_secret
+            .as_bytes()
+            .as_slice()
+            .try_into()
+            .expect("native ML-KEM-1024 expanded key has the specified length");
+        let (rust_secret, rust_public) =
+            DecapsulationKey1024::from_generated_expanded_bytes_with_public(&expanded);
+        (native_secret, native_public, rust_secret, rust_public)
     };
     #[cfg(not(feature = "native-backend"))]
     let (ml_kem_secret, ml_kem_public) = MlKem1024::from_seed(&(*seed).into());
     KeyPair {
-        #[cfg(not(feature = "native-backend"))]
         ml_kem_secret,
-        #[cfg(not(feature = "native-backend"))]
         ml_kem_public,
         x25519_secret,
         x25519_public,
@@ -251,8 +266,6 @@ pub fn generate() -> KeyPair {
         native_ml_kem_public,
         #[cfg(feature = "native-backend")]
         aws_x25519_secret,
-        #[cfg(feature = "native-backend")]
-        rustcrypto_keys: std::sync::OnceLock::new(),
     }
 }
 
@@ -387,7 +400,8 @@ mod tests {
     fn prepared_matches_serialized_encaps() {
         let pair = generate();
         let (ct_ser, ss_ser) = encapsulate(&pair.public_key_bytes()).unwrap();
-        let (ct_prep, ss_prep) = pair.encapsulate_prepared().unwrap();
+        let prepared_public = pair.prepare_public_key().unwrap();
+        let (ct_prep, ss_prep) = prepared_public.encapsulate_prepared().unwrap();
         // Different ephemeral keys => different ciphertexts and secrets, but
         // both must round-trip against the same recipient key.
         let rec_ser = decapsulate(&pair, &ct_ser).unwrap();
@@ -409,9 +423,6 @@ mod tests {
         let (native_ciphertext, native_secret) = encapsulate(&public_key).unwrap();
         let native_ml_ct: [u8; 1568] = native_ciphertext[..1568].try_into().unwrap();
         let native_ml_ct: ml_kem::ml_kem_1024::Ciphertext = native_ml_ct.into();
-        #[cfg(feature = "native-backend")]
-        let rustcrypto_ml_secret = pair.ml_kem_secret().decapsulate(&native_ml_ct);
-        #[cfg(not(feature = "native-backend"))]
         let rustcrypto_ml_secret = pair.ml_kem_secret.decapsulate(&native_ml_ct);
         let eph_bytes: [u8; 32] = native_ciphertext[1568..].try_into().unwrap();
         let x_secret = pair
