@@ -41,6 +41,42 @@ jobs:
         run: cargo test -p nexusq-core --features native-backend --locked
       - name: Test portable C backend configuration
         run: cargo test -p nexusq-core --features native-backend-portable --locked
+      - name: Create RustCrypto public-key envelope fixture
+        env:
+          NQ_CROSS_CONFIG_ROLE: write
+          NQ_CROSS_CONFIG_ENVELOPE_PATH: ${{ runner.temp }}/nq-envelope-rustcrypto.cbor
+          NQ_CROSS_CONFIG_VAULT_PATH: ${{ runner.temp }}/nq-vault-rustcrypto.nqv
+        run: cargo test -p nexusq-core --test cross_config_envelope --locked -- --ignored --exact cross_configuration_artifacts
+      - name: Create native-backend public-key envelope fixture
+        env:
+          NQ_CROSS_CONFIG_ROLE: write
+          NQ_CROSS_CONFIG_ENVELOPE_PATH: ${{ runner.temp }}/nq-envelope-native.cbor
+          NQ_CROSS_CONFIG_VAULT_PATH: ${{ runner.temp }}/nq-vault-native.nqv
+        run: cargo test -p nexusq-core --test cross_config_envelope --features native-backend --locked -- --ignored --exact cross_configuration_artifacts
+      - name: Create portable-backend public-key envelope fixture
+        env:
+          NQ_CROSS_CONFIG_ROLE: write
+          NQ_CROSS_CONFIG_ENVELOPE_PATH: ${{ runner.temp }}/nq-envelope-portable.cbor
+          NQ_CROSS_CONFIG_VAULT_PATH: ${{ runner.temp }}/nq-vault-portable.nqv
+        run: cargo test -p nexusq-core --test cross_config_envelope --features native-backend-portable --locked -- --ignored --exact cross_configuration_artifacts
+      - name: Open native and portable envelopes with RustCrypto
+        env:
+          NQ_CROSS_CONFIG_ROLE: read
+          NQ_CROSS_CONFIG_ENVELOPE_PATHS: ${{ runner.temp }}/nq-envelope-native.cbor;${{ runner.temp }}/nq-envelope-portable.cbor
+          NQ_CROSS_CONFIG_VAULT_PATHS: ${{ runner.temp }}/nq-vault-native.nqv;${{ runner.temp }}/nq-vault-portable.nqv
+        run: cargo test -p nexusq-core --test cross_config_envelope --locked -- --ignored --exact cross_configuration_artifacts
+      - name: Open RustCrypto and portable envelopes with native backend
+        env:
+          NQ_CROSS_CONFIG_ROLE: read
+          NQ_CROSS_CONFIG_ENVELOPE_PATHS: ${{ runner.temp }}/nq-envelope-rustcrypto.cbor;${{ runner.temp }}/nq-envelope-portable.cbor
+          NQ_CROSS_CONFIG_VAULT_PATHS: ${{ runner.temp }}/nq-vault-rustcrypto.nqv;${{ runner.temp }}/nq-vault-portable.nqv
+        run: cargo test -p nexusq-core --test cross_config_envelope --features native-backend --locked -- --ignored --exact cross_configuration_artifacts
+      - name: Open RustCrypto and native envelopes with portable backend
+        env:
+          NQ_CROSS_CONFIG_ROLE: read
+          NQ_CROSS_CONFIG_ENVELOPE_PATHS: ${{ runner.temp }}/nq-envelope-rustcrypto.cbor;${{ runner.temp }}/nq-envelope-native.cbor
+          NQ_CROSS_CONFIG_VAULT_PATHS: ${{ runner.temp }}/nq-vault-rustcrypto.nqv;${{ runner.temp }}/nq-vault-native.nqv
+        run: cargo test -p nexusq-core --test cross_config_envelope --features native-backend-portable --locked -- --ignored --exact cross_configuration_artifacts
       - name: Cargo audit
         run: cargo audit
       - name: Cargo deny
