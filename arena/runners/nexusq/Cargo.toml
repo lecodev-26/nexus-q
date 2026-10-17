@@ -7,6 +7,9 @@ publish = false
 [features]
 default = []
 cached-verifier = []
+# Benchmark the public nexusq-core crypto API with the production feature boundary.
+native-backend = ["nexusq-core/native-backend"]
+native-backend-portable = ["nexusq-core/native-backend-portable"]
 # Explicitly opt in to the experimental SHAKE x4 path for differential tests and Arena.
 experimental-kernels = ["ml-dsa/experimental-kernels", "ml-kem/experimental-kernels"]
 
@@ -23,3 +26,15 @@ ml-dsa = { path = "../../../vendor/ml-dsa" }
 nexusq-kernels = { path = "../../../crates/nexusq-kernels" }
 ml-kem = { path = "../../../vendor/ml-kem" }
 module-lattice = { path = "../../../vendor/module-lattice" }
+
+# Match the workspace production release profile. This package is excluded from
+# the root workspace, so without an explicit profile cargo uses the defaults
+# (no LTO, many codegen-units) and the production-path gate under-measures us
+# against AWS-LC built with -O3.
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+debug = false

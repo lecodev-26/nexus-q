@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      full_fuzz:
+        description: 'Run the complete 4-hour fuzz soaks (required for final validation)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -25,8 +31,16 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
-      - name: Workspace tests
-        run: cargo test --workspace
+      - name: Workspace tests (portable default)
+        run: cargo test --workspace --locked
+      - name: Clippy opt-in native backend integration
+        run: cargo clippy -p nexusq-core --features native-backend --all-targets --locked -- -D warnings
+      - name: Check opt-in native backend integration
+        run: cargo check -p nexusq-core --features native-backend --locked
+      - name: Test native backend integration and provider interoperability
+        run: cargo test -p nexusq-core --features native-backend --locked
+      - name: Test portable C backend configuration
+        run: cargo test -p nexusq-core --features native-backend-portable --locked
       - name: Cargo audit
         run: cargo audit
       - name: Cargo deny
@@ -40,10 +54,13 @@ jobs:
           path: cargo-metadata.json
 
   fuzz-build:
-    name: Fuzz harness build (main only)
+    name: Fuzz harness build (main + native backend PR #55)
     runs-on: ubuntu-latest
-    # Per release policy, even fuzz-target compilation runs only on main.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Keep normal fuzz campaigns on main, but require this PR's fuzz harnesses
+    # to compile before the native backend wiring can merge.
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.event.pull_request.number == 55)
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
@@ -68,7 +85,11 @@ jobs:
   fuzz-soak-vault:
     name: 4-hour fuzz soak - vault parser
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Keep intermediate PR CI fast. Run the full soak on main or by explicit
+    # workflow_dispatch with full_fuzz=true during final pre-merge validation.
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && inputs.full_fuzz == true)
     timeout-minutes: 250
     steps:
       - uses: actions/checkout@v4
@@ -82,7 +103,11 @@ jobs:
   fuzz-soak-envelope:
     name: 4-hour fuzz soak - envelope parser
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Keep intermediate PR CI fast. Run the full soak on main or by explicit
+    # workflow_dispatch with full_fuzz=true during final pre-merge validation.
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && inputs.full_fuzz == true)
     timeout-minutes: 250
     steps:
       - uses: actions/checkout@v4
