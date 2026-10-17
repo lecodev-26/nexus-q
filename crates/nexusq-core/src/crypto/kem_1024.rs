@@ -7,8 +7,6 @@ use ml_kem::FromSeed as _;
 #[cfg(not(feature = "native-backend"))]
 use ml_kem::MlKem1024;
 #[cfg(not(feature = "native-backend"))]
-use ml_kem::kem::Kem;
-#[cfg(not(feature = "native-backend"))]
 use ml_kem::kem::{Decapsulate as _, Encapsulate as _};
 use ml_kem::{DecapsulationKey1024, EncapsulationKey1024, KeyExport};
 use sha3::{Digest, Sha3_256};
@@ -37,6 +35,10 @@ pub struct KeyPair {
     // Preserve the FIPS 203 (d || z) seed so serialized keys remain stable
     // even when the native backend only exposes the expanded decapsulation key.
     seed: Zeroizing<[u8; 64]>,
+    /// Keep the native expanded key so decapsulation does not re-encode and
+    /// re-parse secret material for every operation.
+    #[cfg(feature = "native-backend")]
+    native_ml_kem_secret: nexusq_native_backend::mlkem1024::DecapsulationKey,
 }
 
 impl KeyPair {
@@ -67,7 +69,7 @@ pub fn generate() -> KeyPair {
     let mut seed = Zeroizing::new([0u8; 64]);
     getrandom::fill(seed.as_mut()).expect("OS RNG failed");
     #[cfg(feature = "native-backend")]
-    let (ml_kem_secret, ml_kem_public) = {
+    let (ml_kem_secret, ml_kem_public, native_ml_kem_secret) = {
         // Generate (d || z) once and preserve it for stable serialization.
         // The same seed drives native keygen and the RustCrypto key adapter.
         let (native_secret, native_public) =
@@ -86,7 +88,7 @@ pub fn generate() -> KeyPair {
         let public_key = ml_kem::Key::<EncapsulationKey1024>::from(public_bytes);
         let public = EncapsulationKey1024::new(&public_key)
             .expect("native ML-KEM-1024 public key must satisfy the RustCrypto key checks");
-        (secret, public)
+        (secret, public, native_secret)
     };
     #[cfg(not(feature = "native-backend"))]
     let (ml_kem_secret, ml_kem_public) = MlKem1024::from_seed(&(*seed).into());
@@ -95,6 +97,8 @@ pub fn generate() -> KeyPair {
         ml_kem_public,
         x25519_secret: StaticSecret::random(),
         seed,
+        #[cfg(feature = "native-backend")]
+        native_ml_kem_secret,
     }
 }
 
@@ -154,21 +158,9 @@ pub fn decapsulate(
     let ct_arr: [u8; 1568] = ml_ct.try_into().map_err(|_| KemError::InvalidCiphertext)?;
     #[cfg(feature = "native-backend")]
     let ml_ss_bytes = {
-        // Reuse the already-expanded FIPS key; do not repeat key generation on
-        // each decapsulation. This representation is identical to the native ABI.
-        #[allow(deprecated)]
-        let encoded_secret = pair.ml_kem_secret.to_expanded_bytes();
-        let native_bytes: Zeroizing<[u8; 3168]> = Zeroizing::new(
-            encoded_secret
-                .as_slice()
-                .try_into()
-                .expect("ML-KEM-1024 expanded secret key is 3168 bytes"),
-        );
-        let native_secret =
-            nexusq_native_backend::mlkem1024::DecapsulationKey::from_bytes(native_bytes.as_slice())
-                .map_err(|_| KemError::Decapsulate)?;
         let native_ct = nexusq_native_backend::mlkem1024::Ciphertext(ct_arr);
-        let ss = native_secret
+        let ss = pair
+            .native_ml_kem_secret
             .decapsulate(&native_ct)
             .map_err(|_| KemError::Decapsulate)?;
         *ss.as_bytes()
