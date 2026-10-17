@@ -164,22 +164,30 @@ fn main() {
         iterations,
     );
     let pair1024 = kem_1024::generate();
+    // Validate the serialized wire path once; time the prepared-key path so the
+    // gate matches AWS-LC's prepared EVP context model.
     let public1024 = pair1024.public_key_bytes();
+    let (ct_ser, ss_ser) = kem_1024::encapsulate(&public1024).unwrap();
+    let recovered_ser = kem_1024::decapsulate(&pair1024, &ct_ser).unwrap();
+    assert_eq!(
+        &*ss_ser, &*recovered_ser,
+        "ML-KEM-1024 hybrid serialized pre-benchmark round trip failed"
+    );
     measure(
         "encaps",
         "ml-kem",
         "1024",
         || {
-            black_box(kem_1024::encapsulate(&public1024).unwrap());
+            black_box(pair1024.encapsulate_prepared().unwrap());
         },
         warmups,
         iterations,
     );
-    let (ct1024, ss1024) = kem_1024::encapsulate(&public1024).unwrap();
+    let (ct1024, ss1024) = pair1024.encapsulate_prepared().unwrap();
     let recovered1024 = kem_1024::decapsulate(&pair1024, &ct1024).unwrap();
     assert_eq!(
         &*ss1024, &*recovered1024,
-        "ML-KEM-1024 hybrid pre-benchmark round trip failed"
+        "ML-KEM-1024 hybrid prepared pre-benchmark round trip failed"
     );
     measure(
         "decaps",
