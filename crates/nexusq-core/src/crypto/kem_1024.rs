@@ -81,13 +81,12 @@ pub fn generate() -> KeyPair {
             .as_slice()
             .try_into()
             .expect("native ML-KEM-1024 expanded key has the specified length");
-        #[allow(deprecated)]
-        let secret = DecapsulationKey1024::from_expanded_bytes(&expanded)
-            .expect("native ML-KEM-1024 key must satisfy the RustCrypto key checks");
+        // These are direct outputs of the trusted native generator, not untrusted
+        // serialized inputs; skip repeated modulus/hash validation in the adapter.
+        let secret = DecapsulationKey1024::from_generated_expanded_bytes(&expanded);
         let public_bytes: [u8; 1568] = native_public.0;
         let public_key = ml_kem::Key::<EncapsulationKey1024>::from(public_bytes);
-        let public = EncapsulationKey1024::new(&public_key)
-            .expect("native ML-KEM-1024 public key must satisfy the RustCrypto key checks");
+        let public = EncapsulationKey1024::from_generated_bytes(&public_key);
         (secret, public, native_secret)
     };
     #[cfg(not(feature = "native-backend"))]
@@ -129,13 +128,15 @@ pub fn encapsulate(
     let eph = EphemeralSecret::random();
     let eph_pub = X25519Public::from(&eph);
     let x_ss = eph.diffie_hellman(&X25519Public::from(x_arr));
-    let mut input = Zeroizing::new(Vec::with_capacity(64 + 32 + 32 + INFO.len()));
-    input.extend_from_slice(&ml_ss_bytes);
-    input.extend_from_slice(x_ss.as_bytes());
-    input.extend_from_slice(eph_pub.as_bytes());
-    input.extend_from_slice(x_pk);
-    input.extend_from_slice(INFO);
-    let digest = Sha3_256::digest(&input);
+    // Hash the transcript incrementally: the previous Vec-backed transcript
+    // allocated and copied secret material on every encapsulation.
+    let mut hasher = Sha3_256::new();
+    hasher.update(&ml_ss_bytes);
+    hasher.update(x_ss.as_bytes());
+    hasher.update(eph_pub.as_bytes());
+    hasher.update(x_pk);
+    hasher.update(INFO);
+    let digest = hasher.finalize();
     let mut out = Zeroizing::new([0u8; SHARED_SECRET_LEN]);
     out.copy_from_slice(&digest);
     // The ciphertext carries the same X25519 ephemeral public key that was
@@ -175,14 +176,16 @@ pub fn decapsulate(
     let x_ss = pair
         .x25519_secret
         .diffie_hellman(&X25519Public::from(x_arr));
-    let mut input = Zeroizing::new(Vec::with_capacity(64 + 32 + 32 + INFO.len()));
-    input.extend_from_slice(&ml_ss_bytes);
-    input.extend_from_slice(x_ss.as_bytes());
-    input.extend_from_slice(x_pub);
+    // Keep the wire transcript identical while avoiding a heap allocation and
+    // a second copy of secret bytes on every decapsulation.
     let recipient_pk_x = X25519Public::from(&pair.x25519_secret);
-    input.extend_from_slice(recipient_pk_x.as_bytes());
-    input.extend_from_slice(INFO);
-    let digest = Sha3_256::digest(&input);
+    let mut hasher = Sha3_256::new();
+    hasher.update(&ml_ss_bytes);
+    hasher.update(x_ss.as_bytes());
+    hasher.update(x_pub);
+    hasher.update(recipient_pk_x.as_bytes());
+    hasher.update(INFO);
+    let digest = hasher.finalize();
     let mut out = Zeroizing::new([0u8; SHARED_SECRET_LEN]);
     out.copy_from_slice(&digest);
     Ok(out)
