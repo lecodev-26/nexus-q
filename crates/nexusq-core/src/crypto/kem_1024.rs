@@ -2,6 +2,8 @@
 #[cfg(not(feature = "native-backend"))]
 use ml_kem::FromSeed as _;
 #[cfg(not(feature = "native-backend"))]
+use ml_kem::KeyExport;
+#[cfg(not(feature = "native-backend"))]
 use ml_kem::MlKem1024;
 #[cfg(not(feature = "native-backend"))]
 use ml_kem::kem::{Decapsulate as _, Encapsulate as _};
