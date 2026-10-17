@@ -2,10 +2,12 @@
 #[cfg(not(feature = "native-backend"))]
 use ml_kem::FromSeed as _;
 #[cfg(not(feature = "native-backend"))]
+use ml_kem::KeyExport;
+#[cfg(not(feature = "native-backend"))]
 use ml_kem::MlKem1024;
 #[cfg(not(feature = "native-backend"))]
 use ml_kem::kem::{Decapsulate as _, Encapsulate as _};
-use ml_kem::{DecapsulationKey1024, EncapsulationKey1024, KeyExport};
+use ml_kem::{DecapsulationKey1024, EncapsulationKey1024};
 use sha3::{Digest, Sha3_256};
 #[cfg(not(feature = "native-backend"))]
 use x25519_dalek::EphemeralSecret;
@@ -164,19 +166,26 @@ impl KeyPair {
 fn hybrid_x25519_ephemeral(peer_public: &[u8; 32]) -> ([u8; 32], [u8; 32]) {
     #[cfg(feature = "native-backend")]
     {
-        use ring::agreement::{EphemeralPrivateKey, UnparsedPublicKey, X25519, agree_ephemeral};
-        use ring::rand::SystemRandom;
+        // Use the same X25519 implementation family as the AWS-LC hybrid comparator
+        // (aws-lc-rs wraps AWS-LC assembly), so the hybrid overhead is apples-to-apples.
+        use aws_lc_rs::agreement::{self, EphemeralPrivateKey, UnparsedPublicKey, X25519};
+        use aws_lc_rs::rand::SystemRandom;
         let rng = SystemRandom::new();
         let private = EphemeralPrivateKey::generate(&X25519, &rng).expect("X25519 keygen");
         let public = private.compute_public_key().expect("X25519 public");
         let mut eph_pub = [0u8; 32];
         eph_pub.copy_from_slice(public.as_ref());
-        let peer = UnparsedPublicKey::new(&X25519, peer_public);
-        let ss = agree_ephemeral(private, &peer, |key_material| {
-            let mut out = [0u8; 32];
-            out.copy_from_slice(key_material);
-            out
-        })
+        let peer = UnparsedPublicKey::new(&X25519, peer_public.as_ref());
+        let ss = agreement::agree_ephemeral(
+            private,
+            &peer,
+            aws_lc_rs::error::Unspecified,
+            |key_material| {
+                let mut out = [0u8; 32];
+                out.copy_from_slice(key_material);
+                Ok(out)
+            },
+        )
         .expect("X25519 agree");
         (eph_pub, ss)
     }
@@ -324,6 +333,7 @@ pub fn decapsulate_into(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use x25519_dalek::EphemeralSecret;
 
     #[test]
     fn key_material_sizes() {

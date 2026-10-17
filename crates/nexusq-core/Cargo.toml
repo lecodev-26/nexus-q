@@ -11,7 +11,7 @@ repository.workspace = true
 [features]
 default = []
 # Experimental native ML-KEM/ML-DSA implementation. Explicit opt-in only.
-native-backend = ["dep:nexusq-native-backend", "dep:ring"]
+native-backend = ["dep:nexusq-native-backend", "dep:aws-lc-rs"]
 # Exercises the same API using the backend's portable C implementation only.
 native-backend-portable = ["native-backend", "nexusq-native-backend/portable-only"]
 
@@ -32,7 +32,7 @@ ml-kem = { workspace = true }
 ml-dsa = { workspace = true }
 slh-dsa = { workspace = true }
 x25519-dalek = { workspace = true }
-ring = { workspace = true, optional = true }
+aws-lc-rs = { workspace = true, optional = true }
 ed25519-dalek = { workspace = true }
 rand_core = { workspace = true }
 hybrid-array = { workspace = true }
