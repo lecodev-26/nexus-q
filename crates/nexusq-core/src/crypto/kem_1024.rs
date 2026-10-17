@@ -29,6 +29,8 @@ pub struct KeyPair {
     pub ml_kem_public: EncapsulationKey1024,
     /// X25519 secret key.
     pub x25519_secret: StaticSecret,
+    /// Cached X25519 public key (derived once from `x25519_secret`).
+    x25519_public: X25519Public,
     // Preserve the FIPS 203 (d || z) seed so serialized keys remain stable
     // even when the native backend only exposes the expanded decapsulation key.
     seed: Zeroizing<[u8; 64]>,
@@ -36,16 +38,18 @@ pub struct KeyPair {
     /// re-parse secret material for every operation.
     #[cfg(feature = "native-backend")]
     native_ml_kem_secret: nexusq_native_backend::mlkem1024::DecapsulationKey,
+    /// Cached native public key so prepared encapsulation avoids from_bytes.
+    #[cfg(feature = "native-backend")]
+    native_ml_kem_public: nexusq_native_backend::mlkem1024::EncapsulationKey,
 }
 
 impl KeyPair {
     /// Serialize the public half.
     #[must_use]
     pub fn public_key_bytes(&self) -> Vec<u8> {
-        let x_pub = X25519Public::from(&self.x25519_secret);
         let mut out = Vec::with_capacity(PUBLIC_KEY_LEN);
         out.extend_from_slice(&self.ml_kem_public.to_bytes());
-        out.extend_from_slice(x_pub.as_bytes());
+        out.extend_from_slice(self.x25519_public.as_bytes());
         out
     }
 
@@ -58,6 +62,45 @@ impl KeyPair {
         out.extend_from_slice(x_bytes.as_ref());
         out
     }
+
+    /// Encapsulate using the already-loaded public material of this key pair.
+    ///
+    /// Matches the production model where a long-lived recipient key is kept
+    /// prepared (same idea as an AWS-LC EVP context). Wire format and shared
+    /// secret are identical to [`encapsulate`].
+    pub fn encapsulate_prepared(
+        &self,
+    ) -> Result<(Vec<u8>, Zeroizing<[u8; SHARED_SECRET_LEN]>), KemError> {
+        #[cfg(feature = "native-backend")]
+        let (ct_bytes, ml_ss_bytes) = {
+            let (ct, ss) = self
+                .native_ml_kem_public
+                .encapsulate()
+                .map_err(|_| KemError::Encapsulate)?;
+            (ct.0.to_vec(), *ss.as_bytes())
+        };
+        #[cfg(not(feature = "native-backend"))]
+        let (ct_bytes, ml_ss_bytes) = {
+            let (ct, ss) = self.ml_kem_public.encapsulate();
+            (ct.as_slice().to_vec(), <[u8; 32]>::from(ss))
+        };
+        let eph = EphemeralSecret::random();
+        let eph_pub = X25519Public::from(&eph);
+        let x_ss = eph.diffie_hellman(&self.x25519_public);
+        let mut hasher = Sha3_256::new();
+        hasher.update(ml_ss_bytes);
+        hasher.update(x_ss.as_bytes());
+        hasher.update(eph_pub.as_bytes());
+        hasher.update(self.x25519_public.as_bytes());
+        hasher.update(INFO);
+        let digest = hasher.finalize();
+        let mut out = Zeroizing::new([0u8; SHARED_SECRET_LEN]);
+        out.copy_from_slice(&digest);
+        let mut out_ct = Vec::with_capacity(CIPHERTEXT_LEN);
+        out_ct.extend_from_slice(&ct_bytes);
+        out_ct.extend_from_slice(eph_pub.as_bytes());
+        Ok((out_ct, out))
+    }
 }
 
 /// Generate a fresh key pair.
@@ -65,11 +108,13 @@ impl KeyPair {
 pub fn generate() -> KeyPair {
     let mut seed = Zeroizing::new([0u8; 64]);
     getrandom::fill(seed.as_mut()).expect("OS RNG failed");
+    let x25519_secret = StaticSecret::random();
+    let x25519_public = X25519Public::from(&x25519_secret);
     #[cfg(feature = "native-backend")]
-    let (ml_kem_secret, ml_kem_public, native_ml_kem_secret) = {
+    let (ml_kem_secret, ml_kem_public, native_ml_kem_secret, native_ml_kem_public) = {
         // Generate (d || z) once and preserve it for stable serialization.
         // The same seed drives native keygen and the RustCrypto key adapter.
-        let (native_secret, _native_public) =
+        let (native_secret, native_public) =
             nexusq_native_backend::mlkem1024::generate_derand(&seed)
                 .expect("native ML-KEM-1024 key generation failed");
         #[allow(deprecated)]
@@ -82,17 +127,20 @@ pub fn generate() -> KeyPair {
         // serialized inputs; skip repeated modulus/hash validation in the adapter.
         let (secret, public) =
             DecapsulationKey1024::from_generated_expanded_bytes_with_public(&expanded);
-        (secret, public, native_secret)
+        (secret, public, native_secret, native_public)
     };
     #[cfg(not(feature = "native-backend"))]
     let (ml_kem_secret, ml_kem_public) = MlKem1024::from_seed(&(*seed).into());
     KeyPair {
         ml_kem_secret,
         ml_kem_public,
-        x25519_secret: StaticSecret::random(),
+        x25519_secret,
+        x25519_public,
         seed,
         #[cfg(feature = "native-backend")]
         native_ml_kem_secret,
+        #[cfg(feature = "native-backend")]
+        native_ml_kem_public,
     }
 }
 
@@ -171,14 +219,12 @@ pub fn decapsulate(
     let x_ss = pair
         .x25519_secret
         .diffie_hellman(&X25519Public::from(x_arr));
-    // Keep the wire transcript identical while avoiding a heap allocation and
-    // a second copy of secret bytes on every decapsulation.
-    let recipient_pk_x = X25519Public::from(&pair.x25519_secret);
+    // Use the cached recipient public key; transcript bytes stay identical.
     let mut hasher = Sha3_256::new();
     hasher.update(ml_ss_bytes);
     hasher.update(x_ss.as_bytes());
     hasher.update(x_pub);
-    hasher.update(recipient_pk_x.as_bytes());
+    hasher.update(pair.x25519_public.as_bytes());
     hasher.update(INFO);
     let digest = hasher.finalize();
     let mut out = Zeroizing::new([0u8; SHARED_SECRET_LEN]);
@@ -195,6 +241,19 @@ mod tests {
         let pair = generate();
         assert_eq!(pair.public_key_bytes().len(), PUBLIC_KEY_LEN);
         assert_eq!(pair.secret_key_bytes().len(), SECRET_KEY_LEN);
+    }
+
+    #[test]
+    fn prepared_matches_serialized_encaps() {
+        let pair = generate();
+        let (ct_ser, ss_ser) = encapsulate(&pair.public_key_bytes()).unwrap();
+        let (ct_prep, ss_prep) = pair.encapsulate_prepared().unwrap();
+        // Different ephemeral keys => different ciphertexts and secrets, but
+        // both must round-trip against the same recipient key.
+        let rec_ser = decapsulate(&pair, &ct_ser).unwrap();
+        let rec_prep = decapsulate(&pair, &ct_prep).unwrap();
+        assert_eq!(*ss_ser, *rec_ser);
+        assert_eq!(*ss_prep, *rec_prep);
     }
 
     #[cfg(feature = "native-backend")]
