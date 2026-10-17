@@ -72,7 +72,7 @@ pub fn generate() -> KeyPair {
     let (ml_kem_secret, ml_kem_public, native_ml_kem_secret) = {
         // Generate (d || z) once and preserve it for stable serialization.
         // The same seed drives native keygen and the RustCrypto key adapter.
-        let (native_secret, native_public) =
+        let (native_secret, _native_public) =
             nexusq_native_backend::mlkem1024::generate_derand(&seed)
                 .expect("native ML-KEM-1024 key generation failed");
         #[allow(deprecated)]
@@ -83,10 +83,8 @@ pub fn generate() -> KeyPair {
             .expect("native ML-KEM-1024 expanded key has the specified length");
         // These are direct outputs of the trusted native generator, not untrusted
         // serialized inputs; skip repeated modulus/hash validation in the adapter.
-        let secret = DecapsulationKey1024::from_generated_expanded_bytes(&expanded);
-        let public_bytes: [u8; 1568] = native_public.0;
-        let public_key = ml_kem::Key::<EncapsulationKey1024>::from(public_bytes);
-        let public = EncapsulationKey1024::from_generated_bytes(&public_key);
+        let (secret, public) =
+            DecapsulationKey1024::from_generated_expanded_bytes_with_public(&expanded);
         (secret, public, native_secret)
     };
     #[cfg(not(feature = "native-backend"))]
@@ -131,7 +129,7 @@ pub fn encapsulate(
     // Hash the transcript incrementally: the previous Vec-backed transcript
     // allocated and copied secret material on every encapsulation.
     let mut hasher = Sha3_256::new();
-    hasher.update(&ml_ss_bytes);
+    hasher.update(ml_ss_bytes);
     hasher.update(x_ss.as_bytes());
     hasher.update(eph_pub.as_bytes());
     hasher.update(x_pk);
@@ -180,7 +178,7 @@ pub fn decapsulate(
     // a second copy of secret bytes on every decapsulation.
     let recipient_pk_x = X25519Public::from(&pair.x25519_secret);
     let mut hasher = Sha3_256::new();
-    hasher.update(&ml_ss_bytes);
+    hasher.update(ml_ss_bytes);
     hasher.update(x_ss.as_bytes());
     hasher.update(x_pub);
     hasher.update(recipient_pk_x.as_bytes());

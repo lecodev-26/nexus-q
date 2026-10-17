@@ -56,6 +56,16 @@ where
         Self::from_encryption_key(EncryptionKey::from_generated_bytes(encapsulation_key))
     }
 
+    /// Build an encapsulation key from trusted generated PKE material and its stored hash.
+    /// The caller must ensure `h` authenticates `ek_pke` from the same trusted key generation.
+    #[inline]
+    pub(crate) fn from_generated_parts(ek_pke: EncryptionKey<P>, h: &B32) -> Self {
+        Self {
+            ek_pke: MaybeBox::new(ek_pke),
+            h: h.clone(),
+        }
+    }
+
     /// Convert from an `EncryptionKey`.
     #[inline]
     pub(crate) fn from_encryption_key(ek_pke: EncryptionKey<P>) -> Self {
