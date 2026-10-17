@@ -3,6 +3,8 @@
 #[allow(deprecated)]
 use ml_kem::ExpandedKeyEncoding as _;
 #[cfg(not(feature = "native-backend"))]
+use ml_kem::FromSeed as _;
+#[cfg(not(feature = "native-backend"))]
 use ml_kem::MlKem1024;
 #[cfg(not(feature = "native-backend"))]
 use ml_kem::kem::Kem;
@@ -32,6 +34,9 @@ pub struct KeyPair {
     pub ml_kem_public: EncapsulationKey1024,
     /// X25519 secret key.
     pub x25519_secret: StaticSecret,
+    // Preserve the FIPS 203 (d || z) seed so serialized keys remain stable
+    // even when the native backend only exposes the expanded decapsulation key.
+    seed: Zeroizing<[u8; 64]>,
 }
 
 impl KeyPair {
@@ -48,14 +53,9 @@ impl KeyPair {
     /// Serialize the secret half.
     #[must_use]
     pub fn secret_key_bytes(&self) -> Zeroizing<Vec<u8>> {
-        let seed = Zeroizing::new(
-            self.ml_kem_secret
-                .to_seed()
-                .expect("generated ML-KEM key has a seed"),
-        );
         let x_bytes = Zeroizing::new(self.x25519_secret.to_bytes());
         let mut out = Zeroizing::new(Vec::with_capacity(SECRET_KEY_LEN));
-        out.extend_from_slice(seed.as_slice());
+        out.extend_from_slice(self.seed.as_slice());
         out.extend_from_slice(x_bytes.as_ref());
         out
     }
@@ -64,12 +64,15 @@ impl KeyPair {
 /// Generate a fresh key pair.
 #[must_use]
 pub fn generate() -> KeyPair {
+    let mut seed = Zeroizing::new([0u8; 64]);
+    getrandom::fill(seed.as_mut()).expect("OS RNG failed");
     #[cfg(feature = "native-backend")]
     let (ml_kem_secret, ml_kem_public) = {
-        // Generate ML-KEM material natively, then adapt the expanded FIPS key
-        // into the stable public RustCrypto key types used by this API.
-        let (native_secret, native_public) = nexusq_native_backend::mlkem1024::generate()
-            .expect("native ML-KEM-1024 key generation failed");
+        // Generate (d || z) once and preserve it for stable serialization.
+        // The same seed drives native keygen and the RustCrypto key adapter.
+        let (native_secret, native_public) =
+            nexusq_native_backend::mlkem1024::generate_derand(&seed)
+                .expect("native ML-KEM-1024 key generation failed");
         #[allow(deprecated)]
         let expanded: ml_kem::ml_kem_1024::ExpandedDecapsulationKey = native_secret
             .as_bytes()
@@ -86,11 +89,12 @@ pub fn generate() -> KeyPair {
         (secret, public)
     };
     #[cfg(not(feature = "native-backend"))]
-    let (ml_kem_secret, ml_kem_public) = MlKem1024::generate_keypair();
+    let (ml_kem_secret, ml_kem_public) = MlKem1024::from_seed(&(*seed).into());
     KeyPair {
         ml_kem_secret,
         ml_kem_public,
         x25519_secret: StaticSecret::random(),
+        seed,
     }
 }
 
