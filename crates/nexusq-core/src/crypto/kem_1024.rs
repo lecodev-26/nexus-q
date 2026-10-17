@@ -1,7 +1,4 @@
 //! ML-KEM-1024 + X25519 hybrid key encapsulation.
-#[cfg(feature = "native-backend")]
-#[allow(deprecated)]
-use ml_kem::ExpandedKeyEncoding as _;
 #[cfg(not(feature = "native-backend"))]
 use ml_kem::FromSeed as _;
 #[cfg(not(feature = "native-backend"))]
