@@ -183,7 +183,7 @@ fn hybrid_x25519_ephemeral(peer_public: &[u8; 32]) -> ([u8; 32], [u8; 32]) {
         let peer = UnparsedPublicKey::new(&X25519, peer_public.as_ref());
         let ss = agreement::agree_ephemeral(
             private,
-            &peer,
+            peer,
             aws_lc_rs::error::Unspecified,
             |key_material| {
                 let mut out = [0u8; 32];
