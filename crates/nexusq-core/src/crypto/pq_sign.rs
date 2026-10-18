@@ -8,8 +8,7 @@
 use ml_dsa::MlDsa65;
 #[cfg(not(feature = "native-backend"))]
 use ml_dsa::{
-    Generate as _, KeyExport as _, KeyInit as _, Keypair as _, SignatureEncoding as _, Signer as _,
-    Verifier as _,
+    KeyExport as _, KeyInit as _, Keypair as _, SignatureEncoding as _, Signer as _, Verifier as _,
 };
 use slh_dsa::Shake128f;
 #[cfg(feature = "native-backend")]
