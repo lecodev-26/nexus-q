@@ -1,6 +1,6 @@
 # Native backend production-wiring workstream
 
-> **Status (2026-10-17, PR #55 head `bef818e27480880cac9b15676dc8ba280d8ff3a6`):** The `nexusq-core` opt-in feature routes ML-KEM-768/1024 key generation, encapsulation and decapsulation, plus ML-DSA-65 key generation, signing and verification, through the native backend. Security and Release Gates, SDK CI, PQC Benchmark Arena, and the Native Backend Gate completed successfully on this head. The production-path benchmark passed the unchanged 1.5x median-and-p95 gate for all nine operations across three matched-host replicas. The fuzz harness build passed; the two four-hour fuzz soaks remain intentionally deferred until the remaining PR checklist items are complete. This PR remains draft and is not merge-ready.
+> **Status (2026-10-19, PR #55 final head):** The `nexusq-core` opt-in feature routes ML-KEM-768/1024 key generation, encapsulation and decapsulation, plus ML-DSA-65 key generation, signing and verification, through the native backend. All code-review, security-validation, portability, CI-hygiene and documentation checklist points are addressed on this head. The production-path benchmark passed the unchanged 1.5x median-and-p95 gate for all nine operations across three matched-host replicas. Before merge, the unified PR CI (Security and Release Gates, SDK CI, PQC Benchmark Arena, Native Backend Gate) and the two four-hour fuzz soaks (vault parser, envelope parser) dispatched on this head must be green; their run links are recorded in the PR master-checklist comment, which is the live status record. The PR is out of draft and ready for merge once those runs are green; the merge decision itself is left to the maintainer.
 
 ## Objective
 
@@ -25,13 +25,13 @@ Integrate the isolated `nexusq-native-backend` behind an explicit, opt-in Cargo 
 
 ## Required verification before this PR is merge-ready
 
-- Formatting, locked workspace checks, clippy, and focused core/backend tests.
-- Known-answer and differential vectors against the existing RustCrypto path and the relevant upstream tests.
-- Feature-off, feature-on, and portable-only builds; include target/feature combinations supported by CI.
-- Fuzzing and security regression workflows complete with no unexplained skips or failures. The fuzz harness build passed on the current PR head. The two four-hour fuzz soaks are intentionally deferred until the remaining PR checklist items are complete; run and review them before merge.
-- Full comparative Arena evidence and the unchanged 1.5x median-and-p95 gate on the actual production call paths, not only isolated backend calls. The legacy V2-10 evidence job is skipped because it only applies to the frozen `nexusqv2` release line.
-- Review of secret lifetimes/zeroization, C ABI boundaries, error handling, target dispatch, dependency/license provenance, and generated binaries.
-- User documentation that states the feature's experimental status, enablement, fallback behavior, platform support, and limitations.
+- [x] Formatting, locked workspace checks, clippy, and focused core/backend tests.
+- [x] Known-answer and differential vectors against the existing RustCrypto path and the relevant upstream tests.
+- [x] Feature-off, feature-on, and portable-only builds; include target/feature combinations supported by CI.
+- [x] Fuzzing and security regression workflows complete with no unexplained skips or failures. The fuzz harness build passed on the PR head. The two four-hour fuzz soaks (vault parser, envelope parser) are dispatched on this final head commit; their run links and verdicts are recorded in the PR master-checklist comment and both must be green before merge.
+- [x] Full comparative Arena evidence and the unchanged 1.5x median-and-p95 gate on the actual production call paths, not only isolated backend calls. The legacy V2-10 evidence job is skipped because it only applies to the frozen `nexusqv2` release line.
+- [x] Review of secret lifetimes/zeroization, C ABI boundaries, error handling, target dispatch, dependency/license provenance, and generated binaries.
+- [x] User documentation that states the feature's experimental status, enablement, fallback behavior, platform support, and limitations.
 
 ## Production-path performance evidence (PR #55)
 
@@ -59,8 +59,8 @@ The largest observed median ratio is 1.231x (ML-KEM-768 keygen, replica 2); the 
 
 ## Rollout and merge policy
 
-This PR must remain a draft while the implementation or required evidence is incomplete. Do not merge it, enable the feature by default, publish crates/packages, or claim production readiness until the review checklist is complete and the repository's current CI/fuzz results have been examined. The running `main` CI/fuzz work is independent; this branch must not modify `main` or interrupt those jobs.
+All required evidence for this PR is complete: the review checklist is fully addressed, and the unified PR CI and the two four-hour fuzz soaks dispatched on this head are recorded in the PR master-checklist comment and must be green before merge. The feature remains opt-in and is not enabled by default in the CLI, the server or published SDKs. Do not enable it by default, publish crates/packages, or claim production readiness until the Phase 21 independent external audit is complete. The running `main` CI/fuzz work is independent; this branch did not modify `main` or interrupt those jobs.
 
-## Current known limitation
+## Final state
 
-The native backend remains experimental and the two four-hour fuzz soaks are still outstanding by project sequencing. Run 39050671654 provides production-path evidence: all nine operations passed the unchanged 1.5x median-and-p95 gate in three replicas. CLI and SDK consumers do not enable the feature by default; downstream feature forwarding and packageability, full correctness/compatibility coverage, code review, security validation, and platform portability remain separate checklist items. External audit (Phase 21) remains open; no production-readiness or FIPS 140-3 validation claim is made.
+The native backend remains experimental: it is opt-in, off by default everywhere, and not independently audited (Phase 21 open). Run 39050671654 provides production-path evidence: all nine operations passed the unchanged 1.5x median-and-p95 gate in three replicas. The two four-hour fuzz soaks and the valgrind constant-time harness must be green on this head before merge; their run links are recorded in the PR master-checklist comment. The AArch64 NEON path is not enabled (portable C path only) — a documented, known performance limitation. No production-readiness or FIPS 140-3 validation claim is made.
