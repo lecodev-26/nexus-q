@@ -67,6 +67,37 @@ fn x_wing_hybrid_roundtrip_and_transcript_binding() {
 }
 
 #[test]
+fn x_wing_hybrid_rejects_invalid_public_key_and_ciphertext_lengths() {
+    let pair = hybrid::generate();
+    let public = pair.public_key_bytes();
+    let (ciphertext, _) = hybrid::encapsulate(&public).unwrap();
+
+    for malformed_public in [
+        vec![0u8; hybrid::PUBLIC_KEY_LEN - 1],
+        vec![0u8; hybrid::PUBLIC_KEY_LEN + 1],
+    ] {
+        assert!(matches!(
+            hybrid::encapsulate(&malformed_public),
+            Err(KemError::InvalidPublicKey)
+        ));
+    }
+
+    for malformed_ciphertext in [
+        vec![0u8; hybrid::CIPHERTEXT_LEN - 1],
+        vec![0u8; hybrid::CIPHERTEXT_LEN + 1],
+    ] {
+        assert!(matches!(
+            hybrid::decapsulate(&pair, &malformed_ciphertext),
+            Err(KemError::InvalidCiphertext)
+        ));
+    }
+
+    // Keep the canonical lengths explicit at this public boundary.
+    assert_eq!(public.len(), hybrid::PUBLIC_KEY_LEN);
+    assert_eq!(ciphertext.len(), hybrid::CIPHERTEXT_LEN);
+}
+
+#[test]
 fn ml_dsa_wrapper_bytes_interoperate_with_backend() {
     let pair = MlDsa65KeyPair::generate();
     let message = b"nexusq-v2-interop";
