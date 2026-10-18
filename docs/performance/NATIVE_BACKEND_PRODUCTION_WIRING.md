@@ -60,7 +60,7 @@ The largest observed median ratio is 1.231x (ML-KEM-768 keygen, replica 2); the 
 
 ## Rollout and merge policy
 
-All engineering review evidence for this PR is addressed; the remaining pre-merge items are the green verdicts of the two four-hour fuzz soaks dispatched on this head (see the PR master-checklist comment) and the merge itself. The feature remains opt-in and is not enabled by default in the CLI, the server or published SDKs. Do not enable it by default, publish crates/packages, or claim production readiness until the Phase 21 independent external audit is complete. The running `main` CI/fuzz work is independent; this branch did not modify `main` or interrupt those jobs.
+All engineering review evidence for this PR is addressed; the remaining pre-merge items are the two four-hour fuzz soaks, which must be executed and confirmed green on the exact SHA that gets merged (maintainer's responsibility, before merge; see the PR master-checklist comment), and the merge itself. The feature remains opt-in and is not enabled by default in the CLI, the server or published SDKs. Do not enable it by default, publish crates/packages, or claim production readiness until the Phase 21 independent external audit is complete. The running `main` CI/fuzz work is independent; this branch did not modify `main` or interrupt those jobs.
 
 ## Final state
 

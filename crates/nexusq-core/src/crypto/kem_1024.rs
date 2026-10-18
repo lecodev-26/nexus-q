@@ -224,7 +224,8 @@ fn hybrid_x25519_ephemeral(peer_public: &[u8; 32]) -> Result<([u8; 32], [u8; 32]
         // returns an all-zero shared secret for low-order peer keys instead
         // of an error, so the same degenerate result is rejected here to keep
         // the hybrid encapsulation verdict identical in every configuration.
-        if x_ss.as_bytes().iter().all(|&b| b == 0) {
+        // `was_contributory` is the library's constant-time identity check.
+        if !x_ss.was_contributory() {
             return Err(KemError::Encapsulate);
         }
         Ok((*eph_pub.as_bytes(), *x_ss.as_bytes()))
