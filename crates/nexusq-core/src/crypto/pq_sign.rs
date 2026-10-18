@@ -44,6 +44,15 @@ pub enum PqSignError {
     /// Signature verification failed.
     #[error("signature verification failed")]
     VerificationFailed,
+    /// The operating system CSPRNG could not provide required randomness.
+    #[error("operating system RNG failed")]
+    Randomness,
+    /// Key generation failed in the selected cryptographic backend.
+    #[error("post-quantum key generation failed")]
+    KeyGenerationFailed,
+    /// Signing failed in the selected cryptographic backend.
+    #[error("post-quantum signing failed")]
+    SigningFailed,
 }
 
 /// ML-DSA-65 key pair.
@@ -125,28 +134,38 @@ impl MlDsa65VerifyingKey {
 }
 
 impl MlDsa65KeyPair {
-    /// Generate a new key pair.
-    #[must_use]
-    pub fn generate() -> Self {
+    /// Generate a new key pair, returning entropy/backend failures to the caller.
+    pub fn try_generate() -> Result<Self, PqSignError> {
+        let mut seed = Zeroizing::new([0u8; ML_DSA_65_SECRET_KEY_LEN]);
+        getrandom::fill(seed.as_mut()).map_err(|_| PqSignError::Randomness)?;
         #[cfg(feature = "native-backend")]
         {
-            let mut seed = Zeroizing::new([0u8; ML_DSA_65_SECRET_KEY_LEN]);
-            getrandom::fill(seed.as_mut()).expect("OS RNG failed");
             let (native_signing, verifying) =
-                nexusq_native_backend::mldsa65::generate_from_seed(&seed)
-                    .expect("native ML-DSA-65 key expansion failed");
-            Self {
+                nexusq_native_backend::mldsa65::generate_from_seed(&seed).map_err(|error| {
+                    match error {
+                        nexusq_native_backend::Error::Rng => PqSignError::Randomness,
+                        _ => PqSignError::KeyGenerationFailed,
+                    }
+                })?;
+            Ok(Self {
                 native_signing,
                 seed,
                 public_key: verifying.0.to_vec(),
-            }
+            })
         }
         #[cfg(not(feature = "native-backend"))]
         {
-            Self {
-                signing: ml_dsa::SigningKey::<MlDsa65>::generate(),
-            }
+            Ok(Self {
+                signing: ml_dsa::SigningKey::<MlDsa65>::new(&(*seed).into()),
+            })
         }
+    }
+
+    /// Generate a key pair using the legacy infallible API. Prefer [`Self::try_generate`].
+    #[must_use]
+    pub fn generate() -> Self {
+        Self::try_generate()
+            .expect("ML-DSA-65 key generation failed; use try_generate to handle errors")
     }
 
     /// Reconstruct from the 32-byte FIPS signing seed.
@@ -197,26 +216,32 @@ impl MlDsa65KeyPair {
         }
     }
 
-    /// Sign a message.
-    #[must_use]
-    pub fn sign(&self, message: &[u8]) -> Vec<u8> {
+    /// Sign a message, returning backend failures to the caller.
+    pub fn try_sign(&self, message: &[u8]) -> Result<Vec<u8>, PqSignError> {
         #[cfg(feature = "native-backend")]
         {
             self.native_signing
                 .sign(message, &[])
-                .expect("native ML-DSA-65 signing failed")
-                .0
-                .to_vec()
+                .map(|signature| signature.0.to_vec())
+                .map_err(|error| match error {
+                    nexusq_native_backend::Error::Rng => PqSignError::Randomness,
+                    _ => PqSignError::SigningFailed,
+                })
         }
         #[cfg(not(feature = "native-backend"))]
         {
             self.signing
                 .try_sign(message)
-                .expect("ML-DSA signing cannot fail")
-                .to_bytes()
-                .as_slice()
-                .to_vec()
+                .map(|signature| signature.to_bytes().as_slice().to_vec())
+                .map_err(|_| PqSignError::SigningFailed)
         }
+    }
+
+    /// Sign using the legacy infallible API. Prefer [`Self::try_sign`].
+    #[must_use]
+    pub fn sign(&self, message: &[u8]) -> Vec<u8> {
+        self.try_sign(message)
+            .expect("ML-DSA-65 signing failed; use try_sign to handle errors")
     }
 }
 
@@ -255,18 +280,24 @@ pub struct SlhDsaShake128fKeyPair {
 }
 
 impl SlhDsaShake128fKeyPair {
-    /// Generate a new key pair.
-    #[must_use]
-    pub fn generate() -> Self {
+    /// Generate a new key pair, returning entropy failures to the caller.
+    pub fn try_generate() -> Result<Self, PqSignError> {
         let mut seed = Zeroizing::new([0u8; 48]);
-        getrandom::fill(seed.as_mut()).expect("OS RNG failed");
-        Self {
+        getrandom::fill(seed.as_mut()).map_err(|_| PqSignError::Randomness)?;
+        Ok(Self {
             signing: SlhSigningKey::<Shake128f>::slh_keygen_internal(
                 &seed[..16],
                 &seed[16..32],
                 &seed[32..],
             ),
-        }
+        })
+    }
+
+    /// Generate using the legacy infallible API. Prefer [`Self::try_generate`].
+    #[must_use]
+    pub fn generate() -> Self {
+        Self::try_generate()
+            .expect("SLH-DSA key generation failed; use try_generate to handle errors")
     }
 
     /// Reconstruct from the serialized FIPS private key.
@@ -289,15 +320,19 @@ impl SlhDsaShake128fKeyPair {
         self.signing.verifying_key().to_bytes().as_slice().to_vec()
     }
 
-    /// Sign a message.
-    #[must_use]
-    pub fn sign(&self, message: &[u8]) -> Vec<u8> {
+    /// Sign a message, returning backend failures to the caller.
+    pub fn try_sign(&self, message: &[u8]) -> Result<Vec<u8>, PqSignError> {
         self.signing
             .try_sign(message)
-            .expect("SLH-DSA signing cannot fail")
-            .to_bytes()
-            .as_slice()
-            .to_vec()
+            .map(|signature| signature.to_bytes().as_slice().to_vec())
+            .map_err(|_| PqSignError::SigningFailed)
+    }
+
+    /// Sign using the legacy infallible API. Prefer [`Self::try_sign`].
+    #[must_use]
+    pub fn sign(&self, message: &[u8]) -> Vec<u8> {
+        self.try_sign(message)
+            .expect("SLH-DSA signing failed; use try_sign to handle errors")
     }
 }
 

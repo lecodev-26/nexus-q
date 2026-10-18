@@ -173,7 +173,7 @@ impl Credential {
             expires_at,
         };
         let payload_bytes = crate::vault::to_vec(&payload)?;
-        let signature = signing_key.sign(&payload_bytes);
+        let signature = signing_key.try_sign(&payload_bytes)?;
         Self::issue_v3(
             CredentialSignatureAlgorithm::MlDsa65,
             payload.issuer_key_id,

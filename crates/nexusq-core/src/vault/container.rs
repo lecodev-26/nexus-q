@@ -157,6 +157,10 @@ pub enum VaultError {
     #[error("signature error: {0}")]
     Signature(#[from] SignError),
 
+    /// A post-quantum key generation or signing operation failed.
+    #[error("post-quantum signature error: {0}")]
+    PqSignature(#[from] crate::crypto::pq_sign::PqSignError),
+
     /// The identity is not in a state that allows the operation.
     #[error("identity {id} is {status}; cannot be used for this operation")]
     IdentityNotUsable {
@@ -2056,11 +2060,11 @@ fn generate_material<S: RandomSource>(
             (secret, Some(public))
         }
         Algorithm::MlDsa65 => {
-            let pair = crate::crypto::pq_sign::MlDsa65KeyPair::generate();
+            let pair = crate::crypto::pq_sign::MlDsa65KeyPair::try_generate()?;
             (pair.secret_key(), Some(pair.public_key()))
         }
         Algorithm::SlhDsaShake128f => {
-            let pair = crate::crypto::pq_sign::SlhDsaShake128fKeyPair::generate();
+            let pair = crate::crypto::pq_sign::SlhDsaShake128fKeyPair::try_generate()?;
             (pair.secret_key(), Some(pair.public_key()))
         }
         Algorithm::Aes256Gcm | Algorithm::ChaCha20Poly1305 => {
