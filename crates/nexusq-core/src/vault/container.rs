@@ -161,6 +161,10 @@ pub enum VaultError {
     #[error("post-quantum signature error: {0}")]
     PqSignature(#[from] crate::crypto::pq_sign::PqSignError),
 
+    /// A key encapsulation key generation or operation failed.
+    #[error("KEM error: {0}")]
+    Kem(#[from] crate::crypto::kem::KemError),
+
     /// The identity is not in a state that allows the operation.
     #[error("identity {id} is {status}; cannot be used for this operation")]
     IdentityNotUsable {
@@ -2065,7 +2069,7 @@ fn generate_material<S: RandomSource>(
             (secret, Some(public))
         }
         Algorithm::MlKem1024 => {
-            let pair = crate::crypto::kem_1024::generate();
+            let pair = crate::crypto::kem_1024::try_generate()?;
             let secret = pair.secret_key_bytes();
             let public = pair.public_key_bytes();
             (secret, Some(public))

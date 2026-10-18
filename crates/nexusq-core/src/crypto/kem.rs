@@ -57,6 +57,14 @@ pub enum KemError {
     /// Hybrid shared-secret combination failed.
     #[error("hybrid key combination failed")]
     HybridCombine,
+
+    /// The operating system CSPRNG could not provide required randomness.
+    #[error("operating system RNG failed")]
+    Randomness,
+
+    /// Key generation failed in the selected cryptographic backend.
+    #[error("KEM key generation failed")]
+    KeyGenerationFailed,
 }
 
 // =============================================================================
