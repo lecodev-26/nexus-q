@@ -181,7 +181,7 @@ impl MlDsa65KeyPair {
         {
             let (native_signing, verifying) =
                 nexusq_native_backend::mldsa65::generate_from_seed(&seed)
-                    .map_err(|_| PqSignError::InvalidKey)?;
+                    .map_err(|_| PqSignError::KeyGenerationFailed)?;
             Ok(Self {
                 native_signing,
                 seed,
