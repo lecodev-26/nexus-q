@@ -350,7 +350,7 @@ impl Vault {
         let audit = match &body.audit_dir {
             Some(dir) => {
                 let resolved = resolve_audit_path(&self.path, Path::new(dir));
-                let audit_auth = audit_key(kek.as_ref());
+                let audit_auth = audit_key(kek.as_ref())?;
                 let log = AuditLog::open_with(&resolved, AuditLogConfig::default(), &audit_auth)?;
                 log.verify_all()?;
                 if let Some(anchor) = body.audit_anchor.as_deref() {
@@ -959,7 +959,10 @@ impl Session {
 
         // Update the identity: swap the signing key, bump the version.
         {
-            let identity = self.body.find_identity_mut(id).expect("checked above");
+            let identity = self
+                .body
+                .find_identity_mut(id)
+                .ok_or_else(|| VaultError::IdentityNotFound(id.clone()))?;
             identity.signing_key = new_signing_key.clone();
             identity.signing_key_history.push(new_signing_key.clone());
             if let Some(old_key) = old_credential_key.clone() {
@@ -1456,7 +1459,10 @@ impl Session {
 
         // Fix up the new record: parent, version.
         {
-            let new_record = self.body.find_key_mut(&new_id).expect("just inserted");
+            let new_record = self
+                .body
+                .find_key_mut(&new_id)
+                .ok_or_else(|| LifecycleError::KeyNotFound(new_id.clone()))?;
             new_record.metadata.parent_key_id = Some(key_id.clone());
             new_record.metadata.version = old_version + 1;
         }
@@ -1469,7 +1475,10 @@ impl Session {
         // real deadlines exist. For now we pass through it and
         // immediately complete the rotation.
         {
-            let old_record = self.body.find_key_mut(key_id).expect("checked above");
+            let old_record = self
+                .body
+                .find_key_mut(key_id)
+                .ok_or_else(|| LifecycleError::KeyNotFound(key_id.clone()))?;
             let rotating = old_record
                 .metadata
                 .status
@@ -1686,7 +1695,7 @@ impl Session {
         // Open the log first so a bad path fails before we touch the
         // body.
         let resolved = resolve_audit_path(&self.vault.path, audit_dir);
-        let audit_auth = audit_key(self.kek.as_ref());
+        let audit_auth = audit_key(self.kek.as_ref())?;
         let log = AuditLog::open_with(&resolved, AuditLogConfig::default(), &audit_auth)?;
 
         self.body.audit_anchor = log.head_event_hash().map(ToOwned::to_owned);
@@ -1745,7 +1754,7 @@ impl Session {
         audit_dir: impl AsRef<std::path::Path>,
     ) -> Result<(), VaultError> {
         self.require_writes_allowed()?;
-        let audit_auth = audit_key(self.kek.as_ref());
+        let audit_auth = audit_key(self.kek.as_ref())?;
         let log = AuditLog::open_with(audit_dir.as_ref(), AuditLogConfig::default(), &audit_auth)?;
         self.body.audit_anchor = log.head_event_hash().map(ToOwned::to_owned);
         *self.audit.borrow_mut() = Some(log);
@@ -1875,7 +1884,9 @@ fn parse_file(bytes: &[u8]) -> Result<(VaultHeader, &[u8]), VaultError> {
     }
 
     let (len_bytes, rest) = rest.split_at(HEADER_LEN_PREFIX);
-    let header_len = u32::from_be_bytes(len_bytes.try_into().expect("4 bytes")) as usize;
+    let mut encoded_len = [0u8; HEADER_LEN_PREFIX];
+    encoded_len.copy_from_slice(len_bytes);
+    let header_len = u32::from_be_bytes(encoded_len) as usize;
 
     if rest.len() < header_len {
         return Err(VaultError::Corrupt("header length exceeds file size"));
@@ -2082,8 +2093,8 @@ fn generate_material<S: RandomSource>(
 /// are returned unchanged. A vault with no parent (a bare filename)
 /// resolves relative to the current working directory, matching how
 /// the vault file itself is opened.
-fn audit_key(kek: &[u8]) -> Zeroizing<[u8; 32]> {
-    kdf::hkdf_sha256(kek, None, b"nexusq-audit-log-v2").expect("fixed audit HKDF info must fit")
+fn audit_key(kek: &[u8]) -> Result<Zeroizing<[u8; 32]>, KdfError> {
+    kdf::hkdf_sha256(kek, None, b"nexusq-audit-log-v2")
 }
 
 fn resolve_audit_path(vault_path: &Path, audit_dir: &Path) -> PathBuf {

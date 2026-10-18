@@ -160,7 +160,13 @@ impl MlDsa65KeyPair {
         }
     }
 
-    /// Generate a key pair using the legacy infallible API. Prefer [`Self::try_generate`].
+    /// Generate a key pair using the legacy compatibility API.
+    ///
+    /// Prefer [`Self::try_generate`] in new code to handle entropy/backend failures.
+    ///
+    /// # Panics
+    ///
+    /// Panics if key generation fails; retained for source compatibility.
     #[must_use]
     pub fn generate() -> Self {
         Self::try_generate()
@@ -236,7 +242,13 @@ impl MlDsa65KeyPair {
         }
     }
 
-    /// Sign using the legacy infallible API. Prefer [`Self::try_sign`].
+    /// Sign using the legacy compatibility API.
+    ///
+    /// Prefer [`Self::try_sign`] in new code to handle signing failures.
+    ///
+    /// # Panics
+    ///
+    /// Panics if signing fails; retained for source compatibility.
     #[must_use]
     pub fn sign(&self, message: &[u8]) -> Vec<u8> {
         self.try_sign(message)
@@ -292,7 +304,13 @@ impl SlhDsaShake128fKeyPair {
         })
     }
 
-    /// Generate using the legacy infallible API. Prefer [`Self::try_generate`].
+    /// Generate using the legacy compatibility API.
+    ///
+    /// Prefer [`Self::try_generate`] in new code to handle entropy failures.
+    ///
+    /// # Panics
+    ///
+    /// Panics if key generation fails; retained for source compatibility.
     #[must_use]
     pub fn generate() -> Self {
         Self::try_generate()
@@ -327,7 +345,13 @@ impl SlhDsaShake128fKeyPair {
             .map_err(|_| PqSignError::SigningFailed)
     }
 
-    /// Sign using the legacy infallible API. Prefer [`Self::try_sign`].
+    /// Sign using the legacy compatibility API.
+    ///
+    /// Prefer [`Self::try_sign`] in new code to handle signing failures.
+    ///
+    /// # Panics
+    ///
+    /// Panics if signing fails; retained for source compatibility.
     #[must_use]
     pub fn sign(&self, message: &[u8]) -> Vec<u8> {
         self.try_sign(message)
