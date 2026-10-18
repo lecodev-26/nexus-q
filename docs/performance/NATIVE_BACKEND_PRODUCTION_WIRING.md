@@ -28,7 +28,8 @@ Integrate the isolated `nexusq-native-backend` behind an explicit, opt-in Cargo 
 - [x] Formatting, locked workspace checks, clippy, and focused core/backend tests.
 - [x] Known-answer and differential vectors against the existing RustCrypto path and the relevant upstream tests.
 - [x] Feature-off, feature-on, and portable-only builds; include target/feature combinations supported by CI.
-- [x] Fuzzing and security regression workflows complete with no unexplained skips or failures. The fuzz harness build passed on the PR head. The two four-hour fuzz soaks (vault parser, envelope parser) are dispatched on this final head commit; their run links and verdicts are recorded in the PR master-checklist comment and both must be green before merge.
+- [x] Fuzzing and security regression workflows complete with no unexplained skips or failures; the fuzz harness build passed on the PR head.
+- [ ] The two four-hour fuzz soaks (vault parser, envelope parser) finish green — dispatched on the final head commit by the maintainer, who confirms the verdict before merge (run links in the PR master-checklist comment).
 - [x] Full comparative Arena evidence and the unchanged 1.5x median-and-p95 gate on the actual production call paths, not only isolated backend calls. The legacy V2-10 evidence job is skipped because it only applies to the frozen `nexusqv2` release line.
 - [x] Review of secret lifetimes/zeroization, C ABI boundaries, error handling, target dispatch, dependency/license provenance, and generated binaries.
 - [x] User documentation that states the feature's experimental status, enablement, fallback behavior, platform support, and limitations.
@@ -59,7 +60,7 @@ The largest observed median ratio is 1.231x (ML-KEM-768 keygen, replica 2); the 
 
 ## Rollout and merge policy
 
-All required evidence for this PR is complete: the review checklist is fully addressed, and the unified PR CI and the two four-hour fuzz soaks dispatched on this head are recorded in the PR master-checklist comment and must be green before merge. The feature remains opt-in and is not enabled by default in the CLI, the server or published SDKs. Do not enable it by default, publish crates/packages, or claim production readiness until the Phase 21 independent external audit is complete. The running `main` CI/fuzz work is independent; this branch did not modify `main` or interrupt those jobs.
+All engineering review evidence for this PR is addressed; the remaining pre-merge items are the green verdicts of the two four-hour fuzz soaks dispatched on this head (see the PR master-checklist comment) and the merge itself. The feature remains opt-in and is not enabled by default in the CLI, the server or published SDKs. Do not enable it by default, publish crates/packages, or claim production readiness until the Phase 21 independent external audit is complete. The running `main` CI/fuzz work is independent; this branch did not modify `main` or interrupt those jobs.
 
 ## Final state
 

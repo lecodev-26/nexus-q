@@ -88,7 +88,7 @@ pub mod ml_kem_768 {
     /// Panics if the OS RNG fails. Under the `native-backend` feature the FIPS
     /// native key generation may also fail (OS RNG failure); the infallible
     /// tuple API cannot propagate that error, so callers that must not panic
-    /// should use [`Self::try_generate`], which returns the native key-generation
+    /// should use [`try_generate`], which returns the native key-generation
     /// failure as a [`KemError::KeyGenerationFailed`] error.
     #[must_use]
     pub fn generate() -> (DecapsulationKey768, EncapsulationKey768) {
@@ -100,8 +100,10 @@ pub mod ml_kem_768 {
     ///
     /// # Errors
     ///
-    /// Returns [`KemError::KeyGenerationFailed`] if the OS RNG or the native
-    /// backend key generation fails.
+    /// Returns [`KemError::KeyGenerationFailed`] if the native backend key
+    /// generation fails (OS RNG failure). The default RustCrypto branch is
+    /// infallible — `MlKem768::generate_keypair` cannot fail — so this error is
+    /// only reachable with the `native-backend` feature enabled.
     pub fn try_generate() -> Result<(DecapsulationKey768, EncapsulationKey768), KemError> {
         #[cfg(feature = "native-backend")]
         {

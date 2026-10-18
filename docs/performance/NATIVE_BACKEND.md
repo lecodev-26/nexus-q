@@ -184,7 +184,7 @@ The same replica's 12-round extended statistics reported no failing 3-round wind
 
 ## Production-path integration (PR #55)
 
-PR [#55](https://github.com/lecodev-26/nexus-q/pull/55) wires the native backend into `nexusq-core` behind the explicit opt-in `native-backend` feature, covering ML-KEM-768, ML-KEM-1024, hybrid (X-Wing) encapsulation, ML-DSA-65/87/1024 signing and verification. RustCrypto remains the default on every production call path; the CLI, the server and the published SDKs never enable the feature. The full review record, evidence and the final state of the master checklist live in the PR conversation and in [`NATIVE_BACKEND_PRODUCTION_WIRING.md`](NATIVE_BACKEND_PRODUCTION_WIRING.md).
+PR [#55](https://github.com/lecodev-26/nexus-q/pull/55) wires the native backend into `nexusq-core` behind the explicit opt-in `native-backend` feature, covering ML-KEM-768, ML-KEM-1024, hybrid (X-Wing) encapsulation, and ML-DSA-65 signing and verification. RustCrypto remains the default on every production call path; the CLI, the server and the published SDKs never enable the feature. The full review record, evidence and the final state of the master checklist live in the PR conversation and in [`NATIVE_BACKEND_PRODUCTION_WIRING.md`](NATIVE_BACKEND_PRODUCTION_WIRING.md).
 
 Evidence summary for the final head commit of the PR:
 

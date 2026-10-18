@@ -159,7 +159,7 @@ impl PreparedPublicKey {
             ciphertext_out[..1568].copy_from_slice(ct.as_slice());
             <[u8; 32]>::from(ss)
         };
-        let (eph_pub_bytes, x_ss_bytes) = hybrid_x25519_ephemeral(self.x25519_public.as_bytes());
+        let (eph_pub_bytes, x_ss_bytes) = hybrid_x25519_ephemeral(self.x25519_public.as_bytes())?;
         ciphertext_out[1568..].copy_from_slice(&eph_pub_bytes);
         // One-shot transcript hash on a stack buffer (same layout as AWS-LC).
         let mut transcript = [0u8; 32 + 32 + 32 + 32 + INFO.len()];
@@ -178,16 +178,15 @@ impl PreparedPublicKey {
 ///
 /// Under `native-backend`, prefer ring's assembly-backed X25519 to match AWS-LC.
 ///
-/// # Panics
+/// # Errors
 ///
-/// This helper returns an infallible tuple and cannot change (its result is a
-/// stored vault property). The native X25519 calls below are therefore
-/// `expect`-ed, and each failure mode is a kernel-level failure that cannot be
-/// meaningfully recovered here: OS RNG failure, or X25519 rejection (which
-/// only happens for malformed peer keys — impossible since `peer_public` is
-/// validated upstream).
+/// Returns [`KemError::Randomness`] if the OS RNG fails (native path) and
+/// [`KemError::Encapsulate`] if X25519 agreement fails — AWS-LC rejects
+/// low-order peer keys (all-zero shared secret), and the peer key is only
+/// length-checked upstream (`from_bytes`), so this failure is reachable and
+/// is propagated to the caller instead of panicking.
 #[inline]
-fn hybrid_x25519_ephemeral(peer_public: &[u8; 32]) -> ([u8; 32], [u8; 32]) {
+fn hybrid_x25519_ephemeral(peer_public: &[u8; 32]) -> Result<([u8; 32], [u8; 32]), KemError> {
     #[cfg(feature = "native-backend")]
     {
         // Use the same X25519 implementation family as the AWS-LC hybrid comparator
@@ -195,15 +194,13 @@ fn hybrid_x25519_ephemeral(peer_public: &[u8; 32]) -> ([u8; 32], [u8; 32]) {
         use aws_lc_rs::agreement::{self, EphemeralPrivateKey, UnparsedPublicKey, X25519};
         use aws_lc_rs::rand::SystemRandom;
         let rng = SystemRandom::new();
-        // OS RNG failure: same failure mode the RustCrypto default panics on.
-        let private = EphemeralPrivateKey::generate(&X25519, &rng).expect("X25519 keygen");
+        let private =
+            EphemeralPrivateKey::generate(&X25519, &rng).map_err(|_| KemError::Randomness)?;
         // X25519 public-key derivation cannot fail for a freshly generated key.
         let public = private.compute_public_key().expect("X25519 public");
         let mut eph_pub = [0u8; 32];
         eph_pub.copy_from_slice(public.as_ref());
         let peer = UnparsedPublicKey::new(&X25519, peer_public.as_ref());
-        // peer_public is a validated 32-byte X25519 public key (parsed by
-        // `X25519Public::from_bytes` upstream), so agreement cannot fail.
         let ss = agreement::agree_ephemeral(
             private,
             peer,
@@ -214,15 +211,15 @@ fn hybrid_x25519_ephemeral(peer_public: &[u8; 32]) -> ([u8; 32], [u8; 32]) {
                 Ok(out)
             },
         )
-        .expect("X25519 agree");
-        (eph_pub, ss)
+        .map_err(|_| KemError::Encapsulate)?;
+        Ok((eph_pub, ss))
     }
     #[cfg(not(feature = "native-backend"))]
     {
         let eph = EphemeralSecret::random();
         let eph_pub = X25519Public::from(&eph);
         let x_ss = eph.diffie_hellman(&X25519Public::from(*peer_public));
-        (*eph_pub.as_bytes(), *x_ss.as_bytes())
+        Ok((*eph_pub.as_bytes(), *x_ss.as_bytes()))
     }
 }
 
@@ -326,7 +323,7 @@ pub fn encapsulate(
         (ct.as_slice().to_vec(), <[u8; 32]>::from(ss))
     };
     let x_arr: [u8; 32] = x_pk.try_into().map_err(|_| KemError::InvalidPublicKey)?;
-    let (eph_pub_bytes, x_ss_bytes) = hybrid_x25519_ephemeral(&x_arr);
+    let (eph_pub_bytes, x_ss_bytes) = hybrid_x25519_ephemeral(&x_arr)?;
     let mut transcript = [0u8; 32 + 32 + 32 + 32 + INFO.len()];
     transcript[0..32].copy_from_slice(&ml_ss_bytes);
     transcript[32..64].copy_from_slice(&x_ss_bytes);
