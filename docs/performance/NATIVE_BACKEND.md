@@ -189,7 +189,7 @@ PR [#55](https://github.com/lecodev-26/nexus-q/pull/55) wires the native backend
 Evidence summary for the final head commit of the PR:
 
 - **Production-path benchmark** (`nexusq-core` production-path build vs RustCrypto vs AWS-LC, alternating rounds, 1000 samples): the native production path passes the official 1.5× median-and-p95 gate; run links are recorded in the PR master-checklist comment.
-- **Functional and interop**: cross-config compatibility (native ↔ RustCrypto) covered by the test suite and the 4-hour fuzz soaks on both the vault and envelope parsers; both soaks are dispatched on the PR's final head and must finish green before merge (run links in the PR master-checklist comment).
+- **Functional and interop**: cross-config compatibility (native ↔ RustCrypto) covered by the test suite and the 4-hour fuzz soaks on both the vault and envelope parsers; both soaks must be executed and confirmed green on the exact SHA that gets merged, before merge (maintainer's responsibility; links in the PR master-checklist comment).
 - **Constant time**: the valgrind harness (with its documented limitations, see above) runs on the PR head and must report 0 errors (run link in the PR master-checklist comment).
 - **Licensing**: unchanged — `sha3_keccak_f1600.S` is Apache-2.0-only code; the crate manifest stays `Apache-2.0` and binaries must ship `vendor/s2n-bignum/LICENSE` and `NOTICE`.
 - **Review**: the code-review points (fallible error propagation, documented panics, `// SAFETY:` policy, portable fallback) are addressed; the independent external audit (Phase 21) remains open and no production-readiness claim is made.

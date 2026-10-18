@@ -100,10 +100,9 @@ pub mod ml_kem_768 {
     ///
     /// # Errors
     ///
-    /// Returns [`KemError::KeyGenerationFailed`] if the native backend key
-    /// generation fails (OS RNG failure). The default RustCrypto branch is
-    /// infallible — `MlKem768::generate_keypair` cannot fail — so this error is
-    /// only reachable with the `native-backend` feature enabled.
+    /// Returns [`KemError::KeyGenerationFailed`] when the native backend key
+    /// generation fails (OS RNG failure). The default branch keeps the
+    /// existing `MlKem768::generate_keypair` behavior and returns `Ok`.
     pub fn try_generate() -> Result<(DecapsulationKey768, EncapsulationKey768), KemError> {
         #[cfg(feature = "native-backend")]
         {

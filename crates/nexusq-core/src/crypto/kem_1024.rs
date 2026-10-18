@@ -219,6 +219,14 @@ fn hybrid_x25519_ephemeral(peer_public: &[u8; 32]) -> Result<([u8; 32], [u8; 32]
         let eph = EphemeralSecret::random();
         let eph_pub = X25519Public::from(&eph);
         let x_ss = eph.diffie_hellman(&X25519Public::from(*peer_public));
+        // Parity with the native path: AWS-LC rejects low-order peer keys
+        // (all-zero shared secret). The RustCrypto X25519 implementation
+        // returns an all-zero shared secret for low-order peer keys instead
+        // of an error, so the same degenerate result is rejected here to keep
+        // the hybrid encapsulation verdict identical in every configuration.
+        if x_ss.as_bytes().iter().all(|&b| b == 0) {
+            return Err(KemError::Encapsulate);
+        }
         Ok((*eph_pub.as_bytes(), *x_ss.as_bytes()))
     }
 }

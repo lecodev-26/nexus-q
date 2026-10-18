@@ -1,6 +1,6 @@
 # Experimental native backend feature
 
-The native backend is opt-in and experimental. The default `nexusq-core` build continues to use the existing RustCrypto implementation. The feature must not be enabled in published packages or production deployments until the Phase 21 independent external audit is complete. The PR #55 engineering review is done and the CI gates are green on its final head; the two four-hour fuzz soaks are dispatched on that head and their green verdict must be confirmed before merge (monitored by the maintainer), and none of this is an independent audit.
+The native backend is opt-in and experimental. The default `nexusq-core` build continues to use the existing RustCrypto implementation. The feature must not be enabled in published packages or production deployments until the Phase 21 independent external audit is complete. The PR #55 engineering review is done and the CI gates are green on its final head; the two four-hour fuzz soaks remain to be executed and confirmed green on the exact SHA that gets merged (maintainer's responsibility, before merge), and none of this is an independent audit.
 
 ## Enable for local evaluation
 
@@ -19,7 +19,7 @@ cargo test -p nexusq-core --features native-backend-portable --locked
 
 ## Release restrictions
 
-This feature is not enabled by default. The PR #55 correctness, FFI/security, portability, production-path benchmark and 1.5x median-and-p95 gates have been reviewed and are green on the final head; the fuzz-harness gates are green and the two four-hour soak verdicts are pending (dispatched; maintainer confirms before merge). The production-path benchmark evidence is linked in [`NATIVE_BACKEND_PRODUCTION_WIRING.md`](NATIVE_BACKEND_PRODUCTION_WIRING.md) and the gate re-runs on every PR head through the Native Backend Gate. The feature remains opt-in: it is not enabled in the CLI, the server or published SDK build profiles, and production readiness is still not claimed — the Phase 21 independent external audit remains open. The isolated backend benchmark is not a substitute for measuring production call paths; the production-path benchmark evidence is recorded in the PR #55 master-checklist comment.
+This feature is not enabled by default. The PR #55 correctness, FFI/security, portability, production-path benchmark and 1.5x median-and-p95 gates have been reviewed and are green on the final head; the fuzz-harness gates are green and the two four-hour soak verdicts are pending (they must be executed and confirmed on the exact SHA that gets merged; the maintainer does this before merge). The production-path benchmark evidence is linked in [`NATIVE_BACKEND_PRODUCTION_WIRING.md`](NATIVE_BACKEND_PRODUCTION_WIRING.md) and the gate re-runs on every PR head through the Native Backend Gate. The feature remains opt-in: it is not enabled in the CLI, the server or published SDK build profiles, and production readiness is still not claimed — the Phase 21 independent external audit remains open. The isolated backend benchmark is not a substitute for measuring production call paths; the production-path benchmark evidence is recorded in the PR #55 master-checklist comment.
 
 ## Known limitations
 

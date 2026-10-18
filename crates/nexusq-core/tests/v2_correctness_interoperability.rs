@@ -53,6 +53,30 @@ fn ml_kem_1024_hybrid_roundtrip_and_invalid_lengths() {
 }
 
 #[test]
+fn ml_kem_1024_hybrid_rejects_low_order_x25519_public_component() {
+    // A public key whose X25519 component is a low-order point (here the
+    // all-zero point) must be rejected identically in every configuration:
+    // AWS-LC rejects low-order peer keys during agreement, and the RustCrypto
+    // path applies the same all-zero shared-secret check, so hybrid
+    // encapsulation against a degenerate X25519 component never succeeds.
+    let pair = kem_1024::generate();
+    let mut public = pair.public_key_bytes();
+    public[kem_1024::PUBLIC_KEY_LEN - 32..].fill(0);
+
+    assert!(matches!(
+        kem_1024::encapsulate(&public),
+        Err(KemError::Encapsulate)
+    ));
+
+    // Same verdict through the prepared-public-key path.
+    let prepared = kem_1024::PreparedPublicKey::from_bytes(&public).unwrap();
+    assert!(matches!(
+        prepared.encapsulate_prepared(),
+        Err(KemError::Encapsulate)
+    ));
+}
+
+#[test]
 fn x_wing_hybrid_roundtrip_and_transcript_binding() {
     let pair = hybrid::generate();
     let public = pair.public_key_bytes();
