@@ -126,6 +126,15 @@ fn ml_dsa_wrapper_bytes_interoperate_with_backend() {
         ml_dsa_65_verify(&public, b"wrong", &signature),
         Err(PqSignError::VerificationFailed)
     ));
+
+    // A correctly sized but modified signature must fail verification through
+    // the public nexusq-core API in every feature configuration.
+    let mut tampered_signature = signature.clone();
+    tampered_signature[ML_DSA_65_SIGNATURE_LEN / 2] ^= 0x01;
+    assert!(matches!(
+        ml_dsa_65_verify(&public, message, &tampered_signature),
+        Err(PqSignError::VerificationFailed)
+    ));
 }
 
 #[test]
@@ -159,6 +168,18 @@ fn malformed_pqc_inputs_are_rejected_at_public_boundary() {
         ml_kem_768::public_key_from_bytes(&[0u8; 10]),
         Err(KemError::InvalidPublicKey)
     ));
+
+    // FIPS 203 modulus check: encode the first 12-bit coefficient as 0xFFF,
+    // which is outside the allowed modulus. The public API must reject it
+    // identically with RustCrypto and native-backend features enabled.
+    let mut noncanonical_public = vec![0u8; ml_kem_768::PUBLIC_KEY_LEN];
+    noncanonical_public[0] = 0xFF;
+    noncanonical_public[1] |= 0x0F;
+    assert!(matches!(
+        ml_kem_768::public_key_from_bytes(&noncanonical_public),
+        Err(KemError::InvalidPublicKey)
+    ));
+
     assert!(matches!(
         ml_kem_768::decapsulate(&ml_kem_768::generate().0, &[0u8; 10]),
         Err(KemError::InvalidCiphertext)
