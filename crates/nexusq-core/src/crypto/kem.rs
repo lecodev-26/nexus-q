@@ -85,16 +85,34 @@ pub mod ml_kem_768 {
     ///
     /// # Panics
     ///
-    /// Panics if the OS RNG fails.
+    /// Panics if the OS RNG fails. Under the `native-backend` feature the FIPS
+    /// native key generation may also fail (OS RNG failure); the infallible
+    /// tuple API cannot propagate that error, so callers that must not panic
+    /// should use [`Self::try_generate`], which returns the native key-generation
+    /// failure as a [`KemError::KeyGenerationFailed`] error.
     #[must_use]
     pub fn generate() -> (DecapsulationKey768, EncapsulationKey768) {
+        try_generate().expect("ML-KEM-768 key generation failed; use try_generate to handle errors")
+    }
+
+    /// Generates a fresh ML-KEM-768 key pair, returning entropy/backend failures
+    /// to the caller.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`KemError::KeyGenerationFailed`] if the OS RNG or the native
+    /// backend key generation fails.
+    pub fn try_generate() -> Result<(DecapsulationKey768, EncapsulationKey768), KemError> {
         #[cfg(feature = "native-backend")]
         {
             // Keep the public API's RustCrypto key types, but generate the FIPS
             // key material through the native backend. The expanded secret-key
             // encoding is the compatibility bridge between the two APIs.
+            //
+            // The expanded-key conversion is infallible in practice: the native
+            // backend emits the exact FIPS expanded-key length for ML-KEM-768.
             let (native_secret, _native_public) = nexusq_native_backend::mlkem768::generate()
-                .expect("native ML-KEM-768 key generation failed");
+                .map_err(|_| KemError::KeyGenerationFailed)?;
             #[allow(deprecated)]
             let expanded: ml_kem::ml_kem_768::ExpandedDecapsulationKey = native_secret
                 .as_bytes()
@@ -105,11 +123,11 @@ pub mod ml_kem_768 {
             // repeating the external-input modulus/hash validation on generated material.
             let (secret, public) =
                 DecapsulationKey768::from_generated_expanded_bytes_with_public(&expanded);
-            (secret, public)
+            Ok((secret, public))
         }
         #[cfg(not(feature = "native-backend"))]
         {
-            MlKem768::generate_keypair()
+            Ok(MlKem768::generate_keypair())
         }
     }
 
@@ -142,6 +160,11 @@ pub mod ml_kem_768 {
     ) -> (Vec<u8>, Zeroizing<[u8; SHARED_SECRET_LEN]>) {
         #[cfg(feature = "native-backend")]
         {
+            // Both expects are infallible in practice and the public tuple API
+            // cannot return an error: `public` is a RustCrypto-validated
+            // ML-KEM-768 key, so its 1184-byte encoding is always accepted by
+            // the native backend, and native encapsulation fails only on RNG
+            // failure (the same failure mode the RustCrypto default has).
             let encoded = public.to_bytes();
             let native_public = nexusq_native_backend::mlkem768::EncapsulationKey::from_bytes(
                 encoded.as_slice(),
@@ -181,6 +204,9 @@ pub mod ml_kem_768 {
             // valid expanded representation derived from the same seed.
             #[allow(deprecated)]
             let encoded_secret = secret.to_expanded_bytes();
+            // The RustCrypto `ExpandedDecapsulationKey` type guarantees the
+            // 2400-byte expanded encoding for ML-KEM-768, so this conversion
+            // cannot fail.
             let native_bytes: Zeroizing<[u8; 2400]> = Zeroizing::new(
                 encoded_secret
                     .as_slice()

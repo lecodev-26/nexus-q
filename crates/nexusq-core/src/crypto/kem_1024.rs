@@ -175,7 +175,17 @@ impl PreparedPublicKey {
 }
 
 /// Ephemeral X25519: (ephemeral_public, shared_secret).
+///
 /// Under `native-backend`, prefer ring's assembly-backed X25519 to match AWS-LC.
+///
+/// # Panics
+///
+/// This helper returns an infallible tuple and cannot change (its result is a
+/// stored vault property). The native X25519 calls below are therefore
+/// `expect`-ed, and each failure mode is a kernel-level failure that cannot be
+/// meaningfully recovered here: OS RNG failure, or X25519 rejection (which
+/// only happens for malformed peer keys — impossible since `peer_public` is
+/// validated upstream).
 #[inline]
 fn hybrid_x25519_ephemeral(peer_public: &[u8; 32]) -> ([u8; 32], [u8; 32]) {
     #[cfg(feature = "native-backend")]
@@ -185,11 +195,15 @@ fn hybrid_x25519_ephemeral(peer_public: &[u8; 32]) -> ([u8; 32], [u8; 32]) {
         use aws_lc_rs::agreement::{self, EphemeralPrivateKey, UnparsedPublicKey, X25519};
         use aws_lc_rs::rand::SystemRandom;
         let rng = SystemRandom::new();
+        // OS RNG failure: same failure mode the RustCrypto default panics on.
         let private = EphemeralPrivateKey::generate(&X25519, &rng).expect("X25519 keygen");
+        // X25519 public-key derivation cannot fail for a freshly generated key.
         let public = private.compute_public_key().expect("X25519 public");
         let mut eph_pub = [0u8; 32];
         eph_pub.copy_from_slice(public.as_ref());
         let peer = UnparsedPublicKey::new(&X25519, peer_public.as_ref());
+        // peer_public is a validated 32-byte X25519 public key (parsed by
+        // `X25519Public::from_bytes` upstream), so agreement cannot fail.
         let ss = agreement::agree_ephemeral(
             private,
             peer,
@@ -230,7 +244,7 @@ pub fn try_generate() -> Result<KeyPair, KemError> {
     #[cfg(feature = "native-backend")]
     let (aws_x25519_secret, x25519_public) = {
         use aws_lc_rs::agreement::{PrivateKey, X25519};
-        let sk = PrivateKey::from_private_key(&X25519, &x_seed)
+        let sk = PrivateKey::from_private_key(&X25519, x_seed.as_slice())
             .map_err(|_| KemError::KeyGenerationFailed)?;
         let pk = sk
             .compute_public_key()
