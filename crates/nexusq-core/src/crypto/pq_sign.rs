@@ -58,11 +58,13 @@ pub struct MlDsa65KeyPair {
     public_key: Vec<u8>,
 }
 
-/// Reusable ML-DSA-65 verifier with precomputed public-key state.
+/// Reusable ML-DSA-65 verifier holding an encoded public key.
 ///
-/// Constructing this value performs the public-key decode/precomputation once.
-/// Reusing it avoids rebuilding that state and its heap allocations for every
-/// verification operation. The existing `ml_dsa_65_verify` API remains unchanged.
+/// The RustCrypto implementation decodes the key at construction and reuses
+/// the decoded verifier. The native implementation validates the encoded
+/// length at construction and retains the bytes; the native backend currently
+/// parses the key again on each `verify` call. The existing
+/// `ml_dsa_65_verify` API remains unchanged.
 pub struct MlDsa65VerifyingKey {
     #[cfg(not(feature = "native-backend"))]
     verifying: ml_dsa::VerifyingKey<MlDsa65>,
@@ -71,7 +73,11 @@ pub struct MlDsa65VerifyingKey {
 }
 
 impl MlDsa65VerifyingKey {
-    /// Decode and precompute a serialized ML-DSA-65 public key.
+    /// Validate and retain a serialized ML-DSA-65 public key.
+    ///
+    /// With RustCrypto this also decodes the key for reuse. With the native
+    /// backend, validation currently checks the encoded length; the native
+    /// verifier parses the key during each verification call.
     pub fn from_public_key(bytes: &[u8]) -> Result<Self, PqSignError> {
         #[cfg(not(feature = "native-backend"))]
         {
@@ -90,7 +96,10 @@ impl MlDsa65VerifyingKey {
         }
     }
 
-    /// Verify a signature using the cached public-key state.
+    /// Verify a signature using the retained public key.
+    ///
+    /// The native backend currently reconstructs its verifying-key wrapper for
+    /// each call; RustCrypto reuses the decoded verifier.
     pub fn verify(&self, message: &[u8], signature: &[u8]) -> Result<(), PqSignError> {
         #[cfg(feature = "native-backend")]
         {
