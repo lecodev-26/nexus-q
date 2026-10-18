@@ -60,10 +60,19 @@ fn x_wing_hybrid_roundtrip_and_transcript_binding() {
     let receiver_secret = hybrid::decapsulate(&pair, &ciphertext).unwrap();
     assert_eq!(sender_secret.as_ref(), receiver_secret.as_ref());
 
-    let mut tampered = ciphertext;
-    tampered[hybrid::CIPHERTEXT_LEN - 1] ^= 0x80;
-    let tampered_secret = hybrid::decapsulate(&pair, &tampered).unwrap();
-    assert_ne!(sender_secret.as_ref(), tampered_secret.as_ref());
+    // Tampering with the ML-KEM ciphertext must trigger implicit rejection,
+    // which is then bound into the hybrid shared secret.
+    let mut tampered_ml_kem = ciphertext.clone();
+    tampered_ml_kem[0] ^= 0x01;
+    let tampered_ml_kem_secret = hybrid::decapsulate(&pair, &tampered_ml_kem).unwrap();
+    assert_ne!(sender_secret.as_ref(), tampered_ml_kem_secret.as_ref());
+
+    // The X25519 ephemeral public key occupies the final 32 ciphertext bytes;
+    // changing it must also change the combined secret.
+    let mut tampered_x25519 = ciphertext;
+    tampered_x25519[hybrid::CIPHERTEXT_LEN - 1] ^= 0x80;
+    let tampered_x25519_secret = hybrid::decapsulate(&pair, &tampered_x25519).unwrap();
+    assert_ne!(sender_secret.as_ref(), tampered_x25519_secret.as_ref());
 }
 
 #[test]
