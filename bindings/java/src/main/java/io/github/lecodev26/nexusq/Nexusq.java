@@ -46,7 +46,21 @@ public final class Nexusq {
         return new BackendInfo(name, C.nexusq_backend_is_experimental() != 0, name.equals("native-experimental"));
     }
 
-    public record BackendInfo(String name, boolean experimental, boolean nativeAvailable) {}
+    public static final class BackendInfo {
+        private final String name;
+        private final boolean experimental;
+        private final boolean nativeAvailable;
+
+        public BackendInfo(String name, boolean experimental, boolean nativeAvailable) {
+            this.name = name;
+            this.experimental = experimental;
+            this.nativeAvailable = nativeAvailable;
+        }
+
+        public String name() { return name; }
+        public boolean experimental() { return experimental; }
+        public boolean nativeAvailable() { return nativeAvailable; }
+    }
 
     /** Returns the last error message on the calling thread, or null. */
     public static String lastError() {

@@ -1,6 +1,6 @@
 module github.com/lecodev-26/nexusq/bindings/go
 
-go 1.21
+go 1.22
 
 require github.com/lecodev-26/nexus-q/bindings/go/nexusq v0.0.0
 

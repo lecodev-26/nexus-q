@@ -258,12 +258,12 @@ mod backend_metadata_tests {
         let name = unsafe { CStr::from_ptr(nexusq_backend_name()) }
             .to_str()
             .unwrap();
-        #[cfg(feature = "native-backend")]
+        #[cfg(any(feature = "native-backend", feature = "native-backend-portable"))]
         assert_eq!(
             (name, nexusq_backend_is_experimental()),
             ("native-experimental", 1)
         );
-        #[cfg(not(feature = "native-backend"))]
+        #[cfg(not(any(feature = "native-backend", feature = "native-backend-portable")))]
         assert_eq!((name, nexusq_backend_is_experimental()), ("rustcrypto", 0));
     }
 }
