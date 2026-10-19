@@ -9,6 +9,9 @@ if (process.env.NEXUSQ_LIBRARY || process.env.NEXUSQ_SKIP_NATIVE_DOWNLOAD === "1
 
 const pkg = require("../package.json");
 const platform = `${process.platform}-${process.arch}`;
+if (process.platform === "linux" && !process.report?.getReport?.().header?.glibcVersionRuntime) {
+  throw new Error("NEXUS-Q prebuilt Linux runtimes require glibc (not musl/Alpine). Set NEXUSQ_LIBRARY to a compatible build.");
+}
 const assets = {
   "linux-x64": ["nexusq-sdk-runtime-linux-x64.so", "libnexusq.so"],
   "linux-arm64": ["nexusq-sdk-runtime-linux-arm64.so", "libnexusq.so"],

@@ -20,8 +20,8 @@ signing trust root. The native backend remains experimental and opt-in.
 
 | Runtime asset | Target | ABI / limitation |
 |---|---|---|
-| `nexusq-sdk-runtime-linux-x64.so` | `x86_64-unknown-linux-gnu` | glibc; not musl |
-| `nexusq-sdk-runtime-linux-arm64.so` | `aarch64-unknown-linux-gnu` | glibc; not musl |
+| `nexusq-sdk-runtime-linux-x64.so` | `x86_64-unknown-linux-gnu` | glibc 2.35+; not musl |
+| `nexusq-sdk-runtime-linux-arm64.so` | `aarch64-unknown-linux-gnu` | glibc 2.39+; not musl |
 | `nexusq-sdk-runtime-macos-arm64.dylib` | `aarch64-apple-darwin` | macOS ARM64 |
 | `nexusq-sdk-runtime-windows-x64.dll` | `x86_64-pc-windows-msvc` | Windows x64 / MSVC ABI |
 

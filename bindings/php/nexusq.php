@@ -22,6 +22,9 @@ final class Nexusq
 
         $os = strtolower(PHP_OS_FAMILY);
         $arch = strtolower(php_uname('m'));
+        if ($os === 'linux' && (is_file('/lib/ld-musl-x86_64.so.1') || is_file('/lib/ld-musl-aarch64.so.1') || is_file('/lib/ld-musl-armhf.so.1'))) {
+            throw new RuntimeException('Prebuilt NEXUS-Q Linux runtimes require glibc, not musl/Alpine; set NEXUSQ_LIBRARY to a compatible build.');
+        }
         if ($os === 'linux' && in_array($arch, ['x86_64', 'amd64'], true)) {
             [$asset, $localName] = ['nexusq-sdk-runtime-linux-x64.so', 'libnexusq.so'];
         } elseif ($os === 'linux' && in_array($arch, ['aarch64', 'arm64'], true)) {

@@ -104,6 +104,8 @@ public final class Nexusq {
     private static RuntimeAsset runtimeAsset() {
         String os = System.getProperty("os.name", "").toLowerCase();
         String arch = System.getProperty("os.arch", "").toLowerCase();
+        if (os.contains("linux") && isMuslLinux())
+            throw new IllegalStateException("Prebuilt NEXUS-Q Linux runtimes require glibc, not musl/Alpine. Set NEXUSQ_LIBRARY to a compatible build.");
         if (os.contains("linux") && (arch.equals("amd64") || arch.equals("x86_64")))
             return new RuntimeAsset("nexusq-sdk-runtime-linux-x64.so", "libnexusq.so");
         if (os.contains("linux") && (arch.equals("aarch64") || arch.equals("arm64")))
@@ -114,6 +116,12 @@ public final class Nexusq {
             return new RuntimeAsset("nexusq-sdk-runtime-windows-x64.dll", "nexusq.dll");
         throw new IllegalStateException("No prebuilt NEXUS-Q runtime for " + os + "/" + arch
                 + ". Set NEXUSQ_LIBRARY to a compatible library path.");
+    }
+
+    private static boolean isMuslLinux() {
+        return Files.exists(Path.of("/lib/ld-musl-x86_64.so.1"))
+                || Files.exists(Path.of("/lib/ld-musl-aarch64.so.1"))
+                || Files.exists(Path.of("/lib/ld-musl-armhf.so.1"));
     }
 
     private static final class RuntimeAsset {

@@ -22,6 +22,9 @@ module Nexusq
 
     os = RbConfig::CONFIG.fetch("host_os", "").downcase
     arch = RbConfig::CONFIG.fetch("host_cpu", "").downcase
+    if os.include?("linux") && ["/lib/ld-musl-x86_64.so.1", "/lib/ld-musl-aarch64.so.1", "/lib/ld-musl-armhf.so.1"].any? { |path| File.exist?(path) }
+      raise LoadError, "Prebuilt NEXUS-Q Linux runtimes require glibc, not musl/Alpine; set NEXUSQ_LIBRARY to a compatible build."
+    end
     asset, local_name = if os.include?("linux") && %w[x86_64 amd64].include?(arch)
       ["nexusq-sdk-runtime-linux-x64.so", "libnexusq.so"]
     elsif os.include?("linux") && %w[aarch64 arm64].include?(arch)

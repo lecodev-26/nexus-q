@@ -96,6 +96,8 @@ object Nexusq {
     private fun runtimeAsset(): RuntimeAsset {
         val os = System.getProperty("os.name", "").lowercase()
         val arch = System.getProperty("os.arch", "").lowercase()
+        if (os.contains("linux") && isMuslLinux())
+            throw IllegalStateException("Prebuilt NEXUS-Q Linux runtimes require glibc, not musl/Alpine. Set NEXUSQ_LIBRARY to a compatible build.")
         if (os.contains("linux") && arch in setOf("amd64", "x86_64"))
             return RuntimeAsset("nexusq-sdk-runtime-linux-x64.so", "libnexusq.so")
         if (os.contains("linux") && arch in setOf("aarch64", "arm64"))
@@ -106,6 +108,10 @@ object Nexusq {
             return RuntimeAsset("nexusq-sdk-runtime-windows-x64.dll", "nexusq.dll")
         throw IllegalStateException("No prebuilt NEXUS-Q runtime for $os/$arch. Set NEXUSQ_LIBRARY to a compatible library path.")
     }
+
+    private fun isMuslLinux(): Boolean = listOf(
+        "/lib/ld-musl-x86_64.so.1", "/lib/ld-musl-aarch64.so.1", "/lib/ld-musl-armhf.so.1"
+    ).any { Files.exists(Path.of(it)) }
 
     private data class RuntimeAsset(val assetName: String, val localName: String)
 

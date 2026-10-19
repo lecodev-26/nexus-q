@@ -26,9 +26,14 @@ public static partial class Nexusq
         // Resolve "nexusq" through NEXUSQ_LIBRARY when set; otherwise fall
         // back to the OS loader search.
         NativeLibrary.SetDllImportResolver(typeof(Nexusq).Assembly, (name, _, _) =>
-            name == LibraryName && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("NEXUSQ_LIBRARY"))
-                ? NativeLibrary.Load(Environment.GetEnvironmentVariable("NEXUSQ_LIBRARY")!)
-                : IntPtr.Zero);
+        {
+            if (name != LibraryName) return IntPtr.Zero;
+            var overridePath = Environment.GetEnvironmentVariable("NEXUSQ_LIBRARY");
+            if (!string.IsNullOrEmpty(overridePath)) return NativeLibrary.Load(overridePath);
+            if (RuntimeInformation.RuntimeIdentifier.Contains("musl", StringComparison.OrdinalIgnoreCase))
+                throw new DllNotFoundException("NEXUS-Q prebuilt Linux runtimes require glibc, not musl/Alpine. Set NEXUSQ_LIBRARY to a compatible build.");
+            return IntPtr.Zero;
+        });
     }
 
     // The C SDK takes and returns NUL-terminated UTF-8 strings; the marshalling
