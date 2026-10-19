@@ -26,9 +26,11 @@ jobs:
           ruby-version: "3.3"
 
       - name: Build gem
-        run: gem build bindings/ruby/nexusq.gemspec
+        working-directory: bindings/ruby
+        run: gem build nexusq.gemspec
+
+      - name: Move gem to workspace root
+        run: mv bindings/ruby/*.gem .
 
       - name: Push to RubyGems.org
         uses: rubygems/release-gem@v1
-        with:
-          working-directory: bindings/ruby
