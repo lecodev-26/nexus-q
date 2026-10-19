@@ -141,6 +141,7 @@ jobs:
         env:
           NEXUSQ_LIBRARY: ${{ github.workspace }}/target/release/libnexusq.dylib
         run: |
+          cd bindings/swift
           swift build
           swift test
           swift run Smoke
