@@ -230,7 +230,10 @@ jobs:
         with:
           subject-path: |
             release/*.tar.gz
-            release/nexusq-sdk-runtime-*
+            release/nexusq-sdk-runtime-linux-x64.so
+            release/nexusq-sdk-runtime-linux-arm64.so
+            release/nexusq-sdk-runtime-macos-arm64.dylib
+            release/nexusq-sdk-runtime-windows-x64.dll
 
       - name: Create GitHub release
         env:
@@ -240,4 +243,4 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --title "NEXUS-Q v4.1.0" \
             --notes-file docs/V4_RELEASE.md \
-            release/*.tar.gz release/nexusq-sdk-runtime-* release/SHA256SUMS release/NATIVE-RUNTIME-SHA256SUMS release/*.cdx.json release/*-provenance.json
+            release/*.tar.gz release/nexusq-sdk-runtime-linux-x64.so release/nexusq-sdk-runtime-linux-arm64.so release/nexusq-sdk-runtime-macos-arm64.dylib release/nexusq-sdk-runtime-windows-x64.dll release/SHA256SUMS release/NATIVE-RUNTIME-SHA256SUMS release/*.cdx.json release/*-provenance.json
