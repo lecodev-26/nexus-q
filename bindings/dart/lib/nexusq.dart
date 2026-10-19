@@ -31,8 +31,27 @@ typedef _VaultFormatVersionDart = int Function(Pointer<Utf8> path);
 
 final DynamicLibrary _lib = () {
   final fromEnv = Platform.environment['NEXUSQ_LIBRARY'];
-  return DynamicLibrary.open(fromEnv ?? 'libnexusq.so');
+  if (fromEnv != null && fromEnv.isNotEmpty) return DynamicLibrary.open(fromEnv);
+
+  if (Platform.isLinux) {
+    if (File('/lib/ld-musl-x86_64.so.1').existsSync() ||
+        File('/lib/ld-musl-aarch64.so.1').existsSync()) {
+      throw StateError('NEXUS-Q prebuilt Linux runtimes require glibc, not musl/Alpine. Set NEXUSQ_LIBRARY to a compatible build.');
+    }
+    return _openLibrary('libnexusq.so');
+  }
+  if (Platform.isMacOS) return _openLibrary('libnexusq.dylib');
+  if (Platform.isWindows) return _openLibrary('nexusq.dll');
+  throw UnsupportedError('NEXUS-Q Dart FFI has no configured runtime name for ${Platform.operatingSystem}; set NEXUSQ_LIBRARY to a compatible library.');
 }();
+
+DynamicLibrary _openLibrary(String name) {
+  try {
+    return DynamicLibrary.open(name);
+  } catch (error) {
+    throw StateError('Unable to load NEXUS-Q native library "$name". Install a compatible libnexusq runtime or set NEXUSQ_LIBRARY. Original error: $error');
+  }
+}
 
 final _version = _lib
     .lookupFunction<_VersionC, _VersionDart>('nexusq_version');

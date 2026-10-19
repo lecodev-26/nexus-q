@@ -8,8 +8,10 @@ anything: every call goes through `libnexusq`.
 
 - Dart 3 or newer.
 - The C SDK built (`cargo build -p nexusq-c`).
-- `libnexusq.so` available at runtime through `LD_LIBRARY_PATH` or
-  `NEXUSQ_LIBRARY`.
+- A compatible native library available to the OS loader. The current package
+  does not yet download prebuilt runtimes automatically; set `NEXUSQ_LIBRARY`
+  or configure the platform loader path. Unsupported/missing libraries produce
+  an actionable error rather than silently choosing another provider.
 
 ## Usage
 
