@@ -224,6 +224,11 @@ jobs:
             (cd release && sha256sum "$(basename "$archive")" "$asset") >> release/NATIVE-RUNTIME-SHA256SUMS
           done
           test -s release/NATIVE-RUNTIME-SHA256SUMS
+          (cd release && sha256sum -c NATIVE-RUNTIME-SHA256SUMS)
+          test -s release/nexusq-sdk-runtime-linux-x64.so
+          test -s release/nexusq-sdk-runtime-linux-arm64.so
+          test -s release/nexusq-sdk-runtime-macos-arm64.dylib
+          test -s release/nexusq-sdk-runtime-windows-x64.dll
 
       - name: Attest validated release artifacts
         uses: actions/attest-build-provenance@v2
