@@ -17,7 +17,7 @@ The shipped bindings wrap the same Rust core and do not reimplement cryptography
 | Java | JNA over the C SDK | vault/version surface |
 | Kotlin | JNA over the C SDK | vault/version surface |
 | C# / .NET | P/Invoke over the C SDK | vault/version surface |
-| Swift | SPM system-library target over the C SDK | vault/version surface |
+| Swift | SwiftPM wrapper with verified runtime `dlopen` | vault/version surface |
 | Dart | dart:ffi over the C SDK | vault/version surface |
 
 See each binding's README for its exact current API and toolchain requirements.
@@ -72,13 +72,13 @@ request cannot silently switch implementations.
 
 ## Native C ABI runtime artifact targets
 
-The native-runtime CI/release workflow currently builds version-matched artifacts
-for `x86_64-unknown-linux-gnu` (runtime-dispatched x86-64 native path),
-`aarch64-unknown-linux-gnu` (portable C path), `aarch64-apple-darwin` (portable
-C path), and `x86_64-pc-windows-msvc` (portable C path). The artifact contains
-`libnexusq`, `nexusq.h`, a target/provider manifest, and SHA-256 checksums.
-Other OS/architecture/ABI combinations are not declared as prebuilt-runtime
-targets by this workflow; SDKs must not substitute a binary from another target.
-The RustCrypto provider remains the default for ordinary builds. These native
-artifacts are explicitly experimental and do not imply an independent audit or
-production-readiness approval.
+The SDK runtime workflow builds version-matched default-provider artifacts for
+`x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`, `aarch64-apple-darwin`,
+and `x86_64-pc-windows-msvc`. Each archive contains `libnexusq`, `nexusq.h`, a
+target/provider manifest, and SHA-256 checksums. Linux x64 requires glibc 2.35+;
+Linux ARM64 requires glibc 2.39+; musl/Alpine is not supported. Other
+OS/architecture/ABI combinations are not declared as prebuilt-runtime targets;
+SDKs must not substitute a binary from another target. Ordinary SDK artifacts
+use RustCrypto. The separate opt-in native-backend CI artifacts are experimental
+and are not published as the default SDK runtime; no independent audit,
+production-readiness or FIPS certification claim is made.

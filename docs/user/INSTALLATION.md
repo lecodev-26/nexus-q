@@ -22,7 +22,7 @@ NEXUS-Q can be installed from the language package registries (4.1.0 stable line
 | PHP | `composer require lecodev-26/nexusq` | Available — Packagist |
 | Ruby | `gem install nexusq` | Available — RubyGems.org |
 
-The Go, PHP and Ruby bindings are thin FFI wrappers over the C SDK (`libnexusq`); build and install the C library first. The `nexusq` metacrate simply groups the published Rust library crates (`nexusq-core`, `nexusq-kernels`, `nexusq-ml-kem`, `nexusq-ml-dsa`) so a single `cargo add nexusq` pulls them all in; prefer the individual crates for a minimal dependency tree. The Python package is a native extension module built from `crates/nexusq-py` (PyO3). The GitHub release archive ships the CLI and server binaries, not the C SDK.
+The Go, PHP and Ruby bindings are thin FFI wrappers over the C SDK (`libnexusq`). Ruby and PHP fetch and verify the matching release runtime on first use; Go uses `bindings/go/scripts/with-runtime.sh` to obtain the header/library and set cgo flags for the command. The `nexusq` metacrate groups the published Rust library crates (`nexusq-core`, `nexusq-kernels`, `nexusq-ml-kem`, `nexusq-ml-dsa`) so a single `cargo add nexusq` pulls them all in; prefer individual crates for a minimal dependency tree. The Python package is a self-contained PyO3 native extension. The GitHub release includes the CLI/server package and separate versioned C ABI runtime archives/assets.
 
 ## From source
 
@@ -74,10 +74,11 @@ Before starting the server:
 Docker, systemd, .deb, .rpm, and registry publication are not required by the current deployment boundary. For the registry installation channels of the 4.1.0 line see the table above; their availability does not change the deployment boundary or imply any validation claim.
 
 
-The reproducible GitHub release archive includes the C ABI header and the
-platform library produced by that release build (`include/nexusq.h` and
-`lib/libnexusq.so`, `lib/libnexusq.dylib`, or `lib/nexusq.dll`). This is a
-version-matched C SDK runtime artifact; language bindings still need to use
-their ecosystem-specific package integration and platform loader conventions.
-The native provider remains opt-in and is not enabled by the default release
-build.
+The reproducible GitHub release includes versioned C ABI runtime archives and
+direct per-platform assets, each with `include/nexusq.h` and the matching library
+(`lib/libnexusq.so`, `lib/libnexusq.dylib`, or `lib/nexusq.dll`). These ordinary
+SDK artifacts use the default RustCrypto provider. The separate native-backend
+CI artifacts are experimental and are not substituted into ordinary SDK packages.
+See [native runtime packaging](../NATIVE_RUNTIME_PACKAGING.md) for exact targets,
+ABI/libc limits, download behavior, and the SDKs that still require a wrapper or
+manual linker setup.
