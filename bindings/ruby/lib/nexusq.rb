@@ -6,11 +6,64 @@
 # cryptography or business logic; every operation delegates to libnexusq.
 
 require "ffi"
+require "digest"
+require "fileutils"
+require "open-uri"
+require "rbconfig"
 
 module Nexusq
   extend FFI::Library
 
-  ffi_lib ENV.fetch("NEXUSQ_LIBRARY", "nexusq")
+  RUNTIME_VERSION = "4.1.0"
+
+  def self.resolve_library
+    override = ENV["NEXUSQ_LIBRARY"]
+    return override unless override.nil? || override.empty?
+
+    os = RbConfig::CONFIG.fetch("host_os", "").downcase
+    arch = RbConfig::CONFIG.fetch("host_cpu", "").downcase
+    asset, local_name = if os.include?("linux") && %w[x86_64 amd64].include?(arch)
+      ["nexusq-native-runtime-linux-x64.so", "libnexusq.so"]
+    elsif os.include?("linux") && %w[aarch64 arm64].include?(arch)
+      ["nexusq-native-runtime-linux-arm64.so", "libnexusq.so"]
+    elsif os.include?("darwin") && %w[arm64 aarch64].include?(arch)
+      ["nexusq-native-runtime-macos-arm64.dylib", "libnexusq.dylib"]
+    elsif os.match?(/mingw|mswin/) && %w[x86_64 amd64].include?(arch)
+      ["nexusq-native-runtime-windows-x64.dll", "nexusq.dll"]
+    else
+      raise LoadError, "No prebuilt NEXUS-Q runtime for #{os}/#{arch}; set NEXUSQ_LIBRARY to a compatible library path."
+    end
+
+    cache = File.join(Dir.home, ".cache", "nexusq", RUNTIME_VERSION)
+    library = File.join(cache, local_name)
+    digest_file = "#{library}.sha256"
+    FileUtils.mkdir_p(cache)
+    if File.file?(library) && File.file?(digest_file) &&
+       Digest::SHA256.file(library).hexdigest == File.read(digest_file).strip
+      return library
+    end
+
+    base = "https://github.com/lecodev-26/nexus-q/releases/download/v#{RUNTIME_VERSION}/"
+    checksums = URI.open("#{base}NATIVE-RUNTIME-SHA256SUMS", "User-Agent" => "NEXUS-Q Ruby SDK", &:read)
+    expected = checksums.lines.find { |line| line.strip.end_with?("  #{asset}") }&.split&.first
+    raise LoadError, "No published checksum for #{asset}" unless expected
+
+    bytes = URI.open("#{base}#{asset}", "User-Agent" => "NEXUS-Q Ruby SDK", &:read)
+    actual = Digest::SHA256.hexdigest(bytes)
+    raise LoadError, "SHA-256 mismatch for #{asset}; refusing to load an unverified runtime" unless actual == expected.downcase
+
+    temporary = "#{library}.download"
+    File.binwrite(temporary, bytes)
+    File.rename(temporary, library)
+    File.write(digest_file, "#{actual}\n")
+    library
+  rescue LoadError
+    raise
+  rescue StandardError => e
+    raise LoadError, "Unable to obtain verified NEXUS-Q #{RUNTIME_VERSION} runtime: #{e.message}. Set NEXUSQ_LIBRARY to a compatible library path."
+  end
+
+  ffi_lib resolve_library
 
   attach_function :nexusq_version, [], :string
   attach_function :nexusq_backend_name, [], :string
