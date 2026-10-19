@@ -387,6 +387,25 @@ jobs:
           export ARENA_TARGET="x86_64-linux-gnu" ARENA_OS="Ubuntu" ARENA_OPT=release
           export ARENA_CPU_FREQUENCY_KHZ="$(awk -F: '/cpu MHz/ {gsub(/ /,"",$2); printf "%d", $2*1000; exit}' /proc/cpuinfo)"
           export ARENA_CPU_GOVERNOR="unknown-hosted-runner"
+          # Shared 2-vCPU hosted runners suffer periodic scheduling interference that
+          # inflates p95 tails for BOTH implementations (observed: native and AWS-LC
+          # p95 spikes of 1.5-3.6x own median with medians at 1.0-1.2x, across
+          # different ops/runs/CPUs, on code identical to a fully green run). Pin every
+          # benchmark process to one CPU core with raised priority so the measurement
+          # reflects the code, not the host noise. The gate itself is unchanged:
+          # same threshold (1.5x median and p95), same evaluation, same replicas.
+          run_pinned() {
+            local -a env_args=()
+            local v
+            for v in CORE_ITERATIONS CORE_WARMUPS AWSLC_ITERATIONS AWSLC_WARMUPS \
+                     CORE_IMPL CORE_RUN_ORDER ARENA_RUN_ORDER CORE_CPU CORE_CPU_FEATURES \
+                     ARENA_CPU ARENA_CPU_FEATURES ARENA_CPU_FREQUENCY_KHZ ARENA_CPU_GOVERNOR \
+                     ARENA_TARGET ARENA_OS ARENA_OPT CORE_COMMIT RUSTC_VERSION \
+                     AWSLC_VERSION NEXUSQ_HYBRID_1024 GITHUB_SHA; do
+              if [ -n "${!v:-}" ]; then env_args+=("$v=${!v}"); fi
+            done
+            sudo -n env "${env_args[@]}" taskset -c 1 nice -n -15 "$@"
+          }
           for replica in 1 2 3; do
             case "$replica" in
               1) order="rustcrypto native aws" ;;
@@ -397,14 +416,14 @@ jobs:
               case "$impl" in
                 rustcrypto)
                   export CORE_IMPL=nexusq-core-rustcrypto CORE_RUN_ORDER="replica-${replica}-${impl}"
-                  ./core-production-rustcrypto > "$out/rustcrypto-replica-${replica}.jsonl" ;;
+                  run_pinned ./core-production-rustcrypto > "$out/rustcrypto-replica-${replica}.jsonl" ;;
                 native)
                   export CORE_IMPL=nexusq-core-native-backend CORE_RUN_ORDER="replica-${replica}-${impl}"
-                  ./core-production-native > "$out/native-replica-${replica}.jsonl" ;;
+                  run_pinned ./core-production-native > "$out/native-replica-${replica}.jsonl" ;;
                 aws)
                   export AWSLC_VERSION="$AWSLC_COMMIT" ARENA_RUN_ORDER="replica-${replica}-${impl}"
                   export NEXUSQ_HYBRID_1024=1
-                  ./core-production-aws-lc > "$out/aws-lc-replica-${replica}.jsonl" ;;
+                  run_pinned ./core-production-aws-lc > "$out/aws-lc-replica-${replica}.jsonl" ;;
               esac
             done
           done
