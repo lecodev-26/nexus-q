@@ -1,6 +1,6 @@
 # SDK Guide
 
-The shipped bindings wrap the same Rust core and do not reimplement cryptography. The current repository ships C and limited Python bindings; other language SDKs are not claimed as available.
+The shipped bindings wrap the same Rust core and do not reimplement cryptography. The repository ships C, Python, Go, PHP and Ruby bindings; the Go, PHP and Ruby bindings are thin FFI wrappers over the C SDK. TypeScript/Java/Kotlin/C#/Swift/Dart remain CI/release-scope work rather than claiming local availability.
 
 ## Current bindings
 
@@ -9,6 +9,9 @@ The shipped bindings wrap the same Rust core and do not reimplement cryptography
 | Rust | native crate | full core API |
 | C | C ABI | vault/version surface documented by the C SDK |
 | Python | PyO3 | version and limited vault surface |
+| Go | cgo over the C SDK | vault/version surface |
+| PHP | FFI over the C SDK | vault/version surface |
+| Ruby | FFI over the C SDK | vault/version surface |
 
 See each binding's README for its exact current API and toolchain requirements.
 
