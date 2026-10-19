@@ -206,13 +206,13 @@ h2{font-size:clamp(36px,10vw,60px);max-width:none}
 <header class="hero" id="top">
 <canvas id="cv" aria-hidden="true"></canvas>
 <div class="wrap">
-<span class="chip"><b></b>V3 engineering release · Oct 9, 2026 · no independent audit implied</span>
+<span class="chip"><b></b>v4.1.0 stable line · Oct 19, 2026 · independent audit pending</span>
 <h1 class="d">Post-quantum security, <em>built in the open.</em></h1>
 <p class="lead">NEXUS-Q is a Rust engine for protecting <strong>data, keys and identities</strong> with ML-KEM, ML-DSA and a tamper-evident audit log, plus an honest account of what it does and does not prove. This page explains the whole project, so you do not have to audit the repository to understand it.</p>
 <p class="aud"><strong>Built for</strong> developers and teams who embed cryptography in applications and servers that must protect secrets for the long term.</p>
 <p class="by">Maintained by <a class="lk" href="https://github.com/lecodev-26" target="_blank" rel="noopener">lecodev-26</a> · <a class="lk" href="https://github.com/lecodev-26/nexus-q/graphs/contributors" target="_blank" rel="noopener">contributors</a></p>
 <div class="cta"><a class="btn p" href="#quickstart">Quick start</a><a class="btn" href="https://github.com/lecodev-26/nexus-q" target="_blank" rel="noopener">View repository</a><a class="btn" href="https://github.com/lecodev-26/nexus-q/releases/latest" target="_blank" rel="noopener">Latest release</a><a class="btn" href="#contribute">Contribute</a></div>
-<div class="stats"><div><b>5</b><span>Rust crates in the workspace</span></div><div><b>5</b><span>SDK languages: C, Python, Go, PHP, Ruby</span></div><div><b>8</b><span>implementations in the PQC Benchmark Arena</span></div><div><b>57</b><span>normalized Arena measurements</span></div></div>
+<div class="stats"><div><b>4.1.0</b><span>current stable line</span></div><div><b>241</b><span>official normalized Arena measurements</span></div><div><b>9/9</b><span>native production-path operations passed the 1.5× median and p95 gate</span></div><div><b>Opt-in</b><span>native backend remains experimental; CLI and SDKs default to RustCrypto</span></div></div>
 </div>
 </header>
 
@@ -252,7 +252,7 @@ h2{font-size:clamp(36px,10vw,60px);max-width:none}
 <section id="architecture"><div class="wrap">
 <div class="eyebrow rv">/ architecture</div>
 <h2 class="d rv">What is in the repository</h2>
-<p class="sec-lead rv">A Cargo workspace of five Rust crates, plus bindings for other languages and a reproducible benchmark arena.</p>
+<p class="sec-lead rv">A Rust workspace with the core library, CLI, authenticated server, multi-language SDKs, an opt-in experimental native backend, and a reproducible benchmark arena.</p>
 <div class="tw rv"><table class="table">
 <tr><th>Component</th><th>What it is</th></tr>
 <tr><td>nexusq-core</td><td>The library. All cryptography, vault, key management, identity, policy, storage and hardware abstraction live here.</td></tr>
@@ -289,21 +289,27 @@ h2{font-size:clamp(36px,10vw,60px);max-width:none}
 
 <section id="benchmarks"><div class="wrap">
 <div class="eyebrow rv">/ benchmarks</div>
-<h2 class="d rv">Performance, reported honestly</h2>
-<p class="sec-lead rv">NEXUS-Q is <strong>not</strong> a performance leader, and the project says so. The numbers below come from the repository's own benchmark records. They are the baseline the next versions are measured against.</p>
-<div class="tabs" role="tablist">
-<button class="tab" role="tab" aria-selected="true" data-t="arena">V1 vs the fastest comparator</button>
-<button class="tab" role="tab" aria-selected="false" data-t="v2">V1 vs V2</button>
-<button class="tab" role="tab" aria-selected="false" data-t="v3">V1 vs V3</button>
-</div>
-<div class="panel rv" id="panel"></div>
-<div class="note rv"><b>Read this before quoting a number.</b> Results are sensitive to CPU, scheduler, compiler and runner. The V1 to V3 deltas come from one hosted CI runner. They are observations, not universal claims, and the repository's forensic report separates hypotheses from proven causes. The V3 decision was to keep zeroization and security hardening and accept the observed cost, not to weaken secret cleanup to win latency.</div>
+<h2 class="d rv">v4.1.0 official production-path benchmark</h2>
+<p class="sec-lead rv">The official 2026-10-19 run records 241 normalized PQC Benchmark Arena measurements. The opt-in native backend passed the unchanged 1.5× median-and-p95 gate against AWS-LC on all nine ML-KEM and ML-DSA production-path operations. Lower latency is better; these are measurements from one AMD EPYC 7763 hosted CI runner, not universal performance claims.</p>
+<div class="tw rv"><table class="table">
+<tr><th>Operation</th><th>NEXUS-Q median</th><th>NEXUS-Q p95</th><th>AWS-LC median</th><th>Median ratio</th><th>p95 ratio</th><th>Gate</th></tr>
+<tr><td>ML-KEM-768 keygen</td><td>12.90 µs</td><td>13.38 µs</td><td>12.33 µs</td><td>1.046×</td><td>1.041×</td><td>Pass</td></tr>
+<tr><td>ML-KEM-768 encaps</td><td>12.94 µs</td><td>13.00 µs</td><td>12.75 µs</td><td>1.015×</td><td>1.013×</td><td>Pass</td></tr>
+<tr><td>ML-KEM-768 decaps</td><td>15.38 µs</td><td>15.44 µs</td><td>15.43 µs</td><td>0.997×</td><td>0.994×</td><td>Pass</td></tr>
+<tr><td>ML-KEM-1024 keygen</td><td>18.34 µs</td><td>18.86 µs</td><td>17.85 µs</td><td>1.028×</td><td>1.025×</td><td>Pass</td></tr>
+<tr><td>ML-KEM-1024 encaps</td><td>18.66 µs</td><td>18.76 µs</td><td>18.56 µs</td><td>1.005×</td><td>0.985×</td><td>Pass</td></tr>
+<tr><td>ML-KEM-1024 decaps</td><td>22.01 µs</td><td>22.10 µs</td><td>22.19 µs</td><td>0.992×</td><td>0.977×</td><td>Pass</td></tr>
+<tr><td>ML-DSA-65 keygen</td><td>35.79 µs</td><td>36.62 µs</td><td>40.00 µs</td><td>0.895×</td><td>0.885×</td><td>Pass</td></tr>
+<tr><td>ML-DSA-65 sign</td><td>83.22 µs</td><td>235.40 µs</td><td>96.57 µs</td><td>0.862×</td><td>0.846×</td><td>Pass</td></tr>
+<tr><td>ML-DSA-65 verify</td><td>33.54 µs</td><td>34.01 µs</td><td>34.31 µs</td><td>0.978×</td><td>0.976×</td><td>Pass</td></tr>
+</table></div>
+<div class="note rv"><b>Important scope note.</b> The native backend is experimental and opt-in only. The default <code>nexusq-core</code> build, CLI, server and SDK production call paths continue to use RustCrypto. The 1.5× gate is a performance gate, not a security audit or certification. Independent external audit remains pending. <a class="lk" href="https://github.com/lecodev-26/nexus-q/actions/runs/39186079459" target="_blank" rel="noopener">Official Arena run (241 measurements)</a> · <a class="lk" href="https://github.com/lecodev-26/nexus-q/actions/runs/39182674176" target="_blank" rel="noopener">Production-path gate</a> · <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/performance/NATIVE_BACKEND_FEATURE.md" target="_blank" rel="noopener">Feature and scope documentation</a>.</div>
 </div></section>
 
 <section id="versions"><div class="wrap">
 <div class="eyebrow rv">/ versions & roadmap</div>
-<h2 class="d rv">Four lines of work</h2>
-<p class="sec-lead rv">V1, V2 and V3 are engineering version lines, not certifications. A GitHub release here does not mean an audit, a certification, production readiness or publication to a package registry.</p>
+<h2 class="d rv">Current stable line and engineering history</h2>
+<p class="sec-lead rv">V1, V2 and V3 remain historical engineering baselines. v4.1.0 is the current stable line; a release or passing performance gate does not imply an independent audit, certification, or production readiness.</p>
 <div class="tl">
 <div class="ver rv"><span class="tag">v1.0.0 · Oct 7, 2026</span><h3>V1</h3><p>The frozen engineering baseline: crypto core, vault, keys, identities, policy, audit log, CLI, server and SDKs. Its Arena result showed NEXUS-Q slower than the fastest implementations, which became the main target.</p><span class="st">Frozen</span></div>
 <div class="ver rv"><span class="tag">v2.0.0 · Oct 8, 2026</span><h3>V2</h3><p>Correctness, interoperability, security fuzzing, backend strategy and release gates. The final record claims no performance improvement over V1, and the performance question stayed open.</p><span class="st">Frozen on nexusqv2</span></div>
@@ -431,24 +437,9 @@ addEventListener('resize',function(){if(innerWidth>1080)closeMenu()});
 var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('on');io.unobserve(e.target)}})},{threshold:.1});
 document.querySelectorAll('.rv').forEach(function(el){io.observe(el)});
 document.querySelectorAll('.copy').forEach(function(b){b.addEventListener('click',function(){var t=b.parentNode.querySelector('pre').innerText;(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){b.textContent='Copied'},function(){b.textContent='Select + copy'});setTimeout(function(){b.textContent='Copy'},1600)})});
-var ARENA=[['ML-KEM-768 keygen',33.94,'AWS-LC',11.44],['ML-KEM-768 encaps',27.97,'AWS-LC',12.11],['ML-KEM-768 decaps',34.62,'AWS-LC',15.07],['ML-KEM-1024 keygen',53.89,'liboqs',22.60],['ML-KEM-1024 encaps',46.05,'liboqs',22.71],['ML-KEM-1024 decaps',52.14,'liboqs',25.61],['ML-DSA-65 keygen',168.69,'AWS-LC',44.21],['ML-DSA-65 sign',600.73,'AWS-LC',134.75],['ML-DSA-65 verify',101.20,'CIRCL',22.92]];
-var V2=[['ML-KEM-768 keygen',49.819,51.185],['ML-KEM-768 encaps',45.081,46.063],['ML-KEM-768 decaps',54.537,55.997],['ML-KEM-1024 keygen',81.264,82.191],['ML-KEM-1024 encaps',72.041,73.221],['ML-KEM-1024 decaps',83.992,84.859],['ML-DSA-65 keygen',283.730,284.344],['ML-DSA-65 sign',620.367,945.226],['ML-DSA-65 verify',181.798,181.479]];
-var V3=[['ML-KEM-768 keygen',4.70,'+1.91 to +7.81'],['ML-KEM-768 encaps',4.52,'+0.74 to +8.16'],['ML-KEM-768 decaps',2.70,'+0.55 to +8.35'],['ML-KEM-1024 keygen',3.91,'+1.37 to +12.52'],['ML-KEM-1024 encaps',6.33,'+0.70 to +14.52'],['ML-KEM-1024 decaps',5.03,'+1.26 to +12.08'],['ML-DSA-65 keygen',6.82,'+2.56 to +10.89'],['ML-DSA-65 sign',-0.76,'-15.43 to -0.03'],['ML-DSA-65 verify',6.40,'+3.80 to +7.14']];
-var panel=document.getElementById('panel');
-function row(n,bars,val,sub){return '<div class="row"><div class="nm">'+n+'</div><div class="bars">'+bars+'</div><div class="val">'+val+'</div>'+(sub?'<div class="sub">'+sub+'</div>':'')+'</div>'}
-function build(t){var h='';
-if(t==='arena'){h='<p class="cap">Final v1.0 Arena run on the same x86_64 Linux CI workload (20 iterations, 3 warmups). Lower latency is better. The second bar shows the fastest measured comparator relative to NEXUS-Q, so a shorter bar means a bigger gap.</p>';
-ARENA.forEach(function(r){h+=row(r[0],'<div class="bar a" data-w="100"></div><div class="bar b" data-w="'+(r[3]/r[1]*100).toFixed(1)+'"></div>',(r[1]/r[3]).toFixed(2)+'× slower','NEXUS-Q '+r[1].toFixed(2)+' µs · '+r[2]+' '+r[3].toFixed(2)+' µs')});
-h+='<div class="legend"><span><i style="background:var(--acc)"></i>NEXUS-Q v1</span><span><i style="background:var(--acc2)"></i>Fastest comparator (AWS-LC, liboqs or CIRCL)</span></div>'}
-if(t==='v2'){h='<p class="cap">Same-runner V1 and V2 reference measurements from the retained Arena artifacts. V2 is up to +52.37% slower on ML-DSA-65 signing. An earlier corrected run showed a 0.885 V2/V1 geometric mean, so run-to-run variance is large and no performance claim is made.</p>';
-V2.forEach(function(r){var d=(r[2]/r[1]-1)*100;h+=row(r[0],'<div class="bar a" data-w="'+(100/1.6).toFixed(1)+'"></div><div class="bar '+(d>10?'w':'b')+'" data-w="'+(r[2]/r[1]*100/1.6).toFixed(1)+'"></div>',(d>=0?'+':'')+d.toFixed(2)+'%','V1 '+r[1].toFixed(3)+' µs · V2 '+r[2].toFixed(3)+' µs')});
-h+='<div class="legend"><span><i style="background:var(--acc)"></i>V1</span><span><i style="background:var(--acc2)"></i>V2</span><span><i style="background:var(--warn)"></i>V2 more than 10% slower</span></div>'}
-if(t==='v3'){h='<p class="cap">Median paired percentage change of V3 relative to V1, from 10 randomized alternating rounds on one hosted CI runner. These are not absolute latencies and not a 95% confidence interval. Signing used a fixed 64-seed corpus.</p>';
-V3.forEach(function(r){h+=row(r[0],'<div class="bar '+(r[1]<0?'g':'b')+'" data-w="'+Math.max(2,Math.abs(r[1])/8*100).toFixed(1)+'"></div>',(r[1]>0?'+':'')+r[1].toFixed(2)+'%','per-round range: '+r[2]+'%')});
-h+='<div class="legend"><span><i style="background:var(--acc2)"></i>V3 slower than V1</span><span><i style="background:var(--acc)"></i>V3 faster than V1</span></div>'}
-panel.innerHTML=h;requestAnimationFrame(function(){requestAnimationFrame(function(){panel.querySelectorAll('.bar').forEach(function(b){b.style.width=b.getAttribute('data-w')+'%'})})})}
-document.querySelectorAll('.tab').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('.tab').forEach(function(x){x.setAttribute('aria-selected','false')});b.setAttribute('aria-selected','true');build(b.getAttribute('data-t'))})});
-build('arena');
+
+
+
 var c=document.getElementById('cv'),x=c.getContext('2d'),W,H,P=[],m={x:-999,y:-999},dpr=Math.min(devicePixelRatio||1,2),still=matchMedia('(prefers-reduced-motion:reduce)').matches;
 function init(){var r=c.getBoundingClientRect();W=r.width;H=r.height;c.width=W*dpr;c.height=H*dpr;x.setTransform(dpr,0,0,dpr,0,0);P=[];var g=Math.max(54,Math.round(W/20));for(var i=0;i<W+g;i+=g)for(var j=0;j<H+g;j+=g){P.push({ox:i+(Math.random()-.5)*g*.5,oy:j+(Math.random()-.5)*g*.5,x:0,y:0,s:Math.random()*6.28,f:0})}P.forEach(function(p){p.x=p.ox;p.y=p.oy})}
 function draw(t){var col=getComputedStyle(root).getPropertyValue('--acc').trim()||'#5cf2d6';x.clearRect(0,0,W,H);x.fillStyle=col;x.strokeStyle=col;
