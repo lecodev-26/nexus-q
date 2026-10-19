@@ -36,6 +36,12 @@ public static partial class Nexusq
     [LibraryImport(LibraryName, EntryPoint = "nexusq_version", StringMarshalling = StringMarshalling.Utf8)]
     private static partial IntPtr version_ptr();
 
+    [LibraryImport(LibraryName, EntryPoint = "nexusq_backend_name", StringMarshalling = StringMarshalling.Utf8)]
+    private static partial IntPtr backend_name_ptr();
+
+    [LibraryImport(LibraryName, EntryPoint = "nexusq_backend_is_experimental")]
+    private static partial byte backend_experimental();
+
     [LibraryImport(LibraryName, EntryPoint = "nexusq_last_error_message", StringMarshalling = StringMarshalling.Utf8)]
     private static partial IntPtr last_error_ptr();
 
@@ -49,6 +55,15 @@ public static partial class Nexusq
 
     /// <summary>Returns the library version string.</summary>
     public static string Version() => PtrToString(version_ptr());
+
+    /// <summary>Reports the provider compiled into the loaded library; this does not switch providers.</summary>
+    public static BackendInfo CryptoBackendInfo()
+    {
+        string name = PtrToString(backend_name_ptr());
+        return new BackendInfo(name, backend_experimental() != 0, name == "native-experimental");
+    }
+
+    public sealed record BackendInfo(string Name, bool Experimental, bool NativeAvailable);
 
     /// <summary>Returns the last error message on the calling thread, or null.</summary>
     public static string? LastError()

@@ -21,6 +21,8 @@ final class Nexusq
         $library = getenv('NEXUSQ_LIBRARY') ?: 'libnexusq.so';
         $header = <<<CDEF
             const char *nexusq_version(void);
+            const char *nexusq_backend_name(void);
+            uint8_t nexusq_backend_is_experimental(void);
             const char *nexusq_last_error_message(void);
             int32_t nexusq_vault_create(const char *path, const char *password, const char *label);
             int32_t nexusq_vault_format_version(const char *path);
@@ -33,6 +35,18 @@ final class Nexusq
     public static function version(): string
     {
         return self::ffi()->nexusq_version();
+    }
+
+    /** Reports the compile-time crypto provider; this does not change selection. */
+    public static function backendInfo(): array
+    {
+        $ffi = self::ffi();
+        $name = $ffi->nexusq_backend_name();
+        return [
+            'name' => $name,
+            'experimental' => $ffi->nexusq_backend_is_experimental() !== 0,
+            'native_available' => $name === 'native-experimental',
+        ];
     }
 
     public static function lastError(): ?string

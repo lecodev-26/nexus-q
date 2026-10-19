@@ -39,6 +39,8 @@ part of the SDK workflow.
 The current C ABI exposes:
 
 - `nexusq_version()` — returns the library version.
+- `nexusq_backend_name()` — returns `rustcrypto` or `native-experimental` for the compiled ML-KEM/ML-DSA provider.
+- `nexusq_backend_is_experimental()` — returns 1 for the experimental native provider, otherwise 0.
 - `nexusq_last_error_message()` — returns the last error on the calling
   thread.
 - `nexusq_string_free()` — frees C strings allocated by the library.

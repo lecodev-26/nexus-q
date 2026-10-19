@@ -61,6 +61,9 @@ pub enum Command {
     /// Show local NEXUS-Q diagnostics.
     Diagnostics(DiagnosticsArgs),
 
+    /// Report the cryptographic provider compiled into this binary.
+    Backend,
+
     /// Manage vaults.
     #[command(subcommand)]
     Vault(VaultCommand),

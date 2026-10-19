@@ -25,6 +25,8 @@ object Nexusq {
 
     private interface CApi : Library {
         fun nexusq_version(): String
+        fun nexusq_backend_name(): String
+        fun nexusq_backend_is_experimental(): Byte
         fun nexusq_last_error_message(): String?
         fun nexusq_vault_create(path: String, password: String, label: String?): Int
         fun nexusq_vault_format_version(path: String): Int
@@ -37,6 +39,14 @@ object Nexusq {
 
     /** Returns the library version string. */
     fun version(): String = C.nexusq_version()
+
+    data class BackendInfo(val name: String, val experimental: Boolean, val nativeAvailable: Boolean)
+
+    /** Reports the provider compiled into the loaded library; it does not switch providers. */
+    fun backendInfo(): BackendInfo {
+        val name = C.nexusq_backend_name()
+        return BackendInfo(name, C.nexusq_backend_is_experimental().toInt() != 0, name == "native-experimental")
+    }
 
     /** Returns the last error message on the calling thread, or null. */
     fun lastError(): String? = C.nexusq_last_error_message()

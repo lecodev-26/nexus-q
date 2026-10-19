@@ -2,7 +2,7 @@
 //!
 //! These commands are read-only and never unlock a vault or print secret data.
 
-use nexusq_core::{Metrics, OBSERVABILITY_SCHEMA_VERSION, vault::Vault};
+use nexusq_core::{Metrics, OBSERVABILITY_SCHEMA_VERSION, backend_info, vault::Vault};
 use serde_json::json;
 
 use crate::{GlobalOptions, cli::HealthArgs, error::CliError, output::Output};
@@ -19,11 +19,42 @@ pub fn health(args: HealthArgs, global: &GlobalOptions) -> Result<(), CliError> 
         "status": "ok",
         "observability_schema": OBSERVABILITY_SCHEMA_VERSION,
         "hardware_backend": "software",
+        "pqc_backend": backend_info().name,
+        "pqc_backend_experimental": backend_info().experimental,
+        "native_pqc_backend_available": backend_info().native_available,
         "vault": vault_status,
     });
+    let provider = backend_info();
     let human = format!(
-        "Status:              ok\nObservability schema: v{}\nHardware backend:     software\nVault:                {}",
-        OBSERVABILITY_SCHEMA_VERSION, vault_status
+        "Status:              ok\nObservability schema: v{}\nHardware backend:     software\nPQC backend:       {}{}\nVault:                {}",
+        OBSERVABILITY_SCHEMA_VERSION,
+        provider.name,
+        if provider.experimental {
+            " (experimental)"
+        } else {
+            ""
+        },
+        vault_status
+    );
+    if !global.quiet {
+        println!("{}", Output::new(human, json).render(global.output));
+    }
+    Ok(())
+}
+
+/// Report the compile-time PQC provider. This never changes provider selection.
+pub fn backend(global: &GlobalOptions) -> Result<(), CliError> {
+    let info = backend_info();
+    let json = json!({
+        "name": info.name,
+        "experimental": info.experimental,
+        "native_available": info.native_available,
+        "selection": "compile-time Cargo feature",
+        "default_provider": "rustcrypto",
+    });
+    let human = format!(
+        "PQC backend: {}\nExperimental:   {}\nNative compiled: {}\nSelection:      compile-time Cargo feature",
+        info.name, info.experimental, info.native_available
     );
     if !global.quiet {
         println!("{}", Output::new(human, json).render(global.output));
@@ -64,15 +95,26 @@ pub fn diagnostics(args: HealthArgs, global: &GlobalOptions) -> Result<(), CliEr
         "status": "ok",
         "observability_schema": OBSERVABILITY_SCHEMA_VERSION,
         "hardware_backend": "software",
+        "pqc_backend": backend_info().name,
+        "pqc_backend_experimental": backend_info().experimental,
+        "native_pqc_backend_available": backend_info().native_available,
         "vault": vault_info,
         "metrics": {
             "process_uptime_seconds": metrics.uptime().as_secs_f64(),
             "metrics_endpoint": "server-only",
         },
     });
+    let provider = backend_info();
     let human = format!(
-        "Status:              ok\nObservability schema: v{}\nHardware backend:     software\nVault:                {}\nMetrics:              server exposes Prometheus-compatible /metrics",
-        OBSERVABILITY_SCHEMA_VERSION, vault_human
+        "Status:              ok\nObservability schema: v{}\nHardware backend:     software\nPQC backend:       {}{}\nVault:                {}\nMetrics:              server exposes Prometheus-compatible /metrics",
+        OBSERVABILITY_SCHEMA_VERSION,
+        provider.name,
+        if provider.experimental {
+            " (experimental)"
+        } else {
+            ""
+        },
+        vault_human
     );
     if !global.quiet {
         println!("{}", Output::new(human, json).render(global.output));

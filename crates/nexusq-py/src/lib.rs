@@ -14,6 +14,17 @@ fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
+/// Returns build-time cryptographic provider metadata.
+#[pyfunction]
+fn backend_info(py: Python<'_>) -> PyResult<Py<PyAny>> {
+    let info = nexusq_core::backend_info();
+    let result = pyo3::types::PyDict::new(py);
+    result.set_item("name", info.name)?;
+    result.set_item("experimental", info.experimental)?;
+    result.set_item("native_available", info.native_available)?;
+    Ok(result.into_any().unbind())
+}
+
 /// A vault file on disk.
 #[pyclass]
 struct Vault {
@@ -63,6 +74,7 @@ impl Vault {
 fn nexusq(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_function(wrap_pyfunction!(version, m)?)?;
+    m.add_function(wrap_pyfunction!(backend_info, m)?)?;
     m.add_class::<Vault>()?;
     Ok(())
 }

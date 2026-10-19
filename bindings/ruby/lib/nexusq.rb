@@ -13,12 +13,20 @@ module Nexusq
   ffi_lib ENV.fetch("NEXUSQ_LIBRARY", "nexusq")
 
   attach_function :nexusq_version, [], :string
+  attach_function :nexusq_backend_name, [], :string
+  attach_function :nexusq_backend_is_experimental, [], :uint8
   attach_function :nexusq_last_error_message, [], :string
   attach_function :nexusq_vault_create, [:string, :string, :string], :int32
   attach_function :nexusq_vault_format_version, [:string], :int32
 
   def self.version
     nexusq_version
+  end
+
+  # Reports the provider compiled into the loaded library; it does not switch providers.
+  def self.backend_info
+    name = nexusq_backend_name
+    { name: name, experimental: nexusq_backend_is_experimental != 0, native_available: name == "native-experimental" }
   end
 
   def self.last_error

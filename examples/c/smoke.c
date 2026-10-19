@@ -18,6 +18,14 @@
 
 int main(void) {
     printf("nexusq version: %s\n", nexusq_version());
+    const char *backend = nexusq_backend_name();
+    int experimental = nexusq_backend_is_experimental();
+    if (backend == NULL || backend[0] == '\0' ||
+        experimental != (strcmp(backend, "native-experimental") == 0)) {
+        fprintf(stderr, "invalid PQC backend metadata\n");
+        return 1;
+    }
+    printf("PQC backend: %s\n", backend);
 
     const char *home = getenv("HOME");
     if (home == NULL) {

@@ -72,3 +72,12 @@ Before starting the server:
 6. Configure a supervisor to allow graceful SIGTERM/SIGINT shutdown.
 
 Docker, systemd, .deb, .rpm, and registry publication are not required by the current deployment boundary. For the registry installation channels of the 4.1.0 line see the table above; their availability does not change the deployment boundary or imply any validation claim.
+
+
+The reproducible GitHub release archive includes the C ABI header and the
+platform library produced by that release build (`include/nexusq.h` and
+`lib/libnexusq.so`, `lib/libnexusq.dylib`, or `lib/nexusq.dll`). This is a
+version-matched C SDK runtime artifact; language bindings still need to use
+their ecosystem-specific package integration and platform loader conventions.
+The native provider remains opt-in and is not enabled by the default release
+build.

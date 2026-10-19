@@ -13,6 +13,18 @@ public enum Nexusq {
         String(cString: nexusq_version())
     }
 
+    /// Reports the provider compiled into the linked library; this does not switch providers.
+    public static func backendInfo() -> BackendInfo {
+        let name = String(cString: nexusq_backend_name())
+        return BackendInfo(name: name, experimental: nexusq_backend_is_experimental() != 0, nativeAvailable: name == "native-experimental")
+    }
+
+    public struct BackendInfo: Equatable {
+        public let name: String
+        public let experimental: Bool
+        public let nativeAvailable: Bool
+    }
+
     /// Returns the last error message on the calling thread, or nil.
     /// The message is borrowed from the library and remains valid until the
     /// next NEXUS-Q call on the same thread.

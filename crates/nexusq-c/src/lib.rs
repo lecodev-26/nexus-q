@@ -26,6 +26,23 @@ pub extern "C" fn nexusq_version() -> *const c_char {
     VERSION.as_ptr().cast()
 }
 
+/// Returns the compile-time cryptographic provider as a static C string.
+/// The value is either `rustcrypto` or `native-experimental`.
+#[unsafe(no_mangle)]
+pub extern "C" fn nexusq_backend_name() -> *const c_char {
+    if nexusq_core::backend_info().native_available {
+        c"native-experimental".as_ptr()
+    } else {
+        c"rustcrypto".as_ptr()
+    }
+}
+
+/// Returns 1 when the compiled provider is experimental, otherwise 0.
+#[unsafe(no_mangle)]
+pub extern "C" fn nexusq_backend_is_experimental() -> u8 {
+    u8::from(nexusq_core::backend_info().experimental)
+}
+
 /// Frees a string previously returned by a NEXUS-Q function.
 ///
 /// Passing a null pointer is a no-op. Passing a pointer not returned
@@ -228,5 +245,25 @@ mod tests {
         assert!(!nexusq_last_error_message().is_null());
         assert!(!nexusq_version().is_null());
         assert!(nexusq_last_error_message().is_null());
+    }
+}
+
+#[cfg(test)]
+mod backend_metadata_tests {
+    use super::{nexusq_backend_is_experimental, nexusq_backend_name};
+    use std::ffi::CStr;
+
+    #[test]
+    fn c_abi_reports_compiled_provider() {
+        let name = unsafe { CStr::from_ptr(nexusq_backend_name()) }
+            .to_str()
+            .unwrap();
+        #[cfg(feature = "native-backend")]
+        assert_eq!(
+            (name, nexusq_backend_is_experimental()),
+            ("native-experimental", 1)
+        );
+        #[cfg(not(feature = "native-backend"))]
+        assert_eq!((name, nexusq_backend_is_experimental()), ("rustcrypto", 0));
     }
 }

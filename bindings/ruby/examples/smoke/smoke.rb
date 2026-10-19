@@ -10,6 +10,9 @@ require "tmpdir"
 require_relative "../../lib/nexusq"
 
 puts "nexusq version: #{Nexusq.version}"
+provider = Nexusq.backend_info
+abort "invalid backend metadata" unless provider[:name] && provider[:native_available] == (provider[:name] == "native-experimental") && provider[:experimental] == provider[:native_available]
+puts "PQC backend: #{provider[:name]}"
 
 path = File.join(Dir.tmpdir, "nexusq_ruby_smoke_#{$$}.nqv")
 File.delete(path) if File.exist?(path)

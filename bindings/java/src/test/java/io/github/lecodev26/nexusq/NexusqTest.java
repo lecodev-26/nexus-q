@@ -18,6 +18,14 @@ class NexusqTest {
     }
 
     @Test
+    void backendMetadataIsConsistent() {
+        Nexusq.BackendInfo info = Nexusq.backendInfo();
+        assertNotNull(info.name());
+        assertEquals(info.nativeAvailable(), info.name().equals("native-experimental"));
+        assertEquals(info.experimental(), info.nativeAvailable());
+    }
+
+    @Test
     void vaultCreateRoundTrip(@TempDir Path dir) {
         Path path = dir.resolve("vault.nqv");
         Nexusq.Vault vault = Nexusq.Vault.create(path.toString(), "java-test", "java-smoke");

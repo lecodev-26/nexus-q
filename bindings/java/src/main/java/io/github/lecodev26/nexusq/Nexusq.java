@@ -23,6 +23,8 @@ public final class Nexusq {
 
     interface CApi extends Library {
         String nexusq_version();
+        String nexusq_backend_name();
+        byte nexusq_backend_is_experimental();
         String nexusq_last_error_message();
         int nexusq_vault_create(String path, String password, String label);
         int nexusq_vault_format_version(String path);
@@ -37,6 +39,14 @@ public final class Nexusq {
     public static String version() {
         return C.nexusq_version();
     }
+
+    /** Reports the provider compiled into the loaded library; this does not switch providers. */
+    public static BackendInfo backendInfo() {
+        String name = C.nexusq_backend_name();
+        return new BackendInfo(name, C.nexusq_backend_is_experimental() != 0, name.equals("native-experimental"));
+    }
+
+    public record BackendInfo(String name, boolean experimental, boolean nativeAvailable) {}
 
     /** Returns the last error message on the calling thread, or null. */
     public static String lastError() {

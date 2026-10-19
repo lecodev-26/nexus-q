@@ -17,6 +17,8 @@ const lib = koffi.load(libraryPath);
 
 // Raw C ABI surface of the NEXUS-Q C SDK.
 const nexusq_version = lib.func("const char *nexusq_version()");
+const nexusq_backend_name = lib.func("const char *nexusq_backend_name()");
+const nexusq_backend_is_experimental = lib.func("uint8_t nexusq_backend_is_experimental()");
 const nexusq_last_error_message = lib.func(
   "const char *nexusq_last_error_message()"
 );
@@ -38,6 +40,13 @@ export class NexusqError extends Error {
 /** Returns the library version string. */
 export function version(): string {
   return nexusq_version() as string;
+}
+
+/** Reports the provider compiled into the loaded library; it does not switch providers. */
+export function backendInfo(): { name: string; experimental: boolean; nativeAvailable: boolean } {
+  const name = nexusq_backend_name() as string;
+  const experimental = (nexusq_backend_is_experimental() as number) !== 0;
+  return { name, experimental, nativeAvailable: name === "native-experimental" };
 }
 
 /** Returns the last error message on the calling thread, or null. */

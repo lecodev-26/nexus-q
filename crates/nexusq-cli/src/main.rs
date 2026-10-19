@@ -39,6 +39,7 @@ fn run(cli: Cli) -> Result<(), CliError> {
     match command {
         Command::Health(args) => commands::diagnostics::health(args, &global),
         Command::Diagnostics(args) => commands::diagnostics::diagnostics(args, &global),
+        Command::Backend => commands::diagnostics::backend(&global),
         Command::Vault(cmd) => commands::vault::run(cmd, &global),
         Command::Key(cmd) => commands::key::run(cmd, &global),
         Command::Data(cmd) => commands::data::run(cmd, &global),

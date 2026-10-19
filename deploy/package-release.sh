@@ -38,10 +38,27 @@ cleanup() {
 trap cleanup EXIT HUP INT TERM
 
 PACKAGE_DIR="$STAGING/$PACKAGE_NAME"
-mkdir -p "$PACKAGE_DIR/bin" "$PACKAGE_DIR/config" "$PACKAGE_DIR/docs"
+mkdir -p "$PACKAGE_DIR/bin" "$PACKAGE_DIR/lib" "$PACKAGE_DIR/include" "$PACKAGE_DIR/config" "$PACKAGE_DIR/docs"
 
 cp "$ROOT_DIR/target/release/nexusq" "$PACKAGE_DIR/bin/nexusq"
 cp "$ROOT_DIR/target/release/nexusq-server" "$PACKAGE_DIR/bin/nexusq-server"
+
+# Ship the C ABI runtime and header alongside the CLI/server artifact. The
+# release workflow builds the workspace first, including nexusq-c.
+NATIVE_LIBRARY=
+for candidate in libnexusq.so libnexusq.dylib nexusq.dll; do
+    if [ -f "$ROOT_DIR/target/release/$candidate" ]; then
+        NATIVE_LIBRARY=$candidate
+        break
+    fi
+done
+if [ -z "$NATIVE_LIBRARY" ]; then
+    echo "error: missing C SDK runtime in target/release (expected libnexusq.so, libnexusq.dylib, or nexusq.dll)" >&2
+    echo "run: cargo build -p nexusq-c --release" >&2
+    exit 1
+fi
+cp "$ROOT_DIR/target/release/$NATIVE_LIBRARY" "$PACKAGE_DIR/lib/$NATIVE_LIBRARY"
+cp "$ROOT_DIR/crates/nexusq-c/include/nexusq.h" "$PACKAGE_DIR/include/nexusq.h"
 cp "$ROOT_DIR/deploy/nexusq-server.env.example" "$PACKAGE_DIR/config/nexusq-server.env.example"
 cp "$ROOT_DIR/docs/DEPLOYMENT.md" "$PACKAGE_DIR/docs/DEPLOYMENT.md"
 cp "$ROOT_DIR/docs/SERVER.md" "$PACKAGE_DIR/docs/SERVER.md"
@@ -54,6 +71,8 @@ printf '%s\n' \
     'Contents:' \
     '  bin/nexusq' \
     '  bin/nexusq-server' \
+    '  lib/' \
+    '  include/nexusq.h' \
     '  config/nexusq-server.env.example' \
     '  docs/DEPLOYMENT.md' \
     '  docs/SERVER.md' \
@@ -67,6 +86,8 @@ printf '%s\n' \
     sha256sum \
         bin/nexusq \
         bin/nexusq-server \
+        "lib/$NATIVE_LIBRARY" \
+        include/nexusq.h \
         config/nexusq-server.env.example \
         docs/DEPLOYMENT.md \
         docs/SERVER.md \

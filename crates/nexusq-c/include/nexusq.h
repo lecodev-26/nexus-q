@@ -11,6 +11,12 @@
  */
 const char *nexusq_version(void);
 
+/** Returns the compiled cryptographic provider (`rustcrypto` or `native-experimental`). */
+const char *nexusq_backend_name(void);
+
+/** Returns 1 if the compiled cryptographic provider is experimental, otherwise 0. */
+uint8_t nexusq_backend_is_experimental(void);
+
 /**
  * Frees a string previously returned by a NEXUS-Q function.
  *

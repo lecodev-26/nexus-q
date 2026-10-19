@@ -12,6 +12,11 @@ repository.workspace = true
 name = "nexusq_py"
 crate-type = ["cdylib", "rlib"]
 
+[features]
+default = []
+native-backend = ["nexusq-core/native-backend"]
+native-backend-portable = ["nexusq-core/native-backend-portable"]
+
 [dependencies]
 nexusq-core = { workspace = true }
 pyo3 = { version = "0.29", features = ["extension-module", "abi3-py314"] }

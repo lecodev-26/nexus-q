@@ -38,6 +38,8 @@ Example
 
 int main() {
     std::cout << "nexusq version: " << nexusq::version() << "\n";
+    const auto provider = nexusq::backend_info();
+    std::cout << "PQC backend: " << provider.name << "\n";
 
     try {
         nexusq::Vault vault =
@@ -58,6 +60,7 @@ The wrapper currently exposes:
 
 · nexusq::version() — returns the library version as a
   std::string.
+· nexusq::backend_info() — reports the compiled PQC provider and its experimental status; it does not change provider selection.
 · nexusq::Error — exception type thrown by every operation that
   fails. Carries the same message the C SDK would have returned.
 · nexusq::Vault — creates and inspects a vault file:

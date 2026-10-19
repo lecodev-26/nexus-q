@@ -48,3 +48,11 @@ family (C, C++, Go and Ruby), which shares `libnexusq` as its ABI boundary.
 The semantics are still defined by the same Rust core.
 
 More operations will be exposed as the public Rust API grows.
+
+
+## Backend capability reporting
+
+`nexusq.backend_info()` returns the provider compiled into the extension:
+`name`, `experimental`, and `native_available`. The default wheel reports
+`rustcrypto`. Experimental builds must be built explicitly with
+`--features native-backend`; this is a build-time choice, not runtime dispatch.

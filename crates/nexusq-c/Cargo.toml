@@ -13,6 +13,11 @@ name = "nexusq"
 crate-type = ["cdylib", "staticlib"]
 doc = false
 
+[features]
+default = []
+native-backend = ["nexusq-core/native-backend"]
+native-backend-portable = ["nexusq-core/native-backend-portable"]
+
 [dependencies]
 nexusq-core = { workspace = true }
 

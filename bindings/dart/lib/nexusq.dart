@@ -18,6 +18,8 @@ typedef _VersionDart = Pointer<Char> Function();
 
 typedef _LastErrorC = Pointer<Char> Function();
 typedef _LastErrorDart = Pointer<Char> Function();
+typedef _BackendExperimentalC = Uint8 Function();
+typedef _BackendExperimentalDart = int Function();
 
 typedef _VaultCreateC = Int32 Function(
     Pointer<Utf8> path, Pointer<Utf8> password, Pointer<Utf8> label);
@@ -36,6 +38,8 @@ final _version = _lib
     .lookupFunction<_VersionC, _VersionDart>('nexusq_version');
 final _lastError = _lib
     .lookupFunction<_LastErrorC, _LastErrorDart>('nexusq_last_error_message');
+final _backendName = _lib.lookupFunction<_VersionC, _VersionDart>('nexusq_backend_name');
+final _backendExperimental = _lib.lookupFunction<_BackendExperimentalC, _BackendExperimentalDart>('nexusq_backend_is_experimental');
 final _vaultCreate = _lib
     .lookupFunction<_VaultCreateC, _VaultCreateDart>('nexusq_vault_create');
 final _vaultFormatVersion = _lib.lookupFunction<_VaultFormatVersionC,
@@ -48,6 +52,12 @@ String? _borrowed(Pointer<Char> p) {
 
 /// Returns the library version string.
 String version() => _borrowed(_version())!;
+
+/// Reports the provider compiled into the loaded library; this does not switch providers.
+Map<String, Object> backendInfo() {
+  final name = _borrowed(_backendName())!;
+  return {'name': name, 'experimental': _backendExperimental() != 0, 'nativeAvailable': name == 'native-experimental'};
+}
 
 /// Returns the last error message on the calling thread, or null.
 String? lastError() => _borrowed(_lastError());
