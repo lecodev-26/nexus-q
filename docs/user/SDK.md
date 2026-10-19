@@ -1,6 +1,6 @@
 # SDK Guide
 
-The shipped bindings wrap the same Rust core and do not reimplement cryptography. The repository ships C, Python, Go, PHP and Ruby bindings; the Go, PHP and Ruby bindings are thin FFI wrappers over the C SDK. TypeScript/Java/Kotlin/C#/Swift/Dart remain CI/release-scope work rather than claiming local availability.
+The shipped bindings wrap the same Rust core and do not reimplement cryptography. The repository ships C, Python, Go, PHP, Ruby, TypeScript, Java, Kotlin, C#/.NET, Swift and Dart bindings; every binding except the Python one (PyO3 native extension) and the Rust crates is a thin FFI wrapper over the C SDK.
 
 ## Current bindings
 
@@ -12,6 +12,12 @@ The shipped bindings wrap the same Rust core and do not reimplement cryptography
 | Go | cgo over the C SDK | vault/version surface |
 | PHP | FFI over the C SDK | vault/version surface |
 | Ruby | FFI over the C SDK | vault/version surface |
+| TypeScript / Node.js | koffi FFI over the C SDK | vault/version surface |
+| Java | JNA over the C SDK | vault/version surface |
+| Kotlin | JNA over the C SDK | vault/version surface |
+| C# / .NET | P/Invoke over the C SDK | vault/version surface |
+| Swift | SPM system-library target over the C SDK | vault/version surface |
+| Dart | dart:ffi over the C SDK | vault/version surface |
 
 See each binding's README for its exact current API and toolchain requirements.
 
@@ -34,6 +40,6 @@ maturin develop
 
 ## Important boundary
 
-The existence of a binding in the repository does not mean it has already been published to a package registry. V2.0.0 GitHub release and downstream Rust/Python/SDK publication are separate release gates; registry publication is not implied by repository presence.
+The existence of a binding in the repository does not mean it has already been published to a package registry. Registry publication is not implied by repository presence: check the installation table in [INSTALLATION.md](INSTALLATION.md) for the current publication status of each channel.
 
-TypeScript/Java/Kotlin/C#/Swift/Dart remain CI/release-scope work rather than claiming local availability.
+The FFI bindings expose the operations the C SDK currently publishes (version, last error, vault creation and format version). More operations land as the C SDK grows; the bindings are intentionally thin so that no cryptography or business logic is duplicated outside the Rust core.

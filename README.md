@@ -302,13 +302,19 @@ The 4.1.0 stable line is published to the language package registries. The insta
 | Rust server | `cargo install nexusq-server` | Available — crates.io |
 | C / C++ SDK | `cargo cinstall -p nexusq-c` with [cargo-c], or build the C library from source with `cargo build -p nexusq-c` | Available — crates.io |
 | Python | `pip install nexusq` | Available — PyPI |
+| TypeScript / Node.js | `npm install nexusq` | Pending first npm publication — binding verified locally and wired into SDK CI (`bindings/typescript`) |
+| Java | dependency `io.github.lecodev26:nexusq` | Pending first Maven Central publication — binding verified locally and wired into SDK CI (`bindings/java`) |
+| Kotlin | artifact `io.github.lecodev26:nexusq-kotlin` | Pending first Maven Central publication — binding verified locally and wired into SDK CI (`bindings/kotlin`) |
+| C# / .NET | `dotnet add package Nexusq` | Pending first NuGet publication — binding verified locally and wired into SDK CI (`bindings/dotnet`) |
+| Swift | Swift Package Manager package at this repository (`bindings/swift`) | Pending first tagged release — binding verified locally and wired into SDK CI (`bindings/swift`) |
+| Dart / Flutter | `dart pub add nexusq` | Pending first pub.dev publication — binding verified locally and wired into SDK CI (`bindings/dart`) |
 | Go | `go get github.com/lecodev-26/nexus-q/bindings/go/nexusq` | Available — pkg.go.dev |
 | PHP | `composer require lecodev-26/nexusq` | Available — Packagist |
 | Ruby | `gem install nexusq` | Available — RubyGems.org |
 
 Notes:
 
-- The Go, PHP and Ruby bindings are thin FFI wrappers over the C SDK (`libnexusq`); build and install the C library first.
+- The Go, PHP, Ruby, TypeScript, Java (JNA), Kotlin (JNA) and Dart bindings are thin FFI wrappers over the C SDK (`libnexusq`); build and install the C library first. The C#/.NET binding uses P/Invoke and the Swift binding links the C SDK through a Swift Package Manager system-library target, so both need the C library built and on the loader path as well.
 - The Python package is a native extension module built from `crates/nexusq-py` (PyO3).
 - The C SDK is consumable directly from C and C++.
 - The GitHub release archive ships the CLI and server binaries, not the C SDK; build the C library from source or install it via cargo.

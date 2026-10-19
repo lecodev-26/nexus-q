@@ -1,0 +1,42 @@
+{
+  "name": "nexusq",
+  "version": "4.1.0",
+  "description": "Thin FFI bindings over the NEXUS-Q C SDK (libnexusq): post-quantum vault, version and error surface",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE-MIT",
+    "LICENSE-APACHE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "smoke": "node dist/smoke.js",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "nexus-q",
+    "nexusq",
+    "post-quantum",
+    "cryptography",
+    "ffi",
+    "vault"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lecodev-26/nexus-q",
+    "directory": "bindings/typescript"
+  },
+  "dependencies": {
+    "koffi": "^2.9.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  }
+}

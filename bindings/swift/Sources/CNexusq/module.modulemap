@@ -1,0 +1,5 @@
+module CNexusq {
+    header "shim.h"
+    link "nexusq"
+    export *
+}

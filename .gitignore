@@ -55,3 +55,17 @@ Thumbs.db
 # Local release packaging output
 dist/
 .github/scripts/__pycache__/
+
+# Node (TypeScript SDK)
+node_modules/
+
+# Dart SDK
+.dart_tool/
+.pub-cache/
+
+# Swift Package Manager
+.build/
+
+# .NET SDK
+bindings/dotnet/**/bin/
+bindings/dotnet/**/obj/

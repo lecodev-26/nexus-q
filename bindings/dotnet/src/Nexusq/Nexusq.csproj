@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <LangVersion>latest</LangVersion>
+    <PackageId>Nexusq</PackageId>
+    <Version>4.1.0</Version>
+    <Description>Thin P/Invoke bindings over the NEXUS-Q C SDK (libnexusq): post-quantum vault, version and error surface</Description>
+    <PackageLicenseExpression>MIT OR Apache-2.0</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/lecodev-26/nexus-q</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/lecodev-26/nexus-q</PackageProjectUrl>
+    <Authors>lecodev-26</Authors>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>
