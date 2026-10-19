@@ -561,7 +561,7 @@ dependencies = [
 
 [[package]]
 name = "nexusq-core"
-version = "2.0.0"
+version = "4.1.0"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -594,7 +594,7 @@ dependencies = [
 
 [[package]]
 name = "nexusq-kernels"
-version = "2.0.0"
+version = "4.1.0"
 
 [[package]]
 name = "nexusq-native-backend"
