@@ -177,8 +177,8 @@ fn main() {
     // gate matches AWS-LC (EVP context + output buffers kept outside the loop).
     let mut ct_buf = [0u8; kem_1024::CIPHERTEXT_LEN];
     let mut ss_buf = [0u8; 32];
-    let prepared_public1024 = kem_1024::PreparedPublicKey::from_bytes(&public1024)
-        .expect("prepared public key setup");
+    let prepared_public1024 =
+        kem_1024::PreparedPublicKey::from_bytes(&public1024).expect("prepared public key setup");
     prepared_public1024
         .encapsulate_prepared_into(&mut ct_buf, &mut ss_buf)
         .expect("prepared encaps setup");
