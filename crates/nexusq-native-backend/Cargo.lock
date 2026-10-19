@@ -25,9 +25,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.8.0"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6651c9ed80effdc7db0ff72512157f901af5e3549e341e24b1dd4887d836d838"
+checksum = "877bf67ac8e52449eb2f9e98a344ea163beb70dd1f9eebe3cc5357dcfeaee4df"
 dependencies = [
  "find-msvc-tools",
  "shlex",
@@ -102,9 +102,9 @@ dependencies = [
 
 [[package]]
 name = "find-msvc-tools"
-version = "0.1.14"
+version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aedcfb3409746eddb02b9e19ebda1c3394f759a152e48ee875a0844d1b955484"
+checksum = "1c66915cc5391097de7a2b0b972e8505aa33c0df401fd3a6811dbdb32881ba48"
 
 [[package]]
 name = "getrandom"
@@ -163,13 +163,25 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.190"
+version = "0.2.191"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce5d3ddc6d3fa000eb1536d85e147bfe31aacaba692ed6a876f95cb7c855be78"
+checksum = "65cd87c9a6d60536580b316ad985726104730a5151c99845f2490428ef91240a"
 
 [[package]]
-name = "ml-dsa"
-version = "0.1.1"
+name = "module-lattice"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c61b87c9683ab7cb1c6871d261ad5479b6b10ceb52c4352aaca3b5d35a8febe"
+dependencies = [
+ "ctutils",
+ "hybrid-array",
+ "num-traits",
+ "zeroize",
+]
+
+[[package]]
+name = "nexusq-ml-dsa"
+version = "4.1.0"
 dependencies = [
  "const-oid",
  "crypto-common",
@@ -183,8 +195,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "ml-kem"
-version = "0.3.2"
+name = "nexusq-ml-kem"
+version = "4.1.0"
 dependencies = [
  "hybrid-array",
  "kem",
@@ -196,23 +208,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "module-lattice"
-version = "0.2.3"
-dependencies = [
- "ctutils",
- "hybrid-array",
- "num-traits",
- "zeroize",
-]
-
-[[package]]
 name = "nexusq-native-backend"
 version = "0.1.0"
 dependencies = [
  "cc",
  "getrandom 0.3.4",
- "ml-dsa",
- "ml-kem",
+ "nexusq-ml-dsa",
+ "nexusq-ml-kem",
  "zeroize",
 ]
 

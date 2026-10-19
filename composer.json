@@ -1,0 +1,17 @@
+{
+    "name": "lecodev-26/nexusq",
+    "description": "PHP FFI bindings for NEXUS-Q (libnexusq), a post-quantum cryptographic security engine",
+    "type": "library",
+    "license": "MIT OR Apache-2.0",
+    "require": {
+        "php": ">=8.1",
+        "ext-ffi": "*"
+    },
+    "autoload": {
+        "classmap": ["bindings/php/"]
+    },
+    "support": {
+        "issues": "https://github.com/lecodev-26/nexus-q/issues",
+        "source": "https://github.com/lecodev-26/nexus-q"
+    }
+}

@@ -1,0 +1,34 @@
+name: Publish RubyGems
+
+# Builds and pushes the nexusq gem to RubyGems.org using Trusted Publishing
+# (OIDC). The pending trusted publisher must be registered on rubygems.org for
+# gem nexusq, owner lecodev-26, repository nexus-q, and this exact workflow
+# filename before the first run.
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+
+      - name: Build gem
+        run: gem build bindings/ruby/nexusq.gemspec
+
+      - name: Push to RubyGems.org
+        uses: rubygems/release-gem@v1
+        with:
+          working-directory: bindings/ruby
