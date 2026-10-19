@@ -109,8 +109,22 @@ jobs:
         run: |
           NEXUSQ_LIBRARY=$GITHUB_WORKSPACE/target/release/libnexusq.so \
             dotnet run --project bindings/dotnet/examples/smoke
-      - name: Pack NuGet package
-        run: dotnet pack bindings/dotnet/src/Nexusq -c Release
+      - name: Pack NuGet package with current-platform native asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p bindings/dotnet/src/Nexusq/runtimes/linux-x64/native
+          cp target/release/libnexusq.so bindings/dotnet/src/Nexusq/runtimes/linux-x64/native/
+          dotnet pack bindings/dotnet/src/Nexusq -c Release
+          package_dir="$GITHUB_WORKSPACE/bindings/dotnet/src/Nexusq/bin/Release"
+          package=$(find "$package_dir" -maxdepth 1 -name '*.nupkg' -print -quit)
+          unzip -l "$package" | grep -F 'runtimes/linux-x64/native/libnexusq.so'
+          mkdir -p /tmp/nexusq-clean-consumer
+          dotnet new console --framework net9.0 --output /tmp/nexusq-clean-consumer --no-restore
+          printf 'Console.WriteLine(Nexusq.Version());\n' > /tmp/nexusq-clean-consumer/Program.cs
+          dotnet add /tmp/nexusq-clean-consumer/nexusq-clean-consumer.csproj package Nexusq --version 4.1.0 --source "$package_dir"
+          actual=$(dotnet run --project /tmp/nexusq-clean-consumer/nexusq-clean-consumer.csproj)
+          test "$actual" = "4.1.0"
 
   swift:
     name: Swift Package bindings

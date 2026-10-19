@@ -18,6 +18,9 @@
 
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
+    <!-- Native assets are staged by the release workflow per supported RID.
+         NuGet's native runtime convention lets .NET resolve them automatically. -->
+    <None Include="runtimes/**/*" Pack="true" PackagePath="%(Identity)" />
   </ItemGroup>
 
 </Project>

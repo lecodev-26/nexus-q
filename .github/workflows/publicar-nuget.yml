@@ -11,7 +11,14 @@ permissions:
   contents: read
 
 jobs:
+  native-runtime:
+    name: Build RID-specific native runtime assets
+    uses: ./.github/workflows/native-runtime.yml
+    permissions:
+      contents: read
+
   publish:
+    needs: native-runtime
     permissions:
       contents: read
       id-token: write
@@ -23,8 +30,38 @@ jobs:
         with:
           dotnet-version: '9.x'
 
-      - name: Pack
+      - name: Download validated native runtime artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: nexusq-native-runtime-*
+          path: native-runtimes
+          merge-multiple: false
+
+      - name: Stage native assets in NuGet RID layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=bindings/dotnet/src/Nexusq/runtimes
+          mkdir -p "$root/linux-x64/native" "$root/linux-arm64/native" \
+            "$root/osx-arm64/native" "$root/win-x64/native"
+          cp native-runtimes/nexusq-native-runtime-x86_64-unknown-linux-gnu/lib/libnexusq.so "$root/linux-x64/native/"
+          cp native-runtimes/nexusq-native-runtime-aarch64-unknown-linux-gnu/lib/libnexusq.so "$root/linux-arm64/native/"
+          cp native-runtimes/nexusq-native-runtime-aarch64-apple-darwin/lib/libnexusq.dylib "$root/osx-arm64/native/"
+          cp native-runtimes/nexusq-native-runtime-x86_64-pc-windows-msvc/lib/nexusq.dll "$root/win-x64/native/"
+
+      - name: Pack NuGet package with native assets
         run: dotnet pack bindings/dotnet/src/Nexusq -c Release
+
+      - name: Verify NuGet package contains all supported native RIDs
+        shell: bash
+        run: |
+          set -euo pipefail
+          package=$(find bindings/dotnet/src/Nexusq/bin/Release -maxdepth 1 -name '*.nupkg' -print -quit)
+          test -n "$package"
+          unzip -l "$package" | grep -F 'runtimes/linux-x64/native/libnexusq.so'
+          unzip -l "$package" | grep -F 'runtimes/linux-arm64/native/libnexusq.so'
+          unzip -l "$package" | grep -F 'runtimes/osx-arm64/native/libnexusq.dylib'
+          unzip -l "$package" | grep -F 'runtimes/win-x64/native/nexusq.dll'
 
       - name: NuGet login (Trusted Publishing via OIDC)
         uses: NuGet/login@v1
