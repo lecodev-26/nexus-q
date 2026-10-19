@@ -81,7 +81,7 @@ jobs:
               "default_provider": "rustcrypto",
               "experimental": False,
               "feature": "default",
-              "automatic_runtime_download": False,
+              "automatic_runtime_download": True,
               "note": "Build artifact for SDK packaging; not an independently audited production release."
           }
           Path("native-runtime/runtime.json").write_text(json.dumps(manifest, indent=2) + "\n")
