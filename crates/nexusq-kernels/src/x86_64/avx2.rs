@@ -49,9 +49,12 @@ fn mldsa_mul_reduce(lhs: u32, rhs: u32) -> u32 {
     value - (MLDSA_Q & 0_u32.wrapping_sub(u32::from(value >= MLDSA_Q)))
 }
 
-#[inline]
-#[target_feature(enable = "avx2")]
 // SAFETY: callers must execute this helper only after runtime AVX2 detection.
+// On Rust 1.85.1 (the pinned release toolchain) the intrinsic calls below
+// require an unsafe block (unsafe_op_in_unsafe_fn is denied). On newer
+// toolchains they are safe within this AVX2-targeted function, so the
+// block is redundant there; silence unused_unsafe for cross-version builds.
+#[allow(unused_unsafe)]
 unsafe fn mldsa_add_mod(lhs: __m256i, rhs: __m256i) -> __m256i {
     unsafe {
         let sum = _mm256_add_epi32(lhs, rhs);
@@ -63,9 +66,12 @@ unsafe fn mldsa_add_mod(lhs: __m256i, rhs: __m256i) -> __m256i {
     }
 }
 
-#[inline]
-#[target_feature(enable = "avx2")]
 // SAFETY: callers must execute this helper only after runtime AVX2 detection.
+// On Rust 1.85.1 (the pinned release toolchain) the intrinsic calls below
+// require an unsafe block (unsafe_op_in_unsafe_fn is denied). On newer
+// toolchains they are safe within this AVX2-targeted function, so the
+// block is redundant there; silence unused_unsafe for cross-version builds.
+#[allow(unused_unsafe)]
 unsafe fn mldsa_sub_mod(lhs: __m256i, rhs: __m256i) -> __m256i {
     unsafe {
         let difference = _mm256_sub_epi32(lhs, rhs);
@@ -657,10 +663,12 @@ unsafe fn reduce_mlkem_product(value: __m256i) -> __m256i {
     }
 }
 
-// SAFETY: The caller must execute with AVX2 enabled; callers are inside an
-// AVX2-targeted kernel after the public wrapper's runtime feature check.
-#[target_feature(enable = "avx2")]
 #[inline]
+// On Rust 1.85.1 (the pinned release toolchain) the intrinsic calls below
+// require an unsafe block (unsafe_op_in_unsafe_fn is denied). On newer
+// toolchains they are safe within this AVX2-targeted function, so the
+// block is redundant there; silence unused_unsafe for cross-version builds.
+#[allow(unused_unsafe)]
 unsafe fn rotate_left_64(value: __m256i, amount: u32) -> __m256i {
     unsafe {
         let left = _mm256_sllv_epi64(value, _mm256_set1_epi64x(i64::from(amount)));
