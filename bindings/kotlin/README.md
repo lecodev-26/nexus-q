@@ -2,8 +2,8 @@
 
 Kotlin bindings for NEXUS-Q. A thin wrapper over the
 [C SDK](../../crates/nexusq-c) using [JNA](https://github.com/java-native-access/jna).
-Published under the artifact coordinates `io.github.lecodev26:nexusq-kotlin`.
-Its API surface is independent of the Java binding (`io.github.lecodev26:nexusq`).
+Published under the artifact coordinates `io.github.lecodev-26:nexusq-kotlin`.
+Its API surface is independent of the Java binding (`io.github.lecodev-26:nexusq`).
 It does not reimplement anything: every call goes through `libnexusq`.
 
 ## Requirements

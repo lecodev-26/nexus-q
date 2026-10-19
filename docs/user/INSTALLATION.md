@@ -13,8 +13,8 @@ NEXUS-Q can be installed from the language package registries (4.1.0 stable line
 | C / C++ SDK | `cargo cinstall -p nexusq-c` (requires [cargo-c](https://github.com/lu-zero/cargo-c)), or build the C library from source | Available — crates.io |
 | Python | `pip install nexusq` | Available — PyPI |
 | TypeScript / Node.js | `npm install nexusq` | Pending first npm publication — binding verified locally and wired into SDK CI (`bindings/typescript`) |
-| Java | dependency `io.github.lecodev26:nexusq` | Pending first Maven Central publication — binding verified locally and wired into SDK CI (`bindings/java`) |
-| Kotlin | artifact `io.github.lecodev26:nexusq-kotlin` | Pending first Maven Central publication — binding verified locally and wired into SDK CI (`bindings/kotlin`) |
+| Java | dependency `io.github.lecodev-26:nexusq` | Pending first Maven Central publication — binding verified locally and wired into SDK CI (`bindings/java`) |
+| Kotlin | artifact `io.github.lecodev-26:nexusq-kotlin` | Pending first Maven Central publication — binding verified locally and wired into SDK CI (`bindings/kotlin`) |
 | C# / .NET | `dotnet add package Nexusq` | Pending first NuGet publication — binding verified locally and wired into SDK CI (`bindings/dotnet`) |
 | Swift | Swift Package Manager package at this repository (`bindings/swift`) | Pending first tagged release — binding verified locally and wired into SDK CI (`bindings/swift`) |
 | Dart / Flutter | `dart pub add nexusq` | Pending first pub.dev publication — binding verified locally and wired into SDK CI (`bindings/dart`) |
