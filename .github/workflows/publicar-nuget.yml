@@ -1,9 +1,9 @@
 name: Publish NuGet
 
 # Pushes the Nexusq .NET binding package (bindings/dotnet) to nuget.org.
-# Requires the NUGET_API_KEY repository secret. The corresponding API key
-# on nuget.org is bound to this workflow file and repository, so it can
-# only be used from this workflow.
+# The corresponding API key policy on nuget.org is bound to this exact
+# workflow file and repository (GitHub Actions), so the push is only
+# accepted from this workflow.
 
 on:
   workflow_dispatch:
@@ -25,10 +25,7 @@ jobs:
         run: dotnet pack bindings/dotnet/src/Nexusq -c Release
 
       - name: Push to nuget.org
-        env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: |
           dotnet nuget push bindings/dotnet/src/Nexusq/bin/Release/*.nupkg \
             --source https://api.nuget.org/v3/index.json \
-            --api-key "$NUGET_API_KEY" \
             --skip-duplicate
