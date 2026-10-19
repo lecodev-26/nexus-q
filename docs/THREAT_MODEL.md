@@ -18,6 +18,26 @@ must be validated against this document.
 
 ---
 
+## Native runtime distribution and supply-chain boundary
+
+Prebuilt SDK runtime binaries are executable code and therefore part of the
+software supply chain. The SDK release pipeline binds each runtime to a
+versioned release, checks the provider metadata, and publishes SHA-256 checksums;
+SDK loaders verify the downloaded bytes before loading them. This checksum is
+published alongside the binary on the same GitHub release endpoint, so it
+protects against accidental corruption and many in-transit integrity failures
+but is not an independent signature or proof of publisher identity. Consumers
+with stricter supply-chain requirements should verify GitHub build provenance
+and release policy independently. A compromised release account or build
+runner remains in scope as a supply-chain risk.
+
+Ordinary SDK runtime artifacts use the default RustCrypto provider and must
+report `experimental=false`. Experimental native-backend artifacts are produced
+by a separate CI workflow and must not be silently substituted into normal SDK
+packages. The native backend remains opt-in and unaudited; runtime availability
+is not a claim of security certification, production readiness, or FIPS
+validation.
+
 ## 2. Assets
 
 We protect the following assets, in order of sensitivity:

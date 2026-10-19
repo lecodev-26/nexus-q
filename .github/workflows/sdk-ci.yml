@@ -169,6 +169,13 @@ jobs:
           NEXUSQ_LIBRARY: ${{ github.workspace }}/target/release/libnexusq.so
         run: cd bindings/dart && dart run example/smoke.dart
 
+  sdk-runtime-artifacts:
+    name: Default-provider SDK runtime matrix (manual fast validation only)
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/sdk-runtime.yml
+    permissions:
+      contents: read
+
   backend-feature-contract:
     name: Backend feature propagation and capability contract
     runs-on: ubuntu-latest
