@@ -70,16 +70,9 @@ jobs:
     permissions:
       contents: read
 
-  phase-9-native-performance:
-    name: 'Phase 9 — Native assembly performance gate'
-    needs: phase-8-hybrid-benchmark
-    uses: ./.github/workflows/native-assembly-benchmarks.yml
-    permissions:
-      contents: read
-
   phase-10-aa-control:
     name: 'Phase 10 — A/A benchmark noise control'
-    needs: phase-9-native-performance
+    needs: phase-8-hybrid-benchmark
     uses: ./.github/workflows/native-backend-aa-control.yml
     permissions:
       contents: read

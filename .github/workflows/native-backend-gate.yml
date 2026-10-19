@@ -1,8 +1,7 @@
 name: NEXUS-Q Native Backend Gate (experimental)
 
 # Isolated workflow for the experimental Rust + C + assembly backend
-# (crates/nexusq-native-backend). It does not modify or replace
-# native-assembly-benchmarks.yml. The official verdict uses the unmodified
+# (crates/nexusq-native-backend). The official verdict uses the unmodified
 # arena/scripts/evaluate_native_assembly_gate.py (1.5x, median AND p95, nine
 # operations, three alternating rounds) on every replica.
 
@@ -179,7 +178,7 @@ jobs:
           cc --version | tee $out/cc.txt
           git rev-parse HEAD | tee $out/revision.txt
           sha256sum arena/runners/nexusq-native/Cargo.lock crates/nexusq-native-backend/Cargo.lock | tee $out/locks.sha256
-      - name: Fetch and build pinned AWS-LC (same commands as native-assembly-benchmarks.yml)
+      - name: Fetch and build pinned AWS-LC comparator
         run: |
           git init .arena-aws-lc
           git -C .arena-aws-lc remote add origin https://github.com/aws/aws-lc.git
