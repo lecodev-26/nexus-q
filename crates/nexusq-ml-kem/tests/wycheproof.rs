@@ -62,11 +62,17 @@ enum ExpectedResult {
 
 macro_rules! load_json_file {
     ($json_file:expr) => {{
-        let path = format!("../thirdparty/wycheproof/testvectors_v1/{}", $json_file);
-        let data_file = File::open(&path)
-            .expect("failed to open data file (try running `git submodule update --init`)");
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../vendor/thirdparty/wycheproof/testvectors_v1")
+            .join($json_file);
+        let data_file = File::open(&path).unwrap_or_else(|err| {
+            panic!(
+                "failed to open Wycheproof data file {}: {err}",
+                path.display()
+            )
+        });
 
-        println!("Loading file: {path}");
+        println!("Loading file: {}", path.display());
 
         let tests: TestFile = serde_json::from_reader(data_file).expect("invalid test JSON");
         println!("{} ({})", tests.algorithm, tests.schema);
