@@ -4,6 +4,8 @@ name: Publish Python
 # crates/nexusq-py with maturin) using PyPI Trusted Publishing (OIDC).
 # The pending publisher must be registered on pypi.org for this repository
 # and this exact workflow filename before the first run.
+# Wheels are built on a matrix and uploaded as artifacts; a single Linux job
+# downloads them and publishes (pypa/gh-action-pypi-publish requires Linux).
 # Note: abi3-py314 builds require CPython 3.14; the wheels support Python >= 3.14.
 
 on:
@@ -16,7 +18,6 @@ jobs:
     name: Build sdist
     runs-on: ubuntu-latest
     permissions:
-      id-token: write
       contents: read
     steps:
       - name: Checkout
@@ -37,22 +38,22 @@ jobs:
         working-directory: crates/nexusq-py
         run: maturin sdist --out dist
 
-      - name: Publish sdist to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+      - name: Upload sdist artifact
+        uses: actions/upload-artifact@v4
         with:
-          packages-dir: crates/nexusq-py/dist
-          skip-existing: true
+          name: sdist
+          path: crates/nexusq-py/dist/
+          if-no-files-found: error
 
   wheels:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-13, windows-latest]
-    permissions:
-      id-token: write
-      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -72,8 +73,29 @@ jobs:
         working-directory: crates/nexusq-py
         run: maturin build --release --out dist
 
-      - name: Publish wheels to PyPI
+      - name: Upload wheels artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: crates/nexusq-py/dist/
+          if-no-files-found: error
+
+  publish:
+    name: Publish to PyPI
+    needs: [sdist, wheels]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: crates/nexusq-py/dist
+          packages-dir: dist
           skip-existing: true
