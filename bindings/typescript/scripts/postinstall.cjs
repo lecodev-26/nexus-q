@@ -29,14 +29,14 @@ const destination = path.join(__dirname, "..", "vendor", localName);
 const temp = `${destination}.download`;
 
 async function main() {
-  const checksumsResponse = await fetch(`${base}/NATIVE-RUNTIME-SHA256SUMS`);
+  const checksumsResponse = await fetch(`${base}/NATIVE-RUNTIME-SHA256SUMS`, { signal: AbortSignal.timeout(30_000) });
   if (!checksumsResponse.ok) throw new Error(`Cannot fetch NEXUS-Q ${pkg.version} runtime checksums (HTTP ${checksumsResponse.status}).`);
   const checksums = await checksumsResponse.text();
   const line = checksums.split(/\r?\n/).find((entry) => entry.trim().endsWith(`  ${asset}`));
   if (!line) throw new Error(`NEXUS-Q ${pkg.version} release has no checksum for ${asset}.`);
   const expected = line.trim().split(/\s+/)[0].toLowerCase();
 
-  const response = await fetch(`${base}/${asset}`);
+  const response = await fetch(`${base}/${asset}`, { signal: AbortSignal.timeout(60_000) });
   if (!response.ok) throw new Error(`Cannot fetch NEXUS-Q native runtime ${asset} (HTTP ${response.status}).`);
   const bytes = Buffer.from(await response.arrayBuffer());
   const actual = crypto.createHash("sha256").update(bytes).digest("hex");

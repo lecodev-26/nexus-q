@@ -47,11 +47,11 @@ module Nexusq
     end
 
     base = "https://github.com/lecodev-26/nexus-q/releases/download/v#{RUNTIME_VERSION}/"
-    checksums = URI.open("#{base}NATIVE-RUNTIME-SHA256SUMS", "User-Agent" => "NEXUS-Q Ruby SDK", &:read)
+    checksums = URI.open("#{base}NATIVE-RUNTIME-SHA256SUMS", "User-Agent" => "NEXUS-Q Ruby SDK", open_timeout: 10, read_timeout: 30, &:read)
     expected = checksums.lines.find { |line| line.strip.end_with?("  #{asset}") }&.split&.first
     raise LoadError, "No published checksum for #{asset}" unless expected
 
-    bytes = URI.open("#{base}#{asset}", "User-Agent" => "NEXUS-Q Ruby SDK", &:read)
+    bytes = URI.open("#{base}#{asset}", "User-Agent" => "NEXUS-Q Ruby SDK", open_timeout: 10, read_timeout: 60, &:read)
     actual = Digest::SHA256.hexdigest(bytes)
     raise LoadError, "SHA-256 mismatch for #{asset}; refusing to load an unverified runtime" unless actual == expected.downcase
 

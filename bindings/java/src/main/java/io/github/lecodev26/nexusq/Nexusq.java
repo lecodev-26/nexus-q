@@ -61,7 +61,8 @@ public final class Nexusq {
                 if (expected.equals(sha256(Files.readAllBytes(library)))) return library.toAbsolutePath().toString();
             }
             String base = "https://github.com/lecodev-26/nexus-q/releases/download/v" + RUNTIME_VERSION + "/";
-            HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.ALWAYS).build();
+            HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.ALWAYS)
+                    .connectTimeout(java.time.Duration.ofSeconds(10)).build();
             HttpResponse<byte[]> sums = get(client, base + "NATIVE-RUNTIME-SHA256SUMS");
             String expected = new String(sums.body(), StandardCharsets.UTF_8).lines()
                     .filter(line -> line.trim().endsWith("  " + asset.assetName))
@@ -89,7 +90,7 @@ public final class Nexusq {
     private static HttpResponse<byte[]> get(HttpClient client, String url)
             throws IOException, InterruptedException {
         HttpResponse<byte[]> response = client.send(
-                HttpRequest.newBuilder(URI.create(url)).GET().build(), HttpResponse.BodyHandlers.ofByteArray());
+                HttpRequest.newBuilder(URI.create(url)).timeout(java.time.Duration.ofSeconds(60)).GET().build(), HttpResponse.BodyHandlers.ofByteArray());
         if (response.statusCode() != 200) throw new IOException("HTTP " + response.statusCode() + " downloading " + url);
         return response;
     }

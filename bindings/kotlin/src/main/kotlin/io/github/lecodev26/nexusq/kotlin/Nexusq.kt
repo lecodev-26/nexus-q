@@ -59,7 +59,8 @@ object Nexusq {
                 if (expected == sha256(Files.readAllBytes(library))) return library.toAbsolutePath().toString()
             }
             val base = "https://github.com/lecodev-26/nexus-q/releases/download/v$RUNTIME_VERSION/"
-            val client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.ALWAYS).build()
+            val client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.ALWAYS)
+                .connectTimeout(java.time.Duration.ofSeconds(10)).build()
             val sums = get(client, base + "NATIVE-RUNTIME-SHA256SUMS")
             val expected = String(sums, StandardCharsets.UTF_8).lineSequence()
                 .firstOrNull { it.trim().endsWith("  " + asset.assetName) }
@@ -85,7 +86,7 @@ object Nexusq {
     }
 
     private fun get(client: HttpClient, url: String): ByteArray {
-        val response = client.send(HttpRequest.newBuilder(URI.create(url)).GET().build(), HttpResponse.BodyHandlers.ofByteArray())
+        val response = client.send(HttpRequest.newBuilder(URI.create(url)).timeout(java.time.Duration.ofSeconds(60)).GET().build(), HttpResponse.BodyHandlers.ofByteArray())
         if (response.statusCode() != 200) throw IOException("HTTP ${response.statusCode()} downloading $url")
         return response.body()
     }

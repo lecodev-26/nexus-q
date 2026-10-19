@@ -50,7 +50,7 @@ final class Nexusq
         }
 
         $base = 'https://github.com/lecodev-26/nexus-q/releases/download/v' . self::RUNTIME_VERSION . '/';
-        $context = stream_context_create(['http' => ['follow_location' => 1, 'user_agent' => 'NEXUS-Q PHP SDK']]);
+        $context = stream_context_create(['http' => ['follow_location' => 1, 'user_agent' => 'NEXUS-Q PHP SDK', 'timeout' => 60]]);
         $checksums = @file_get_contents($base . 'NATIVE-RUNTIME-SHA256SUMS', false, $context);
         if ($checksums === false) {
             throw new RuntimeException('Unable to download NEXUS-Q runtime checksums; check network access or set NEXUSQ_LIBRARY.');

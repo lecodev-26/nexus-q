@@ -46,8 +46,8 @@ if ! verify_runtime; then
   mkdir -p "$CACHE_ROOT"
   TEMP="$(mktemp -d)"
   trap 'rm -rf "$TEMP"' EXIT
-  curl -fsSL "$BASE/NATIVE-RUNTIME-SHA256SUMS" -o "$TEMP/release-sums"
-  curl -fsSL "$BASE/$ARCHIVE" -o "$TEMP/$ARCHIVE"
+  curl -fsSL --connect-timeout 10 --max-time 30 "$BASE/NATIVE-RUNTIME-SHA256SUMS" -o "$TEMP/release-sums"
+  curl -fsSL --connect-timeout 10 --max-time 120 "$BASE/$ARCHIVE" -o "$TEMP/$ARCHIVE"
   EXPECTED="$(awk -v file="$ARCHIVE" '$2 == file {print $1}' "$TEMP/release-sums")"
   [[ -n "$EXPECTED" ]] || { echo "No release checksum found for $ARCHIVE" >&2; exit 1; }
   ACTUAL="$(sha256_file "$TEMP/$ARCHIVE")"
