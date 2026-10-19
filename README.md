@@ -12,7 +12,7 @@
 
 </div>
 
-> **Current project status (2026-10-19):** the workspace is versioned **4.1.0 — the stable line release** of the V4 work, ready for the final independent audit. V1 (`v1.0.0`), V2 (`v2.0.0`) and V3 (`v3-engineering-2026-10-09`) are retained engineering baselines; V4 native-backend work is integrated into `main` by [PR #54](https://github.com/lecodev-26/nexus-q/pull/54) at commit [`1c03968`](https://github.com/lecodev-26/nexus-q/commit/1c03968e9b8d5578020e571e2f25edc5a7165607) and was tagged [`v4-engineering-2026-10-16`](https://github.com/lecodev-26/nexus-q/tree/v4-engineering-2026-10-16) as an engineering snapshot before this release line. The official 1.5× median-and-p95 performance gate passed in the reviewed native-backend CI, and PR [#55](https://github.com/lecodev-26/nexus-q/pull/55) wires the backend into `nexusq-core` behind an explicitly opt-in `native-backend` feature. **The native backend remains experimental: the default `nexusq-core` build, the CLI and the SDKs still use RustCrypto for production call paths; the native path is opt-in only and is not enabled by default anywhere.** The production-path benchmark (native vs RustCrypto vs AWS-LC) passed the unchanged 1.5× median-and-p95 gate. Do not infer an independent audit, FIPS 140-3 validation, production readiness, or v1.0 release readiness. Evaluation commands and feature scope are documented in [`docs/performance/NATIVE_BACKEND_FEATURE.md`](docs/performance/NATIVE_BACKEND_FEATURE.md). See [`docs/performance/NATIVE_BACKEND.md`](docs/performance/NATIVE_BACKEND.md) and [`docs/V3_V4_ROADMAP.md`](docs/V3_V4_ROADMAP.md). Registry publication of the 4.1.0 line (crates.io, PyPI, Go, PHP, Ruby and the C SDK) is in progress; see the Installation section.
+> **Current project status (2026-10-19):** the workspace is versioned **4.1.0 — the stable line release** of the V4 work, ready for the final independent audit. V1 (`v1.0.0`), V2 (`v2.0.0`) and V3 (`v3-engineering-2026-10-09`) are retained engineering baselines; V4 native-backend work is integrated into `main` by [PR #54](https://github.com/lecodev-26/nexus-q/pull/54) at commit [`1c03968`](https://github.com/lecodev-26/nexus-q/commit/1c03968e9b8d5578020e571e2f25edc5a7165607) and was tagged [`v4-engineering-2026-10-16`](https://github.com/lecodev-26/nexus-q/tree/v4-engineering-2026-10-16) as an engineering snapshot before this release line. The official 1.5× median-and-p95 performance gate passed in the reviewed native-backend CI, and PR [#55](https://github.com/lecodev-26/nexus-q/pull/55) wires the backend into `nexusq-core` behind an explicitly opt-in `native-backend` feature. **The native backend remains experimental: the default `nexusq-core` build, the CLI and the SDKs still use RustCrypto for production call paths; the native path is opt-in only and is not enabled by default anywhere.** The production-path benchmark (native vs RustCrypto vs AWS-LC) passed the unchanged 1.5× median-and-p95 gate. Do not infer an independent audit, FIPS 140-3 validation, production readiness, or v1.0 release readiness. Evaluation commands and feature scope are documented in [`docs/performance/NATIVE_BACKEND_FEATURE.md`](docs/performance/NATIVE_BACKEND_FEATURE.md). See [`docs/performance/NATIVE_BACKEND.md`](docs/performance/NATIVE_BACKEND.md) and [`docs/V3_V4_ROADMAP.md`](docs/V3_V4_ROADMAP.md). Registry publication of the 4.1.0 line (crates.io, PyPI, Go, PHP, Ruby and the C SDK) is planned but not yet completed; see the Installation section.
 
 <div align="center">
 
@@ -292,24 +292,25 @@ The generated archive contains the CLI, server, non-secret configuration example
 
 ## Installation
 
-The 4.1.0 stable line is being published to the language package registries. The supported installation channel for each SDK:
+The 4.1.0 stable line is planned for publication to the language package registries; nothing has been published yet. The intended installation channel for each SDK:
 
 | Channel | Install | Status |
 |---|---|---|
-| Rust library | `cargo add nexusq-core` | Publication in progress — crates.io |
-| Rust CLI | `cargo install nexusq-cli` | Publication in progress — crates.io |
-| Rust server | `cargo install nexusq-server` | Publication in progress — crates.io |
-| C / C++ SDK | `cargo cinstall -p nexusq-c` with [cargo-c](https://github.com/lu-zero/cargo-c), or the GitHub release tarball | Publication in progress — crates.io |
-| Python | `pip install nexusq` | Publication in progress — PyPI |
-| Go | `go get github.com/lecodev-26/nexus-q/bindings/go/nexusq` | Publication in progress — pkg.go.dev |
-| PHP | `composer require lecodev-26/nexusq` | Publication in progress — Packagist |
-| Ruby | `gem install nexusq` | Publication in progress — RubyGems.org |
+| Rust library | `cargo add nexusq-core` | Planned — crates.io |
+| Rust CLI | `cargo install nexusq-cli` | Planned — crates.io |
+| Rust server | `cargo install nexusq-server` | Planned — crates.io |
+| C / C++ SDK | `cargo cinstall -p nexusq-c` with [cargo-c], or build the C library from source with `cargo build -p nexusq-c` | Planned — crates.io |
+| Python | `pip install nexusq` | Planned — PyPI |
+| Go | `go get github.com/lecodev-26/nexus-q/bindings/go/nexusq` | Planned — pkg.go.dev |
+| PHP | `composer require lecodev-26/nexusq` | Planned — Packagist |
+| Ruby | `gem install nexusq` | Planned — RubyGems.org |
 
 Notes:
 
 - The Go, PHP and Ruby bindings are thin FFI wrappers over the C SDK (`libnexusq`); build and install the C library first.
 - The Python package is a native extension module built from `crates/nexusq-py` (PyO3).
 - The C SDK is consumable directly from C and C++.
+- The GitHub release archive ships the CLI and server binaries, not the C SDK; build the C library from source or install it via cargo.
 - Registry availability is a distribution channel, not a validation claim; see the security and assurance section below.
 
 <div align="center">

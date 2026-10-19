@@ -1,21 +1,21 @@
 # Installation
 
-NEXUS-Q can be installed from the language package registries (publication of the 4.1.0 stable line in progress) or built from source.
+NEXUS-Q can be built from source; publication of the 4.1.0 stable line to the language package registries is planned but not yet completed.
 
-## From package registries
+## From package registries (planned)
 
 | Channel | Install | Status |
 |---|---|---|
-| Rust library | `cargo add nexusq-core` | Publication in progress — crates.io |
-| Rust CLI | `cargo install nexusq-cli` | Publication in progress — crates.io |
-| Rust server | `cargo install nexusq-server` | Publication in progress — crates.io |
-| C / C++ SDK | `cargo cinstall -p nexusq-c` (requires [cargo-c](https://github.com/lu-zero/cargo-c)), or the GitHub release tarball | Publication in progress — crates.io |
-| Python | `pip install nexusq` | Publication in progress — PyPI |
-| Go | `go get github.com/lecodev-26/nexus-q/bindings/go/nexusq` | Publication in progress — pkg.go.dev |
-| PHP | `composer require lecodev-26/nexusq` | Publication in progress — Packagist |
-| Ruby | `gem install nexusq` | Publication in progress — RubyGems.org |
+| Rust library | `cargo add nexusq-core` | Planned — crates.io |
+| Rust CLI | `cargo install nexusq-cli` | Planned — crates.io |
+| Rust server | `cargo install nexusq-server` | Planned — crates.io |
+| C / C++ SDK | `cargo cinstall -p nexusq-c` (requires [cargo-c](https://github.com/lu-zero/cargo-c)), or build the C library from source | Planned — crates.io |
+| Python | `pip install nexusq` | Planned — PyPI |
+| Go | `go get github.com/lecodev-26/nexus-q/bindings/go/nexusq` | Planned — pkg.go.dev |
+| PHP | `composer require lecodev-26/nexusq` | Planned — Packagist |
+| Ruby | `gem install nexusq` | Planned — RubyGems.org |
 
-The Go, PHP and Ruby bindings are thin FFI wrappers over the C SDK (`libnexusq`); build and install the C library first. The Python package is a native extension module built from `crates/nexusq-py` (PyO3).
+The Go, PHP and Ruby bindings are thin FFI wrappers over the C SDK (`libnexusq`); build and install the C library first. The Python package is a native extension module built from `crates/nexusq-py` (PyO3). The GitHub release archive ships the CLI and server binaries, not the C SDK.
 
 ## From source
 
@@ -64,4 +64,4 @@ Before starting the server:
 5. Keep the server bound to loopback unless a trusted TLS termination layer is present.
 6. Configure a supervisor to allow graceful SIGTERM/SIGINT shutdown.
 
-Docker, systemd, .deb, .rpm, and registry publication are not required by the current deployment boundary. For the supported registry installation channels of the 4.1.0 line see the table above; their availability does not change the deployment boundary or imply any validation claim.
+Docker, systemd, .deb, .rpm, and registry publication are not required by the current deployment boundary. For the planned registry installation channels of the 4.1.0 line see the table above; their availability does not change the deployment boundary or imply any validation claim.
