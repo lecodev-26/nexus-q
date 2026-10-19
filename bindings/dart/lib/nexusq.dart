@@ -31,7 +31,7 @@ typedef _VaultFormatVersionDart = int Function(Pointer<Utf8> path);
 
 final DynamicLibrary _lib = () {
   final fromEnv = Platform.environment['NEXUSQ_LIBRARY'];
-  if (fromEnv != null && fromEnv.isNotEmpty) return DynamicLibrary.open(fromEnv);
+  if (fromEnv != null && fromEnv.isNotEmpty) return _openLibrary(fromEnv);
 
   if (Platform.isLinux) {
     if (File('/lib/ld-musl-x86_64.so.1').existsSync() ||
