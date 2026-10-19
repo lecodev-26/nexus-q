@@ -73,3 +73,29 @@ LD_LIBRARY_PATH=target/debug /tmp/nexusq-c-smoke
 
 More operations will be added as the core public API and Phase 13 SDK surface
 grow.
+
+## Sensitive data handling and zeroization
+
+The C ABI does **not** implement cryptographic operations itself. All secret
+material (passwords, key material, intermediate buffers) is owned and managed
+by `nexusq-core`.
+
+Callers **must**:
+
+- Treat every password / key buffer passed into the ABI as sensitive.
+- Zeroize their own copies of secrets as soon as they are no longer required
+  (for example with explicit `memset_s` / `SecureZeroMemory` or equivalent).
+- Never log, print, or persist the contents of `nexusq_last_error_message()`
+  when the error may contain residual diagnostic data derived from secrets.
+
+The library:
+
+- Uses `Zeroizing` / `zeroize` features on the Rust side for key material and
+  temporary buffers inside the core.
+- Frees C strings allocated by the library via `nexusq_string_free()`.
+- Does not guarantee that the entire process address space is scrubbed; the
+  C binding is a thin translation layer.
+
+These contracts are part of the security boundary of the C SDK. Future ABI
+additions that return or accept key material will document explicit ownership
+and zeroization requirements.
