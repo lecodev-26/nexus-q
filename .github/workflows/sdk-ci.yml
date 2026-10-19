@@ -192,20 +192,13 @@ jobs:
           test "$(cargo run -q -p nexusq-cli --locked -- backend --output json | python3 -c 'import json,sys; print(json.load(sys.stdin)["name"])')" = rustcrypto
       - name: Check native feature is forwarded by all entry points
         run: |
-          cargo check -p nexusq-core --locked --features native-backend
-          cargo check -p nexusq-cli --locked --features native-backend
-          cargo check -p nexusq-server --locked --features native-backend
-          cargo check -p nexusq-c --locked --features native-backend
-          cargo check -p nexusq-py --locked --features native-backend
+          cargo check -p nexusq-core -p nexusq-cli -p nexusq-server -p nexusq-c -p nexusq-py --locked --features native-backend
           cargo test -p nexusq-core --locked --features native-backend backend_info_tests
           cargo test -p nexusq-c --locked --features native-backend backend_metadata_tests
           cargo test -p nexusq-cli --locked --features native-backend --test cli_e2e backend_command_reports_build_time_provider_as_json
       - name: Check portable native feature propagation
         run: |
-          cargo check -p nexusq-cli --locked --features native-backend-portable
-          cargo check -p nexusq-server --locked --features native-backend-portable
-          cargo check -p nexusq-c --locked --features native-backend-portable
-          cargo check -p nexusq-py --locked --features native-backend-portable
+          cargo check -p nexusq-core -p nexusq-cli -p nexusq-server -p nexusq-c -p nexusq-py --locked --features native-backend-portable
       - name: Verify RustCrypto remains default and API docs build
         run: |
           cargo doc -p nexusq-core -p nexusq-cli -p nexusq-server -p nexusq-c -p nexusq-py --locked --no-deps
