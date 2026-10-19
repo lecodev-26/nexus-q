@@ -11,6 +11,7 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 tempfile = "3.27"
 nexusq-core = { path = "../crates/nexusq-core" }
+serde_json = "1"
 
 [[bin]]
 name = "vault_parse"
@@ -57,6 +58,20 @@ bench = false
 [[bin]]
 name = "backup_import"
 path = "fuzz_targets/backup_import.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "mldsa_key_decode"
+path = "fuzz_targets/mldsa_key_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "policy_set_decode"
+path = "fuzz_targets/policy_set_decode.rs"
 test = false
 doc = false
 bench = false

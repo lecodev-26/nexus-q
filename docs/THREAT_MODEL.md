@@ -114,9 +114,10 @@ adversary has all the capabilities of the weaker ones.
   decrypt-later).
 - **Goal:** break classical public-key cryptography (RSA, ECDH, ECDSA).
 - **NEXUS-Q defense:** **primary design goal**. Current key-establishment
-  uses the ML-KEM-768/X25519 hybrid. Identity signatures currently use
-  Ed25519, so current signature operations are classical; ML-DSA/SLH-DSA
-  support is planned. Symmetric primitives use 256-bit keys.
+  uses the ML-KEM-768/X25519 hybrid. New credentials and identity signatures
+  use ML-DSA-65 (default) with SLH-DSA-SHAKE-128f available as a hash-based
+  alternative; legacy Ed25519 credentials remain verifiable but are classical
+  and not post-quantum secure. Symmetric primitives use 256-bit keys.
 
 ### 3.9 Supply-chain adversary (A-supply)
 
@@ -411,10 +412,12 @@ What NEXUS-Q **does** claim, in plain terms:
    signature scheme is unbroken.
 4. **Forward secrecy of session keys** (Fase 14+): a compromised
    long-term key does not reveal past session keys.
-5. **Post-quantum key-establishment resistance** through the implemented
-   ML-KEM-768/X25519 hybrid using the documented X-Wing Internet-Draft construction and transcript binding, without claiming finalized-standard conformance; assuming the underlying schemes and construction
-   remain secure. Current Ed25519 signatures are classical and are not
-   post-quantum secure.
+5. **Post-quantum key-establishment and signature resistance** through the
+   implemented ML-KEM-768/X25519 hybrid (X-Wing construction with transcript
+   binding) and ML-DSA-65 signatures (default for new credentials), with
+   SLH-DSA-SHAKE-128f available as a hash-based alternative. Legacy Ed25519
+   signatures remain classical and are not post-quantum secure. No claim of
+   finalized-standard conformance is made beyond the implemented schemes.
 6. **Authenticated audit log**: any modification of a past
    entry invalidates the chain.
 7. **Fail-closed behavior**: on any error, no partial plaintext is
@@ -428,22 +431,15 @@ What NEXUS-Q **does not** claim:
   hardware-backed key storage.
 - Security against a user who chooses a weak password and disables all
   hardware protections.
-- Security of downstream applications that misuse the API.
+- FIPS validation, Common Criteria, or independent external audit
+  completion unless a corresponding public evidence package is linked.
 
 ---
 
-## 11. Review and evolution
+## 11. Change control
 
-This threat model is a **living document**. It is reviewed:
-
-- At the end of Fase 0 (this document)
-- Before each major release (v1.0, v1.1, ...)
-- Whenever a new class of adversary becomes relevant (e.g., a new
-  side-channel technique, a new quantum result)
-- Whenever the architecture changes in a way that affects trust boundaries
-
-Changes to this document are versioned in Git and follow the same review
-process as code changes.
+Any change that affects an adversary model, a threat in scope, an assumption,
+or a security guarantee must update this document in the same PR.
 
 ---
 
