@@ -308,7 +308,7 @@ h2{font-size:clamp(36px,10vw,60px);max-width:none}
 <div class="ver rv"><span class="tag">v1.0.0 · Oct 7, 2026</span><h3>V1</h3><p>The frozen engineering baseline: crypto core, vault, keys, identities, policy, audit log, CLI, server and SDKs. Its Arena result showed NEXUS-Q slower than the fastest implementations, which became the main target.</p><span class="st">Frozen</span></div>
 <div class="ver rv"><span class="tag">v2.0.0 · Oct 8, 2026</span><h3>V2</h3><p>Correctness, interoperability, security fuzzing, backend strategy and release gates. The final record claims no performance improvement over V1, and the performance question stayed open.</p><span class="st">Frozen on nexusqv2</span></div>
 <div class="ver rv"><span class="tag">Oct 9, 2026 · PR #45</span><h3>V3</h3><p>Hardened implementation, reproducible Arena, corrected benchmark sampling and retained evidence archive with SHA-256 manifest.</p><span class="st">Engineering release</span></div>
-<div class="ver cur rv"><span class="tag">Oct 19, 2026 · PR #55</span><h3>V4</h3><p>Experimental native backend integrated into main; the measured backend passed the 1.5× median-and-p95 gate, and PR #55 wires it into nexusq-core behind an explicitly opt-in feature. Default builds, the CLI and SDKs still use RustCrypto; the native path is opt-in only.</p><span class="st">Engineering snapshot · not production-ready</span></div>
+<div class="ver cur rv"><span class="tag">Oct 19, 2026 · 4.1.0 · PR #55</span><h3>V4.1</h3><p>Stable line release: the native backend passed the 1.5× median-and-p95 gates and PR #55 wires it into nexusq-core behind an explicitly opt-in feature. Default builds, the CLI and SDKs still use RustCrypto; the native path is opt-in only.</p><span class="st">Stable line · final independent audit pending</span></div>
 </div>
 </div></section>
 
@@ -409,7 +409,7 @@ cargo build --workspace --release</pre></div>
 <details><summary>Why combine ML-KEM with X25519?</summary><p>A hybrid keeps the key exchange protected as long as at least one of the two schemes holds up. That is the usual reasoning for hybrids while post-quantum algorithms are still young in deployment.</p></details>
 <details><summary>Can I use it from Python, Go, C, PHP or Ruby?</summary><p>The repository includes a C SDK, a Python binding and Go, PHP and Ruby bindings, covered by a dedicated SDK CI. They are not published to package registries, so you build them from source. See the SDK guide.</p></details>
 <details><summary>What license is it under?</summary><p>You can choose either the MIT license or the Apache License 2.0, the same dual license used by much of the Rust ecosystem.</p></details>
-<details><summary>How can I help?</summary><p>Read the threat model, run the Arena yourself, review the code, and open an issue or a pull request. V4 native-backend work is an engineering snapshot; the opt-in wiring is complete but the independent external audit is still open. Security reports go through GitHub Security Advisories.</p></details>
+<details><summary>How can I help?</summary><p>Read the threat model, run the Arena yourself, review the code, and open an issue or a pull request. The 4.1.0 stable line is complete; the independent external audit (Phase 21) is still open and is the remaining step. Security reports go through GitHub Security Advisories.</p></details>
 </div>
 </div></section>
 

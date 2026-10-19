@@ -1,11 +1,13 @@
 # Changelog
 
-## Unreleased — 2026-10-16
+## v4.1.0 — stable line release (2026-10-19)
 
-- Integrated the experimental native backend engineering work into `main` through [PR #54](https://github.com/lecodev-26/nexus-q/pull/54), commit `1c03968e9b8d5578020e571e2f25edc5a7165607`.
-- Added the annotated engineering tag [`v4-engineering-2026-10-16`](https://github.com/lecodev-26/nexus-q/tree/v4-engineering-2026-10-16) and a draft GitHub release (visible from the repository Releases page); the draft is intentionally not published as a stable release.
-- The reviewed native-backend CI passed the 1.5× median-and-p95 gate without relaxing its threshold. This is benchmark evidence for the isolated backend, not proof of production-path integration or end-to-end application performance.
-- Documented that the native backend remains experimental and is not yet wired into `nexusq-core`, CLI, or SDK production cryptographic paths. No independent audit, FIPS validation, production-readiness, or v1.0 release claim is made.
+- Version bump: the workspace and every published crate move from 2.0.0 to **4.1.0**, the stable release line of the V4 work.
+- PR [#55](https://github.com/lecodev-26/nexus-q/pull/55) wires the native backend into `nexusq-core` behind an explicitly opt-in `native-backend` feature (ML-KEM-768/1024, hybrid encapsulation, ML-DSA-65). RustCrypto remains the default on every production call path; the CLI, the server and the SDKs never enable the feature.
+- All PR review gates are green on the PR's final head commit: the production-path benchmark passed the unchanged 1.5× median-and-p95 gate (three replicas), the constant-time valgrind harness, cargo audit, upstream func/KAT/ACVP and the vendored-source identity checks pass, and cross-config compatibility (native ↔ RustCrypto) is covered by tests.
+- Error-handling hardening on the native paths: signing, vault, ML-DSA and ML-KEM key-generation failures propagate as errors; the hybrid X25519 ephemeral path returns `KemError` instead of panicking, and low-order X25519 peer keys are rejected identically in every configuration (constant-time check).
+- Added the tag-gated `v4.1.0` release workflow (full release gate: fmt/check/clippy/tests debug+release, SDK smoke, reproducible packaging, checksums, CycloneDX SBOM, provenance, cross-platform builds) and the release notes in `docs/V4_RELEASE.md`.
+- **Honest caveats, unchanged:** the native backend remains experimental and opt-in; no FIPS 140-3 validation or PCT; the Phase 21 independent external audit remains open — this release is ready for that final audit; the two four-hour fuzz soaks must be executed and confirmed green on the exact merged SHA before the release tag is cut.
 
 
 All notable changes are recorded here. The project remains in engineering/release preparation; entries before a stable public

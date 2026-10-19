@@ -1,8 +1,8 @@
 # NEXUS-Q version history and current V4 status
 
-Updated: 2026-10-16
+Updated: 2026-10-19
 
-This document describes the repository as it exists on `main`. It is a status record, not a declaration that NEXUS-Q is production-ready or that all planned integration work is complete.
+This document describes the repository as it exists on `main`. It is a status record, not a declaration that NEXUS-Q is production-ready or that all planned integration work is complete. The workspace is versioned 4.1.0 (stable line release); the `v4.1.0` tag and GitHub release are cut after PR #55 merges and its four-hour fuzz soaks are green, via the tag-gated `v4-release.yml` gate and `docs/V4_RELEASE.md`.
 
 ## Version lines
 
@@ -11,7 +11,8 @@ This document describes the repository as it exists on `main`. It is a status re
 | V1 | tag [`v1.0.0`](https://github.com/lecodev-26/nexus-q/releases/tag/v1.0.0) | Original baseline | Frozen engineering baseline |
 | V2 | branch `nexusqv2`, tag [`v2.0.0`](https://github.com/lecodev-26/nexus-q/releases/tag/v2.0.0) | Security, correctness/interoperability and release-gate work | Frozen engineering line |
 | V3 | branch `nexusqv3`, tag [`v3-engineering-2026-10-09`](https://github.com/lecodev-26/nexus-q/releases/tag/v3-engineering-2026-10-09) | Hardened implementation, reproducible Arena and retained evidence | Engineering release |
-| V4 | branch `nexusqv4`, tag [`v4-engineering-2026-10-16`](https://github.com/lecodev-26/nexus-q/tree/v4-engineering-2026-10-16) | Experimental native backend and performance work | Integrated into `main`; production-path wiring remains unfinished |
+| V4 | branch `nexusqv4`, tag [`v4-engineering-2026-10-16`](https://github.com/lecodev-26/nexus-q/tree/v4-engineering-2026-10-16) | Experimental native backend and performance work | Integrated into `main`; production-path wiring completed by PR #55 |
+| V4.1 | workspace version `4.1.0`, tag `v4.1.0` (cut after the PR #55 merge and green soaks) | Stable line release of the V4 work | Current stable line, ready for the final independent audit (Phase 21) |
 
 ## Current `main` snapshot
 
