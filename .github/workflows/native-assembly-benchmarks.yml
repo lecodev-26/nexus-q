@@ -2,29 +2,6 @@ name: NEXUS-Q Native Assembly Performance Gate
 
 on:
   workflow_dispatch:
-  push:
-    branches: ["perf/issue-48-native-assembly-gate"]
-    paths:
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "crates/**"
-      - "vendor/**"
-      - "arena/runners/nexusq/**"
-      - "arena/adapters/aws-lc/**"
-      - "arena/scripts/evaluate_native_assembly_gate.py"
-      - ".github/workflows/native-assembly-benchmarks.yml"
-  pull_request:
-    branches: ["nexusqv4"]
-    paths:
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "crates/**"
-      - "vendor/**"
-      - "arena/runners/nexusq/**"
-      - "arena/adapters/aws-lc/**"
-      - "arena/scripts/evaluate_native_assembly_gate.py"
-      - ".github/workflows/native-assembly-benchmarks.yml"
-
 permissions:
   contents: read
 

@@ -12,5 +12,5 @@ readme = "README.md"
 [dependencies]
 nexusq-core = { version = "4.1.0" }
 nexusq-kernels = { version = "4.1.0" }
-nexusq-ml-kem = { version = "4.1.0" }
-nexusq-ml-dsa = { version = "4.1.0" }
+nexusq_ml_kem = { package = "nexusq-ml-kem", version = "4.1.0" }
+nexusq_ml_dsa = { package = "nexusq-ml-dsa", version = "4.1.0" }

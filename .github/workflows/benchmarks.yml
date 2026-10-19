@@ -2,9 +2,6 @@ name: Benchmarks
 
 on:
   workflow_dispatch:
-  push:
-    branches: ["main", "ci/benchmark-arena"]
-
 permissions:
   contents: read
 

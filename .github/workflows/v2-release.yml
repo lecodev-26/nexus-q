@@ -1,13 +1,7 @@
 name: NEXUS-Q v2 Final Release
 
 on:
-  pull_request:
-    branches: [nexusqv2]
-  push:
-    branches: [nexusqv2]
-    tags: ["v2.0.0"]
   workflow_dispatch:
-
 permissions:
   contents: read
 

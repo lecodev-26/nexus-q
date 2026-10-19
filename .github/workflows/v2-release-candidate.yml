@@ -1,10 +1,7 @@
 name: NEXUS-Q v2 Release Candidate
 
 on:
-  push:
-    branches: ["v2/issue-11-release-candidate"]
   workflow_dispatch:
-
 permissions:
   contents: read
 

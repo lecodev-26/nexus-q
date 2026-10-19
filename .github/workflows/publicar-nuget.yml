@@ -7,12 +7,14 @@ name: Publish NuGet
 
 on:
   workflow_dispatch:
-
 permissions:
   contents: read
 
 jobs:
   publish:
+    permissions:
+      contents: read
+      id-token: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,8 +26,15 @@ jobs:
       - name: Pack
         run: dotnet pack bindings/dotnet/src/Nexusq -c Release
 
+      - name: NuGet login (Trusted Publishing via OIDC)
+        uses: NuGet/login@v1
+        id: nuget-login
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
       - name: Push to nuget.org
         run: |
           dotnet nuget push bindings/dotnet/src/Nexusq/bin/Release/*.nupkg \
+            --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" \
             --source https://api.nuget.org/v3/index.json \
             --skip-duplicate

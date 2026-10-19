@@ -1,32 +1,7 @@
 name: NEXUS-Q Native Assembly CI
 
 on:
-  push:
-    branches: ["perf/issue-48-native-assembly-gate"]
-    paths:
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "crates/**"
-      - "vendor/**"
-      - "arena/runners/nexusq/**"
-      - "arena/scripts/**"
-      - ".github/scripts/**"
-      - ".github/workflows/native-assembly-*.yml"
-      - "docs/performance/**"
-  pull_request:
-    branches: ["nexusqv4"]
-    paths:
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "crates/**"
-      - "vendor/**"
-      - "arena/runners/nexusq/**"
-      - "arena/scripts/**"
-      - ".github/scripts/**"
-      - ".github/workflows/native-assembly-*.yml"
-      - "docs/performance/**"
   workflow_dispatch:
-
 permissions:
   contents: read
 

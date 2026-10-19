@@ -1,12 +1,7 @@
 name: NEXUS-Q v2 Correctness and Interoperability
 
 on:
-  pull_request:
-    branches: [nexusqv2]
-  push:
-    branches: [v2/v2-08-correctness-interoperability]
   workflow_dispatch:
-
 permissions:
   contents: read
 

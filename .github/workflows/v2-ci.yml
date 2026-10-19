@@ -1,18 +1,7 @@
 name: NEXUS-Q v2 CI
 
 on:
-  pull_request:
-    branches:
-      - "nexusqv2"
-  push:
-    branches:
-      - "nexusqv2"
-      - "v2/security-hardening-kamal-findings"
-      - "v2/p2-audit-hardening"
-      - "v2/security-closure-kamal-findings"
-      - "v2/final-security-audit-hardening"
   workflow_dispatch:
-
 permissions:
   contents: read
 

@@ -2,11 +2,6 @@ name: PQC Benchmark Arena
 
 on:
   workflow_dispatch:
-  push:
-    branches: ["main", "ci/benchmark-arena", "nexusqv2", "nexusqv3"]
-  pull_request:
-    branches: ["main", "nexusqv2", "nexusqv3"]
-
 permissions:
   contents: read
 

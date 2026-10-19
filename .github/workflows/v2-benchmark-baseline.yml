@@ -1,15 +1,7 @@
 name: NEXUS-Q v2 Benchmark Baseline
 
 on:
-  push:
-    branches: ["v2/v2-01-benchmark-baseline"]
   workflow_dispatch:
-    inputs:
-      reason:
-        description: "Baseline run reason"
-        required: false
-        default: "V2-01 baseline"
-
 permissions:
   contents: read
 

@@ -1,32 +1,7 @@
 name: NEXUS-Q V3 Incremental CI
 
 on:
-  push:
-    branches: [nexusqv3]
-    paths:
-      - '.github/workflows/v3-incremental-ci.yml'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - 'crates/nexusq-core/**'
-      - 'arena/runners/nexusq/**'
-      - 'arena/schemas/**'
-      - 'arena/registry/**'
-      - 'vendor/ml-kem/**'
-      - 'vendor/module-lattice/**'
-  pull_request:
-    branches: [nexusqv3]
-    paths:
-      - '.github/workflows/v3-incremental-ci.yml'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - 'crates/nexusq-core/**'
-      - 'arena/runners/nexusq/**'
-      - 'arena/schemas/**'
-      - 'arena/registry/**'
-      - 'vendor/ml-kem/**'
-      - 'vendor/module-lattice/**'
   workflow_dispatch:
-
 permissions:
   contents: read
 

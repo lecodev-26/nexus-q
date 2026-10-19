@@ -62,7 +62,11 @@ def main() -> int:
             print(f"=== Skipping {crate} v{version} (already on crates.io) ===")
             continue
         print(f"=== Publishing {crate} v{version} ===")
-        result = subprocess.run(["cargo", "publish", "-p", crate])
+        if crate == "nexusq-native-backend":
+            command = ["cargo", "publish", "--manifest-path", "crates/nexusq-native-backend/Cargo.toml"]
+        else:
+            command = ["cargo", "publish", "-p", crate]
+        result = subprocess.run(command)
         if result.returncode != 0:
             return result.returncode
     return 0

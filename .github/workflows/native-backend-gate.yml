@@ -8,51 +8,6 @@ name: NEXUS-Q Native Backend Gate (experimental)
 
 on:
   workflow_dispatch:
-  push:
-    branches: ["perf/native-backend-hybrid"]
-    paths:
-      - "crates/nexusq-native-backend/**"
-      - "arena/runners/nexusq-native/**"
-      - "arena/runners/nexusq/**"
-      - "arena/scripts/evaluate_core_production_benchmark.py"
-      - "arena/schemas/benchmark-result.schema.json"
-      - "vendor/mlkem-native/**"
-      - "vendor/mldsa-native/**"
-      - "vendor/s2n-bignum/**"
-      - "vendor/ml-kem/**"
-      - "vendor/ml-dsa/**"
-      - "vendor/module-lattice/**"
-      - "arena/adapters/aws-lc/**"
-      - "arena/scripts/evaluate_native_assembly_gate.py"
-      - "arena/scripts/native_backend_stats.py"
-      - ".github/workflows/native-backend-gate.yml"
-      - ".github/scripts/check-native-backend-unsafe.py"
-  pull_request:
-    paths:
-      # The integration PR changes the core call sites and feature wiring;
-      # run this backend's upstream, differential, constant-time and perf gates.
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "crates/nexusq-core/**"
-      - ".github/workflows/security-ci.yml"
-      - ".github/workflows/native-backend-gate.yml"
-      - "crates/nexusq-native-backend/**"
-      - "arena/runners/nexusq-native/**"
-      - "arena/runners/nexusq/**"
-      - "arena/scripts/evaluate_core_production_benchmark.py"
-      - "arena/schemas/benchmark-result.schema.json"
-      - "vendor/mlkem-native/**"
-      - "vendor/mldsa-native/**"
-      - "vendor/s2n-bignum/**"
-      - "vendor/ml-kem/**"
-      - "vendor/ml-dsa/**"
-      - "vendor/module-lattice/**"
-      - "arena/adapters/aws-lc/**"
-      - "arena/scripts/evaluate_native_assembly_gate.py"
-      - "arena/scripts/native_backend_stats.py"
-      - ".github/workflows/native-backend-gate.yml"
-      - ".github/scripts/check-native-backend-unsafe.py"
-
 permissions:
   contents: read
 

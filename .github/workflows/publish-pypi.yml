@@ -10,9 +10,6 @@ name: Publish Python
 
 on:
   workflow_dispatch:
-  push:
-    tags: ["v*"]
-
 jobs:
   sdist:
     name: Build sdist

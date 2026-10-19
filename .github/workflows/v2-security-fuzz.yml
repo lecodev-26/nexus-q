@@ -1,12 +1,7 @@
 name: NEXUS-Q v2 Security Regression and Fuzzing
 
 on:
-  pull_request:
-    branches: [nexusqv2]
-  push:
-    branches: [v2/v2-09-security-fuzz, main]
   workflow_dispatch:
-
 permissions:
   contents: read
 

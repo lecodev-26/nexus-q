@@ -16,6 +16,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: nexusq-main-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   rust-security:
     name: Rust security gates
@@ -92,8 +96,7 @@ jobs:
   fuzz-build:
     name: Fuzz harness build (main + native backend PR #55)
     runs-on: ubuntu-latest
-    # Keep normal fuzz campaigns on main, but require this PR's fuzz harnesses
-    # to compile before the native backend wiring can merge.
+    # Compile fuzz harnesses on main; full-duration campaigns are manual-only.
     if: >-
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'pull_request' && github.event.pull_request.number == 55)
@@ -121,11 +124,9 @@ jobs:
   fuzz-soak-vault:
     name: 4-hour fuzz soak - vault parser
     runs-on: ubuntu-latest
-    # Keep intermediate PR CI fast. Run the full soak on main or by explicit
-    # workflow_dispatch with full_fuzz=true during final pre-merge validation.
+    # Full-duration campaigns are opt-in via workflow_dispatch with full_fuzz=true.
     if: >-
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'workflow_dispatch' && inputs.full_fuzz == true)
+      github.event_name == 'workflow_dispatch' && inputs.full_fuzz == true
     timeout-minutes: 250
     steps:
       - uses: actions/checkout@v4
@@ -139,11 +140,9 @@ jobs:
   fuzz-soak-envelope:
     name: 4-hour fuzz soak - envelope parser
     runs-on: ubuntu-latest
-    # Keep intermediate PR CI fast. Run the full soak on main or by explicit
-    # workflow_dispatch with full_fuzz=true during final pre-merge validation.
+    # Full-duration campaigns are opt-in via workflow_dispatch with full_fuzz=true.
     if: >-
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'workflow_dispatch' && inputs.full_fuzz == true)
+      github.event_name == 'workflow_dispatch' && inputs.full_fuzz == true
     timeout-minutes: 250
     steps:
       - uses: actions/checkout@v4

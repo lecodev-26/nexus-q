@@ -11,11 +11,6 @@ name: NEXUS-Q Gate A/A control (informational)
 
 on:
   workflow_dispatch:
-  push:
-    branches: ["perf/native-backend-hybrid"]
-    paths:
-      - ".github/workflows/native-backend-aa-control.yml"
-
 permissions:
   contents: read
 

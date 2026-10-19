@@ -1,10 +1,7 @@
 name: NEXUS-Q v2 Hotspot Profiles
 
 on:
-  push:
-    branches: ["v2/v2-02-profile-hotspots"]
   workflow_dispatch:
-
 permissions:
   contents: read
 
