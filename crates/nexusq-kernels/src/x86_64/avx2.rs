@@ -55,7 +55,9 @@ fn mldsa_mul_reduce(lhs: u32, rhs: u32) -> u32 {
 // toolchains they are safe within this AVX2-targeted function, so the
 // block is redundant there; silence unused_unsafe for cross-version builds.
 #[allow(unused_unsafe)]
+// SAFETY: callers must execute this helper only after runtime AVX2 detection.
 unsafe fn mldsa_add_mod(lhs: __m256i, rhs: __m256i) -> __m256i {
+    // SAFETY: this function is called only after runtime AVX2 detection.
     unsafe {
         let sum = _mm256_add_epi32(lhs, rhs);
         let mask = _mm256_cmpgt_epi32(sum, _mm256_set1_epi32((MLDSA_Q - 1) as i32));
@@ -72,7 +74,9 @@ unsafe fn mldsa_add_mod(lhs: __m256i, rhs: __m256i) -> __m256i {
 // toolchains they are safe within this AVX2-targeted function, so the
 // block is redundant there; silence unused_unsafe for cross-version builds.
 #[allow(unused_unsafe)]
+// SAFETY: callers must execute this helper only after runtime AVX2 detection.
 unsafe fn mldsa_sub_mod(lhs: __m256i, rhs: __m256i) -> __m256i {
+    // SAFETY: this function is called only after runtime AVX2 detection.
     unsafe {
         let difference = _mm256_sub_epi32(lhs, rhs);
         let mask = _mm256_cmpgt_epi32(_mm256_setzero_si256(), difference);
@@ -669,7 +673,9 @@ unsafe fn reduce_mlkem_product(value: __m256i) -> __m256i {
 // toolchains they are safe within this AVX2-targeted function, so the
 // block is redundant there; silence unused_unsafe for cross-version builds.
 #[allow(unused_unsafe)]
+// SAFETY: callers must execute this helper only after runtime AVX2 detection.
 unsafe fn rotate_left_64(value: __m256i, amount: u32) -> __m256i {
+    // SAFETY: AVX2 intrinsics are used only after runtime AVX2 detection.
     unsafe {
         let left = _mm256_sllv_epi64(value, _mm256_set1_epi64x(i64::from(amount)));
         let right = _mm256_srlv_epi64(value, _mm256_set1_epi64x(i64::from(64 - amount)));

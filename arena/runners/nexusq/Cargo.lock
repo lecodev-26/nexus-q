@@ -522,7 +522,6 @@ dependencies = [
  "pkcs8",
  "shake",
  "signature",
- "zeroize",
 ]
 
 [[package]]
@@ -536,7 +535,6 @@ dependencies = [
  "pkcs8",
  "rand_core 0.10.1",
  "sha3",
- "zeroize",
 ]
 
 [[package]]
@@ -576,8 +574,8 @@ dependencies = [
  "hkdf",
  "hmac",
  "hybrid-array",
- "ml-dsa",
- "ml-kem",
+ "nexusq-ml-dsa",
+ "nexusq-ml-kem",
  "nexusq-native-backend",
  "rand_core 0.9.5",
  "serde",
@@ -595,6 +593,36 @@ dependencies = [
 [[package]]
 name = "nexusq-kernels"
 version = "4.1.0"
+
+[[package]]
+name = "nexusq-ml-dsa"
+version = "4.1.0"
+dependencies = [
+ "const-oid",
+ "crypto-common",
+ "ctutils",
+ "hybrid-array",
+ "module-lattice",
+ "nexusq-kernels",
+ "pkcs8",
+ "shake",
+ "signature",
+ "zeroize",
+]
+
+[[package]]
+name = "nexusq-ml-kem"
+version = "4.1.0"
+dependencies = [
+ "hybrid-array",
+ "kem",
+ "module-lattice",
+ "nexusq-kernels",
+ "pkcs8",
+ "rand_core 0.10.1",
+ "sha3",
+ "zeroize",
+]
 
 [[package]]
 name = "nexusq-native-backend"
