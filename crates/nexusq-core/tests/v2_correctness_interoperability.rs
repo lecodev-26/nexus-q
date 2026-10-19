@@ -53,6 +53,30 @@ fn ml_kem_1024_hybrid_roundtrip_and_invalid_lengths() {
 }
 
 #[test]
+fn ml_kem_1024_hybrid_rejects_low_order_x25519_public_component() {
+    // A public key whose X25519 component is a low-order point (here the
+    // all-zero point) must be rejected identically in every configuration:
+    // AWS-LC rejects low-order peer keys during agreement, and the RustCrypto
+    // path applies the same all-zero shared-secret check, so hybrid
+    // encapsulation against a degenerate X25519 component never succeeds.
+    let pair = kem_1024::generate();
+    let mut public = pair.public_key_bytes();
+    public[kem_1024::PUBLIC_KEY_LEN - 32..].fill(0);
+
+    assert!(matches!(
+        kem_1024::encapsulate(&public),
+        Err(KemError::Encapsulate)
+    ));
+
+    // Same verdict through the prepared-public-key path.
+    let prepared = kem_1024::PreparedPublicKey::from_bytes(&public).unwrap();
+    assert!(matches!(
+        prepared.encapsulate_prepared(),
+        Err(KemError::Encapsulate)
+    ));
+}
+
+#[test]
 fn x_wing_hybrid_roundtrip_and_transcript_binding() {
     let pair = hybrid::generate();
     let public = pair.public_key_bytes();
@@ -60,10 +84,50 @@ fn x_wing_hybrid_roundtrip_and_transcript_binding() {
     let receiver_secret = hybrid::decapsulate(&pair, &ciphertext).unwrap();
     assert_eq!(sender_secret.as_ref(), receiver_secret.as_ref());
 
-    let mut tampered = ciphertext;
-    tampered[hybrid::CIPHERTEXT_LEN - 1] ^= 0x80;
-    let tampered_secret = hybrid::decapsulate(&pair, &tampered).unwrap();
-    assert_ne!(sender_secret.as_ref(), tampered_secret.as_ref());
+    // Tampering with the ML-KEM ciphertext must trigger implicit rejection,
+    // which is then bound into the hybrid shared secret.
+    let mut tampered_ml_kem = ciphertext.clone();
+    tampered_ml_kem[0] ^= 0x01;
+    let tampered_ml_kem_secret = hybrid::decapsulate(&pair, &tampered_ml_kem).unwrap();
+    assert_ne!(sender_secret.as_ref(), tampered_ml_kem_secret.as_ref());
+
+    // The X25519 ephemeral public key occupies the final 32 ciphertext bytes;
+    // changing it must also change the combined secret.
+    let mut tampered_x25519 = ciphertext;
+    tampered_x25519[hybrid::CIPHERTEXT_LEN - 1] ^= 0x80;
+    let tampered_x25519_secret = hybrid::decapsulate(&pair, &tampered_x25519).unwrap();
+    assert_ne!(sender_secret.as_ref(), tampered_x25519_secret.as_ref());
+}
+
+#[test]
+fn x_wing_hybrid_rejects_invalid_public_key_and_ciphertext_lengths() {
+    let pair = hybrid::generate();
+    let public = pair.public_key_bytes();
+    let (ciphertext, _) = hybrid::encapsulate(&public).unwrap();
+
+    for malformed_public in [
+        vec![0u8; hybrid::PUBLIC_KEY_LEN - 1],
+        vec![0u8; hybrid::PUBLIC_KEY_LEN + 1],
+    ] {
+        assert!(matches!(
+            hybrid::encapsulate(&malformed_public),
+            Err(KemError::InvalidPublicKey)
+        ));
+    }
+
+    for malformed_ciphertext in [
+        vec![0u8; hybrid::CIPHERTEXT_LEN - 1],
+        vec![0u8; hybrid::CIPHERTEXT_LEN + 1],
+    ] {
+        assert!(matches!(
+            hybrid::decapsulate(&pair, &malformed_ciphertext),
+            Err(KemError::InvalidCiphertext)
+        ));
+    }
+
+    // Keep the canonical lengths explicit at this public boundary.
+    assert_eq!(public.len(), hybrid::PUBLIC_KEY_LEN);
+    assert_eq!(ciphertext.len(), hybrid::CIPHERTEXT_LEN);
 }
 
 #[test]
@@ -84,6 +148,15 @@ fn ml_dsa_wrapper_bytes_interoperate_with_backend() {
     ml_dsa_65_verify(&public, message, &signature).unwrap();
     assert!(matches!(
         ml_dsa_65_verify(&public, b"wrong", &signature),
+        Err(PqSignError::VerificationFailed)
+    ));
+
+    // A correctly sized but modified signature must fail verification through
+    // the public nexusq-core API in every feature configuration.
+    let mut tampered_signature = signature.clone();
+    tampered_signature[ML_DSA_65_SIGNATURE_LEN / 2] ^= 0x01;
+    assert!(matches!(
+        ml_dsa_65_verify(&public, message, &tampered_signature),
         Err(PqSignError::VerificationFailed)
     ));
 }
@@ -119,6 +192,18 @@ fn malformed_pqc_inputs_are_rejected_at_public_boundary() {
         ml_kem_768::public_key_from_bytes(&[0u8; 10]),
         Err(KemError::InvalidPublicKey)
     ));
+
+    // FIPS 203 modulus check: encode the first 12-bit coefficient as 0xFFF,
+    // which is outside the allowed modulus. The public API must reject it
+    // identically with RustCrypto and native-backend features enabled.
+    let mut noncanonical_public = vec![0u8; ml_kem_768::PUBLIC_KEY_LEN];
+    noncanonical_public[0] = 0xFF;
+    noncanonical_public[1] |= 0x0F;
+    assert!(matches!(
+        ml_kem_768::public_key_from_bytes(&noncanonical_public),
+        Err(KemError::InvalidPublicKey)
+    ));
+
     assert!(matches!(
         ml_kem_768::decapsulate(&ml_kem_768::generate().0, &[0u8; 10]),
         Err(KemError::InvalidCiphertext)
@@ -142,6 +227,44 @@ fn ed25519_serialization_and_malformed_signature_regression() {
         parsed.verify(message, &tampered_signature),
         Err(SignError::VerificationFailed)
     ));
+}
+
+#[test]
+fn ml_dsa_public_api_seed_derivation_matches_rustcrypto() {
+    use ml_dsa::{KeyExport as _, Keypair as _, MlDsa65};
+
+    let seed = [0x42u8; 32];
+    let wrapper = MlDsa65KeyPair::from_secret_key(&seed).unwrap();
+    let rustcrypto = ml_dsa::SigningKey::<MlDsa65>::new(&seed.into());
+
+    assert_eq!(wrapper.secret_key().as_slice(), seed.as_slice());
+    assert_eq!(
+        wrapper.public_key(),
+        rustcrypto.verifying_key().to_bytes().as_slice(),
+        "ML-DSA public API must derive identical public bytes from the same seed"
+    );
+}
+
+#[test]
+fn ml_kem_1024_public_api_seed_derivation_matches_rustcrypto() {
+    use ml_kem::{FromSeed as _, KeyExport as _, MlKem1024};
+
+    let pair = kem_1024::generate();
+    let serialized_secret = pair.secret_key_bytes();
+    let seed: [u8; 64] = serialized_secret[..64].try_into().unwrap();
+    let (rustcrypto_secret, rustcrypto_public) = MlKem1024::from_seed(&seed.into());
+    let wrapper_public = pair.public_key_bytes();
+
+    assert_eq!(
+        &wrapper_public[..1568],
+        rustcrypto_public.to_bytes().as_slice(),
+        "ML-KEM-1024 public API must derive identical public bytes from its serialized seed"
+    );
+    assert_eq!(
+        rustcrypto_secret.to_bytes().as_slice(),
+        seed.as_slice(),
+        "RustCrypto must preserve the ML-KEM-1024 seed used for key derivation"
+    );
 }
 
 #[test]

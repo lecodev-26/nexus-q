@@ -252,6 +252,32 @@ mod tests {
     }
 
     #[test]
+    fn legacy_body_without_optional_fields_remains_deserializable() {
+        #[derive(Serialize)]
+        struct LegacyVaultBody {
+            metadata: VaultMetadata,
+            keys: Vec<KeyRecord>,
+        }
+
+        // Before identities, policies and audit anchors were added, the body
+        // contained only metadata and keys. Keep that serialized shape readable.
+        let current = VaultBody::new(sample_metadata());
+        let legacy = LegacyVaultBody {
+            metadata: current.metadata,
+            keys: current.keys,
+        };
+        let encoded = crate::vault::serde_helpers::to_vec(&legacy).unwrap();
+        let decoded: VaultBody = crate::vault::serde_helpers::from_slice(&encoded).unwrap();
+
+        assert!(decoded.identities.is_empty());
+        assert!(decoded.policies.is_none());
+        assert!(decoded.audit_dir.is_none());
+        assert!(decoded.audit_anchor.is_none());
+        assert!(decoded.revoked_credentials.is_empty());
+        assert_eq!(decoded.metadata.schema_version, CURRENT_SCHEMA_VERSION);
+    }
+
+    #[test]
     fn current_schema_version_is_one() {
         assert_eq!(CURRENT_SCHEMA_VERSION, 1);
     }

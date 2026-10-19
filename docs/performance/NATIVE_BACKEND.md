@@ -1,6 +1,6 @@
 # Experimental native backend (Rust API + C + assembly)
 
-Status (2026-10-16): **integrated into `main` as an experimental, standalone native backend; not wired into production cryptographic call paths.** PR [#54](https://github.com/lecodev-26/nexus-q/pull/54) merged commit [`1c03968e9b8d5578020e571e2f25edc5a7165607`](https://github.com/lecodev-26/nexus-q/commit/1c03968e9b8d5578020e571e2f25edc5a7165607). Engineering snapshot: [`v4-engineering-2026-10-16`](https://github.com/lecodev-26/nexus-q/tree/v4-engineering-2026-10-16). The reviewed native-backend CI passed the official 1.5× median-and-p95 gate with its threshold unchanged. This is evidence for the isolated measured backend operations only. **The backend is not yet connected to `nexusq-core`, CLI, or SDK production cryptographic paths**, and this document does not claim end-to-end acceleration, production readiness, independent audit or FIPS validation. Main-branch CI status is live and should be checked in [GitHub Actions](https://github.com/lecodev-26/nexus-q/actions) rather than inferred from historical run tables.
+Status (2026-10-19): **integrated into `main` as an experimental, standalone native backend, and wired into `nexusq-core` behind an explicit opt-in `native-backend` feature by PR [#55](https://github.com/lecodev-26/nexus-q/pull/55).** PR [#54](https://github.com/lecodev-26/nexus-q/pull/54) merged commit [`1c03968e9b8d5578020e571e2f25edc5a7165607`](https://github.com/lecodev-26/nexus-q/commit/1c03968e9b8d5578020e571e2f25edc5a7165607). Engineering snapshot: [`v4-engineering-2026-10-16`](https://github.com/lecodev-26/nexus-q/tree/v4-engineering-2026-10-16). The reviewed native-backend CI passed the official 1.5× median-and-p95 gate with its threshold unchanged. This is evidence for the isolated measured backend operations only. **The default build of `nexusq-core`, the CLI, the server and the SDKs still uses RustCrypto; the native path is opt-in only and is not enabled by default anywhere**, and this document does not claim end-to-end acceleration, production readiness, independent audit or FIPS validation. Main-branch CI status is live and should be checked in [GitHub Actions](https://github.com/lecodev-26/nexus-q/actions) rather than inferred from historical run tables.
 
 This file is a technical design/evidence record. Older measurements and verdicts below remain historical and must be interpreted against their exact commit and harness. The former Issue #48 is closed; its checklist is retained for historical traceability, not as an active task tracker.
 
@@ -151,7 +151,7 @@ Identical code therefore fails the 1.5x p95 limit in about 7.5–10 % of evaluat
 
 ### Zen 3 median gap (systematic, not a gate failure)
 
-The in-process A/B diagnostic (`diag/inproc_ab.c`, `native-backend-diag.yml`) links both libraries into one process and alternates calls per iteration. On EPYC 7763 the NEXUS-Q build is still 7–11 % slower on ML-KEM, also with deterministic RNG inputs. So the cause is neither the RNG nor the harness nor cross-process noise. On Zen 4/5 the difference is within ±3 %. On the local Intel KVM, NEXUS-Q is 5–10 % faster.
+The in-process A/B diagnostic (`diag/inproc_ab.c`; the retired `native-backend-diag.yml` workflow, removed in the PR #55 CI cleanup and reproducible from git history) links both libraries into one process and alternates calls per iteration. On EPYC 7763 the NEXUS-Q build is still 7–11 % slower on ML-KEM, also with deterministic RNG inputs. So the cause is neither the RNG nor the harness nor cross-process noise. On Zen 4/5 the difference is within ±3 %. On the local Intel KVM, NEXUS-Q is 5–10 % faster.
 
 - Measured: AWS-LC's compiler flags (`-std=gnu11 -DNDEBUG -fvisibility=hidden -fno-common`) recover 1–3 points (runs 38796903942, 38798035934). The s2n x4 permutation recovers nothing (D9).
 - Hypothesis, not verified: the remaining difference lies in the FIPS202 sponge layer. AWS-LC replaces mlkem-native's (`MLK_CONFIG_FIPS202_CUSTOM_HEADER` with its own absorb/squeeze and 64-bit lane XOR). In the profiles, mlkem-native's `keccakf1600_extract_bytes`/`xor_bytes` account for 3.7–5.3 % of ML-KEM time on Zen 3, while AWS-LC's equivalent is under 1 %. Testing this requires a custom FIPS202 layer, which is new constant-time-relevant code that needs its own review.
@@ -175,11 +175,21 @@ The same replica's 12-round extended statistics reported no failing 3-round wind
 
 ## Not done yet (explicitly)
 
-- The PRs are merged into `nexusqv4` (PR #51 → native-backend branch, then PR #50 → `nexusqv4`). The merge result is commit `05a0d19a01dfdba2bb74b6f8d90c17718f4fcf87`; complete CI/gate validation of this merge result is still pending. The earlier green gate run is not a substitute.
-
-- The backend is not wired into `nexusq-core`, CLI, server or SDK. The production cryptographic path is unchanged.
-- AArch64 NEON backend: not enabled. AArch64 is functionally tested only on the portable C path.
+- AArch64 NEON backend: not enabled. AArch64 is functionally tested only on the portable C path; this is a known performance limitation on AArch64 (including Apple Silicon, Android and ARM servers) — see the limitations section of [`NATIVE_BACKEND_FEATURE.md`](NATIVE_BACKEND_FEATURE.md).
 - No FIPS 140-3 validation. No pairwise consistency test (PCT) is run, which matches the non-FIPS AWS-LC build used as the comparator.
-- Historical gate runs include p95 failures and A/A false failures; they remain recorded. The latest completed pre-integration gate run passed 6/6 replicas, but the merged `nexusqv4` commit still needs a fresh complete run.
+- The constant-time harness has a documented limitation: see the "Security evidence" section above — it is one contributing assurance signal, not a complete constant-time proof.
+- Historical gate runs include p95 failures and A/A false failures; they remain recorded.
 - The Zen 3 median gap (7–14 % on ML-KEM) is not closed; see the hypothesis above.
 - No independent external review of this integration. Phase 21 (external audit) remains open, so this work does not make NEXUS-Q v1.0 or v2 production-ready.
+
+## Production-path integration (PR #55)
+
+PR [#55](https://github.com/lecodev-26/nexus-q/pull/55) wires the native backend into `nexusq-core` behind the explicit opt-in `native-backend` feature, covering ML-KEM-768, ML-KEM-1024, hybrid (X-Wing) encapsulation, and ML-DSA-65 signing and verification. RustCrypto remains the default on every production call path; the CLI, the server and the published SDKs never enable the feature. The full review record, evidence and the final state of the master checklist live in the PR conversation and in [`NATIVE_BACKEND_PRODUCTION_WIRING.md`](NATIVE_BACKEND_PRODUCTION_WIRING.md).
+
+Evidence summary for the final head commit of the PR:
+
+- **Production-path benchmark** (`nexusq-core` production-path build vs RustCrypto vs AWS-LC, alternating rounds, 1000 samples): the native production path passes the official 1.5× median-and-p95 gate; run links are recorded in the PR master-checklist comment.
+- **Functional and interop**: cross-config compatibility (native ↔ RustCrypto) covered by the test suite and the 4-hour fuzz soaks on both the vault and envelope parsers; both soaks must be executed and confirmed green on the exact SHA that gets merged, before merge (maintainer's responsibility; links in the PR master-checklist comment).
+- **Constant time**: the valgrind harness (with its documented limitations, see above) runs on the PR head and must report 0 errors (run link in the PR master-checklist comment).
+- **Licensing**: unchanged — `sha3_keccak_f1600.S` is Apache-2.0-only code; the crate manifest stays `Apache-2.0` and binaries must ship `vendor/s2n-bignum/LICENSE` and `NOTICE`.
+- **Review**: the code-review points (fallible error propagation, documented panics, `// SAFETY:` policy, portable fallback) are addressed; the independent external audit (Phase 21) remains open and no production-readiness claim is made.

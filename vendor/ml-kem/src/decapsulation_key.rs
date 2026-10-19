@@ -79,6 +79,49 @@ where
         })
     }
 
+    /// Construct a decapsulation key from expanded bytes emitted by a trusted ML-KEM
+    /// key-generation backend.
+    ///
+    /// This skips redundant public-key modulus/hash validation because the bytes are assumed
+    /// to be the direct output of the trusted generator. Never use with external key material.
+    #[doc(hidden)]
+    pub fn from_generated_expanded_bytes(enc: &ExpandedDecapsulationKey<P>) -> Self {
+        let (dk_pke, ek_pke, _h, z) = P::split_dk(enc);
+        let dk_pke = MaybeBox::new(DecryptionKey::from_bytes(dk_pke));
+        let ek_pke = EncryptionKey::from_generated_bytes(ek_pke);
+        let ek = EncapsulationKey::from_encryption_key(ek_pke);
+        Self {
+            dk_pke,
+            ek,
+            d: None,
+            z: MaybeBox::new(z.clone()),
+        }
+    }
+
+    /// Construct both key objects from a trusted backend's expanded key in one decode pass.
+    ///
+    /// The embedded public-key hash is reused, avoiding a second public-key decode and hash.
+    /// Only use with direct output from a successful trusted key-generation operation.
+    #[doc(hidden)]
+    pub fn from_generated_expanded_bytes_with_public(
+        enc: &ExpandedDecapsulationKey<P>,
+    ) -> (Self, EncapsulationKey<P>) {
+        let (dk_pke, ek_pke, h, z) = P::split_dk(enc);
+        let dk_pke = MaybeBox::new(DecryptionKey::from_bytes(dk_pke));
+        let ek_pke = EncryptionKey::from_generated_bytes(ek_pke);
+        let ek = EncapsulationKey::from_generated_parts(ek_pke, h);
+        let public = ek.clone();
+        (
+            Self {
+                dk_pke,
+                ek,
+                d: None,
+                z: MaybeBox::new(z.clone()),
+            },
+            public,
+        )
+    }
+
     /// Serialize the [`Seed`] value: 64-bytes which can be used to reconstruct the
     /// [`DecapsulationKey`].
     ///

@@ -1,6 +1,6 @@
 # Native Assembly Implementation Checklist — Historical Record
 
-> **Archived status (2026-10-16):** this checklist belonged to the now-closed Issue #48 initiative. The V4 backend has been integrated into `main`, but it is still experimental and is not wired into `nexusq-core`, CLI, or SDK production cryptographic paths. Do not use the old checkboxes as a live status dashboard: they document the original task plan and evidence references, not the completion state of the current repository. Future production-path integration will use a separate workstream.
+> **Archived status (2026-10-19):** this checklist belonged to the now-closed Issue #48 initiative. The V4 backend has been integrated into `main` and, since PR #55, is wired into `nexusq-core` behind the explicitly opt-in `native-backend` feature; the default build, the CLI and the SDKs still use RustCrypto and the feature is not enabled by default anywhere. Do not use the old checkboxes as a live status dashboard: they document the original task plan and evidence references, not the completion state of the current repository.
 
 Historical tracking issue: [#48](https://github.com/lecodev-26/nexus-q/issues/48).
 

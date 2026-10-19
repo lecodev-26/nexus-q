@@ -13,6 +13,9 @@ on:
     paths:
       - "crates/nexusq-native-backend/**"
       - "arena/runners/nexusq-native/**"
+      - "arena/runners/nexusq/**"
+      - "arena/scripts/evaluate_core_production_benchmark.py"
+      - "arena/schemas/benchmark-result.schema.json"
       - "vendor/mlkem-native/**"
       - "vendor/mldsa-native/**"
       - "vendor/s2n-bignum/**"
@@ -26,8 +29,18 @@ on:
       - ".github/scripts/check-native-backend-unsafe.py"
   pull_request:
     paths:
+      # The integration PR changes the core call sites and feature wiring;
+      # run this backend's upstream, differential, constant-time and perf gates.
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/nexusq-core/**"
+      - ".github/workflows/security-ci.yml"
+      - ".github/workflows/native-backend-gate.yml"
       - "crates/nexusq-native-backend/**"
       - "arena/runners/nexusq-native/**"
+      - "arena/runners/nexusq/**"
+      - "arena/scripts/evaluate_core_production_benchmark.py"
+      - "arena/schemas/benchmark-result.schema.json"
       - "vendor/mlkem-native/**"
       - "vendor/mldsa-native/**"
       - "vendor/s2n-bignum/**"
@@ -304,3 +317,144 @@ jobs:
           path: arena/results/ci/native-backend/
           if-no-files-found: warn
           retention-days: 30
+
+
+  production-path-benchmark:
+    name: nexusq-core production-path benchmark (RustCrypto vs native vs AWS-LC)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: arena/runners/nexusq
+      - name: Install AWS-LC build tools
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build build-essential python3
+      - name: Record host metadata
+        run: |
+          set -euo pipefail
+          out=arena/results/ci/core-production
+          mkdir -p "$out"
+          lscpu | tee "$out/lscpu.txt"
+          rustc -Vv | tee "$out/rustc.txt"
+          cc --version | tee "$out/cc.txt"
+          git rev-parse HEAD | tee "$out/revision.txt"
+          echo "$(awk -F': ' '/model name|Hardware|Processor/{print $2; exit}' /proc/cpuinfo)" > "$out/cpu-model.txt"
+      - name: Build public nexusq-core benchmark with RustCrypto default
+        run: |
+          set -euo pipefail
+          cargo build --manifest-path arena/runners/nexusq/Cargo.toml --locked --release --bin core_production_benchmark
+          cp arena/runners/nexusq/target/release/core_production_benchmark ./core-production-rustcrypto
+      - name: Build public nexusq-core benchmark with native backend opt-in
+        run: |
+          set -euo pipefail
+          cargo build --manifest-path arena/runners/nexusq/Cargo.toml --locked --release --bin core_production_benchmark --features native-backend
+          cp arena/runners/nexusq/target/release/core_production_benchmark ./core-production-native
+      - name: Build pinned AWS-LC comparator
+        run: |
+          set -euo pipefail
+          git init .core-awslc
+          git -C .core-awslc remote add origin https://github.com/aws/aws-lc.git
+          git -C .core-awslc fetch --depth 1 origin "$AWSLC_COMMIT"
+          git -C .core-awslc checkout --detach "$AWSLC_COMMIT"
+          test "$(git -C .core-awslc rev-parse HEAD)" = "$AWSLC_COMMIT"
+          cmake -S .core-awslc -B .core-awslc-build -GNinja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+          cmake --build .core-awslc-build --parallel 2
+          cc -D_POSIX_C_SOURCE=200809L -std=c11 -O3 -Wall -Wextra -Werror \
+            -I"$GITHUB_WORKSPACE/.core-awslc/include" arena/adapters/aws-lc/runner.c \
+            -L"$GITHUB_WORKSPACE/.core-awslc-build/crypto" \
+            -Wl,-rpath,"$GITHUB_WORKSPACE/.core-awslc-build/crypto" -lcrypto -lm \
+            -o ./core-production-aws-lc
+          sha256sum core-production-rustcrypto core-production-native core-production-aws-lc | tee arena/results/ci/core-production/binaries.sha256
+      - name: Run three matched-host replicas with alternating implementation order
+        env:
+          CORE_ITERATIONS: "1000"
+          CORE_WARMUPS: "100"
+          AWSLC_ITERATIONS: "1000"
+          AWSLC_WARMUPS: "100"
+          AWSLC_VERSION: ${{ env.AWSLC_COMMIT }}
+        run: |
+          set -euo pipefail
+          out=arena/results/ci/core-production
+          cpu="$(awk -F': ' '/model name|Hardware|Processor/{print $2; exit}' /proc/cpuinfo)"
+          features="$(grep -m1 '^flags' /proc/cpuinfo | cut -d: -f2 | xargs | tr ' ' ',')"
+          export CORE_CPU="$cpu" CORE_CPU_FEATURES="$features" ARENA_CPU="$cpu" ARENA_CPU_FEATURES="$features"
+          export CORE_COMMIT="${{ github.event.pull_request.head.sha || github.sha }}"
+          export RUSTC_VERSION="$(rustc --version)"
+          export ARENA_TARGET="x86_64-linux-gnu" ARENA_OS="Ubuntu" ARENA_OPT=release
+          export ARENA_CPU_FREQUENCY_KHZ="$(awk -F: '/cpu MHz/ {gsub(/ /,"",$2); printf "%d", $2*1000; exit}' /proc/cpuinfo)"
+          export ARENA_CPU_GOVERNOR="unknown-hosted-runner"
+          # Shared 2-vCPU hosted runners suffer periodic scheduling interference that
+          # inflates p95 tails for BOTH implementations (observed: native and AWS-LC
+          # p95 spikes of 1.5-3.6x own median with medians at 1.0-1.2x, across
+          # different ops/runs/CPUs, on code identical to a fully green run). Pin every
+          # benchmark process to one CPU core with raised priority so the measurement
+          # reflects the code, not the host noise. The gate itself is unchanged:
+          # same threshold (1.5x median and p95), same evaluation, same replicas.
+          run_pinned() {
+            local -a env_args=()
+            local v
+            for v in CORE_ITERATIONS CORE_WARMUPS AWSLC_ITERATIONS AWSLC_WARMUPS \
+                     CORE_IMPL CORE_RUN_ORDER ARENA_RUN_ORDER CORE_CPU CORE_CPU_FEATURES \
+                     ARENA_CPU ARENA_CPU_FEATURES ARENA_CPU_FREQUENCY_KHZ ARENA_CPU_GOVERNOR \
+                     ARENA_TARGET ARENA_OS ARENA_OPT CORE_COMMIT RUSTC_VERSION \
+                     AWSLC_VERSION NEXUSQ_HYBRID_1024 GITHUB_SHA; do
+              if [ -n "${!v:-}" ]; then env_args+=("$v=${!v}"); fi
+            done
+            sudo -n env "${env_args[@]}" taskset -c 1 nice -n -15 "$@"
+          }
+          for replica in 1 2 3; do
+            case "$replica" in
+              1) order="rustcrypto native aws" ;;
+              2) order="native aws rustcrypto" ;;
+              3) order="aws rustcrypto native" ;;
+            esac
+            for impl in $order; do
+              case "$impl" in
+                rustcrypto)
+                  export CORE_IMPL=nexusq-core-rustcrypto CORE_RUN_ORDER="replica-${replica}-${impl}"
+                  run_pinned ./core-production-rustcrypto > "$out/rustcrypto-replica-${replica}.jsonl" ;;
+                native)
+                  export CORE_IMPL=nexusq-core-native-backend CORE_RUN_ORDER="replica-${replica}-${impl}"
+                  run_pinned ./core-production-native > "$out/native-replica-${replica}.jsonl" ;;
+                aws)
+                  export AWSLC_VERSION="$AWSLC_COMMIT" ARENA_RUN_ORDER="replica-${replica}-${impl}"
+                  export NEXUSQ_HYBRID_1024=1
+                  run_pinned ./core-production-aws-lc > "$out/aws-lc-replica-${replica}.jsonl" ;;
+              esac
+            done
+          done
+      - name: Evaluate all replicas against the unchanged 1.5x median/p95 gate
+        if: always()
+        run: |
+          set -uo pipefail
+          out=arena/results/ci/core-production
+          status=0
+          for replica in 1 2 3; do
+            if [ ! -s "$out/rustcrypto-replica-${replica}.jsonl" ] || [ ! -s "$out/native-replica-${replica}.jsonl" ] || [ ! -s "$out/aws-lc-replica-${replica}.jsonl" ]; then
+              echo "replica $replica is missing one or more raw result files" | tee "$out/report-replica-${replica}.md"
+              status=1
+              continue
+            fi
+            if python3 arena/scripts/evaluate_core_production_benchmark.py \
+              "$out/rustcrypto-replica-${replica}.jsonl" \
+              "$out/native-replica-${replica}.jsonl" \
+              "$out/aws-lc-replica-${replica}.jsonl" \
+              | tee "$out/report-replica-${replica}.md"; then
+              :
+            else
+              status=1
+            fi
+          done
+          exit "$status"
+      - name: Upload production-path benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-production-benchmark-${{ github.event.pull_request.head.sha || github.sha }}
+          path: arena/results/ci/core-production/
+          if-no-files-found: warn
+          retention-days: 90

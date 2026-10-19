@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include <ctype.h>
 #include <openssl/evp.h>
+#include <openssl/crypto.h>
 #include <openssl/base.h>
 #include <errno.h>
 #include <math.h>
@@ -19,6 +20,8 @@
 typedef int (*operation_fn)(void *);
 
 static uint64_t *active_cycle_samples;
+static const char *active_measurement_scope = "aws_lc_evp_primitive_operation";
+static const char *active_measurement_method = "per-operation clock_gettime(CLOCK_MONOTONIC); AWS-LC public EVP primitive call; reusable context allocation outside timed samples; per-call sign/verify initialization retained; median of raw samples";
 
 static uint64_t read_cycle_counter(void) {
 #if defined(__x86_64__)
@@ -244,8 +247,8 @@ static void emit(const char *algorithm, const char *parameter, const char *opera
            "\"measurement\":{\"iterations\":%d,\"warmups\":%d,"
            "\"measurement_timestamp_unix_ns\":%llu,\"latency_ns\":%llu,"
            "\"throughput_ops_s\":%.6f,\"memory_bytes\":null,"
-           "\"measurement_method\":\"per-operation clock_gettime(CLOCK_MONOTONIC); AWS-LC public EVP primitive call; reusable context allocation outside timed samples; per-call sign/verify initialization retained; median of raw samples\", "
-           "\"measurement_scope\":\"aws_lc_evp_primitive_operation\", "
+           "\"measurement_method\":\"%s\", "
+           "\"measurement_scope\":\"%s\", "
            "\"comparison_contract\":\"fips_operation_v1\", "
            "\"cycle_counter_source\":\"%s\",\"samples_ns\":[",
            algorithm, parameter, operation, env_or("AWSLC_VERSION", "runtime"),
@@ -254,7 +257,7 @@ static void emit(const char *algorithm, const char *parameter, const char *opera
            env_or("ARENA_OPT", "release"), env_or("ARENA_RUN_ORDER", "unknown"),
            count, warmup_count, timestamp,
            (unsigned long long)stats.median_ns,
-           1e9 / (double)stats.median_ns, cycle_counter_source());
+           1e9 / (double)stats.median_ns, active_measurement_method, active_measurement_scope, cycle_counter_source());
 
     for (int i = 0; i < count; ++i) {
         printf("%s%llu", i ? "," : "", (unsigned long long)samples[i]);
@@ -474,9 +477,164 @@ cleanup:
     return result;
 }
 
+typedef struct {
+    EVP_PKEY *kem_key;
+    EVP_PKEY *x_key;
+    EVP_PKEY *x_public;
+    EVP_PKEY_CTX *encaps_ctx;
+    EVP_PKEY_CTX *decaps_ctx;
+    unsigned char *ciphertext;
+    unsigned char *ml_secret;
+    unsigned char *decapsulated_secret;
+    unsigned char recipient_public[32];
+    unsigned char combined_secret[32];
+    size_t secret_len;
+} hybrid_1024_context;
+
+static int x25519_keygen(EVP_PKEY **key) {
+    EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_X25519, NULL);
+    int ok = ctx && EVP_PKEY_keygen_init(ctx) && EVP_PKEY_keygen(ctx, key);
+    EVP_PKEY_CTX_free(ctx);
+    return ok;
+}
+
+static int x25519_public_bytes(EVP_PKEY *key, unsigned char out[32]) {
+    size_t len = 32;
+    return EVP_PKEY_get_raw_public_key(key, out, &len) && len == 32;
+}
+
+static int x25519_derive(EVP_PKEY *private_key, EVP_PKEY *peer_public, unsigned char out[32]) {
+    EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new(private_key, NULL);
+    size_t len = 32;
+    int ok = ctx && EVP_PKEY_derive_init(ctx) && EVP_PKEY_derive_set_peer(ctx, peer_public)
+          && EVP_PKEY_derive(ctx, out, &len) && len == 32;
+    EVP_PKEY_CTX_free(ctx);
+    return ok;
+}
+
+static int hybrid_1024_keygen_once(void *opaque) {
+    EVP_PKEY_CTX *kem_ctx = opaque;
+    EVP_PKEY *kem_key = NULL, *x_key = NULL;
+    int ok = kem_ctx && EVP_PKEY_keygen(kem_ctx, &kem_key) && x25519_keygen(&x_key);
+    EVP_PKEY_free(kem_key);
+    EVP_PKEY_free(x_key);
+    return ok;
+}
+
+static int hybrid_1024_combine(const unsigned char ml_secret[32], const unsigned char x_secret[32],
+                               const unsigned char ephemeral_public[32], const unsigned char recipient_public[32],
+                               unsigned char out[32]) {
+    static const unsigned char info[] = "nexusq-hybrid-kem-1024-v2";
+    unsigned char input[32 + 32 + 32 + 32 + sizeof(info) - 1];
+    unsigned int out_len = 0;
+    size_t offset = 0;
+    memcpy(input + offset, ml_secret, 32); offset += 32;
+    memcpy(input + offset, x_secret, 32); offset += 32;
+    memcpy(input + offset, ephemeral_public, 32); offset += 32;
+    memcpy(input + offset, recipient_public, 32); offset += 32;
+    memcpy(input + offset, info, sizeof(info) - 1);
+    return EVP_Digest(input, sizeof(input), out, &out_len, EVP_sha3_256(), NULL) && out_len == 32;
+}
+
+static int hybrid_1024_encaps_once(void *opaque) {
+    hybrid_1024_context *ctx = opaque;
+    unsigned char ephemeral_public[32], x_secret[32], combined[32];
+    size_t ml_ct_len = 1568, ml_secret_len = ctx->secret_len;
+    EVP_PKEY *ephemeral = NULL;
+    int ok = ctx->encaps_ctx && EVP_PKEY_encapsulate(ctx->encaps_ctx, ctx->ciphertext, &ml_ct_len,
+                                                     ctx->ml_secret, &ml_secret_len)
+          && ml_ct_len == 1568 && ml_secret_len == 32 && x25519_keygen(&ephemeral)
+          && x25519_public_bytes(ephemeral, ephemeral_public)
+          && x25519_derive(ephemeral, ctx->x_public, x_secret)
+          && hybrid_1024_combine(ctx->ml_secret, x_secret, ephemeral_public,
+                                 ctx->recipient_public, combined);
+    if (ok) {
+        memcpy(ctx->ciphertext + 1568, ephemeral_public, 32);
+        memcpy(ctx->combined_secret, combined, 32);
+    }
+    EVP_PKEY_free(ephemeral);
+    OPENSSL_cleanse(x_secret, sizeof(x_secret));
+    OPENSSL_cleanse(combined, sizeof(combined));
+    return ok;
+}
+
+static int hybrid_1024_decaps_once(void *opaque) {
+    hybrid_1024_context *ctx = opaque;
+    unsigned char ephemeral_public[32], recipient_public[32], x_secret[32], combined[32];
+    size_t secret_len = ctx->secret_len;
+    EVP_PKEY *ephemeral = NULL;
+    int ok = ctx->decaps_ctx && EVP_PKEY_decapsulate(ctx->decaps_ctx, ctx->decapsulated_secret, &secret_len,
+                                                     ctx->ciphertext, 1568)
+          && secret_len == 32 && x25519_public_bytes(ctx->x_key, recipient_public);
+    memcpy(ephemeral_public, ctx->ciphertext + 1568, 32);
+    if (ok) {
+        ephemeral = EVP_PKEY_new_raw_public_key(EVP_PKEY_X25519, NULL, ephemeral_public, 32);
+        ok = ephemeral && x25519_derive(ctx->x_key, ephemeral, x_secret)
+          && hybrid_1024_combine(ctx->decapsulated_secret, x_secret, ephemeral_public, recipient_public, combined)
+          && CRYPTO_memcmp(combined, ctx->combined_secret, 32) == 0;
+    }
+    EVP_PKEY_free(ephemeral);
+    OPENSSL_cleanse(x_secret, sizeof(x_secret));
+    OPENSSL_cleanse(combined, sizeof(combined));
+    return ok;
+}
+
+static int hybrid_1024_parameter(void) {
+    int count = iterations(), warmup_count = warmups(), result = 1;
+    uint64_t *samples = calloc((size_t)count, sizeof(*samples));
+    uint64_t *cycle_samples = calloc((size_t)count, sizeof(*cycle_samples));
+    active_cycle_samples = cycle_samples;
+    EVP_PKEY_CTX *keygen_ctx = new_kem_keygen_context(NID_MLKEM1024);
+    hybrid_1024_context ctx = {0};
+    unsigned char recipient_public[32];
+    if (!samples || !cycle_samples || !keygen_ctx ||
+        !run_samples(hybrid_1024_keygen_once, keygen_ctx, samples, count, warmup_count)) goto cleanup;
+    active_measurement_scope = "aws_lc_nexusq_hybrid_api_comparator";
+    active_measurement_method = "per-operation monotonic clock; AWS-LC ML-KEM-1024 EVP plus X25519 key agreement and SHA3-256 NEXUS-Q hybrid combiner; per-operation allocations included; median from raw samples";
+    emit("ml-kem", "1024", "keygen", samples, count, warmup_count, 1600, 96, 1600, 0, 1, 0);
+    if (!generate_kem_key(&ctx.kem_key, NID_MLKEM1024) || !x25519_keygen(&ctx.x_key) ||
+        !x25519_public_bytes(ctx.x_key, recipient_public)) goto cleanup;
+    ctx.x_public = EVP_PKEY_new_raw_public_key(EVP_PKEY_X25519, NULL, recipient_public, 32);
+    ctx.encaps_ctx = EVP_PKEY_CTX_new(ctx.kem_key, NULL);
+    ctx.decaps_ctx = EVP_PKEY_CTX_new(ctx.kem_key, NULL);
+    ctx.ciphertext = OPENSSL_malloc(1600);
+    ctx.ml_secret = OPENSSL_malloc(32);
+    ctx.decapsulated_secret = OPENSSL_malloc(32);
+    ctx.secret_len = 32;
+    if (!ctx.x_public || !ctx.encaps_ctx || !ctx.decaps_ctx || !ctx.ciphertext || !ctx.ml_secret || !ctx.decapsulated_secret) goto cleanup;
+    /* Keep the recipient public key for the combiner; the ciphertext tail stores the ephemeral public key. */
+    memcpy(ctx.recipient_public, recipient_public, 32);
+    if (!hybrid_1024_encaps_once(&ctx)) goto cleanup;
+    if (!run_samples(hybrid_1024_encaps_once, &ctx, samples, count, warmup_count)) goto cleanup;
+    emit("ml-kem", "1024", "encaps", samples, count, warmup_count, 1600, 96, 1600, 0, 1, 0);
+    if (!run_samples(hybrid_1024_decaps_once, &ctx, samples, count, warmup_count)) goto cleanup;
+    emit("ml-kem", "1024", "decaps", samples, count, warmup_count, 1600, 96, 1600, 0, 1, 0);
+    result = 0;
+cleanup:
+    EVP_PKEY_CTX_free(keygen_ctx);
+    EVP_PKEY_CTX_free(ctx.encaps_ctx);
+    EVP_PKEY_CTX_free(ctx.decaps_ctx);
+    EVP_PKEY_free(ctx.kem_key);
+    EVP_PKEY_free(ctx.x_key);
+    EVP_PKEY_free(ctx.x_public);
+    OPENSSL_free(ctx.ciphertext);
+    OPENSSL_free(ctx.ml_secret);
+    OPENSSL_free(ctx.decapsulated_secret);
+    free(samples);
+    free(cycle_samples);
+    active_cycle_samples = NULL;
+    OPENSSL_cleanse(ctx.combined_secret, sizeof(ctx.combined_secret));
+    active_measurement_scope = "aws_lc_evp_primitive_operation";
+    active_measurement_method = "per-operation clock_gettime(CLOCK_MONOTONIC); AWS-LC public EVP primitive call; reusable context allocation outside timed samples; per-call sign/verify initialization retained; median of raw samples";
+    if (result) fprintf(stderr, "AWS-LC ML-KEM-1024 hybrid benchmark failed\n");
+    return result;
+}
+
 static int kem(void) {
     if (kem_parameter("768", NID_MLKEM768, 1184, 2400, 1088) != 0) return 1;
-    if (kem_parameter("1024", NID_MLKEM1024, 1568, 3168, 1568) != 0) return 1;
+    if (getenv("NEXUSQ_HYBRID_1024") && strcmp(getenv("NEXUSQ_HYBRID_1024"), "1") == 0) {
+        if (hybrid_1024_parameter() != 0) return 1;
+    } else if (kem_parameter("1024", NID_MLKEM1024, 1568, 3168, 1568) != 0) return 1;
     return 0;
 }
 
