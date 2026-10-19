@@ -178,6 +178,31 @@ The ML-DSA-only zeroize control does not prove SHA3/SHAKE zeroization is the cau
 
 </details>
 
+<details>
+<summary><b>V4.1.0 stable line (Arena run and production-path gate)</b></summary>
+
+The v4.1.0 stable line release was validated on `main` with the full PQC Benchmark Arena and the official 1.5× median-and-p95 production-path gate; both are green on the release code (a post-merge compile fix for the pinned Rust 1.85.1 release toolchain landed as [PR #57](https://github.com/lecodev-26/nexus-q/pull/57)).
+
+**Arena run (2026-10-19, commit [`70152eb`](https://github.com/lecodev-26/nexus-q/commit/70152ebcf92c7edfa97c99c5f767a43ecce1aa00)):** 241 normalized measurements on the same `ubuntu-24.04` x86_64 CI environment, 20 iterations and 3 warmups per operation. Comparators: AWS-LC (`ec05f25`), Botan 3.13.0, OpenSSL 3.5.9, CIRCL 1.6.4, RustCrypto KEMs, liboqs 0.16.0 and PQ Code Package, plus the retained V1 / V1+zeroize / V3 controls. Raw JSONL measurements are retained as [CI artifacts of the Arena run](https://github.com/lecodev-26/nexus-q/actions/runs/39186079459); reported without a composite score.
+
+**Production-path gate (native backend vs AWS-LC, three alternating rounds per implementation, pooled medians and nearest-rank p95, 3,000 samples per operation per implementation):** all nine operations passed the unchanged 1.5× median-and-p95 gate on the merged release code ([gate run](https://github.com/lecodev-26/nexus-q/actions/runs/39182674176)).
+
+| Operation | NEXUS-Q median | NEXUS-Q p95 | AWS-LC median | Median ratio | p95 ratio | Gate |
+|---|---:|---:|---:|---:|---:|---|
+| ML-KEM-768 keygen | 12.90 µs | 13.38 µs | 12.33 µs | 1.046 | 1.041 | pass |
+| ML-KEM-768 encaps | 12.94 µs | 13.00 µs | 12.75 µs | 1.015 | 1.013 | pass |
+| ML-KEM-768 decaps | 15.38 µs | 15.44 µs | 15.43 µs | 0.997 | 0.994 | pass |
+| ML-KEM-1024 keygen | 18.34 µs | 18.86 µs | 17.85 µs | 1.028 | 1.025 | pass |
+| ML-KEM-1024 encaps | 18.66 µs | 18.76 µs | 18.56 µs | 1.005 | 0.985 | pass |
+| ML-KEM-1024 decaps | 22.01 µs | 22.10 µs | 22.19 µs | 0.992 | 0.977 | pass |
+| ML-DSA-65 keygen | 35.79 µs | 36.62 µs | 40.00 µs | 0.895 | 0.885 | pass |
+| ML-DSA-65 sign | 83.22 µs | 235.40 µs | 96.57 µs | 0.862 | 0.846 | pass |
+| ML-DSA-65 verify | 33.54 µs | 34.01 µs | 34.31 µs | 0.978 | 0.976 | pass |
+
+These are single-runner CI measurements on an AMD EPYC 7763 hosted runner, not universal performance claims. The native backend remains experimental and opt-in; the default `nexusq-core` build, the CLI and the SDKs still use RustCrypto for production call paths. See [`docs/performance/NATIVE_BACKEND_FEATURE.md`](docs/performance/NATIVE_BACKEND_FEATURE.md) and [`docs/V4_RELEASE.md`](docs/V4_RELEASE.md).
+
+</details>
+
 <div align="center">
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/dark/h-versions.svg"><img src="assets/light/h-versions.svg" alt="Versions" width="100%"></picture>
@@ -190,7 +215,7 @@ The ML-DSA-only zeroize control does not prove SHA3/SHAKE zeroization is the cau
 | V2 | [`v2.0.0`](https://github.com/lecodev-26/nexus-q/releases/tag/v2.0.0) · `nexusqv2` | Security/correctness engineering line | Frozen |
 | V3 | [`v3-engineering-2026-10-09`](https://github.com/lecodev-26/nexus-q/releases/tag/v3-engineering-2026-10-09) · `nexusqv3` | Hardened implementation and benchmark evidence | Engineering release |
 | V4 | [`v4-engineering-2026-10-16`](https://github.com/lecodev-26/nexus-q/tree/v4-engineering-2026-10-16) · `nexusqv4` | Experimental native backend and performance work | Engineering snapshot (pre-release) |
-| V4.1 | `v4.1.0` (tag cut after PR #55 merges and the soaks are green) | Stable line release: opt-in native-backend production-path wiring | **Current stable line — ready for the final independent audit (Phase 21)** |
+| V4.1 | [`v4.1.0`](https://github.com/lecodev-26/nexus-q/releases/tag/v4.1.0) · `main` | Stable line release: opt-in native-backend production-path wiring | **Current stable line — ready for the final independent audit (Phase 21)** |
 
 <details>
 <summary><b>V3 engineering release and V4 snapshot</b></summary>
