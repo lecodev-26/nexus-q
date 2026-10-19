@@ -5,6 +5,10 @@ name: Publish crates
 # with publish-new scope). For the first publication of each crate the token
 # is mandatory; once the crates exist, trusted publishing (OIDC) can replace
 # it (https://crates.io/docs/trusted-publishing).
+#
+# Crates whose exact manifest version is already on crates.io are skipped
+# (see .github/scripts/publish_crates.py), so re-running the workflow only
+# publishes new crates or versions.
 
 on:
   workflow_dispatch:
@@ -29,55 +33,4 @@ jobs:
       - name: Publish crates in dependency order
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          set -euo pipefail
-          crates=(
-            nexusq-kernels
-            nexusq-ml-kem
-            nexusq-ml-dsa
-            nexusq-native-backend
-            nexusq-core
-            nexusq-c
-            nexusq-py
-            nexusq-cli
-            nexusq-server
-            nexusq
-          )
-          # Skip any crate whose exact version is already on crates.io, so
-          # re-running the workflow only publishes new crates/versions.
-          version_of() {
-            python3 - "$1" <<'PY'
-import sys, tomllib
-name = sys.argv[1]
-with open(f"crates/{name}/Cargo.toml", "rb") as f:
-    pkg = tomllib.load(f)["package"]
-ver = pkg.get("version")
-if not isinstance(ver, str):  # { workspace = true } inheritance
-    with open("Cargo.toml", "rb") as f:
-        ver = tomllib.load(f)["workspace"]["package"]["version"]
-print(ver)
-PY
-          }
-          already_published() {
-            python3 - "$1" "$(version_of "$1")" <<'PY'
-import json, sys, urllib.request
-crate, version = sys.argv[1], sys.argv[2]
-req = urllib.request.Request(
-    f"https://crates.io/api/v1/crates/{crate}/{version}",
-    headers={"User-Agent": "nexus-q-publish-workflow (github.com/lecodev-26/nexus-q)"},
-)
-try:
-    urllib.request.urlopen(req)
-    sys.exit(0)  # exact version already published
-except urllib.error.HTTPError:
-    sys.exit(1)  # not published yet
-PY
-          }
-          for c in "${crates[@]}"; do
-            if already_published "$c"; then
-              echo "=== Skipping $c (version already on crates.io) ==="
-              continue
-            fi
-            echo "=== Publishing $c ==="
-            cargo publish -p "$c"
-          done
+        run: python3 .github/scripts/publish_crates.py
