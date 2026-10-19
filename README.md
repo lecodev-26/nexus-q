@@ -126,17 +126,36 @@ The reference document is [`docs/CRYPTOGRAPHY.md`](docs/CRYPTOGRAPHY.md). Planne
 
 </div>
 
-NEXUS-Q is **not presented as a performance leader**. The v1 baseline is slower than the fastest mature implementations on the measured ML-KEM and ML-DSA operations, and that gap is the primary engineering target. Lower latency is better.
+NEXUS-Q is **not presented as a universal performance leader**. On the v4.1.0 stable line, the opt-in native backend measures 0.86×–1.05× of AWS-LC median latency across the nine ML-KEM and ML-DSA operations on the same CI runner, passing the official 1.5× median-and-p95 gate on every operation. The default `nexusq-core` build, the CLI and the SDKs still use RustCrypto for production call paths; the native path is opt-in and experimental. Lower latency is better.
 
 <div align="center">
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/dark/bars.svg"><img src="assets/light/bars.svg" alt="NEXUS-Q v1 versus the fastest comparator on nine ML-KEM and ML-DSA operations" width="100%"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/dark/bars.svg"><img src="assets/light/bars.svg" alt="NEXUS-Q v4.1.0 (opt-in native backend) versus AWS-LC on nine ML-KEM and ML-DSA operations" width="100%"></picture>
 
 </div>
 
+<sub>v4.1.0 stable line, 2026-10-19: official 1.5× median-and-p95 production-path gate (opt-in native backend vs AWS-LC) from the green release CI on the merged v4.1.0 code — three alternating rounds per implementation, pooled medians and nearest-rank p95, 3,000 samples per operation per implementation on an AMD EPYC 7763 CI runner. The full PQC Benchmark Arena run of the same release (241 normalized measurements, eight comparators plus the V1/V1+zeroize/V3 controls) is retained as CI artifacts. Reported without a composite score.</sub>
+
+| Operation | NEXUS-Q | AWS-LC | NEXUS-Q / AWS-LC |
+|---|---:|---:|---:|
+| ML-KEM-768 keygen | 12.90 µs | 12.33 µs | 1.05× |
+| ML-KEM-768 encaps | 12.94 µs | 12.75 µs | 1.01× |
+| ML-KEM-768 decaps | 15.38 µs | 15.43 µs | 1.00× |
+| ML-KEM-1024 keygen | 18.34 µs | 17.85 µs | 1.03× |
+| ML-KEM-1024 encaps | 18.66 µs | 18.56 µs | 1.01× |
+| ML-KEM-1024 decaps | 22.01 µs | 22.19 µs | 0.99× |
+| ML-DSA-65 keygen | 35.79 µs | 40.00 µs | 0.89× |
+| ML-DSA-65 sign | 83.22 µs | 96.57 µs | 0.86× |
+| ML-DSA-65 verify | 33.54 µs | 34.31 µs | 0.98× |
+
+<details>
+<summary><b>v1.0 Arena baseline (historical)</b></summary>
+
+The v1 baseline was slower than the fastest mature implementations on the measured ML-KEM and ML-DSA operations; closing that gap was the primary engineering target of the V4 line.
+
 <sub>Final v1.0 Arena run, 2026-10-05: 57 normalized measurements from eight implementations on the same x86_64 Linux CI environment, 20 iterations and 3 warmups. Reported without a composite score. Comparators: AWS-LC, Botan, CIRCL, liboqs, OpenSSL, PQ Code Package and RustCrypto KEMs. Raw measurements are retained as CI artifacts.</sub>
 
-| Operation | NEXUS-Q | Best measured comparator | NEXUS-Q / best |
+| Operation | NEXUS-Q v1 | Best measured comparator | NEXUS-Q v1 / best |
 |---|---:|---:|---:|
 | ML-KEM-768 keygen | 33.94 µs | AWS-LC, 11.44 µs | 2.97× |
 | ML-KEM-768 encaps | 27.97 µs | AWS-LC, 12.11 µs | 2.31× |
@@ -147,6 +166,8 @@ NEXUS-Q is **not presented as a performance leader**. The v1 baseline is slower 
 | ML-DSA-65 keygen | 168.69 µs | AWS-LC, 44.21 µs | 3.82× |
 | ML-DSA-65 sign | 600.73 µs | AWS-LC, 134.75 µs | 4.46× |
 | ML-DSA-65 verify | 101.20 µs | CIRCL, 22.92 µs | 4.42× |
+
+</details>
 
 <details>
 <summary><b>V1 vs V2 (same-runner Arena comparison)</b></summary>
