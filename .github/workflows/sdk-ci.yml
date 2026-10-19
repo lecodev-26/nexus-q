@@ -139,11 +139,11 @@ jobs:
         run: cargo build -p nexusq-c --locked --release
       - name: Build and test Swift package
         env:
-          DYLD_LIBRARY_PATH: ${{ github.workspace }}/target/release
+          NEXUSQ_LIBRARY: ${{ github.workspace }}/target/release/libnexusq.dylib
         run: |
-          swift build -Xlinker -L$GITHUB_WORKSPACE/target/release
-          swift test -Xlinker -L$GITHUB_WORKSPACE/target/release
-          swift run -Xlinker -L$GITHUB_WORKSPACE/target/release Smoke
+          swift build
+          swift test
+          swift run Smoke
 
   dart:
     name: Dart FFI bindings

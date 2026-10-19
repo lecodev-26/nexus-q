@@ -44,6 +44,8 @@ escape hatch, not the standard installation flow.
   `runtimes/<rid>/native/`, so the normal .NET native resolver can select the
   current RID. CI installs the packed package into a clean consumer and loads
   the library without `NEXUSQ_LIBRARY`.
+- **Swift:** macOS ARM64 uses runtime `dlopen` and downloads/verifies the matching
+  runtime on first use, without a compile-time system-library dependency.
 - **Go:** `bindings/go/scripts/with-runtime.sh` downloads the matching archive,
   verifies both the release-asset and in-archive checksums, validates that the
   provider is RustCrypto, and supplies cgo/linker variables for Linux x64/ARM64
@@ -52,10 +54,10 @@ escape hatch, not the standard installation flow.
   acquisition remains open.
 - **C/C++:** versioned release archives contain the library and public header;
   consumers still need the ecosystem's normal linker/runtime configuration.
-- **Dart and Swift:** automatic acquisition/resolution is not yet complete.
-  Their Dart FFI and SwiftPM system-library integration still requires a
-  compatible library to be built/installed or explicitly located. These SDKs
-  remain open work for issue #61.
+- **Dart:** automatic acquisition is not yet complete. Dart FFI still requires
+  a compatible library to be built/installed or explicitly located; the loader
+  now reports an actionable error for unsupported/missing libraries. This SDK
+  remains open work for issue #61.
 
 ## Release procedure
 
