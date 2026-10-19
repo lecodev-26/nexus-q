@@ -32,11 +32,9 @@ sha256_file() {
 }
 verify_runtime() {
   [[ -f "$RUNTIME_DIR/runtime.json" && -f "$RUNTIME_DIR/SHA256SUMS" && -f "$RUNTIME_DIR/lib/$LIB" ]] || return 1
-  python3 - "$RUNTIME_DIR/runtime.json" "$TARGET" <<'PY' || return 1
-import json,sys
-m=json.load(open(sys.argv[1]))
-assert m.get('target') == sys.argv[2] and m.get('provider') == 'rustcrypto' and m.get('experimental') is False, m
-PY
+  grep -Fq "\"target\": \"$TARGET\"" "$RUNTIME_DIR/runtime.json" || return 1
+  grep -Fq '"provider": "rustcrypto"' "$RUNTIME_DIR/runtime.json" || return 1
+  grep -Fq '"experimental": false' "$RUNTIME_DIR/runtime.json" || return 1
   (cd "$RUNTIME_DIR" && if command -v sha256sum >/dev/null 2>&1; then sha256sum -c SHA256SUMS; else shasum -a 256 -c SHA256SUMS; fi) >/dev/null
 }
 if ! verify_runtime; then
@@ -52,11 +50,9 @@ if ! verify_runtime; then
   tar -xzf "$TEMP/$ARCHIVE" -C "$TEMP"
   NEW_DIR="$TEMP/nexusq-sdk-runtime-$TARGET"
   [[ -d "$NEW_DIR" ]] || { echo "Runtime archive has an unexpected layout" >&2; exit 1; }
-  python3 - "$NEW_DIR/runtime.json" "$TARGET" <<'PY'
-import json,sys
-m=json.load(open(sys.argv[1]))
-assert m.get('target') == sys.argv[2] and m.get('provider') == 'rustcrypto' and m.get('experimental') is False, m
-PY
+  grep -Fq "\"target\": \"$TARGET\"" "$NEW_DIR/runtime.json" || { echo "Runtime target metadata mismatch" >&2; exit 1; }
+  grep -Fq '"provider": "rustcrypto"' "$NEW_DIR/runtime.json" || { echo "Runtime is not the default RustCrypto provider" >&2; exit 1; }
+  grep -Fq '"experimental": false' "$NEW_DIR/runtime.json" || { echo "Refusing an experimental runtime" >&2; exit 1; }
   (cd "$NEW_DIR" && if command -v sha256sum >/dev/null 2>&1; then sha256sum -c SHA256SUMS; else shasum -a 256 -c SHA256SUMS; fi)
   rm -rf "$RUNTIME_DIR"
   mv "$NEW_DIR" "$RUNTIME_DIR"
