@@ -1,0 +1,70 @@
+[package]
+name = "nexusq-ml-dsa"
+description = """
+NEXUS-Q fork of the pure Rust ML-DSA (FIPS 204, formerly CRYSTALS-Dilithium)
+implementation from RustCrypto, with optional NEXUS-Q kernel integration
+"""
+version = "4.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "Apache-2.0 OR MIT"
+readme = "README.md"
+repository = "https://github.com/lecodev-26/nexus-q"
+categories = ["cryptography"]
+keywords = ["crypto", "signature"]
+# Exclude these large files in published crate:
+exclude = [
+    "tests/key-gen.json",
+    "tests/key-gen.rs",
+    "tests/proptests.proptest-regressions",
+    "tests/sig-gen.json",
+    "tests/sig-gen.rs",
+    "tests/sig-ver.json",
+    "tests/sig-ver.rs",
+]
+
+[lib]
+name = "ml_dsa"
+
+[features]
+default = ["alloc", "getrandom", "pkcs8"]
+alloc = ["hybrid-array/alloc", "module-lattice/alloc", "pkcs8?/alloc", "signature/alloc"]
+
+getrandom = ["common/getrandom", "rand_core"]
+pkcs8 = ["dep:const-oid", "dep:pkcs8"]
+rand_core = ["common/rand_core", "signature/rand_core"]
+zeroize = ["dep:zeroize", "hybrid-array/zeroize", "module-lattice/zeroize"]
+nexusq-kernels = ["dep:nexusq-kernels"]
+experimental-kernels = ["nexusq-kernels/experimental-avx2"]
+
+[dependencies]
+common = { package = "crypto-common", version = "0.2", default-features = false }
+ctutils = { version = "0.4", default-features = false }
+hybrid-array = { version = "0.4", features = ["extra-sizes"] }
+module-lattice = { version = "0.2.3", features = ["ctutils"] }
+shake = { version = "0.1", default-features = false }
+signature = { version = "3", default-features = false, features = ["digest"] }
+nexusq-kernels = { version = "4.1.0", optional = true }
+
+# optional dependencies
+const-oid = { version = "0.10", features = ["db"], optional = true }
+pkcs8 = { version = "0.11", default-features = false, optional = true }
+zeroize = { version = "1.8.1", optional = true, default-features = false }
+
+[dev-dependencies]
+criterion = "0.7"
+getrandom = { version = "0.4", features = ["sys_rng"] }
+hex = { version = "0.4.3", features = ["serde"] }
+hex-literal = "1"
+pkcs8 = { version = "0.11", features = ["pem"] }
+proptest = "1"
+serde = { version = "1.0.215", features = ["derive"] }
+serde_json = "1.0.132"
+
+[[bench]]
+name = "ml_dsa"
+harness = false
+required-features = ["getrandom"]
+
+[package.metadata.docs.rs]
+all-features = true

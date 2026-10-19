@@ -4,11 +4,19 @@
 // type delegates to libnexusq; no cryptography and no business logic
 // live here.
 //
-// Build: the C SDK must be built and available. Set CGO_CFLAGS and
-// CGO_LDFLAGS, or place libnexusq where the linker can find it:
+// Build: the C SDK (libnexusq) must be built and available. Set CGO_CFLAGS
+// and CGO_LDFLAGS to point at the header and library, e.g. from a repository
+// checkout:
 //
 //     CGO_CFLAGS="-I $(pwd)/crates/nexusq-c/include" \
-//     CGO_LDFLAGS="-L $(pwd)/target/debug -lnexusq" \
+//     CGO_LDFLAGS="-L $(pwd)/target/release -lnexusq" \
+//     go build
+//
+// With a cargo-c install (cargo cinstall -p nexusq-c) pkg-config metadata is
+// generated, and the flags can be produced with:
+//
+//     CGO_CFLAGS="$(pkg-config --cflags nexusq)" \
+//     CGO_LDFLAGS="$(pkg-config --libs nexusq)" \
 //     go build
 //
 // At runtime, LD_LIBRARY_PATH must include the directory holding
@@ -16,8 +24,6 @@
 package nexusq
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/../../../crates/nexusq-c/include
-#cgo LDFLAGS: -L${SRCDIR}/../../../target/debug -lnexusq
 #include <stdlib.h>
 #include "nexusq.h"
 */

@@ -458,3 +458,16 @@ jobs:
           path: arena/results/ci/core-production/
           if-no-files-found: warn
           retention-days: 90
+
+  vendor-sync:
+    name: Crate-local vendor snapshot in sync with repository vendor/
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Diff crate-local vendored C sources against repository vendor/
+        run: |
+          set -e
+          diff -r vendor/mlkem-native/mlkem crates/nexusq-native-backend/vendor/mlkem-native/mlkem
+          diff -r vendor/mldsa-native/mldsa crates/nexusq-native-backend/vendor/mldsa-native/mldsa
+          diff -r vendor/s2n-bignum crates/nexusq-native-backend/vendor/s2n-bignum

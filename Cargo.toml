@@ -8,6 +8,8 @@ members = [
     "crates/nexusq-server",
     "crates/nexusq-c",
     "crates/nexusq-py",
+    "crates/nexusq-ml-kem",
+    "crates/nexusq-ml-dsa",
 ]
 
 [workspace.package]
@@ -19,10 +21,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/lecodev-26/nexus-q"
 
 [patch.crates-io]
-ml-dsa = { path = "vendor/ml-dsa" }
 nexusq-kernels = { path = "crates/nexusq-kernels" }
-ml-kem = { path = "vendor/ml-kem" }
-module-lattice = { path = "vendor/module-lattice" }
 
 [workspace.dependencies]
 nexusq-core = { path = "crates/nexusq-core", version = "4.1.0" }
@@ -45,9 +44,9 @@ hkdf = "0.13.0-rc.5"
 hmac = { version = "0.13", features = ["zeroize"] }
 aes-gcm = { version = "0.11.0-rc.5", features = ["zeroize"] }
 chacha20poly1305 = { version = "0.11.0-rc.5", features = ["zeroize"] }
-ml-kem = { version = "0.3", features = ["getrandom", "zeroize", "nexusq-kernels"] }
+nexusq-ml-kem = { path = "crates/nexusq-ml-kem", version = "4.1.0", features = ["getrandom", "zeroize", "nexusq-kernels"] }
 module-lattice = "0.2.3"
-ml-dsa = { version = "0.1.1", features = ["zeroize", "nexusq-kernels"] }
+nexusq-ml-dsa = { path = "crates/nexusq-ml-dsa", version = "4.1.0", features = ["zeroize", "nexusq-kernels"] }
 slh-dsa = { version = "0.2.0-rc.5", features = ["zeroize"] }
 x25519-dalek = { version = "3", features = ["getrandom", "static_secrets", "zeroize"] }
 aws-lc-rs = { version = "1", default-features = false, features = ["aws-lc-sys"] }

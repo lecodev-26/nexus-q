@@ -1,10 +1,14 @@
 //! Builds the vendored mlkem-native / mldsa-native (pinned to the commits
 //! imported by AWS-LC ec05f25e) plus the s2n-bignum scalar Keccak routine.
+//!
+//! The C sources are vendored INSIDE this crate (vendor/) so the crate is
+//! self-contained and publishable; the repository-level vendor/ snapshot is
+//! kept for upstream integrity diffing and must stay in sync (checked in CI).
 use std::path::PathBuf;
 
 fn main() {
     let root = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-    let vendor = root.join("../../vendor");
+    let vendor = root.join("vendor");
     let mlkem = vendor.join("mlkem-native/mlkem");
     let mldsa = vendor.join("mldsa-native/mldsa");
     let s2n = vendor.join("s2n-bignum");

@@ -7,7 +7,7 @@
 
 require "rubygems"
 require "tmpdir"
-require_relative "../../nexusq"
+require_relative "../../lib/nexusq"
 
 puts "nexusq version: #{Nexusq.version}"
 
