@@ -1,14 +1,10 @@
-name: Security and Release Gates
+name: NEXUS-Q Phase 1 — Core and Security Gates
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-  workflow_dispatch:
+  workflow_call:
     inputs:
       full_fuzz:
-        description: 'Run the complete 4-hour fuzz soaks (required for final validation)'
+        description: 'Run the complete 4-hour fuzz soaks'
         required: false
         type: boolean
         default: false
@@ -26,6 +22,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
       - name: Install security tooling
         run: |
@@ -94,12 +92,13 @@ jobs:
           path: cargo-metadata.json
 
   fuzz-build:
-    name: Fuzz harness build (main + native backend PR #55)
+    name: Fuzz harness build (main and pull requests)
     runs-on: ubuntu-latest
-    # Compile fuzz harnesses on main; full-duration campaigns are manual-only.
+    # Compile fuzz harnesses as part of the main pipeline and on every PR.
     if: >-
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'pull_request' && github.event.pull_request.number == 55)
+      github.event_name == 'pull_request' ||
+      github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
@@ -151,4 +150,19 @@ jobs:
         run: cargo install cargo-fuzz --locked
       - name: Fuzz envelope parser
         run: cargo fuzz run envelope_parse -- -max_total_time=14400
+        working-directory: fuzz
+
+  fuzz-soak-backup:
+    name: 4-hour fuzz soak - backup importer
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' && inputs.full_fuzz == true
+    timeout-minutes: 250
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Fuzz backup importer
+        run: cargo fuzz run backup_import -- -max_total_time=14400
         working-directory: fuzz

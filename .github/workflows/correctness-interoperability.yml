@@ -1,7 +1,7 @@
 name: NEXUS-Q v2 Correctness and Interoperability
 
 on:
-  workflow_dispatch:
+  workflow_call:
 permissions:
   contents: read
 
@@ -16,8 +16,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Run V2-08 regression suite
         run: cargo test -p nexusq-core --test v2_correctness_interoperability --locked
-      - name: Run core unit and integration tests
-        run: cargo test -p nexusq-core --locked
 
   ml-kem-vectors:
     name: ML-KEM upstream NIST/ACVP and negative-vector tests

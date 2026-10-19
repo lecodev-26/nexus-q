@@ -10,7 +10,7 @@ name: NEXUS-Q Gate A/A control (informational)
 # the 1.5x p95 limit. The threshold and the gate itself are not changed.
 
 on:
-  workflow_dispatch:
+  workflow_call:
 permissions:
   contents: read
 
