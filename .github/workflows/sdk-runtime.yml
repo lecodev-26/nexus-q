@@ -72,7 +72,7 @@ jobs:
           cargo = Path("Cargo.toml").read_text()
           version = re.search(r'(?m)^version = "([^"]+)"', cargo).group(1)
           manifest = {
-              "schema": "nexusq-native-runtime-v1",
+              "schema": "nexusq-sdk-runtime-v1",
               "version": version,
               "target": "${{ matrix.target }}",
               "library": "lib/${{ matrix.library }}",
