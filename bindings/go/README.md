@@ -41,7 +41,8 @@ Build and run (the first call downloads and verifies the runtime):
 ```bash
 cd bindings/go
 ./scripts/with-runtime.sh go run ./examples/smoke
-./scripts/with-runtime.sh go test ./nexusq/...
+cd nexusq
+../scripts/with-runtime.sh go test ./...
 ```
 
 For an advanced local build, set `CGO_CFLAGS`, `CGO_LDFLAGS`, and the platform

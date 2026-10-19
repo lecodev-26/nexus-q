@@ -251,6 +251,8 @@ jobs:
           go-version: '1.27.x'
       - name: Build C SDK
         run: cargo build -p nexusq-c --locked --release
+      - name: Validate Go runtime bootstrap helper
+        run: bash -n bindings/go/scripts/with-runtime.sh
       - name: Test Go SDK against packaged C ABI
         env:
           CGO_CFLAGS: -I${{ github.workspace }}/crates/nexusq-c/include
