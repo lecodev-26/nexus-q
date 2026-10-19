@@ -119,7 +119,7 @@ macro_rules! load_json_file {
             "failed to open Wycheproof vectors; initialize vendor/thirdparty/wycheproof submodule",
         );
 
-        println!("Loading file: {path}");
+        println!("Loading file: {}", path.display());
 
         let tests: TestFile = serde_json::from_reader(data_file).expect("invalid test JSON");
         println!("{}:\n{}\n", tests.algorithm, tests.header.join(""));
