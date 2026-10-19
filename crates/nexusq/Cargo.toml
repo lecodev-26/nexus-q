@@ -1,7 +1,7 @@
 [package]
 name = "nexusq"
 description = "Metacrate for NEXUS-Q: pulls in the full Rust library stack (core, kernels, ML-KEM, ML-DSA) with one dependency"
-version = "4.1.1"
+version = "4.1.0"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true

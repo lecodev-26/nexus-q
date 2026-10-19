@@ -1022,7 +1022,7 @@ dependencies = [
 
 [[package]]
 name = "nexusq"
-version = "4.1.1"
+version = "4.1.0"
 dependencies = [
  "nexusq-core 4.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "nexusq-kernels",
