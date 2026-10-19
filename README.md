@@ -12,7 +12,7 @@
 
 </div>
 
-> **Current project status (2026-10-19):** the workspace is versioned **4.1.0 — the stable line release** of the V4 work, ready for the final independent audit. V1 (`v1.0.0`), V2 (`v2.0.0`) and V3 (`v3-engineering-2026-10-09`) are retained engineering baselines; V4 native-backend work is integrated into `main` by [PR #54](https://github.com/lecodev-26/nexus-q/pull/54) at commit [`1c03968`](https://github.com/lecodev-26/nexus-q/commit/1c03968e9b8d5578020e571e2f25edc5a7165607) and was tagged [`v4-engineering-2026-10-16`](https://github.com/lecodev-26/nexus-q/tree/v4-engineering-2026-10-16) as an engineering snapshot before this release line. The official 1.5× median-and-p95 performance gate passed in the reviewed native-backend CI, and PR [#55](https://github.com/lecodev-26/nexus-q/pull/55) wires the backend into `nexusq-core` behind an explicitly opt-in `native-backend` feature. **The native backend remains experimental: the default `nexusq-core` build, the CLI and the SDKs still use RustCrypto for production call paths; the native path is opt-in only and is not enabled by default anywhere.** The production-path benchmark (native vs RustCrypto vs AWS-LC) passed the unchanged 1.5× median-and-p95 gate. Do not infer an independent audit, FIPS 140-3 validation, production readiness, or v1.0 release readiness. Evaluation commands and feature scope are documented in [`docs/performance/NATIVE_BACKEND_FEATURE.md`](docs/performance/NATIVE_BACKEND_FEATURE.md). See [`docs/performance/NATIVE_BACKEND.md`](docs/performance/NATIVE_BACKEND.md) and [`docs/V3_V4_ROADMAP.md`](docs/V3_V4_ROADMAP.md). Registry publication of the 4.1.0 line (crates.io, PyPI, Go, PHP, Ruby and the C SDK) is complete; see the Installation section.
+> **Current project status (2026-10-19):** the workspace is versioned **4.1.0 — the stable line release** of the V4 work, ready for the final independent audit. V1 (`v1.0.0`), V2 (`v2.0.0`) and V3 (`v3-engineering-2026-10-09`) are retained engineering baselines; V4 native-backend work is integrated into `main` by [PR #54](https://github.com/lecodev-26/nexus-q/pull/54) at commit [`1c03968`](https://github.com/lecodev-26/nexus-q/commit/1c03968e9b8d5578020e571e2f25edc5a7165607) and was tagged [`v4-engineering-2026-10-16`](https://github.com/lecodev-26/nexus-q/tree/v4-engineering-2026-10-16) as an engineering snapshot before this release line. The official 1.5× median-and-p95 performance gate passed in the reviewed native-backend CI, and PR [#55](https://github.com/lecodev-26/nexus-q/pull/55) wires the backend into `nexusq-core` behind an explicitly opt-in `native-backend` feature. **The native backend remains experimental: the default `nexusq-core` build, the CLI and the SDKs still use RustCrypto for production call paths; the native path is opt-in only and is not enabled by default anywhere.** The production-path benchmark (native vs RustCrypto vs AWS-LC) passed the unchanged 1.5× median-and-p95 gate. Do not infer an independent audit, FIPS 140-3 validation, production readiness, or v1.0 release readiness. Evaluation commands and feature scope are documented in [`docs/performance/NATIVE_BACKEND_FEATURE.md`](docs/performance/NATIVE_BACKEND_FEATURE.md). See [`docs/performance/NATIVE_BACKEND.md`](docs/performance/NATIVE_BACKEND.md) and [`docs/V3_V4_ROADMAP.md`](docs/V3_V4_ROADMAP.md). Registry publication of the 4.1.0 line is complete for crates.io, PyPI, npm, RubyGems, Go, the Swift Package Manager (tag `4.1.1`) and the C SDK; Java and Kotlin are validated and syncing to Maven Central, the NuGet publish workflow is queued, and the Packagist package still needs a version sync; see the Installation section.
 
 <div align="center">
 
@@ -302,15 +302,15 @@ The 4.1.0 stable line is published to the language package registries. The insta
 | Rust server | `cargo install nexusq-server` | Available — crates.io |
 | C / C++ SDK | `cargo cinstall -p nexusq-c` with [cargo-c], or build the C library from source with `cargo build -p nexusq-c` | Available — crates.io |
 | Python | `pip install nexusq` | Available — PyPI |
-| TypeScript / Node.js | `npm install nexusq` | Pending first npm publication — binding verified locally and wired into SDK CI (`bindings/typescript`) |
-| Java | dependency `io.github.lecodev-26:nexusq` | Pending first Maven Central publication — binding verified locally and wired into SDK CI (`bindings/java`) |
-| Kotlin | artifact `io.github.lecodev-26:nexusq-kotlin` | Pending first Maven Central publication — binding verified locally and wired into SDK CI (`bindings/kotlin`) |
-| C# / .NET | `dotnet add package Nexusq` | Pending first NuGet publication — binding verified locally and wired into SDK CI (`bindings/dotnet`) |
-| Swift | Swift Package Manager package at this repository (`bindings/swift`) | Pending first tagged release — binding verified locally and wired into SDK CI (`bindings/swift`) |
+| TypeScript / Node.js | `npm install nexusq` | Available — npm, `nexusq@4.1.0` (latest) |
+| Java | Maven Central dependency `io.github.lecodev-26:nexusq:4.1.0` | Publishing — validated and syncing to Maven Central (`bindings/java`) |
+| Kotlin | Maven Central artifact `io.github.lecodev-26:nexusq-kotlin:4.1.0` | Publishing — validated and syncing to Maven Central (`bindings/kotlin`) |
+| C# / .NET | `dotnet add package Nexusq` | Pending — NuGet publish workflow dispatched and queued (`bindings/dotnet`) |
+| Swift | `.package(url: "https://github.com/lecodev-26/nexus-q.git", from: "4.1.1")`, product `Nexusq` | Available — tag `4.1.1` (`bindings/swift`) |
 | Dart / Flutter | `dart pub add nexusq` | Pending first pub.dev publication — binding verified locally and wired into SDK CI (`bindings/dart`) |
 | Go | `go get github.com/lecodev-26/nexus-q/bindings/go/nexusq` | Available — pkg.go.dev |
-| PHP | `composer require lecodev-26/nexusq` | Available — Packagist |
-| Ruby | `gem install nexusq` | Available — RubyGems.org |
+| PHP | `composer require lecodev-26/nexusq` | Registered on Packagist — versions not synced yet, run an Update on the Packagist package page |
+| Ruby | `gem install nexusq` | Available — RubyGems.org, `nexusq 4.1.0` |
 
 Notes:
 
