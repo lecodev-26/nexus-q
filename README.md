@@ -12,7 +12,7 @@
 
 </div>
 
-> **Current project status (2026-10-19):** the workspace is versioned **4.1.0 — the stable line release** of the V4 work, ready for the final independent audit. V1 (`v1.0.0`), V2 (`v2.0.0`) and V3 (`v3-engineering-2026-10-09`) are retained engineering baselines; V4 native-backend work is integrated into `main` by [PR #54](https://github.com/lecodev-26/nexus-q/pull/54) at commit [`1c03968`](https://github.com/lecodev-26/nexus-q/commit/1c03968e9b8d5578020e571e2f25edc5a7165607) and was tagged [`v4-engineering-2026-10-16`](https://github.com/lecodev-26/nexus-q/tree/v4-engineering-2026-10-16) as an engineering snapshot before this release line. The official 1.5× median-and-p95 performance gate passed in the reviewed native-backend CI, and PR [#55](https://github.com/lecodev-26/nexus-q/pull/55) wires the backend into `nexusq-core` behind an explicitly opt-in `native-backend` feature. **The native backend remains experimental: the default `nexusq-core` build, the CLI and the SDKs still use RustCrypto for production call paths; the native path is opt-in only and is not enabled by default anywhere.** The production-path benchmark (native vs RustCrypto vs AWS-LC) passed the unchanged 1.5× median-and-p95 gate. Do not infer an independent audit, FIPS 140-3 validation, production readiness, or v1.0 release readiness. Evaluation commands and feature scope are documented in [`docs/performance/NATIVE_BACKEND_FEATURE.md`](docs/performance/NATIVE_BACKEND_FEATURE.md). See [`docs/performance/NATIVE_BACKEND.md`](docs/performance/NATIVE_BACKEND.md) and [`docs/V3_V4_ROADMAP.md`](docs/V3_V4_ROADMAP.md). Registry publication of the 4.1.0 line is complete for crates.io, PyPI, npm, RubyGems, Go, the Swift Package Manager (tag `4.1.1`) and the C SDK; Java and Kotlin are validated and syncing to Maven Central, the NuGet publish workflow is queued, and the Packagist package still needs a version sync; see the Installation section.
+> **Current project status (2026-10-19):** the workspace is versioned **4.1.0 — the stable line release** of the V4 work, ready for the final independent audit. V1 (`v1.0.0`), V2 (`v2.0.0`) and V3 (`v3-engineering-2026-10-09`) are retained engineering baselines; V4 native-backend work is integrated into `main` by [PR #54](https://github.com/lecodev-26/nexus-q/pull/54) at commit [`1c03968`](https://github.com/lecodev-26/nexus-q/commit/1c03968e9b8d5578020e571e2f25edc5a7165607) and was tagged [`v4-engineering-2026-10-16`](https://github.com/lecodev-26/nexus-q/tree/v4-engineering-2026-10-16) as an engineering snapshot before this release line. The official 1.5× median-and-p95 performance gate passed in the reviewed native-backend CI, and PR [#55](https://github.com/lecodev-26/nexus-q/pull/55) wires the backend into `nexusq-core` behind an explicitly opt-in `native-backend` feature. **The native backend remains experimental: the default `nexusq-core` build, the CLI and the SDKs still use RustCrypto for production call paths; the native path is opt-in only and is not enabled by default anywhere.** The production-path benchmark (native vs RustCrypto vs AWS-LC) passed the unchanged 1.5× median-and-p95 gate. Do not infer an independent audit, FIPS 140-3 validation, production readiness, or v1.0 release readiness. Evaluation commands and feature scope are documented in [`docs/performance/NATIVE_BACKEND_FEATURE.md`](docs/performance/NATIVE_BACKEND_FEATURE.md). See [`docs/performance/NATIVE_BACKEND.md`](docs/performance/NATIVE_BACKEND.md) and [`docs/V3_V4_ROADMAP.md`](docs/V3_V4_ROADMAP.md). Published package channels verified on 2026-10-19: crates.io (Rust library, core, CLI, server, C SDK and PQC crates), PyPI, npm, RubyGems, Maven Central (Java and Kotlin), Packagist, Go via pkg.go.dev, and Swift Package Manager (Git tag `4.1.1`). NuGet and pub.dev did not resolve public packages at verification time and are not described as published; see the Installation section.
 
 <div align="center">
 
@@ -292,31 +292,33 @@ The generated archive contains the CLI, server, non-secret configuration example
 
 ## Installation
 
-The 4.1.0 stable line is published to the language package registries. The installation channel for each SDK:
+The 4.1.0 stable line has published packages across several language registries; availability varies by SDK, and NuGet/pub.dev were not visible at verification time. The installation channel for each SDK:
 
 | Channel | Install | Status |
 |---|---|---|
 | Rust library (all-in-one metacrate) | `cargo add nexusq` | Available — crates.io |
-| Rust library (core only) | `cargo add nexusq-core` | Available — crates.io |
+| Rust library (core only) | `cargo add nexusq-core` | Available — [crates.io](https://crates.io/crates/nexusq-core) |
+| Rust ML-KEM crate | `cargo add nexusq-ml-kem` | Available — [crates.io](https://crates.io/crates/nexusq-ml-kem) |
+| Rust ML-DSA crate | `cargo add nexusq-ml-dsa` | Available — [crates.io](https://crates.io/crates/nexusq-ml-dsa) |
 | Rust CLI | `cargo install nexusq-cli` | Available — crates.io |
 | Rust server | `cargo install nexusq-server` | Available — crates.io |
 | C / C++ SDK | `cargo cinstall -p nexusq-c` with [cargo-c](https://github.com/lu-zero/cargo-c), or build the C library from source with `cargo build -p nexusq-c` | Available — crates.io |
 | Python | `pip install nexusq` | Available — PyPI |
 | TypeScript / Node.js | `npm install nexusq` | Available — npm, `nexusq@4.1.0` (latest) |
-| Java | Maven Central dependency `io.github.lecodev-26:nexusq:4.1.0` | Publishing — validated and syncing to Maven Central (`bindings/java`) |
-| Kotlin | Maven Central artifact `io.github.lecodev-26:nexusq-kotlin:4.1.0` | Publishing — validated and syncing to Maven Central (`bindings/kotlin`) |
-| C# / .NET | `dotnet add package Nexusq` | Pending — NuGet publish workflow dispatched and queued (`bindings/dotnet`) |
+| Java | Maven Central dependency `io.github.lecodev-26:nexusq:4.1.0` | Published — [Maven Central](https://central.sonatype.com/artifact/io.github.lecodev-26/nexusq) |
+| Kotlin | Maven Central artifact `io.github.lecodev-26:nexusq-kotlin:4.1.0` | Published — [Maven Central](https://central.sonatype.com/artifact/io.github.lecodev-26/nexusq-kotlin) |
+| C# / .NET | `dotnet add package Nexusq` | Not yet visible on NuGet at verification time; do not treat as published |
 | Swift | `.package(url: "https://github.com/lecodev-26/nexus-q.git", from: "4.1.1")`, product `Nexusq` | Available — tag `4.1.1` (`bindings/swift`) |
-| Dart / Flutter | `dart pub add nexusq` | Pending first pub.dev publication — binding verified locally and wired into SDK CI (`bindings/dart`) |
+| Dart / Flutter | `dart pub add nexusq` | Not yet visible on pub.dev at verification time; do not treat as published |
 | Go | `go get github.com/lecodev-26/nexus-q/bindings/go/nexusq` | Available — pkg.go.dev, module tag `bindings/go/nexusq/v0.1.0` |
-| PHP | `composer require lecodev-26/nexusq` | Registered on Packagist — versions not synced yet, run an Update on the Packagist package page |
+| PHP | `composer require lecodev-26/nexusq` | Published — [Packagist](https://packagist.org/packages/lecodev-26/nexusq), version `4.1.1` |
 | Ruby | `gem install nexusq` | Available — RubyGems.org, `nexusq 4.1.0` |
 
 Notes:
 
 - The Go, PHP, Ruby, TypeScript, Java (JNA), Kotlin (JNA) and Dart bindings are thin FFI wrappers over the C SDK (`libnexusq`); build and install the C library first. The C#/.NET binding uses P/Invoke and the Swift binding links the C SDK through a Swift Package Manager system-library target, so both need the C library built and on the loader path as well.
 - The Python package is a native extension module built from `crates/nexusq-py` (PyO3).
-- Java and Kotlin resolve from Maven Central once the sync completes:
+- Java and Kotlin are published on Maven Central:
 
   ```xml
   <!-- Maven -->
@@ -372,7 +374,7 @@ User-facing documentation starts at [`docs/user/README.md`](docs/user/README.md)
 
 </div>
 
-V1–V4 are engineering version lines/snapshots, not proof of production readiness. A GitHub release does not imply an independent security audit, certification, FIPS validation, or production readiness; the same applies to registry publication, which is a distribution channel and not a validation claim. The V4 backend remains experimental and is not connected to the production cryptographic paths of `nexusq-core`, CLI, or SDKs. The performance gate result applies to the benchmarked backend and must not be read as an end-to-end application performance claim. Check [current `main` CI](https://github.com/lecodev-26/nexus-q/actions) before relying on any validation statement.
+V1–V4 are engineering version lines/snapshots, not proof of production readiness. A GitHub release does not imply an independent security audit, certification, FIPS validation, or production readiness; the same applies to registry publication, which is a distribution channel and not a validation claim. The V4 native backend remains experimental and opt-in; it is wired into `nexusq-core` behind the `native-backend` feature but is not enabled by default in the core, CLI, server, or SDKs. The performance gate result applies to the benchmarked backend and must not be read as an end-to-end application performance claim. Check [current `main` CI](https://github.com/lecodev-26/nexus-q/actions) before relying on any validation statement.
 
 | ✅ Claimed and evidenced | ❌ Not claimed |
 |---|---|
@@ -380,7 +382,7 @@ V1–V4 are engineering version lines/snapshots, not proof of production readine
 | Secrets zeroized when no longer needed | FIPS validation or Common Criteria certification |
 | Tamper-evident, HMAC-authenticated audit log | Formal verification |
 | Deny-by-default policy engine | Production readiness |
-| Security CI, SDK CI, benchmark CI and fuzz targets | Registry availability as an audit or production-readiness endorsement |
+| Security CI, SDK CI, benchmark CI and fuzz targets | Registry publication as an audit or production-readiness endorsement |
 | Published threat model and security model | Hardware isolation from the default software backend |
 
 Report suspected vulnerabilities privately through GitHub Security Advisories. See [`SECURITY.md`](SECURITY.md).

@@ -199,7 +199,7 @@ h2{font-size:clamp(36px,10vw,60px);max-width:none}
 <body>
 <nav><div class="wrap">
 <a class="logo notranslate" translate="no" href="#top"><img src="/icon-192.png" alt="" width="30" height="30">NEXUS-Q</a>
-<div class="links" id="menu"><a href="#overview">Overview</a><a href="#how">How it works</a><a href="#crypto">Crypto</a><a href="#benchmarks">Benchmarks</a><a href="#versions">Versions</a><a href="#quickstart">Quick start</a><a href="#contribute">Contribute</a><a href="#faq">FAQ</a><a class="mo" href="https://github.com/lecodev-26/nexus-q" target="_blank" rel="noopener">GitHub</a></div>
+<div class="links" id="menu"><a href="#overview">Overview</a><a href="#how">How it works</a><a href="#crypto">Crypto</a><a href="#packages">Packages</a><a href="#benchmarks">Benchmarks</a><a href="#versions">Versions</a><a href="#quickstart">Quick start</a><a href="#contribute">Contribute</a><a href="#faq">FAQ</a><a class="mo" href="https://github.com/lecodev-26/nexus-q" target="_blank" rel="noopener">GitHub</a></div>
 <div class="navr"><button class="tg" id="tg" type="button" aria-label="Switch between light and dark mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><span id="tgt">Light</span></button><a class="btn p" href="https://github.com/lecodev-26/nexus-q" target="_blank" rel="noopener">GitHub</a><button class="mb" id="mb" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button></div>
 </div></nav>
 
@@ -271,6 +271,31 @@ h2{font-size:clamp(36px,10vw,60px);max-width:none}
 </div>
 </div></section>
 
+<section id="packages"><div class="wrap">
+<div class="eyebrow rv">/ packages & distribution</div>
+<h2 class="d rv">Install NEXUS-Q from package registries</h2>
+<p class="sec-lead rv">The 4.1.x packages are published across Rust, Python, JavaScript, Java, Kotlin, Go, PHP, Ruby and Swift channels. Registry publication is a distribution milestone only; it does not imply an independent security audit, certification, or production readiness. Most FFI SDKs require the NEXUS-Q C library (<code>libnexusq</code>) to be installed on the system first.</p>
+<div class="tw rv"><table class="table">
+<tr><th>Ecosystem</th><th>Published package</th><th>Install / dependency</th><th>Registry</th></tr>
+<tr><td>Rust · library</td><td><code>nexusq</code> 4.1.0</td><td><code>cargo add nexusq</code></td><td><a class="lk" href="https://crates.io/crates/nexusq" target="_blank" rel="noopener">crates.io</a></td></tr>
+<tr><td>Rust · core</td><td><code>nexusq-core</code> 4.1.0</td><td><code>cargo add nexusq-core</code></td><td><a class="lk" href="https://crates.io/crates/nexusq-core" target="_blank" rel="noopener">crates.io</a></td></tr>
+<tr><td>Rust · ML-KEM</td><td><code>nexusq-ml-kem</code> 4.1.0</td><td><code>cargo add nexusq-ml-kem</code></td><td><a class="lk" href="https://crates.io/crates/nexusq-ml-kem" target="_blank" rel="noopener">crates.io</a></td></tr>
+<tr><td>Rust · ML-DSA</td><td><code>nexusq-ml-dsa</code> 4.1.0</td><td><code>cargo add nexusq-ml-dsa</code></td><td><a class="lk" href="https://crates.io/crates/nexusq-ml-dsa" target="_blank" rel="noopener">crates.io</a></td></tr>
+<tr><td>Rust · CLI</td><td><code>nexusq-cli</code> 4.1.0</td><td><code>cargo install nexusq-cli</code></td><td><a class="lk" href="https://crates.io/crates/nexusq-cli" target="_blank" rel="noopener">crates.io</a></td></tr>
+<tr><td>Rust · server</td><td><code>nexusq-server</code> 4.1.0</td><td><code>cargo install nexusq-server</code></td><td><a class="lk" href="https://crates.io/crates/nexusq-server" target="_blank" rel="noopener">crates.io</a></td></tr>
+<tr><td>C / C++</td><td><code>nexusq-c</code> 4.1.0</td><td><code>cargo build -p nexusq-c</code> or <code>cargo cinstall -p nexusq-c</code></td><td><a class="lk" href="https://crates.io/crates/nexusq-c" target="_blank" rel="noopener">crates.io</a></td></tr>
+<tr><td>Python</td><td><code>nexusq</code> 4.1.0</td><td><code>pip install nexusq</code></td><td><a class="lk" href="https://pypi.org/project/nexusq/" target="_blank" rel="noopener">PyPI</a></td></tr>
+<tr><td>TypeScript / Node.js</td><td><code>nexusq</code> 4.1.0</td><td><code>npm install nexusq</code></td><td><a class="lk" href="https://www.npmjs.com/package/nexusq" target="_blank" rel="noopener">npm</a></td></tr>
+<tr><td>Java</td><td><code>io.github.lecodev-26:nexusq:4.1.0</code></td><td>Maven / Gradle dependency</td><td><a class="lk" href="https://central.sonatype.com/artifact/io.github.lecodev-26/nexusq" target="_blank" rel="noopener">Maven Central</a></td></tr>
+<tr><td>Kotlin</td><td><code>io.github.lecodev-26:nexusq-kotlin:4.1.0</code></td><td>Maven / Gradle dependency</td><td><a class="lk" href="https://central.sonatype.com/artifact/io.github.lecodev-26/nexusq-kotlin" target="_blank" rel="noopener">Maven Central</a></td></tr>
+<tr><td>Go</td><td><code>bindings/go/nexusq</code> v0.1.0</td><td><code>go get github.com/lecodev-26/nexus-q/bindings/go/nexusq</code></td><td><a class="lk" href="https://pkg.go.dev/github.com/lecodev-26/nexus-q/bindings/go/nexusq" target="_blank" rel="noopener">pkg.go.dev</a></td></tr>
+<tr><td>PHP</td><td><code>lecodev-26/nexusq</code> 4.1.1</td><td><code>composer require lecodev-26/nexusq</code></td><td><a class="lk" href="https://packagist.org/packages/lecodev-26/nexusq" target="_blank" rel="noopener">Packagist</a></td></tr>
+<tr><td>Ruby</td><td><code>nexusq</code> 4.1.0</td><td><code>gem install nexusq</code></td><td><a class="lk" href="https://rubygems.org/gems/nexusq" target="_blank" rel="noopener">RubyGems</a></td></tr>
+<tr><td>Swift</td><td>Swift package tag <code>4.1.1</code></td><td><code>.package(url: "https://github.com/lecodev-26/nexus-q.git", from: "4.1.1")</code></td><td><a class="lk" href="https://github.com/lecodev-26/nexus-q/tree/4.1.1/bindings/swift" target="_blank" rel="noopener">Swift Package Manager / Git tag</a></td></tr>
+</table></div>
+<p class="sec-lead rv" style="margin-top:18px">The NuGet package <code>Nexusq</code> and the Dart package <code>nexusq</code> did not resolve in the public registries at the time this page was checked (October 19, 2026), so they are not listed as published. See the <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/main/README.md#installation" target="_blank" rel="noopener">repository installation matrix</a> for source-build and SDK details.</p>
+</div></section>
+
 <section id="crypto"><div class="wrap">
 <div class="eyebrow rv">/ cryptography</div>
 <h2 class="d rv">Six families, nothing else</h2>
@@ -336,7 +361,7 @@ h2{font-size:clamp(36px,10vw,60px);max-width:none}
 <li>FIPS validation or Common Criteria certification</li>
 <li>Formal verification</li>
 <li>Production readiness</li>
-<li>Publication to crates.io, PyPI or other registries</li>
+<li>Security endorsement, audit, or production readiness implied by publication to a package registry</li>
 <li>Hardware isolation from the default software backend</li>
 <li>Performance leadership</li></ul></div>
 </div>
@@ -413,7 +438,7 @@ cargo build --workspace --release</pre></div>
 <details><summary>Has it been audited?</summary><p>No independent external audit has been completed, and none is implied by a GitHub release. The project states it will link a public evidence package from the repository if one exists.</p></details>
 <details><summary>Why is it slower than AWS-LC and others?</summary><p>V1 was built to be correct and secure first. Its Arena run measured it roughly 2 to 4.5 times slower than the fastest implementations. V3 keeps zeroization and hardening and accepts the cost. V4 includes an experimental native backend. It has passed the measured-backend and production-path 1.5× median-and-p95 gates in the reviewed CI, but the native path is opt-in only and this result is not an end-to-end application benchmark.</p></details>
 <details><summary>Why combine ML-KEM with X25519?</summary><p>A hybrid keeps the key exchange protected as long as at least one of the two schemes holds up. That is the usual reasoning for hybrids while post-quantum algorithms are still young in deployment.</p></details>
-<details><summary>Can I use it from Python, Go, C, PHP or Ruby?</summary><p>The repository includes a C SDK, a Python binding and Go, PHP and Ruby bindings, covered by a dedicated SDK CI. They are not published to package registries, so you build them from source. See the SDK guide.</p></details>
+<details><summary>Can I use it from Python, Go, C, PHP or Ruby?</summary><p>Yes. Python is published on PyPI; Go is available via pkg.go.dev; PHP on Packagist; and Ruby on RubyGems. The C SDK is published on crates.io. The FFI wrappers require the C library (libnexusq) to be installed locally first. See the package table and SDK guide.</p></details>
 <details><summary>What license is it under?</summary><p>You can choose either the MIT license or the Apache License 2.0, the same dual license used by much of the Rust ecosystem.</p></details>
 <details><summary>How can I help?</summary><p>Read the threat model, run the Arena yourself, review the code, and open an issue or a pull request. The 4.1.0 stable line is complete; the independent external audit (Phase 21) is still open and is the remaining step. Security reports go through GitHub Security Advisories.</p></details>
 </div>
