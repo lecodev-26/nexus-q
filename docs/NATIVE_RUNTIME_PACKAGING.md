@@ -54,10 +54,11 @@ escape hatch, not the standard installation flow.
   acquisition remains open.
 - **C/C++:** versioned release archives contain the library and public header;
   consumers still need the ecosystem's normal linker/runtime configuration.
-- **Dart:** automatic acquisition is not yet complete. Dart FFI still requires
-  a compatible library to be built/installed or explicitly located; the loader
-  now reports an actionable error for unsupported/missing libraries. This SDK
-  remains open work for issue #61.
+- **Dart:** `bindings/dart/scripts/with-runtime.sh` downloads and verifies the
+  matching runtime for Linux x64/ARM64 glibc and macOS ARM64, then runs a Dart
+  command with `NEXUSQ_LIBRARY` configured. Dart's current package setup has no
+  install hook, so the wrapper is required unless a compatible library is
+  installed separately.
 
 ## Release procedure
 
