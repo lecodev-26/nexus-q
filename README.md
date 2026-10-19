@@ -300,7 +300,7 @@ The 4.1.0 stable line is published to the language package registries. The insta
 | Rust library (core only) | `cargo add nexusq-core` | Available — crates.io |
 | Rust CLI | `cargo install nexusq-cli` | Available — crates.io |
 | Rust server | `cargo install nexusq-server` | Available — crates.io |
-| C / C++ SDK | `cargo cinstall -p nexusq-c` with [cargo-c], or build the C library from source with `cargo build -p nexusq-c` | Available — crates.io |
+| C / C++ SDK | `cargo cinstall -p nexusq-c` with [cargo-c](https://github.com/lu-zero/cargo-c), or build the C library from source with `cargo build -p nexusq-c` | Available — crates.io |
 | Python | `pip install nexusq` | Available — PyPI |
 | TypeScript / Node.js | `npm install nexusq` | Available — npm, `nexusq@4.1.0` (latest) |
 | Java | Maven Central dependency `io.github.lecodev-26:nexusq:4.1.0` | Publishing — validated and syncing to Maven Central (`bindings/java`) |
@@ -308,7 +308,7 @@ The 4.1.0 stable line is published to the language package registries. The insta
 | C# / .NET | `dotnet add package Nexusq` | Pending — NuGet publish workflow dispatched and queued (`bindings/dotnet`) |
 | Swift | `.package(url: "https://github.com/lecodev-26/nexus-q.git", from: "4.1.1")`, product `Nexusq` | Available — tag `4.1.1` (`bindings/swift`) |
 | Dart / Flutter | `dart pub add nexusq` | Pending first pub.dev publication — binding verified locally and wired into SDK CI (`bindings/dart`) |
-| Go | `go get github.com/lecodev-26/nexus-q/bindings/go/nexusq` | Available — pkg.go.dev |
+| Go | `go get github.com/lecodev-26/nexus-q/bindings/go/nexusq` | Available — pkg.go.dev, module tag `bindings/go/nexusq/v0.1.0` |
 | PHP | `composer require lecodev-26/nexusq` | Registered on Packagist — versions not synced yet, run an Update on the Packagist package page |
 | Ruby | `gem install nexusq` | Available — RubyGems.org, `nexusq 4.1.0` |
 
@@ -316,6 +316,23 @@ Notes:
 
 - The Go, PHP, Ruby, TypeScript, Java (JNA), Kotlin (JNA) and Dart bindings are thin FFI wrappers over the C SDK (`libnexusq`); build and install the C library first. The C#/.NET binding uses P/Invoke and the Swift binding links the C SDK through a Swift Package Manager system-library target, so both need the C library built and on the loader path as well.
 - The Python package is a native extension module built from `crates/nexusq-py` (PyO3).
+- Java and Kotlin resolve from Maven Central once the sync completes:
+
+  ```xml
+  <!-- Maven -->
+  <dependency>
+    <groupId>io.github.lecodev-26</groupId>
+    <artifactId>nexusq</artifactId>
+    <version>4.1.0</version>
+  </dependency>
+  <!-- Kotlin: artifactId nexusq-kotlin, same group and version -->
+  ```
+
+  ```kotlin
+  // Gradle (Kotlin DSL)
+  implementation("io.github.lecodev-26:nexusq:4.1.0")
+  implementation("io.github.lecodev-26:nexusq-kotlin:4.1.0")
+  ```
 - The C SDK is consumable directly from C and C++.
 - The GitHub release archive ships the CLI and server binaries, not the C SDK; build the C library from source or install it via cargo.
 - Registry availability is a distribution channel, not a validation claim; see the security and assurance section below.
