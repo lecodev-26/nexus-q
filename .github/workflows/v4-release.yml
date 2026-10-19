@@ -206,11 +206,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          : > release/NATIVE-RUNTIME-SHA256SUMS
           for directory in native-runtimes/nexusq-native-runtime-*; do
             test -d "$directory"
+            target=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["target"])' "$directory/runtime.json")
+            case "$target" in
+              x86_64-unknown-linux-gnu) asset="nexusq-native-runtime-linux-x64.so" ;;
+              aarch64-unknown-linux-gnu) asset="nexusq-native-runtime-linux-arm64.so" ;;
+              aarch64-apple-darwin) asset="nexusq-native-runtime-macos-arm64.dylib" ;;
+              x86_64-pc-windows-msvc) asset="nexusq-native-runtime-windows-x64.dll" ;;
+              *) echo "Unsupported native runtime target: $target" >&2; exit 1 ;;
+            esac
+            library=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["library"])' "$directory/runtime.json")
+            cp "$directory/$library" "release/$asset"
             archive="release/$(basename "$directory").tar.gz"
             tar -czf "$archive" -C native-runtimes "$(basename "$directory")"
-            sha256sum "$archive" >> release/NATIVE-RUNTIME-SHA256SUMS
+            (cd release && sha256sum "$(basename "$archive")" "$asset") >> release/NATIVE-RUNTIME-SHA256SUMS
           done
           test -s release/NATIVE-RUNTIME-SHA256SUMS
 
@@ -219,6 +230,7 @@ jobs:
         with:
           subject-path: |
             release/*.tar.gz
+            release/nexusq-native-runtime-*
 
       - name: Create GitHub release
         env:
@@ -228,4 +240,4 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --title "NEXUS-Q v4.1.0" \
             --notes-file docs/V4_RELEASE.md \
-            release/*.tar.gz release/SHA256SUMS release/NATIVE-RUNTIME-SHA256SUMS release/*.cdx.json release/*-provenance.json
+            release/*.tar.gz release/nexusq-native-runtime-* release/SHA256SUMS release/NATIVE-RUNTIME-SHA256SUMS release/*.cdx.json release/*-provenance.json

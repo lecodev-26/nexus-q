@@ -11,8 +11,30 @@
  *   NEXUSQ_LIBRARY=target/debug/libnexusq.so node dist/smoke.js
  */
 import koffi from "koffi";
+import path from "node:path";
+import fs from "node:fs";
 
-const libraryPath = process.env.NEXUSQ_LIBRARY || "nexusq";
+function resolveLibraryPath(): string {
+  const override = process.env.NEXUSQ_LIBRARY;
+  if (override) return override;
+  const platform = `${process.platform}-${process.arch}`;
+  const file = platform === "linux-x64" || platform === "linux-arm64"
+    ? "libnexusq.so"
+    : platform === "darwin-arm64"
+      ? "libnexusq.dylib"
+      : platform === "win32-x64"
+        ? "nexusq.dll"
+        : undefined;
+  if (!file) {
+    throw new Error(`NEXUS-Q has no prebuilt native runtime for ${platform}; set NEXUSQ_LIBRARY to an installed compatible library.`);
+  }
+  const bundled = path.join(__dirname, "..", "vendor", file);
+  if (fs.existsSync(bundled)) return bundled;
+  // Source-checkout and advanced system installs may use the platform loader.
+  return file === "nexusq.dll" ? "nexusq" : file;
+}
+
+const libraryPath = resolveLibraryPath();
 const lib = koffi.load(libraryPath);
 
 // Raw C ABI surface of the NEXUS-Q C SDK.

@@ -34,6 +34,8 @@ jobs:
       - name: Build C SDK
         run: cargo build -p nexusq-c --locked --release
       - name: Build TypeScript SDK
+        env:
+          NEXUSQ_SKIP_NATIVE_DOWNLOAD: '1'
         run: |
           cd bindings/typescript
           npm ci

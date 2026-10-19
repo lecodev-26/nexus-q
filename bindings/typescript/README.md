@@ -7,12 +7,23 @@ reimplement anything: every call goes through `libnexusq`.
 
 Node.js only; not for browsers.
 
-## Requirements
+## Installation and native runtime
 
 - Node.js 18 or newer.
-- The C SDK built (`cargo build -p nexusq-c`).
-- `libnexusq.so` available at runtime through `LD_LIBRARY_PATH` or
-  `NEXUSQ_LIBRARY`.
+- On supported published releases, `npm install nexusq` downloads the matching
+  prebuilt runtime and verifies its SHA-256 against the release checksum file.
+  Rust and a local C SDK build are not required.
+- Prebuilt targets: Linux x64/glibc, Linux ARM64/glibc, macOS ARM64, and Windows
+  x64. Other OS/architecture/ABI combinations require a compatible library built
+  separately.
+- `NEXUSQ_LIBRARY` remains available as an advanced override. Runtime downloads
+  are version-matched to the npm package and are never used to change the default
+  provider: RustCrypto remains the default unless a native-enabled runtime is
+  explicitly built and selected.
+
+For a repository checkout where you are building the C library yourself, set
+`NEXUSQ_SKIP_NATIVE_DOWNLOAD=1` during npm install and pass `NEXUSQ_LIBRARY` to
+smoke tests.
 
 ## Usage
 
@@ -26,16 +37,16 @@ console.log(`vault created at ${vault.path}`);
 console.log(`format version: ${vault.formatVersion}`);
 ```
 
-Run with:
+Most users can run the example directly after installing the package:
 
 ```bash
-NEXUSQ_LIBRARY=/path/to/nexusq/target/debug/libnexusq.so node your_program.js
+node your_program.js
 ```
 
-If the library directory is already on the dynamic loader path:
+For development or an advanced custom build, override the library path:
 
 ```bash
-LD_LIBRARY_PATH=/path/to/nexusq/target/debug node your_program.js
+NEXUSQ_LIBRARY=/path/to/libnexusq.so node your_program.js
 ```
 
 ## What is available
@@ -55,7 +66,7 @@ More operations land as the C SDK grows.
 Build and run the smoke test from the repository root:
 
 ```bash
-cd bindings/typescript && npm install && npm run build && cd ../..
+cd bindings/typescript && NEXUSQ_SKIP_NATIVE_DOWNLOAD=1 npm ci && npm run build && cd ../..
 NEXUSQ_LIBRARY=target/debug/libnexusq.so npm --prefix bindings/typescript run smoke
 ```
 
