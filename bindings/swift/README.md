@@ -45,8 +45,9 @@ More operations land as the C SDK grows.
 Run the smoke test and the XCTest suite from the repository root:
 
 ```bash
-NEXUSQ_LIBRARY=target/debug/libnexusq.dylib swift run Smoke
-NEXUSQ_LIBRARY=target/debug/libnexusq.dylib swift test
+cd bindings/swift
+NEXUSQ_LIBRARY=../../target/debug/libnexusq.dylib swift run Smoke
+NEXUSQ_LIBRARY=../../target/debug/libnexusq.dylib swift test
 ```
 
 The Swift binding is intentionally a thin wrapper over the C SDK, matching
