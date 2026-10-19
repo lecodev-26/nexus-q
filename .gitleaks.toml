@@ -8,4 +8,6 @@ description = "Public deterministic test-key fixtures shipped by vendored RustCr
 paths = [
   '''vendor/ml-kem/tests/examples/.*\.priv''',
   '''vendor/ml-dsa/tests/examples/.*\.priv''',
+  '''crates/nexusq-ml-kem/tests/examples/.*\.priv''',
+  '''crates/nexusq-ml-dsa/tests/examples/.*\.priv''',
 ]

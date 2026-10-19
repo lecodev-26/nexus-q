@@ -49,10 +49,28 @@ The semantics are still defined by the same Rust core.
 
 More operations will be exposed as the public Rust API grows.
 
-
 ## Backend capability reporting
 
 `nexusq.backend_info()` returns the provider compiled into the extension:
 `name`, `experimental`, and `native_available`. The default wheel reports
 `rustcrypto`. Experimental builds must be built explicitly with
 `--features native-backend`; this is a build-time choice, not runtime dispatch.
+
+## Sensitive data handling and zeroization
+
+Passwords and any future key material passed through the Python binding are
+treated as sensitive by the Rust core (`Zeroizing` / `zeroize` features).
+
+Callers **must**:
+
+- Avoid keeping passwords or key material in Python strings longer than
+  necessary (Python strings are immutable and may be interned or remain in
+  memory).
+- Prefer short-lived local variables and avoid logging or serializing secrets.
+- Be aware that CPython does not provide a portable secure-wipe for arbitrary
+  Python objects; the binding therefore relies on the Rust core for zeroization
+  of internal buffers.
+
+The binding itself does not retain copies of passwords beyond the duration of
+the call into `nexusq-core`. Future APIs that return key material will document
+explicit ownership and clearing requirements.
