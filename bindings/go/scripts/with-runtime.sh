@@ -61,6 +61,16 @@ if ! verify_runtime; then
 fi
 
 export CGO_CFLAGS="-I$RUNTIME_DIR/include ${CGO_CFLAGS:-}"
-export CGO_LDFLAGS="-L$RUNTIME_DIR/lib -lnexusq ${CGO_LDFLAGS:-}"
-export "$LOADER_VAR"="$RUNTIME_DIR/lib${!LOADER_VAR:+:${!LOADER_VAR}}"
+if [[ -n "${NEXUSQ_LIBRARY:-}" ]]; then
+  OVERRIDE_DIR="$(cd "$(dirname "$NEXUSQ_LIBRARY")" && pwd)"
+  if [[ "$(basename "$NEXUSQ_LIBRARY")" != "$LIB" ]]; then
+    echo "NEXUSQ_LIBRARY must point to a file named $LIB for cgo linking on $OS/$ARCH." >&2
+    exit 2
+  fi
+  export CGO_LDFLAGS="-L$OVERRIDE_DIR -lnexusq ${CGO_LDFLAGS:-}"
+  export "$LOADER_VAR"="$OVERRIDE_DIR${!LOADER_VAR:+:${!LOADER_VAR}}"
+else
+  export CGO_LDFLAGS="-L$RUNTIME_DIR/lib -lnexusq ${CGO_LDFLAGS:-}"
+  export "$LOADER_VAR"="$RUNTIME_DIR/lib${!LOADER_VAR:+:${!LOADER_VAR}}"
+fi
 exec "$@"

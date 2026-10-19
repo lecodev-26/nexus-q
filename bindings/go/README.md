@@ -45,8 +45,9 @@ cd nexusq
 ../scripts/with-runtime.sh go test ./...
 ```
 
-For an advanced local build, set `CGO_CFLAGS`, `CGO_LDFLAGS`, and the platform
-loader path explicitly as described below.
+For an advanced local build, set `NEXUSQ_LIBRARY` to an installed
+`libnexusq.so`/`libnexusq.dylib` (the helper still downloads the matching header),
+or set `CGO_CFLAGS`, `CGO_LDFLAGS`, and the platform loader path explicitly.
 
 The helper sets `CGO_CFLAGS`, `CGO_LDFLAGS`, and `LD_LIBRARY_PATH` (or
 `DYLD_LIBRARY_PATH`) for the child command. When you vendor the Go module
