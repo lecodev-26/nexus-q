@@ -37,7 +37,7 @@ module Nexusq
       raise LoadError, "No prebuilt NEXUS-Q runtime for #{os}/#{arch}; set NEXUSQ_LIBRARY to a compatible library path."
     end
 
-    cache = File.join(Dir.home, ".cache", "nexusq", RUNTIME_VERSION)
+    cache = File.join(Dir.home, ".cache", "nexusq", RUNTIME_VERSION, asset)
     library = File.join(cache, local_name)
     digest_file = "#{library}.sha256"
     FileUtils.mkdir_p(cache)

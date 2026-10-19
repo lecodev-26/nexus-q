@@ -11,7 +11,7 @@ It does not reimplement anything: every call goes through `libnexusq`.
 - Published releases download the version-matched native runtime on supported
   targets (Linux x64/ARM64 glibc, macOS ARM64, Windows x64) and verify its
   SHA-256 checksum before loading it. Consumers do not need Rust installed.
-- The runtime is cached under `~/.cache/nexusq/<version>`.
+- The runtime is cached under `~/.cache/nexusq/<version>/<runtime-asset>`.
 - `NEXUSQ_LIBRARY` remains an advanced override for a custom/local library.
 
 ## Usage

@@ -51,7 +51,7 @@ public final class Nexusq {
         String override = System.getenv("NEXUSQ_LIBRARY");
         if (override != null && !override.isBlank()) return override;
         RuntimeAsset asset = runtimeAsset();
-        Path cache = Path.of(System.getProperty("user.home"), ".cache", "nexusq", RUNTIME_VERSION);
+        Path cache = Path.of(System.getProperty("user.home"), ".cache", "nexusq", RUNTIME_VERSION, asset.assetName);
         Path library = cache.resolve(asset.localName);
         Path digestFile = cache.resolve(asset.localName + ".sha256");
         try {

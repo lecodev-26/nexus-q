@@ -38,7 +38,7 @@ final class Nexusq
         }
 
         $cache = rtrim(getenv('HOME') ?: sys_get_temp_dir(), DIRECTORY_SEPARATOR)
-            . DIRECTORY_SEPARATOR . '.cache' . DIRECTORY_SEPARATOR . 'nexusq' . DIRECTORY_SEPARATOR . self::RUNTIME_VERSION;
+            . DIRECTORY_SEPARATOR . '.cache' . DIRECTORY_SEPARATOR . 'nexusq' . DIRECTORY_SEPARATOR . self::RUNTIME_VERSION . DIRECTORY_SEPARATOR . $asset;
         if (!is_dir($cache) && !mkdir($cache, 0700, true) && !is_dir($cache)) {
             throw new RuntimeException("Cannot create NEXUS-Q runtime cache at {$cache}");
         }

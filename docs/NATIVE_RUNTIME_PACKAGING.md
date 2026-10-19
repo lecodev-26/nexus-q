@@ -37,9 +37,9 @@ escape hatch, not the standard installation flow.
 - **TypeScript/Node.js:** install-time downloader selects a supported asset,
   verifies the release checksum, and caches the runtime in the installed SDK.
 - **Java and Kotlin:** JNA loaders fetch and verify the matching asset on first
-  use, then cache it under `~/.cache/nexusq/<version>`.
+  use, then cache it under `~/.cache/nexusq/<version>/<runtime-asset>` to avoid cross-architecture cache collisions.
 - **Ruby and PHP:** FFI loaders fetch and verify the matching asset on first
-  use, then cache it under the per-user versioned cache directory.
+  use, then cache it under a per-user, versioned, target-specific cache directory.
 - **.NET:** the NuGet publishing workflow stages all four assets under
   `runtimes/<rid>/native/`, so the normal .NET native resolver can select the
   current RID. CI installs the packed package into a clean consumer and loads

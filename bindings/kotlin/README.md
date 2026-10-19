@@ -12,7 +12,7 @@ It does not reimplement anything: every call goes through `libnexusq`.
 - The JNA jar on the classpath.
 - Published releases automatically obtain and SHA-256-verify the matching
   native runtime on Linux x64/ARM64 glibc, macOS ARM64, and Windows x64. Users
-  do not need Rust; the runtime is cached under `~/.cache/nexusq/<version>`.
+  do not need Rust; the runtime is cached under `~/.cache/nexusq/<version>/<runtime-asset>`.
 - `NEXUSQ_LIBRARY` remains an advanced override for local/custom libraries.
 
 ## Usage

@@ -49,7 +49,7 @@ object Nexusq {
     private fun resolveLibrary(): String {
         System.getenv("NEXUSQ_LIBRARY")?.takeIf { it.isNotBlank() }?.let { return it }
         val asset = runtimeAsset()
-        val cache = Path.of(System.getProperty("user.home"), ".cache", "nexusq", RUNTIME_VERSION)
+        val cache = Path.of(System.getProperty("user.home"), ".cache", "nexusq", RUNTIME_VERSION, asset.assetName)
         val library = cache.resolve(asset.localName)
         val digestFile = cache.resolve(asset.localName + ".sha256")
         try {
