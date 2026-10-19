@@ -467,6 +467,7 @@ dependencies = [
  "hybrid-array",
  "kem",
  "module-lattice",
+ "nexusq-kernels",
  "num-rational",
  "pkcs8",
  "rand_core",
@@ -487,6 +488,10 @@ dependencies = [
  "num-traits",
  "zeroize",
 ]
+
+[[package]]
+name = "nexusq-kernels"
+version = "4.1.0"
 
 [[package]]
 name = "num-bigint"
