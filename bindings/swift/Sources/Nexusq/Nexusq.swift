@@ -101,7 +101,7 @@ private enum NativeRuntime {
     private static let handle: UnsafeMutableRawPointer = {
         do {
             let path = try resolveLibraryPath()
-            guard let handle = dlopen(path, RTLD_NOW | RTLD_LOCAL) else {
+            guard let handle = path.withCString({ dlopen($0, RTLD_NOW | RTLD_LOCAL) }) else {
                 let detail = dlerror().map { String(cString: $0) } ?? "unknown dynamic-loader error"
                 throw RuntimeError("Unable to load \(path): \(detail)")
             }
@@ -176,7 +176,7 @@ private enum NativeRuntime {
     }
 
     private static func function<T>(_ name: String, as type: T.Type) -> T {
-        guard let symbol = dlsym(handle, name) else {
+        guard let symbol = name.withCString({ dlsym(handle, $0) }) else {
             let detail = dlerror().map { String(cString: $0) } ?? "symbol not found"
             fatalError("NEXUS-Q runtime is missing \(name): \(detail)")
         }
