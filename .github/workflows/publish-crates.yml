@@ -41,6 +41,7 @@ jobs:
             nexusq-py
             nexusq-cli
             nexusq-server
+            nexusq
           )
           for c in "${crates[@]}"; do
             echo "=== Publishing $c ==="

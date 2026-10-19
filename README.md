@@ -296,7 +296,8 @@ The 4.1.0 stable line is published to the language package registries. The insta
 
 | Channel | Install | Status |
 |---|---|---|
-| Rust library | `cargo add nexusq-core` | Available — crates.io |
+| Rust library (all-in-one metacrate) | `cargo add nexusq` | Available — crates.io |
+| Rust library (core only) | `cargo add nexusq-core` | Available — crates.io |
 | Rust CLI | `cargo install nexusq-cli` | Available — crates.io |
 | Rust server | `cargo install nexusq-server` | Available — crates.io |
 | C / C++ SDK | `cargo cinstall -p nexusq-c` with [cargo-c], or build the C library from source with `cargo build -p nexusq-c` | Available — crates.io |

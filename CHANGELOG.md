@@ -8,6 +8,7 @@
 - Error-handling hardening on the native paths: signing, vault, ML-DSA and ML-KEM key-generation failures propagate as errors; the hybrid X25519 ephemeral path returns `KemError` instead of panicking, and low-order X25519 peer keys are rejected identically in every configuration (constant-time check).
 - Added the tag-gated `v4.1.0` release workflow (full release gate: fmt/check/clippy/tests debug+release, SDK smoke, reproducible packaging, checksums, CycloneDX SBOM, provenance, cross-platform builds) and the release notes in `docs/V4_RELEASE.md`.
 - **Honest caveats, unchanged:** the native backend remains experimental and opt-in; no FIPS 140-3 validation or PCT; the Phase 21 independent external audit remains open — this release is ready for that final audit; the two four-hour fuzz soaks must be executed and confirmed green on the exact merged SHA before the release tag is cut.
+- Post-release additions to the 4.1.0 registry line: the `nexusq` metacrate on crates.io (one `cargo add nexusq` pulls in `nexusq-core`, `nexusq-kernels`, `nexusq-ml-kem`, `nexusq-ml-dsa`) and the multiplatform PyPI wheels for the existing 4.1.0 Python package (macOS x86_64/ARM64, Linux ARM64, Windows x86_64, built from the same 4.1.0 source via the matrix workflow restored from `19ff0da`). The sdist and the Linux x86_64 wheel are unchanged.
 
 
 All notable changes are recorded here. The project remains in engineering/release preparation; entries before a stable public

@@ -1,0 +1,16 @@
+[package]
+name = "nexusq"
+description = "Metacrate for NEXUS-Q: pulls in the full Rust library stack (core, kernels, ML-KEM, ML-DSA) with one dependency"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+
+[dependencies]
+nexusq-core = { version = "4.1.0" }
+nexusq-kernels = { version = "4.1.0" }
+nexusq-ml-kem = { version = "4.1.0" }
+nexusq-ml-dsa = { version = "4.1.0" }

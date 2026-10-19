@@ -10,6 +10,7 @@ members = [
     "crates/nexusq-py",
     "crates/nexusq-ml-kem",
     "crates/nexusq-ml-dsa",
+    "crates/nexusq",
 ]
 
 [workspace.package]

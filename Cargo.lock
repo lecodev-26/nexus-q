@@ -1021,10 +1021,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "nexusq"
+version = "4.1.0"
+dependencies = [
+ "nexusq-core 4.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "nexusq-kernels",
+ "nexusq-ml-dsa 4.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "nexusq-ml-kem 4.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "nexusq-c"
 version = "4.1.0"
 dependencies = [
- "nexusq-core",
+ "nexusq-core 4.1.0",
  "tempfile",
 ]
 
@@ -1034,7 +1044,7 @@ version = "4.1.0"
 dependencies = [
  "clap",
  "hex",
- "nexusq-core",
+ "nexusq-core 4.1.0",
  "rpassword",
  "serde_json",
  "tempfile",
@@ -1059,8 +1069,8 @@ dependencies = [
  "hkdf",
  "hmac",
  "hybrid-array",
- "nexusq-ml-dsa",
- "nexusq-ml-kem",
+ "nexusq-ml-dsa 4.1.0",
+ "nexusq-ml-kem 4.1.0",
  "nexusq-native-backend",
  "proptest",
  "rand_core 0.9.5",
@@ -1071,6 +1081,39 @@ dependencies = [
  "slh-dsa",
  "subtle",
  "tempfile",
+ "thiserror",
+ "tracing",
+ "x25519-dalek",
+ "zeroize",
+]
+
+[[package]]
+name = "nexusq-core"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "02c05f628c3b4cdfdb58a01fd4fba39a882adff7b89d99b1e91253e4fb53eb2f"
+dependencies = [
+ "aes-gcm",
+ "argon2",
+ "base64",
+ "chacha20poly1305",
+ "ciborium",
+ "crc32c",
+ "ed25519-dalek",
+ "getrandom 0.3.4",
+ "hex",
+ "hkdf",
+ "hmac",
+ "hybrid-array",
+ "nexusq-ml-dsa 4.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "nexusq-ml-kem 4.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand_core 0.9.5",
+ "serde",
+ "serde_bytes",
+ "sha2",
+ "sha3",
+ "slh-dsa",
+ "subtle",
  "thiserror",
  "tracing",
  "x25519-dalek",
@@ -1109,6 +1152,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "nexusq-ml-dsa"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3b4b73cc7ca2f51b56f2608758e66f95ca9f89cea406c7f7d2b10d55a1ef3d9"
+dependencies = [
+ "const-oid",
+ "crypto-common",
+ "ctutils",
+ "hybrid-array",
+ "module-lattice",
+ "nexusq-kernels",
+ "pkcs8",
+ "shake",
+ "signature",
+ "zeroize",
+]
+
+[[package]]
 name = "nexusq-ml-kem"
 version = "4.1.0"
 dependencies = [
@@ -1131,6 +1192,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "nexusq-ml-kem"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77427f1a05f6e9a035022d3c1b17588050615bac978dbdd0e5809e70a402e2a1"
+dependencies = [
+ "hybrid-array",
+ "kem",
+ "module-lattice",
+ "nexusq-kernels",
+ "pkcs8",
+ "rand_core 0.10.1",
+ "sha3",
+ "zeroize",
+]
+
+[[package]]
 name = "nexusq-native-backend"
 version = "0.1.0"
 dependencies = [
@@ -1143,7 +1220,7 @@ dependencies = [
 name = "nexusq-py"
 version = "4.1.0"
 dependencies = [
- "nexusq-core",
+ "nexusq-core 4.1.0",
  "pyo3",
  "tempfile",
 ]
@@ -1154,7 +1231,7 @@ version = "4.1.0"
 dependencies = [
  "axum",
  "base64",
- "nexusq-core",
+ "nexusq-core 4.1.0",
  "serde",
  "serde_json",
  "subtle",

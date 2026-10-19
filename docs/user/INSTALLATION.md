@@ -6,7 +6,8 @@ NEXUS-Q can be installed from the language package registries (4.1.0 stable line
 
 | Channel | Install | Status |
 |---|---|---|
-| Rust library | `cargo add nexusq-core` | Available — crates.io |
+| Rust library (all-in-one metacrate) | `cargo add nexusq` | Available — crates.io |
+| Rust library (core only) | `cargo add nexusq-core` | Available — crates.io |
 | Rust CLI | `cargo install nexusq-cli` | Available — crates.io |
 | Rust server | `cargo install nexusq-server` | Available — crates.io |
 | C / C++ SDK | `cargo cinstall -p nexusq-c` (requires [cargo-c](https://github.com/lu-zero/cargo-c)), or build the C library from source | Available — crates.io |
@@ -15,7 +16,7 @@ NEXUS-Q can be installed from the language package registries (4.1.0 stable line
 | PHP | `composer require lecodev-26/nexusq` | Available — Packagist |
 | Ruby | `gem install nexusq` | Available — RubyGems.org |
 
-The Go, PHP and Ruby bindings are thin FFI wrappers over the C SDK (`libnexusq`); build and install the C library first. The Python package is a native extension module built from `crates/nexusq-py` (PyO3). The GitHub release archive ships the CLI and server binaries, not the C SDK.
+The Go, PHP and Ruby bindings are thin FFI wrappers over the C SDK (`libnexusq`); build and install the C library first. The `nexusq` metacrate simply groups the published Rust library crates (`nexusq-core`, `nexusq-kernels`, `nexusq-ml-kem`, `nexusq-ml-dsa`) so a single `cargo add nexusq` pulls them all in; prefer the individual crates for a minimal dependency tree. The Python package is a native extension module built from `crates/nexusq-py` (PyO3). The GitHub release archive ships the CLI and server binaries, not the C SDK.
 
 ## From source
 
