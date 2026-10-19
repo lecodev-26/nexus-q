@@ -29,6 +29,7 @@ jobs:
       contents: read
 
   phase-3-correctness:
+    if: github.event_name != 'pull_request'
     name: 'Phase 3 — Interoperability and upstream vectors'
     needs: phase-2-sdks
     uses: ./.github/workflows/correctness-interoperability.yml
@@ -36,6 +37,7 @@ jobs:
       contents: read
 
   phase-4-native-specialized:
+    if: github.event_name != 'pull_request'
     name: 'Phase 4 — Native assembly and kernel-specific checks'
     needs: phase-3-correctness
     uses: ./.github/workflows/native-assembly-ci.yml
@@ -43,6 +45,7 @@ jobs:
       contents: read
 
   phase-5-native-backend:
+    if: github.event_name != 'pull_request'
     name: 'Phase 5 — Experimental native backend gate'
     needs: phase-4-native-specialized
     uses: ./.github/workflows/native-backend-gate.yml
@@ -50,6 +53,7 @@ jobs:
       contents: read
 
   phase-6-pqc-arena:
+    if: github.event_name != 'pull_request'
     name: 'Phase 6 — PQC Benchmark Arena'
     needs: phase-5-native-backend
     uses: ./.github/workflows/pqc-arena.yml
@@ -57,6 +61,7 @@ jobs:
       contents: read
 
   phase-7-benchmarks:
+    if: github.event_name != 'pull_request'
     name: 'Phase 7 — Cross-platform benchmarks'
     needs: phase-6-pqc-arena
     uses: ./.github/workflows/benchmarks.yml
@@ -64,6 +69,7 @@ jobs:
       contents: read
 
   phase-8-hybrid-benchmark:
+    if: github.event_name != 'pull_request'
     name: 'Phase 8 — Hybrid benchmark gate'
     needs: phase-7-benchmarks
     uses: ./.github/workflows/hybrid-benchmark.yml
@@ -71,6 +77,7 @@ jobs:
       contents: read
 
   phase-10-aa-control:
+    if: github.event_name != 'pull_request'
     name: 'Phase 10 — A/A benchmark noise control'
     needs: phase-8-hybrid-benchmark
     uses: ./.github/workflows/native-backend-aa-control.yml
@@ -78,6 +85,7 @@ jobs:
       contents: read
 
   phase-11-final-fuzz-soak:
+    if: github.event_name != 'pull_request'
     name: 'Phase 11 — Final sequential four-hour fuzz campaigns'
     needs: phase-10-aa-control
     uses: ./.github/workflows/fuzz-soak.yml
