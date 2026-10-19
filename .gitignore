@@ -54,3 +54,4 @@ Thumbs.db
 
 # Local release packaging output
 dist/
+.github/scripts/__pycache__/
