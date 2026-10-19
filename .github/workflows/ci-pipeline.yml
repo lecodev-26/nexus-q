@@ -6,32 +6,6 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      full_fuzz:
-        description: 'Run all four-hour fuzz campaigns in phase 1'
-        type: boolean
-        required: false
-        default: false
-      run_native_gate:
-        description: 'Run the expensive experimental native backend gate after standard CI'
-        type: boolean
-        required: false
-        default: false
-      run_arena:
-        description: 'Run the full PQC Benchmark Arena after previous phases pass'
-        type: boolean
-        required: false
-        default: false
-      run_benchmarks:
-        description: 'Run cross-platform and native-assembly benchmarks after selected prior phases pass'
-        type: boolean
-        required: false
-        default: false
-      run_aa_control:
-        description: 'Run the very expensive 10-replica A/A benchmark control after performance gates pass'
-        type: boolean
-        required: false
-        default: false
 
 permissions:
   contents: read
@@ -44,8 +18,6 @@ jobs:
   phase-1-security-core:
     name: 'Phase 1 — Core, security, secrets and fuzz build'
     uses: ./.github/workflows/security-ci.yml
-    with:
-      full_fuzz: ${{ github.event_name == 'workflow_dispatch' && inputs.full_fuzz }}
     permissions:
       contents: read
 
@@ -71,74 +43,50 @@ jobs:
       contents: read
 
   phase-5-native-backend:
-    name: 'Phase 5 — Experimental native backend gate (optional)'
+    name: 'Phase 5 — Experimental native backend gate'
     needs: phase-4-native-specialized
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_native_gate }}
     uses: ./.github/workflows/native-backend-gate.yml
     permissions:
       contents: read
 
   phase-6-pqc-arena:
-    name: 'Phase 6 — PQC Benchmark Arena (optional)'
-    needs: [phase-4-native-specialized, phase-5-native-backend]
-    if: >-
-      always() && needs.phase-4-native-specialized.result == 'success' &&
-      (needs.phase-5-native-backend.result == 'success' || needs.phase-5-native-backend.result == 'skipped') &&
-      github.event_name == 'workflow_dispatch' && inputs.run_arena
+    name: 'Phase 6 — PQC Benchmark Arena'
+    needs: phase-5-native-backend
     uses: ./.github/workflows/pqc-arena.yml
     permissions:
       contents: read
 
   phase-7-benchmarks:
-    name: 'Phase 7 — Cross-platform benchmarks (optional)'
-    needs: [phase-4-native-specialized, phase-5-native-backend, phase-6-pqc-arena]
-    if: >-
-      always() && needs.phase-4-native-specialized.result == 'success' &&
-      (needs.phase-5-native-backend.result == 'success' || needs.phase-5-native-backend.result == 'skipped') &&
-      (needs.phase-6-pqc-arena.result == 'success' || needs.phase-6-pqc-arena.result == 'skipped') &&
-      github.event_name == 'workflow_dispatch' && inputs.run_benchmarks
+    name: 'Phase 7 — Cross-platform benchmarks'
+    needs: phase-6-pqc-arena
     uses: ./.github/workflows/benchmarks.yml
     permissions:
       contents: read
 
   phase-8-hybrid-benchmark:
-    name: 'Phase 8 — Hybrid benchmark gate (optional)'
-    needs: [phase-4-native-specialized, phase-5-native-backend, phase-6-pqc-arena, phase-7-benchmarks]
-    if: >-
-      always() && needs.phase-4-native-specialized.result == 'success' &&
-      (needs.phase-5-native-backend.result == 'success' || needs.phase-5-native-backend.result == 'skipped') &&
-      (needs.phase-6-pqc-arena.result == 'success' || needs.phase-6-pqc-arena.result == 'skipped') &&
-      (needs.phase-7-benchmarks.result == 'success' || needs.phase-7-benchmarks.result == 'skipped') &&
-      github.event_name == 'workflow_dispatch' && inputs.run_benchmarks
+    name: 'Phase 8 — Hybrid benchmark gate'
+    needs: phase-7-benchmarks
     uses: ./.github/workflows/hybrid-benchmark.yml
     permissions:
       contents: read
 
   phase-9-native-performance:
-    name: 'Phase 9 — Native assembly performance gate (optional)'
-    needs: [phase-4-native-specialized, phase-5-native-backend, phase-6-pqc-arena, phase-7-benchmarks, phase-8-hybrid-benchmark]
-    if: >-
-      always() && needs.phase-4-native-specialized.result == 'success' &&
-      (needs.phase-5-native-backend.result == 'success' || needs.phase-5-native-backend.result == 'skipped') &&
-      (needs.phase-6-pqc-arena.result == 'success' || needs.phase-6-pqc-arena.result == 'skipped') &&
-      (needs.phase-7-benchmarks.result == 'success' || needs.phase-7-benchmarks.result == 'skipped') &&
-      (needs.phase-8-hybrid-benchmark.result == 'success' || needs.phase-8-hybrid-benchmark.result == 'skipped') &&
-      github.event_name == 'workflow_dispatch' && inputs.run_benchmarks
+    name: 'Phase 9 — Native assembly performance gate'
+    needs: phase-8-hybrid-benchmark
     uses: ./.github/workflows/native-assembly-benchmarks.yml
     permissions:
       contents: read
 
   phase-10-aa-control:
-    name: 'Phase 10 — A/A benchmark noise control (optional, very expensive)'
-    needs: [phase-4-native-specialized, phase-5-native-backend, phase-6-pqc-arena, phase-7-benchmarks, phase-8-hybrid-benchmark, phase-9-native-performance]
-    if: >-
-      always() && needs.phase-4-native-specialized.result == 'success' &&
-      (needs.phase-5-native-backend.result == 'success' || needs.phase-5-native-backend.result == 'skipped') &&
-      (needs.phase-6-pqc-arena.result == 'success' || needs.phase-6-pqc-arena.result == 'skipped') &&
-      (needs.phase-7-benchmarks.result == 'success' || needs.phase-7-benchmarks.result == 'skipped') &&
-      (needs.phase-8-hybrid-benchmark.result == 'success' || needs.phase-8-hybrid-benchmark.result == 'skipped') &&
-      (needs.phase-9-native-performance.result == 'success' || needs.phase-9-native-performance.result == 'skipped') &&
-      github.event_name == 'workflow_dispatch' && inputs.run_aa_control
+    name: 'Phase 10 — A/A benchmark noise control'
+    needs: phase-9-native-performance
     uses: ./.github/workflows/native-backend-aa-control.yml
+    permissions:
+      contents: read
+
+  phase-11-final-fuzz-soak:
+    name: 'Phase 11 — Final sequential four-hour fuzz campaigns'
+    needs: phase-10-aa-control
+    uses: ./.github/workflows/fuzz-soak.yml
     permissions:
       contents: read

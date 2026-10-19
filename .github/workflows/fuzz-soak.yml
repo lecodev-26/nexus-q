@@ -1,0 +1,49 @@
+name: NEXUS-Q Final Sequential Four-Hour Fuzz Campaigns
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz-soak-vault:
+    name: 4-hour fuzz soak — vault parser
+    runs-on: ubuntu-latest
+    timeout-minutes: 250
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Fuzz vault parser for four hours
+        run: cargo fuzz run vault_parse -- -max_total_time=14400
+        working-directory: fuzz
+
+  fuzz-soak-envelope:
+    name: 4-hour fuzz soak — envelope parser
+    needs: fuzz-soak-vault
+    runs-on: ubuntu-latest
+    timeout-minutes: 250
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Fuzz envelope parser for four hours
+        run: cargo fuzz run envelope_parse -- -max_total_time=14400
+        working-directory: fuzz
+
+  fuzz-soak-backup:
+    name: 4-hour fuzz soak — backup importer
+    needs: fuzz-soak-envelope
+    runs-on: ubuntu-latest
+    timeout-minutes: 250
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Fuzz backup importer for four hours
+        run: cargo fuzz run backup_import -- -max_total_time=14400
+        working-directory: fuzz

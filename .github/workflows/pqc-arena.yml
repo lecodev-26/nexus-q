@@ -792,7 +792,6 @@ jobs:
 
   profile-diagnostic:
     name: V3 LTO / codegen-units diagnostic
-    if: github.event_name == 'workflow_dispatch' || github.base_ref == 'nexusqv3' || github.ref == 'refs/heads/nexusqv3'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

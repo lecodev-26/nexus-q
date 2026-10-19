@@ -1,26 +1,25 @@
-# CI pipeline
+# NEXUS-Q sequential CI pipeline
 
-`.github/workflows/ci-pipeline.yml` is the only workflow that automatically runs for pushes to `main` and pull requests targeting `main`. It is a sequential orchestrator: a phase starts only after the preceding required phase succeeds. Jobs inside a phase may run in parallel.
+The `ci-pipeline.yml` workflow is the single automatic entry point for pushes to `main` and pull requests targeting `main`. A manual dispatch is also available for reruns; no phase-selection inputs are needed.
 
-## Required phases
+## Execution order and fail-fast behavior
 
-1. Core Rust tests, security/dependency checks, secret scan, fuzz harness compilation. The checkout initializes Git submodules recursively, including Wycheproof vectors.
-2. SDK and language-binding builds/smoke tests.
-3. Interoperability, ML-KEM vectors and upstream correctness suites.
-4. Native assembly/kernel-specific checks, including AVX2 differential tests and the kernel unsafe-code boundary.
+The eleven phases run in order. Each phase has the previous phase as a `needs` dependency, so a failure prevents later phases from starting:
 
-## Optional manual phases
+1. Core Rust/security gates, secret scanning, and fuzz harness compilation.
+2. SDK and language-binding builds/tests.
+3. Correctness, interoperability, and upstream vectors.
+4. Native assembly and kernel-specific checks.
+5. Experimental native-backend gate.
+6. PQC Benchmark Arena and its validation/diagnostic jobs.
+7. Cross-platform benchmarks.
+8. Hybrid benchmark.
+9. Native assembly performance benchmark.
+10. A/A benchmark noise control.
+11. Final long fuzz campaigns, only after phase 10 succeeds.
 
-Use **Actions → NEXUS-Q Sequential CI Pipeline → Run workflow** to enable additional work. All options default to false.
+## Final fuzz campaigns
 
-- `full_fuzz`: four-hour fuzz campaigns for vault, envelope and backup-import parsers (run in phase 1, so later phases wait for them).
-- `run_native_gate`: experimental native backend integrity, correctness, constant-time and benchmark gate.
-- `run_arena`: the full PQC Benchmark Arena.
-- `run_benchmarks`: cross-platform benchmark smoke/results, hybrid benchmark, and native assembly performance gate, in sequence.
-- `run_aa_control`: the ten-replica A/A noise-control experiment, which is particularly expensive.
+The final reusable workflow runs three four-hour campaigns sequentially: vault parser, envelope parser, and backup importer. A campaign failure stops the remaining campaigns. Each job has a 250-minute timeout to allow setup plus the four-hour fuzz run.
 
-Optional phases run only after required phases pass; performance stages are ordered and stop after a failure. Arena and benchmark workloads are not automatically launched on every push.
-
-## Release and publishing
-
-`v4-release.yml` and the NuGet, crates.io, PyPI and RubyGems publishers remain manual-only. They are kept separate because each registry has its own release credentials/trusted-publisher identity; do not merge or rename those publisher workflows without updating the corresponding registry configuration. Run publishing only after reviewing the exact tag/version and a green CI run.
+The phase-1 fuzz job only builds the fuzz harnesses; it does not run the long campaigns early.
