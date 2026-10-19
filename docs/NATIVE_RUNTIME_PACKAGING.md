@@ -44,12 +44,18 @@ escape hatch, not the standard installation flow.
   `runtimes/<rid>/native/`, so the normal .NET native resolver can select the
   current RID. CI installs the packed package into a clean consumer and loads
   the library without `NEXUSQ_LIBRARY`.
+- **Go:** `bindings/go/scripts/with-runtime.sh` downloads the matching archive,
+  verifies both the release-asset and in-archive checksums, validates that the
+  provider is RustCrypto, and supplies cgo/linker variables for Linux x64/ARM64
+  glibc and macOS ARM64. Go/cgo still needs that wrapper around build/test/run;
+  plain `go get` does not execute package install hooks, so fully transparent
+  acquisition remains open.
 - **C/C++:** versioned release archives contain the library and public header;
   consumers still need the ecosystem's normal linker/runtime configuration.
-- **Go, Dart, and Swift:** automatic acquisition/resolution is not yet complete.
-  Their current cgo, Dart FFI, and SwiftPM system-library integration still
-  requires a compatible library to be built/installed or explicitly located.
-  These SDKs remain open work for issue #61.
+- **Dart and Swift:** automatic acquisition/resolution is not yet complete.
+  Their Dart FFI and SwiftPM system-library integration still requires a
+  compatible library to be built/installed or explicitly located. These SDKs
+  remain open work for issue #61.
 
 ## Release procedure
 
