@@ -23,13 +23,13 @@ final class Nexusq
         $os = strtolower(PHP_OS_FAMILY);
         $arch = strtolower(php_uname('m'));
         if ($os === 'linux' && in_array($arch, ['x86_64', 'amd64'], true)) {
-            [$asset, $localName] = ['nexusq-native-runtime-linux-x64.so', 'libnexusq.so'];
+            [$asset, $localName] = ['nexusq-sdk-runtime-linux-x64.so', 'libnexusq.so'];
         } elseif ($os === 'linux' && in_array($arch, ['aarch64', 'arm64'], true)) {
-            [$asset, $localName] = ['nexusq-native-runtime-linux-arm64.so', 'libnexusq.so'];
+            [$asset, $localName] = ['nexusq-sdk-runtime-linux-arm64.so', 'libnexusq.so'];
         } elseif ($os === 'darwin' && in_array($arch, ['arm64', 'aarch64'], true)) {
-            [$asset, $localName] = ['nexusq-native-runtime-macos-arm64.dylib', 'libnexusq.dylib'];
+            [$asset, $localName] = ['nexusq-sdk-runtime-macos-arm64.dylib', 'libnexusq.dylib'];
         } elseif ($os === 'windows' && in_array($arch, ['x86_64', 'amd64'], true)) {
-            [$asset, $localName] = ['nexusq-native-runtime-windows-x64.dll', 'nexusq.dll'];
+            [$asset, $localName] = ['nexusq-sdk-runtime-windows-x64.dll', 'nexusq.dll'];
         } else {
             throw new RuntimeException("No prebuilt NEXUS-Q runtime for {$os}/{$arch}; set NEXUSQ_LIBRARY to a compatible library path.");
         }

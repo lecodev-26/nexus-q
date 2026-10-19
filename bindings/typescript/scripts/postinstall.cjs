@@ -10,10 +10,10 @@ if (process.env.NEXUSQ_LIBRARY || process.env.NEXUSQ_SKIP_NATIVE_DOWNLOAD === "1
 const pkg = require("../package.json");
 const platform = `${process.platform}-${process.arch}`;
 const assets = {
-  "linux-x64": ["nexusq-native-runtime-linux-x64.so", "libnexusq.so"],
-  "linux-arm64": ["nexusq-native-runtime-linux-arm64.so", "libnexusq.so"],
-  "darwin-arm64": ["nexusq-native-runtime-macos-arm64.dylib", "libnexusq.dylib"],
-  "win32-x64": ["nexusq-native-runtime-windows-x64.dll", "nexusq.dll"],
+  "linux-x64": ["nexusq-sdk-runtime-linux-x64.so", "libnexusq.so"],
+  "linux-arm64": ["nexusq-sdk-runtime-linux-arm64.so", "libnexusq.so"],
+  "darwin-arm64": ["nexusq-sdk-runtime-macos-arm64.dylib", "libnexusq.dylib"],
+  "win32-x64": ["nexusq-sdk-runtime-windows-x64.dll", "nexusq.dll"],
 };
 const selected = assets[platform];
 if (!selected) {

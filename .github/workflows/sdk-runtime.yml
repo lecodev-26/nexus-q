@@ -1,0 +1,100 @@
+name: SDK RustCrypto runtime artifacts
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-runtime:
+    name: Build ${{ matrix.target }} RustCrypto SDK runtime
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            features: default
+            library: libnexusq.so
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            features: default
+            library: libnexusq.so
+          - runner: macos-14
+            target: aarch64-apple-darwin
+            features: default
+            library: libnexusq.dylib
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            features: default
+            library: nexusq.dll
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Build and test C ABI runtime
+        run: |
+          cargo test -p nexusq-c --locked
+          cargo build -p nexusq-c --locked --release
+        shell: bash
+      - name: Smoke test the built shared library through its C ABI
+        shell: bash
+        run: |
+          python - <<'PY'
+          import ctypes
+          from pathlib import Path
+          library = Path("target/release/${{ matrix.library }}")
+          runtime = ctypes.CDLL(str(library.resolve()))
+          runtime.nexusq_backend_name.restype = ctypes.c_char_p
+          runtime.nexusq_backend_is_experimental.restype = ctypes.c_uint8
+          name = runtime.nexusq_backend_name().decode("ascii")
+          experimental = runtime.nexusq_backend_is_experimental()
+          assert name == "rustcrypto", name
+          assert experimental == 0, experimental
+          print({"pqc_backend": name, "experimental": experimental, "library": str(library)})
+          PY
+      - name: Assemble versioned runtime artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p native-runtime/lib native-runtime/include
+          cp "target/release/${{ matrix.library }}" native-runtime/lib/
+          cp crates/nexusq-c/include/nexusq.h native-runtime/include/
+          python3 - <<'PY'
+          import hashlib, json, re
+          from pathlib import Path
+          cargo = Path("Cargo.toml").read_text()
+          version = re.search(r'(?m)^version = "([^"]+)"', cargo).group(1)
+          manifest = {
+              "schema": "nexusq-native-runtime-v1",
+              "version": version,
+              "target": "${{ matrix.target }}",
+              "library": "lib/${{ matrix.library }}",
+              "header": "include/nexusq.h",
+              "provider": "rustcrypto",
+              "default_provider": "rustcrypto",
+              "experimental": False,
+              "feature": "default",
+              "automatic_runtime_download": False,
+              "note": "Build artifact for SDK packaging; not an independently audited production release."
+          }
+          Path("native-runtime/runtime.json").write_text(json.dumps(manifest, indent=2) + "\n")
+          files = sorted([*Path("native-runtime/lib").glob("*"), *Path("native-runtime/include").glob("*"), Path("native-runtime/runtime.json")])
+          lines = []
+          for file in files:
+              digest = hashlib.sha256(file.read_bytes()).hexdigest()
+              lines.append(f"{digest}  {file.relative_to('native-runtime')}")
+          Path("native-runtime/SHA256SUMS").write_text("\n".join(lines) + "\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexusq-sdk-runtime-${{ matrix.target }}
+          path: native-runtime/
+          if-no-files-found: error
+          retention-days: 30

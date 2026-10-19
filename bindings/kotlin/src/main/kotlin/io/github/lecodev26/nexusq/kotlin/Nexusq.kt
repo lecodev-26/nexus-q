@@ -97,13 +97,13 @@ object Nexusq {
         val os = System.getProperty("os.name", "").lowercase()
         val arch = System.getProperty("os.arch", "").lowercase()
         if (os.contains("linux") && arch in setOf("amd64", "x86_64"))
-            return RuntimeAsset("nexusq-native-runtime-linux-x64.so", "libnexusq.so")
+            return RuntimeAsset("nexusq-sdk-runtime-linux-x64.so", "libnexusq.so")
         if (os.contains("linux") && arch in setOf("aarch64", "arm64"))
-            return RuntimeAsset("nexusq-native-runtime-linux-arm64.so", "libnexusq.so")
+            return RuntimeAsset("nexusq-sdk-runtime-linux-arm64.so", "libnexusq.so")
         if (os.contains("mac") && arch in setOf("aarch64", "arm64"))
-            return RuntimeAsset("nexusq-native-runtime-macos-arm64.dylib", "libnexusq.dylib")
+            return RuntimeAsset("nexusq-sdk-runtime-macos-arm64.dylib", "libnexusq.dylib")
         if (os.contains("win") && arch in setOf("amd64", "x86_64"))
-            return RuntimeAsset("nexusq-native-runtime-windows-x64.dll", "nexusq.dll")
+            return RuntimeAsset("nexusq-sdk-runtime-windows-x64.dll", "nexusq.dll")
         throw IllegalStateException("No prebuilt NEXUS-Q runtime for $os/$arch. Set NEXUSQ_LIBRARY to a compatible library path.")
     }
 

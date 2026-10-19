@@ -23,13 +23,13 @@ module Nexusq
     os = RbConfig::CONFIG.fetch("host_os", "").downcase
     arch = RbConfig::CONFIG.fetch("host_cpu", "").downcase
     asset, local_name = if os.include?("linux") && %w[x86_64 amd64].include?(arch)
-      ["nexusq-native-runtime-linux-x64.so", "libnexusq.so"]
+      ["nexusq-sdk-runtime-linux-x64.so", "libnexusq.so"]
     elsif os.include?("linux") && %w[aarch64 arm64].include?(arch)
-      ["nexusq-native-runtime-linux-arm64.so", "libnexusq.so"]
+      ["nexusq-sdk-runtime-linux-arm64.so", "libnexusq.so"]
     elsif os.include?("darwin") && %w[arm64 aarch64].include?(arch)
-      ["nexusq-native-runtime-macos-arm64.dylib", "libnexusq.dylib"]
+      ["nexusq-sdk-runtime-macos-arm64.dylib", "libnexusq.dylib"]
     elsif os.match?(/mingw|mswin/) && %w[x86_64 amd64].include?(arch)
-      ["nexusq-native-runtime-windows-x64.dll", "nexusq.dll"]
+      ["nexusq-sdk-runtime-windows-x64.dll", "nexusq.dll"]
     else
       raise LoadError, "No prebuilt NEXUS-Q runtime for #{os}/#{arch}; set NEXUSQ_LIBRARY to a compatible library path."
     end

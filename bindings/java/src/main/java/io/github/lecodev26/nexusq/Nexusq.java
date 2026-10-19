@@ -105,13 +105,13 @@ public final class Nexusq {
         String os = System.getProperty("os.name", "").toLowerCase();
         String arch = System.getProperty("os.arch", "").toLowerCase();
         if (os.contains("linux") && (arch.equals("amd64") || arch.equals("x86_64")))
-            return new RuntimeAsset("nexusq-native-runtime-linux-x64.so", "libnexusq.so");
+            return new RuntimeAsset("nexusq-sdk-runtime-linux-x64.so", "libnexusq.so");
         if (os.contains("linux") && (arch.equals("aarch64") || arch.equals("arm64")))
-            return new RuntimeAsset("nexusq-native-runtime-linux-arm64.so", "libnexusq.so");
+            return new RuntimeAsset("nexusq-sdk-runtime-linux-arm64.so", "libnexusq.so");
         if (os.contains("mac") && (arch.equals("aarch64") || arch.equals("arm64")))
-            return new RuntimeAsset("nexusq-native-runtime-macos-arm64.dylib", "libnexusq.dylib");
+            return new RuntimeAsset("nexusq-sdk-runtime-macos-arm64.dylib", "libnexusq.dylib");
         if (os.contains("win") && (arch.equals("amd64") || arch.equals("x86_64")))
-            return new RuntimeAsset("nexusq-native-runtime-windows-x64.dll", "nexusq.dll");
+            return new RuntimeAsset("nexusq-sdk-runtime-windows-x64.dll", "nexusq.dll");
         throw new IllegalStateException("No prebuilt NEXUS-Q runtime for " + os + "/" + arch
                 + ". Set NEXUSQ_LIBRARY to a compatible library path.");
     }
