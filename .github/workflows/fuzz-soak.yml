@@ -1,4 +1,4 @@
-name: NEXUS-Q Bounded Sequential Fuzz Campaigns
+name: NEXUS-Q Sequential Four-Hour Fuzz Campaigns
 
 on:
   workflow_call:
@@ -6,44 +6,46 @@ on:
 permissions:
   contents: read
 
+# Each campaign is deliberately a single libFuzzer invocation. Do not wrap it
+# in retry/restart loops: libFuzzer owns the four-hour limit and exits normally.
 jobs:
   fuzz-soak-vault:
-    name: bounded fuzz run — vault parser
+    name: four-hour fuzz campaign — vault parser
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 255
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
-      - name: Fuzz vault parser with a hard 10-minute limit
-        run: timeout --signal=INT --kill-after=30s 10m cargo fuzz run vault_parse -- -max_total_time=540
+      - name: Run vault parser campaign for four hours
+        run: cargo fuzz run vault_parse -- -max_total_time=14400 -timeout=30
         working-directory: fuzz
 
   fuzz-soak-envelope:
-    name: bounded fuzz run — envelope parser
+    name: four-hour fuzz campaign — envelope parser
     needs: fuzz-soak-vault
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 255
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
-      - name: Fuzz envelope parser with a hard 10-minute limit
-        run: timeout --signal=INT --kill-after=30s 10m cargo fuzz run envelope_parse -- -max_total_time=540
+      - name: Run envelope parser campaign for four hours
+        run: cargo fuzz run envelope_parse -- -max_total_time=14400 -timeout=30
         working-directory: fuzz
 
   fuzz-soak-backup:
-    name: bounded fuzz run — backup importer
+    name: four-hour fuzz campaign — backup importer
     needs: fuzz-soak-envelope
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 255
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
-      - name: Fuzz backup importer with a hard 10-minute limit
-        run: timeout --signal=INT --kill-after=30s 10m cargo fuzz run backup_import -- -max_total_time=540
+      - name: Run backup importer campaign for four hours
+        run: cargo fuzz run backup_import -- -max_total_time=14400 -timeout=30
         working-directory: fuzz
