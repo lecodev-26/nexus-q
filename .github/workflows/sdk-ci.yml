@@ -275,6 +275,19 @@ jobs:
         env:
           NEXUSQ_LIBRARY: ${{ github.workspace }}/target/release/libnexusq.so
         run: ruby bindings/ruby/examples/smoke/smoke.rb
+      - name: Build and inspect RubyGems package
+        working-directory: bindings/ruby
+        run: |
+          set -euo pipefail
+          gem build nexusq.gemspec
+          gem specification nexusq-4.1.0.gem --yaml > /tmp/nexusq-gem-spec.yml
+          grep -Fq 'version: 4.1.0' /tmp/nexusq-gem-spec.yml
+          grep -Fq '  - MIT' /tmp/nexusq-gem-spec.yml
+          grep -Fq '  - Apache-2.0' /tmp/nexusq-gem-spec.yml
+          grep -Fq -- '- lib/nexusq.rb' /tmp/nexusq-gem-spec.yml
+          grep -Fq -- '- examples/smoke/smoke.rb' /tmp/nexusq-gem-spec.yml
+          grep -Fq -- '- README.md' /tmp/nexusq-gem-spec.yml
+          rm -f nexusq-4.1.0.gem
 
   php:
     name: PHP FFI SDK
