@@ -17,7 +17,9 @@ fn main() {
     let c_keccak = std::env::var("CARGO_FEATURE_UPSTREAM_C_KECCAK").is_ok();
     let arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap();
     let os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
-    let native = !portable && arch == "x86_64" && os == "linux";
+    let native_x86 = !portable && arch == "x86_64" && os == "linux";
+    let native_aarch64 = !portable && arch == "aarch64" && (os == "linux" || os == "android");
+    let native = native_x86 || native_aarch64;
 
     // -O3 as in AWS-LC's CMake Release build. No -mavx2: AVX2 code lives only
     // in .S files and is selected at runtime (AVX2 && BMI2).
@@ -55,9 +57,11 @@ fn main() {
     kem.file(csrc.join("nq_mlkem_all.c"));
     dsa.file(csrc.join("nq_mldsa_all.c"));
     if native {
+        // The upstream monolithic assembly translation units select the matching
+        // x86-64 or AArch64 implementation from the target architecture macros.
         kem.file(csrc.join("nq_mlkem_asm.S"));
         dsa.file(csrc.join("nq_mldsa_asm.S"));
-        if !c_keccak {
+        if native_x86 && !c_keccak {
             // Shared by both libraries (identical permutation, one copy).
             kem.include(s2n.join("include"))
                 .include(&s2n)

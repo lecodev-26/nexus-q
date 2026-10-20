@@ -2,10 +2,12 @@
 //!
 //! Safe Rust API (bytes in / bytes out, FIPS 203/204 contract) over the vendored
 //! mlkem-native v2.0.0 (`d1b2fe78`) and mldsa-native v2.0.0 (`834a90d5`), the
-//! same arithmetic cores that AWS-LC `ec05f25e` imports, plus the s2n-bignum
-//! scalar Keccak-f1600 that AWS-LC uses on x86-64. On x86-64 Linux the AVX2
-//! assembly is selected at runtime (AVX2 && BMI2); otherwise the portable C path
-//! of the same library is used. Secret material is zeroized on drop.
+//! same arithmetic cores that AWS-LC `ec05f25e` imports. On x86-64 Linux the
+//! AVX2 assembly is selected at runtime (AVX2 && BMI2) and the 1-way Keccak
+//! routine uses s2n-bignum; on AArch64, upstream NEON arithmetic and Keccak
+//! assembly are selected for the mandatory Advanced SIMD execution state. The
+//! portable C path remains available through `portable-only`. Secret material
+//! is zeroized on drop.
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -65,6 +67,25 @@ mod error_mapping_tests {
     fn algorithm_specific_minus_six_is_not_misclassified() {
         assert_eq!(map_err(-6), Error::Native(-6));
     }
+
+    #[test]
+    fn keccak_backend_metadata_matches_target_and_features() {
+        let backend = super::keccak_x1_backend();
+        if cfg!(all(
+            target_arch = "x86_64",
+            nq_native_backend_compiled = "true",
+            not(feature = "upstream-c-keccak")
+        )) {
+            assert_eq!(backend, "s2n-bignum sha3_keccak_f1600 (x86-64 asm)");
+        } else if cfg!(all(
+            target_arch = "aarch64",
+            nq_native_backend_compiled = "true"
+        )) {
+            assert_eq!(backend, "mlkem-native/mldsa-native AArch64 assembly");
+        } else {
+            assert_eq!(backend, "upstream portable C");
+        }
+    }
 }
 
 /// True when the AVX2 assembly backend was compiled in and is selected on this
@@ -83,10 +104,16 @@ pub fn native_backend_active() -> bool {
 /// Which 1-way Keccak-f1600 implementation is linked.
 pub fn keccak_x1_backend() -> &'static str {
     if cfg!(all(
+        target_arch = "x86_64",
         nq_native_backend_compiled = "true",
         not(feature = "upstream-c-keccak")
     )) {
         "s2n-bignum sha3_keccak_f1600 (x86-64 asm)"
+    } else if cfg!(all(
+        target_arch = "aarch64",
+        nq_native_backend_compiled = "true"
+    )) {
+        "mlkem-native/mldsa-native AArch64 assembly"
     } else {
         "upstream portable C"
     }

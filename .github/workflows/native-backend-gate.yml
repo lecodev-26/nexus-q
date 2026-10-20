@@ -124,11 +124,25 @@ jobs:
         env:
           NQ_DIFF_ITERS: "2000"
         run: cargo test --manifest-path crates/nexusq-native-backend/Cargo.toml --locked --release --features upstream-c-keccak
-      - name: Build Arena runner
-        if: runner.arch == 'X64'
+      - name: Build Arena runner (x86-64 and AArch64)
         run: |
-          cargo clippy --manifest-path arena/runners/nexusq-native/Cargo.toml --locked --release -- -D warnings
+          cargo clippy --manifest-path arena/runners/nexusq-native/Cargo.toml --locked --release --all-targets -- -D warnings
           cargo build --manifest-path arena/runners/nexusq-native/Cargo.toml --locked --release
+      - name: AArch64 runner smoke test
+        if: runner.arch == 'ARM64'
+        run: |
+          set -euo pipefail
+          NEXUSQ_ITERATIONS=10 NEXUSQ_WARMUPS=2 NEXUSQ_RUN_ID=arm-runner-smoke \
+            cargo run --manifest-path arena/runners/nexusq-native/Cargo.toml --locked --release > arm-runner-smoke.jsonl
+          python3 - <<'PY'
+          import json
+          rows = [json.loads(line) for line in open('arm-runner-smoke.jsonl') if line.strip()]
+          assert len(rows) == 9, f'expected nine operation rows, got {len(rows)}'
+          assert all(len(row['measurement']['samples_ns']) == 10 for row in rows)
+          assert all(row['measurement']['cycle_counter_source'] == 'unavailable_on_target' for row in rows)
+          assert all(row['measurement']['samples_cycles'] == [] for row in rows)
+          print('AArch64 runner smoke: nine operations, nanosecond samples, no fabricated cycle counts')
+          PY
 
   supply-chain:
     name: cargo-audit on the new lockfiles

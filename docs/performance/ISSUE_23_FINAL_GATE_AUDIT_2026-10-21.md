@@ -30,3 +30,25 @@ The official 1.5× median-and-p95 gate is the current intermediate gate. Re-eval
 ## Verification tooling change
 
 `arena/scripts/evaluate_native_assembly_gate.py` now accepts an optional `--limit RATIO`. The default remains `1.5`, preserving the existing workflow behavior. Passing `--limit 1.0` evaluates the original Issue #23 final target without weakening the intermediate gate. Regression tests cover the default, exact parity, a failing 1.00× case, and invalid thresholds.
+
+## Additional local work (2026-10-21)
+
+The native backend build now enables the upstream-vendored AArch64 NEON arithmetic and Keccak assembly on Linux/Android AArch64, with NEON capability enabled only for that architecture. `portable-only` still disables assembly. This is an architecture-path enablement, not evidence that the original x86-64 1.00× performance target has been met. Local AArch64 differential tests must pass, and the matched x86-64 benchmark plus upstream KAT/ACVP and constant-time workflow gates remain required before acceptance.
+
+### Local AArch64 native-vs-portable diagnostic
+
+The native Arena runner now builds on AArch64 and records nanosecond samples without fabricating x86 TSC values (`cycle_counter_source=unavailable_on_target`, empty `samples_cycles`). Three alternating local rounds were run on Android/AArch64 with 100 warmups and 1,000 samples per operation per round. The raw JSONL is retained outside the repository at `$HOME/nexusq-issue23-baseline/local-aarch64/`. This compares the upstream AArch64 assembly path with the same vendored implementation's portable-C path, not with AWS-LC and not with the x86-64 final gate.
+
+| Operation | Native assembly median (µs) | Portable C median (µs) | Median ratio | Native assembly p95 (µs) | Portable C p95 (µs) | p95 ratio |
+|---|---:|---:|---:|---:|---:|---:|
+| ML-DSA-65 keygen | 92.62 | 191.69 | 0.483× | 96.00 | 213.62 | 0.449× |
+| ML-DSA-65 sign | 223.19 | 619.65 | 0.360× | 603.38 | 1917.15 | 0.315× |
+| ML-DSA-65 verify | 88.31 | 179.77 | 0.491× | 90.39 | 192.54 | 0.469× |
+| ML-KEM-1024 decaps | 45.85 | 79.46 | 0.577× | 47.38 | 82.15 | 0.577× |
+| ML-KEM-1024 encaps | 37.23 | 69.85 | 0.533× | 38.23 | 71.15 | 0.537× |
+| ML-KEM-1024 keygen | 36.62 | 73.15 | 0.501× | 38.08 | 76.31 | 0.499× |
+| ML-KEM-768 decaps | 31.31 | 51.69 | 0.606× | 32.62 | 52.92 | 0.616× |
+| ML-KEM-768 encaps | 25.54 | 44.62 | 0.572× | 27.31 | 59.38 | 0.460× |
+| ML-KEM-768 keygen | 25.46 | 46.38 | 0.549× | 29.85 | 48.92 | 0.610× |
+
+The AArch64 assembly path was faster than portable C in all nine operation medians in this local diagnostic. ML-DSA signing's p95 remains noisy, so this is directional evidence rather than a release claim. It does not resolve the separate x86-64 comparison against AWS-LC, nor restore liboqs/CIRCL as the best-per-operation comparators required by the original issue.
