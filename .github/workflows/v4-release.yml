@@ -168,7 +168,7 @@ jobs:
 
   sdk-runtime:
     name: Build version-matched default-provider SDK runtimes
-    if: startsWith(github.ref, 'refs/tags/v4.1.0') || github.event_name == 'workflow_dispatch'
+    if: github.ref == 'refs/tags/v4.1.0' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     needs: [release-gate]
     uses: ./.github/workflows/sdk-runtime.yml
     permissions:
@@ -176,7 +176,7 @@ jobs:
 
   public-release:
     name: Publish GitHub v4.1.0 release
-    if: startsWith(github.ref, 'refs/tags/v4.1.0') || github.event_name == 'workflow_dispatch'
+    if: github.ref == 'refs/tags/v4.1.0' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     needs: [release-gate, platform-gate, sdk-runtime]
     runs-on: ubuntu-latest
     permissions:
