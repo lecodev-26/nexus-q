@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail closed unless every required PQC operation meets the 1.5x median+p95 gate."""
+"""Fail closed unless every required PQC operation meets the selected median+p95 ratio gate."""
 from __future__ import annotations
 import json, math, statistics, sys
 from pathlib import Path
@@ -44,17 +44,33 @@ def read_rows(paths: list[Path], expected_id: str) -> dict[tuple[str, str, str],
     return result
 
 def main() -> int:
-    if len(sys.argv) < 4:
-        print("usage: evaluator REPORT.json nexusq-round1.jsonl nexusq-round2.jsonl nexusq-round3.jsonl -- aws-round1.jsonl aws-round2.jsonl aws-round3.jsonl", file=sys.stderr)
+    args = sys.argv[1:]
+    limit = LIMIT
+    if "--limit" in args:
+        index = args.index("--limit")
+        if index + 1 >= len(args):
+            print("--limit requires a positive ratio (for example 1.0)", file=sys.stderr)
+            return 64
+        try:
+            limit = float(args[index + 1])
+        except ValueError:
+            print("--limit requires a numeric ratio (for example 1.0)", file=sys.stderr)
+            return 64
+        if not math.isfinite(limit) or limit <= 0:
+            print("--limit must be a finite positive ratio", file=sys.stderr)
+            return 64
+        del args[index:index + 2]
+    if len(args) < 4:
+        print("usage: evaluator REPORT.json [--limit RATIO] nexusq-round1.jsonl nexusq-round2.jsonl nexusq-round3.jsonl -- aws-round1.jsonl aws-round2.jsonl aws-round3.jsonl", file=sys.stderr)
         return 64
-    report_path = Path(sys.argv[1])
+    report_path = Path(args[0])
     try:
-        separator = sys.argv.index("--", 2)
+        separator = args.index("--", 1)
     except ValueError:
         print("missing -- separator between NEXUS-Q and AWS-LC files", file=sys.stderr)
         return 64
-    nexus_paths = [Path(x) for x in sys.argv[2:separator]]
-    aws_paths = [Path(x) for x in sys.argv[separator + 1:]]
+    nexus_paths = [Path(x) for x in args[1:separator]]
+    aws_paths = [Path(x) for x in args[separator + 1:]]
     if len(nexus_paths) != 3 or len(aws_paths) != 3:
         print("gate requires exactly three NEXUS-Q rounds and three AWS-LC rounds", file=sys.stderr)
         return 64
@@ -71,7 +87,7 @@ def main() -> int:
         n_stddev, a_stddev = statistics.pstdev(ns), statistics.pstdev(aws_samples)
         np95, ap95 = percentile(ns, 0.95), percentile(aws_samples, 0.95)
         mr, pr = nm / am, np95 / ap95
-        op_pass = mr <= LIMIT and pr <= LIMIT
+        op_pass = mr <= limit and pr <= limit
         passed &= op_pass
         results.append({
             "algorithm": key[0], "parameter_set": key[1], "operation": key[2],
@@ -79,11 +95,11 @@ def main() -> int:
             "nexusq_median_ns": nm, "aws_lc_median_ns": am, "median_ratio_nexusq_over_aws_lc": mr,
             "nexusq_stddev_ns": n_stddev, "aws_lc_stddev_ns": a_stddev,
             "nexusq_p95_ns": np95, "aws_lc_p95_ns": ap95, "p95_ratio_nexusq_over_aws_lc": pr,
-            "median_pass": mr <= LIMIT, "p95_pass": pr <= LIMIT, "pass": op_pass,
+            "median_pass": mr <= limit, "p95_pass": pr <= limit, "pass": op_pass,
         })
     report = {
         "schema": "nexusq-native-assembly-performance-gate-v1",
-        "gate": {"comparator": "AWS-LC", "max_median_ratio": LIMIT, "max_p95_ratio": LIMIT,
+        "gate": {"comparator": "AWS-LC", "max_median_ratio": limit, "max_p95_ratio": limit,
                  "rounds_per_implementation": 3, "required_operations": len(EXPECTED),
                  "aggregation": "pool raw samples from three alternating suite rounds; nearest-rank p95"},
         "status": "PASS" if passed else "FAIL", "results": results,

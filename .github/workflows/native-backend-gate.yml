@@ -22,6 +22,15 @@ env:
   AWSLC_COMMIT: ec05f25ef5bcb1bf03d2e2f44ba57973a878e0ba
 
 jobs:
+  evaluator-tests:
+    name: Performance gate evaluator regression tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test intermediate and final Issue #23 thresholds
+        run: python3 -m unittest arena/scripts/test_evaluate_native_assembly_gate.py -v
+
   vendor-integrity:
     name: Vendored sources match upstream + upstream func/KAT/ACVP
     runs-on: ubuntu-latest
@@ -236,10 +245,18 @@ jobs:
               echo -e "${round}\t${impl}\t$(( $(steal) - s0 ))" >> $out/steal.tsv
             done
           done
-      - name: Official gate (unmodified evaluator, rounds 1-3, 1.5x median AND p95)
+      - name: Official gate (intermediate 1.5x median AND p95)
         run: |
           out=arena/results/ci/native-backend
           python3 arena/scripts/evaluate_native_assembly_gate.py $out/gate-report.json \
+            $out/nexusq-round-1.jsonl $out/nexusq-round-2.jsonl $out/nexusq-round-3.jsonl -- \
+            $out/aws-lc-round-1.jsonl $out/aws-lc-round-2.jsonl $out/aws-lc-round-3.jsonl
+      - name: Issue #23 final target diagnostic (1.00x median AND p95; non-blocking)
+        if: always()
+        continue-on-error: true
+        run: |
+          out=arena/results/ci/native-backend
+          python3 arena/scripts/evaluate_native_assembly_gate.py $out/issue-23-final-gate-report.json --limit 1.0 \
             $out/nexusq-round-1.jsonl $out/nexusq-round-2.jsonl $out/nexusq-round-3.jsonl -- \
             $out/aws-lc-round-1.jsonl $out/aws-lc-round-2.jsonl $out/aws-lc-round-3.jsonl
       - name: Extended statistics over all 12 rounds (informational)
