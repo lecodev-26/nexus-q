@@ -17,6 +17,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          submodules: recursive
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -155,6 +156,8 @@ jobs:
         os: [ubuntu-latest, macos-14, windows-latest]
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.85.1
@@ -189,6 +192,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
+          submodules: recursive
 
       - name: Download validated release evidence
         uses: actions/download-artifact@v4
