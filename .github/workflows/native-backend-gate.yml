@@ -191,6 +191,9 @@ jobs:
           workspaces: arena/runners/nexusq-native
       - name: Install AWS-LC build tools
         run: sudo apt-get update && sudo apt-get install -y cmake ninja-build build-essential
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.x"
       - name: Record host and toolchain metadata
         run: |
           mkdir -p arena/results/ci/native-backend
@@ -279,14 +282,88 @@ jobs:
           python3 arena/scripts/evaluate_native_assembly_gate.py $out/gate-report.json \
             $out/nexusq-round-1.jsonl $out/nexusq-round-2.jsonl $out/nexusq-round-3.jsonl -- \
             $out/aws-lc-round-1.jsonl $out/aws-lc-round-2.jsonl $out/aws-lc-round-3.jsonl
+      - name: Build pinned liboqs and CIRCL reference runners
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch 0.16.0 https://github.com/open-quantum-safe/liboqs.git .arena-liboqs
+          test "$(git -C .arena-liboqs rev-parse --short=7 HEAD)" = "5a1a854"
+          cmake -S .arena-liboqs -B .arena-liboqs-build -GNinja -DOQS_BUILD_ONLY_LIB=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release '-DOQS_MINIMAL_BUILD=KEM_ml_kem_768;KEM_ml_kem_1024;SIG_ml_dsa_65'
+          cmake --build .arena-liboqs-build --parallel 2
+          cc -D_POSIX_C_SOURCE=200809L -std=c11 -O3 -Wall -Wextra -Werror -DLIBOQS_COMMIT='"5a1a854"' \
+            -I"$GITHUB_WORKSPACE/.arena-liboqs-build/include" -I"$GITHUB_WORKSPACE/.arena-liboqs/src" \
+            arena/adapters/liboqs/runner.c .arena-liboqs-build/lib/liboqs.a -lcrypto -ldl -lpthread -lm -o arena-liboqs-runner
+          git clone --depth 1 --branch v1.6.4 https://github.com/cloudflare/circl.git .arena-circl
+          test "$(git -C .arena-circl rev-parse --short=7 HEAD)" = "901199c"
+          mkdir -p .arena-circl/arena-runner
+          cp arena/adapters/circl/runner.go .arena-circl/arena-runner/main.go
+          cat > .arena-circl/arena-runner/go.mod <<'EOF'
+          module nexusq-circl-arena
+
+          go 1.25
+
+          require github.com/cloudflare/circl v1.6.4
+          EOF
+          (cd .arena-circl/arena-runner && go mod edit -replace github.com/cloudflare/circl=.. && go mod tidy && go build -trimpath -o runner .)
+          sha256sum arena-liboqs-runner .arena-circl/arena-runner/runner | tee arena/results/ci/native-backend/reference-binaries.sha256
+      - name: Collect three alternating matched-host rounds for best-comparator diagnostic
+        continue-on-error: true
+        env:
+          NEXUSQ_ITERATIONS: "1000"
+          NEXUSQ_WARMUPS: "100"
+          AWSLC_ITERATIONS: "1000"
+          AWSLC_WARMUPS: "100"
+          ARENA_ITERATIONS: "1000"
+          ARENA_WARMUPS: "100"
+          ARENA_OPT: release
+          AWSLC_VERSION: ${{ env.AWSLC_COMMIT }}
+          CIRCL_COMMIT: "901199c"
+          CIRCL_VERSION: "1.6.4"
+        run: |
+          set -euo pipefail
+          out=arena/results/ci/native-backend
+          export NEXUSQ_CPU="$(lscpu | sed -n 's/^Model name:[[:space:]]*//p' | head -1)"
+          export ARENA_CPU="$NEXUSQ_CPU"
+          export NEXUSQ_CPU_FEATURES="$(grep -m1 '^flags' /proc/cpuinfo | cut -d: -f2 | xargs | tr ' ' ',')"
+          export ARENA_CPU_FEATURES="$NEXUSQ_CPU_FEATURES"
+          export ARENA_TARGET="x86_64-linux" ARENA_OS="linux" ARENA_RUN_ORDER="best-comparator"
+          export NEXUSQ_GIT_COMMIT="$GITHUB_SHA" NEXUSQ_RUSTC_VERBOSE="$(rustc -Vv | tr '\n' ';')" RUSTC_VERSION="$(rustc --version)"
+          BENCH_CPU="$(sed -n 's/^Cpus_allowed_list:[[:space:]]*\([0-9]*\).*/\1/p' /proc/self/status)"
+          test -n "$BENCH_CPU"
+          echo "Pinned benchmark CPU: $BENCH_CPU" | tee "$out/best-comparator-cpu-affinity.txt"
+          for round in 1 2 3; do
+            case "$round" in
+              1) order="nexusq aws-lc liboqs circl" ;;
+              2) order="circl liboqs aws-lc nexusq" ;;
+              3) order="aws-lc nexusq circl liboqs" ;;
+            esac
+            for impl in $order; do
+              case "$impl" in
+                nexusq)
+                  export NEXUSQ_RUN_ID="${GITHUB_SHA}-best-r${round}" NEXUSQ_RUN_ORDER="best-round-${round}"
+                  taskset -c "$BENCH_CPU" ./nexusq-native-runner > "$out/nexusq-best-round-${round}.jsonl" ;;
+                aws-lc)
+                  export ARENA_RUN_ORDER="best-round-${round}"
+                  taskset -c "$BENCH_CPU" ./arena-aws-lc-runner > "$out/aws-lc-best-round-${round}.jsonl" ;;
+                liboqs)
+                  export ARENA_RUN_ID="best-round-${round}"
+                  taskset -c "$BENCH_CPU" ./arena-liboqs-runner > "$out/liboqs-best-round-${round}.jsonl" ;;
+                circl)
+                  export ARENA_RUN_ID="best-round-${round}"
+                  taskset -c "$BENCH_CPU" .arena-circl/arena-runner/runner > "$out/circl-best-round-${round}.jsonl" ;;
+              esac
+            done
+          done
       - name: Issue #23 final target diagnostic (1.00x median AND p95; non-blocking)
         if: always()
         continue-on-error: true
         run: |
           out=arena/results/ci/native-backend
-          python3 arena/scripts/evaluate_native_assembly_gate.py $out/issue-23-final-gate-report.json --limit 1.0 \
-            $out/nexusq-round-1.jsonl $out/nexusq-round-2.jsonl $out/nexusq-round-3.jsonl -- \
-            $out/aws-lc-round-1.jsonl $out/aws-lc-round-2.jsonl $out/aws-lc-round-3.jsonl
+          python3 arena/scripts/evaluate_native_assembly_gate.py $out/issue-23-final-gate-report.json --limit 1.0 --best-of \
+            $out/nexusq-best-round-1.jsonl $out/nexusq-best-round-2.jsonl $out/nexusq-best-round-3.jsonl \
+            --comparator aws-lc $out/aws-lc-best-round-1.jsonl $out/aws-lc-best-round-2.jsonl $out/aws-lc-best-round-3.jsonl \
+            --comparator liboqs $out/liboqs-best-round-1.jsonl $out/liboqs-best-round-2.jsonl $out/liboqs-best-round-3.jsonl \
+            --comparator circl $out/circl-best-round-1.jsonl $out/circl-best-round-2.jsonl $out/circl-best-round-3.jsonl
       - name: Extended statistics over all 12 rounds (informational)
         if: always()
         run: |

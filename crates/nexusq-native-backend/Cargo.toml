@@ -19,7 +19,7 @@ portable-only = []
 # Keep the AVX2 backends but use upstream's portable C 1-way Keccak instead of
 # the s2n-bignum routine (A/B measurement only).
 upstream-c-keccak = []
-# Benchmark-only: use AWS-LC RAND_bytes so the kernel gate shares the comparator's CSPRNG.
+# Benchmark-only: use the locked aws-lc-sys RAND_bytes C shim so kernel timings share the comparator's CSPRNG.
 aws-lc-rng = ["dep:aws-lc-rs"]
 
 [dependencies]

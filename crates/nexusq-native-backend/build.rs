@@ -15,6 +15,7 @@ fn main() {
     let csrc = root.join("csrc");
     let portable = std::env::var("CARGO_FEATURE_PORTABLE_ONLY").is_ok();
     let c_keccak = std::env::var("CARGO_FEATURE_UPSTREAM_C_KECCAK").is_ok();
+    let aws_lc_rng = std::env::var("CARGO_FEATURE_AWS_LC_RNG").is_ok();
     let arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap();
     let os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
     let native_x86 = !portable && arch == "x86_64" && os == "linux";
@@ -70,6 +71,25 @@ fn main() {
     }
     kem.compile("nq_mlkem");
     dsa.compile("nq_mldsa");
+    if aws_lc_rng {
+        // Call the exact AWS-LC RAND_bytes symbol from C, avoiding an extra C -> Rust -> C
+        // round trip on every kernel randombytes callback. This feature is runner-only;
+        // the production/default callback remains getrandom(2) above.
+        cc::Build::new()
+            .file(csrc.join("nq_rng_awslc.c"))
+            .opt_level(3)
+            .warnings(true)
+            .flag_if_supported("-fomit-frame-pointer")
+            .flag_if_supported("-Wall")
+            .flag_if_supported("-Wextra")
+            .flag_if_supported("-Werror")
+            .compile("nq_awslc_rng");
+        println!(
+            "cargo:rerun-if-changed={}",
+            csrc.join("nq_rng_awslc.c").display()
+        );
+        println!("cargo:rustc-link-lib=static=aws_lc_0_46_0_crypto");
+    }
     println!("cargo:rustc-cfg=nq_native_backend_compiled=\"{}\"", native);
     println!("cargo:rustc-check-cfg=cfg(nq_native_backend_compiled, values(\"true\", \"false\"))");
     for d in [&csrc, &mlkem, &mldsa, &s2n] {

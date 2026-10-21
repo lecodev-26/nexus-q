@@ -32,6 +32,7 @@ pub enum Error {
 // SAFETY: exported under a NEXUS-Q-specific name for the vendored C code only;
 // callers pass a writable buffer of exactly `len` bytes.
 #[doc(hidden)]
+#[cfg(not(feature = "aws-lc-rng"))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nq_randombytes(out: *mut u8, len: usize) -> i32 {
     if len == 0 {
@@ -42,9 +43,6 @@ pub unsafe extern "C" fn nq_randombytes(out: *mut u8, len: usize) -> i32 {
     }
     // SAFETY: the C callers pass a writable buffer of exactly `len` bytes.
     let buf = unsafe { core::slice::from_raw_parts_mut(out, len) };
-    #[cfg(feature = "aws-lc-rng")]
-    let result = aws_lc_rs::rand::fill(buf);
-    #[cfg(not(feature = "aws-lc-rng"))]
     let result = getrandom::fill(buf);
     match result {
         Ok(()) => 0,

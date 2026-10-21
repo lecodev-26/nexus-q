@@ -67,8 +67,9 @@ fn measure<F: FnMut()>(mut f: F) -> (Vec<u128>, Vec<u64>) {
         let c0 = cycles_now();
         let t0 = Instant::now();
         f();
+        let t1 = Instant::now();
         let c1 = cycles_now();
-        ns.push(t0.elapsed().as_nanos());
+        ns.push(t1.duration_since(t0).as_nanos());
         if let (Some(start), Some(end)) = (c0, c1) {
             cy.push(end.wrapping_sub(start));
         }

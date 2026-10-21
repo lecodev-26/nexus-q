@@ -21,7 +21,7 @@ typedef int (*operation_fn)(void *);
 
 static uint64_t *active_cycle_samples;
 static const char *active_measurement_scope = "aws_lc_evp_primitive_operation";
-static const char *active_measurement_method = "per-operation clock_gettime(CLOCK_MONOTONIC); AWS-LC public EVP primitive call; reusable context allocation outside timed samples; per-call sign/verify initialization retained; median of raw samples";
+static const char *active_measurement_method = "per-operation clock_gettime(CLOCK_MONOTONIC); AWS-LC public EVP primitive call; keygen includes raw public/secret key export; reusable operation contexts outside timed samples; median of raw samples";
 
 static uint64_t read_cycle_counter(void) {
 #if defined(__x86_64__)
@@ -309,14 +309,24 @@ static int generate_dsa_key(EVP_PKEY **key) {
 
 typedef struct {
     EVP_PKEY_CTX *ctx;
+    size_t public_key_capacity;
+    size_t secret_key_capacity;
 } kem_keygen_context;
 
 static int kem_keygen_once(void *opaque) {
     const kem_keygen_context *ctx = opaque;
     EVP_PKEY *key = NULL;
-    int ok = EVP_PKEY_keygen(ctx->ctx, &key);
+    unsigned char *public_key = OPENSSL_malloc(ctx->public_key_capacity);
+    unsigned char *secret_key = OPENSSL_malloc(ctx->secret_key_capacity);
+    size_t public_len = ctx->public_key_capacity;
+    size_t secret_len = ctx->secret_key_capacity;
+    int ok = public_key && secret_key && ctx->ctx && EVP_PKEY_keygen(ctx->ctx, &key)
+          && EVP_PKEY_get_raw_public_key(key, public_key, &public_len)
+          && EVP_PKEY_get_raw_private_key(key, secret_key, &secret_len);
     EVP_PKEY_free(key);
-    return ok;
+    OPENSSL_free(public_key);
+    OPENSSL_free(secret_key);
+    return ok && public_len == ctx->public_key_capacity && secret_len == ctx->secret_key_capacity;
 }
 
 typedef struct {
@@ -355,12 +365,26 @@ static int kem_decaps_once(void *opaque) {
     return ok;
 }
 
+typedef struct {
+    EVP_PKEY_CTX *ctx;
+    size_t public_key_capacity;
+    size_t secret_key_capacity;
+} dsa_keygen_context;
+
 static int dsa_keygen_once(void *opaque) {
-    EVP_PKEY_CTX *ctx = opaque;
+    const dsa_keygen_context *ctx = opaque;
     EVP_PKEY *key = NULL;
-    int ok = ctx && EVP_PKEY_keygen(ctx, &key);
+    unsigned char *public_key = OPENSSL_malloc(ctx->public_key_capacity);
+    unsigned char *secret_key = OPENSSL_malloc(ctx->secret_key_capacity);
+    size_t public_len = ctx->public_key_capacity;
+    size_t secret_len = ctx->secret_key_capacity;
+    int ok = public_key && secret_key && ctx->ctx && EVP_PKEY_keygen(ctx->ctx, &key)
+          && EVP_PKEY_get_raw_public_key(key, public_key, &public_len)
+          && EVP_PKEY_get_raw_private_key(key, secret_key, &secret_len);
     EVP_PKEY_free(key);
-    return ok;
+    OPENSSL_free(public_key);
+    OPENSSL_free(secret_key);
+    return ok && public_len == ctx->public_key_capacity && secret_len == ctx->secret_key_capacity;
 }
 
 typedef struct {
@@ -404,12 +428,14 @@ static int kem_parameter(const char *parameter, int parameter_nid,
     unsigned char *ciphertext = NULL;
     unsigned char *secret = NULL;
     unsigned char *decapsulated_secret = NULL;
-    kem_keygen_context keygen = {new_kem_keygen_context(parameter_nid)};
+    kem_keygen_context keygen = {new_kem_keygen_context(parameter_nid), public_key_bytes, secret_key_bytes};
     kem_context context = {0};
     size_t ciphertext_len = 0, secret_len = 0;
     int result = 1;
     if (!samples || !cycle_samples || !keygen.ctx) { free(samples); free(cycle_samples); EVP_PKEY_CTX_free(keygen.ctx); return 1; }
 
+    active_measurement_scope = "reference_implementation_operation";
+    active_measurement_method = "per-operation monotonic clock; AWS-LC EVP keygen plus raw public/secret key export; per-call output allocations included; median of raw samples";
     if (!run_samples(kem_keygen_once, &keygen, samples, count, warmup_count)) goto cleanup;
     emit("ml-kem", parameter, "keygen", samples, count, warmup_count,
          public_key_bytes, secret_key_bytes, expected_ciphertext_bytes, 0, 1, 0);
@@ -453,9 +479,13 @@ static int kem_parameter(const char *parameter, int parameter_nid,
         goto cleanup;
     }
 
+    active_measurement_scope = "aws_lc_evp_preimported_public_key";
+    active_measurement_method = "per-operation monotonic clock; EVP_PKEY and operation context are prepared before timing; encoded public-key import is outside the timed sample";
     if (!run_samples(kem_encaps_once, &context, samples, count, warmup_count)) goto cleanup;
     emit("ml-kem", parameter, "encaps", samples, count, warmup_count,
          public_key_bytes, secret_key_bytes, ciphertext_len, 0, 1, 0);
+    active_measurement_scope = "aws_lc_evp_preimported_secret_key";
+    active_measurement_method = "per-operation monotonic clock; EVP_PKEY and operation context are prepared before timing; encoded secret-key import is outside the timed sample";
     if (!run_samples(kem_decaps_once, &context, samples, count, warmup_count)) goto cleanup;
     emit("ml-kem", parameter, "decaps", samples, count, warmup_count,
          public_key_bytes, secret_key_bytes, ciphertext_len, 0, 1, 0);
@@ -651,7 +681,10 @@ static int dsa(void) {
     if (!samples || !cycle_samples || !signature) { free(samples); free(cycle_samples); OPENSSL_free(signature); return 1; }
 
     EVP_PKEY_CTX *dsa_keygen_ctx = new_dsa_keygen_context();
-    if (!dsa_keygen_ctx || !run_samples(dsa_keygen_once, dsa_keygen_ctx, samples, count, warmup_count)) {
+    dsa_keygen_context keygen = {dsa_keygen_ctx, 1952, 4032};
+    active_measurement_scope = "reference_implementation_operation";
+    active_measurement_method = "per-operation monotonic clock; AWS-LC EVP keygen plus raw public/secret key export; per-call output allocations included; median of raw samples";
+    if (!dsa_keygen_ctx || !run_samples(dsa_keygen_once, &keygen, samples, count, warmup_count)) {
         EVP_PKEY_CTX_free(dsa_keygen_ctx);
         goto fail;
     }
@@ -670,9 +703,13 @@ static int dsa(void) {
     if (!context.sign_ctx || !context.verify_ctx || !dsa_sign_once(&context)) {
         goto fail;
     }
+    active_measurement_scope = "aws_lc_evp_preimported_secret_key";
+    active_measurement_method = "per-operation monotonic clock; EVP_PKEY is prepared before timing; sign initialization retained per sample; encoded secret-key import is outside the timed sample";
     if (!run_samples(dsa_sign_once, &context, samples, count, warmup_count)) goto fail;
     emit("ml-dsa", "65", "sign", samples, count, warmup_count,
          1952, 4032, 0, context.signature_len, 0, 1);
+    active_measurement_scope = "aws_lc_evp_preimported_public_key";
+    active_measurement_method = "per-operation monotonic clock; EVP_PKEY is prepared before timing; verify initialization retained per sample; encoded public-key import is outside the timed sample";
     if (!run_samples(dsa_verify_once, &context, samples, count, warmup_count)) goto fail;
     emit("ml-dsa", "65", "verify", samples, count, warmup_count,
          1952, 4032, 0, context.signature_len, 0, 1);
