@@ -8,7 +8,29 @@ const N_CRYPTO: usize = 20;
 const N_VAULT: usize = 3;
 
 fn report(name: &str, n: usize, d: Duration) {
-    println!("{name:34} {:12.0} ns/op", d.as_nanos() as f64 / n as f64);
+    println!(
+        "{name:34} {:12.0} ns/op (mean)",
+        d.as_nanos() as f64 / n as f64
+    );
+}
+
+fn report_samples<F, T>(name: &str, n: usize, mut operation: F)
+where
+    F: FnMut() -> T,
+{
+    for _ in 0..10 {
+        black_box(operation());
+    }
+    let mut samples = Vec::with_capacity(n);
+    for _ in 0..n {
+        let start = Instant::now();
+        black_box(operation());
+        samples.push(start.elapsed().as_nanos());
+    }
+    samples.sort_unstable();
+    let median = samples[n / 2];
+    let p95 = samples[(n * 95).div_ceil(100).saturating_sub(1)];
+    println!("{name:34} median {median:10} ns/op; p95 {p95:10} ns/op (n={n})");
 }
 
 fn main() {
@@ -28,6 +50,19 @@ fn main() {
         black_box(kem_1024::encapsulate(&pk).unwrap());
     }
     report("ML-KEM-1024+X25519 encaps", N_CRYPTO, t.elapsed());
+
+    // Use per-call medians/p95 as well as the legacy aggregate mean: OS entropy
+    // can occasionally block, making a 20-call mean misleading on Android.
+    report_samples("ML-KEM-1024+X25519 encaps samples", 100, || {
+        kem_1024::encapsulate(&pk).unwrap()
+    });
+    // Measure the prepared-public-key API separately: it amortizes key parsing
+    // across repeated sends to the same recipient.
+    let prepared = kem_1024::PreparedPublicKey::from_bytes(&pk).unwrap();
+    report_samples("ML-KEM-1024+X25519 prepared samples", 100, || {
+        prepared.encapsulate_prepared().unwrap()
+    });
+
     let ct = kem_1024::encapsulate(&pk).unwrap().0;
     let t = Instant::now();
     for _ in 0..N_CRYPTO {

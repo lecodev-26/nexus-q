@@ -52,3 +52,16 @@ The native Arena runner now builds on AArch64 and records nanosecond samples wit
 | ML-KEM-768 keygen | 25.46 | 46.38 | 0.549× | 29.85 | 48.92 | 0.610× |
 
 The AArch64 assembly path was faster than portable C in all nine operation medians in this local diagnostic. ML-DSA signing's p95 remains noisy, so this is directional evidence rather than a release claim. It does not resolve the separate x86-64 comparison against AWS-LC, nor restore liboqs/CIRCL as the best-per-operation comparators required by the original issue.
+
+### Termux hybrid API follow-up (21 October 2026)
+
+The first 20-iteration Phase 17 benchmark showed a misleading ML-KEM-1024 hybrid encapsulation mean of roughly 3.76 ms with `native-backend`. This was investigated using two 100-call per-operation sample rounds after 10 warmups for both ordinary and prepared-public-key APIs. On this Android/AArch64 device:
+
+| Configuration | API | Run 1 median / P95 | Run 2 median / P95 |
+|---|---|---:|---:|
+| Default RustCrypto | serialized public key | 498.7 / 533.8 µs | 1,085.5 / 3,773.2 µs |
+| Default RustCrypto | prepared public key | 479.0 / 507.3 µs | 476.9 / 509.2 µs |
+| Native backend | serialized public key | 116.2 / 149.2 µs | 116.0 / 138.1 µs |
+| Native backend | prepared public key | 115.7 / 316.0 µs | 115.7 / 130.8 µs |
+
+The high aggregate means did not reproduce in the native per-call median/P95 data; the default serialized-key path did show a high-variance second run. The cause of these outliers is not established; OS entropy or scheduler/backend latency are possibilities, not confirmed diagnoses. The local benchmark now reports per-call median and P95 for these APIs to avoid relying on a short aggregate mean. The native path was consistently faster at the median in these local runs, though the default path's tail variability needs further investigation before making a production-performance claim. These Android measurements are not substitutes for the issue's matched x86-64 AWS-LC/liboqs/CIRCL gate.
