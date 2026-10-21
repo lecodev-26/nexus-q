@@ -348,7 +348,7 @@ jobs:
           ARENA_TARGET="$(uname -m)-$(uname -s | tr '[:upper:]' '[:lower:]')" \
           ARENA_OS="$(uname -s)" \
           ARENA_CPU="$(awk -F': ' '/model name|Hardware|Processor/{print $2; exit}' /proc/cpuinfo || true)" \
-          ARENA_CPU_FEATURES="$(python3 -c 'import json; s=set(); [s.update(x.split()) for x in open("/proc/cpuinfo", errors="ignore") if x.startswith(("flags", "Features")) and ":" in x for x in [x.split(":",1)[1]]]; print(",".join(json.dumps(x) for x in sorted(s)))')" \
+          ARENA_CPU_FEATURES="$(python3 -c 'import json; s=set(); [s.update(x.split()) for x in open("/proc/cpuinfo", errors="ignore") if x.startswith(("flags", "Features")) and ":" in x for x in [x.split(":",1)[1]]]; print(",".join(sorted(s)))')" \
           ./arena-liboqs-runner | tee arena/results/ci/liboqs-0.16.0.jsonl
           python3 -m pip install --disable-pip-version-check --no-input 'jsonschema==4.26.0'
           python3 - <<'PY'
