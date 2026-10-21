@@ -17,6 +17,7 @@ members = [
     "crates/nexusq-tsa",
     "crates/nexusq-ha",
     "crates/nexusq-pki-cluster",
+    "crates/nexusq-admin",
     "crates/nexusq",
 ]
 

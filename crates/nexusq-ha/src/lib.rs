@@ -245,6 +245,13 @@ pub struct JournalSnapshot {
     pub checksum: [u8; 32],
 }
 
+impl JournalSnapshot {
+    /// Validate snapshot tenant, checksum, sequence order and record hash chain.
+    pub fn validate_for_tenant(&self, tenant: &TenantId) -> Result<(), HaError> {
+        validate_snapshot(self, tenant)
+    }
+}
+
 #[derive(Serialize)]
 struct SnapshotBody<'a> {
     version: u32,

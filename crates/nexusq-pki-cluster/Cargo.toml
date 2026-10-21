@@ -12,6 +12,7 @@ axum = { workspace = true }
 base64 = "0.22"
 der = { version = "0.8", features = ["std", "pem"] }
 nexusq-ha = { path = "../nexusq-ha", version = "4.1.0" }
+nexusq-admin = { path = "../nexusq-admin", version = "4.1.0" }
 nexusq-enrollment = { path = "../nexusq-enrollment", version = "4.1.0" }
 nexusq-ocsp = { path = "../nexusq-ocsp", version = "4.1.0" }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }

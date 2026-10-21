@@ -22,6 +22,7 @@ use axum::{
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use der::Encode;
+use nexusq_admin::{AdminError, AuditAction, AuditLog, AuditOutcome, Permission, RbacStore};
 use nexusq_enrollment::{EnrollmentAuthority, Error as EnrollmentError, Principal, Protocol};
 use nexusq_ha::{
     DurableTenantJournal, HaError, JournalRecord, LeadershipLease, RecoveryObjectives, ReplicaPeer,
@@ -47,6 +48,7 @@ pub struct PkiTenantRegistry {
     tenants: RwLock<HashMap<TenantId, TenantRuntime>>,
     limiter: TenantRateLimiter,
     objectives: RecoveryObjectives,
+    audit: RwLock<Option<Arc<AuditLog>>>,
 }
 
 /// Errors while configuring the tenant runtime.
@@ -106,6 +108,7 @@ impl PkiTenantRegistry {
             limiter: TenantRateLimiter::new(std::time::Duration::from_secs(60))
                 .map_err(ClusterError::Ha)?,
             objectives,
+            audit: RwLock::new(None),
         })
     }
 
@@ -204,6 +207,50 @@ impl PkiTenantRegistry {
     /// Recovery objectives applied by this cluster runtime.
     pub fn recovery_objectives(&self) -> RecoveryObjectives {
         self.objectives
+    }
+
+    /// Build the public tenant router plus RBAC-protected administrative routes.
+    pub fn router_with_admin(
+        self: Arc<Self>,
+        rbac: Arc<RbacStore>,
+        audit: Arc<AuditLog>,
+    ) -> Router {
+        if let Ok(mut slot) = self.audit.write() {
+            *slot = Some(audit.clone());
+        }
+        let public = self.clone().router();
+        let admin = Router::new()
+            .route("/admin/tenants/{tenant}", get(admin_tenant_status_handler))
+            .route(
+                "/admin/tenants/{tenant}/issuance",
+                post(admin_set_issuance_handler),
+            )
+            .with_state(AdminApiState {
+                registry: self,
+                rbac,
+                audit,
+            });
+        public.merge(admin)
+    }
+
+    fn audit_event(
+        &self,
+        actor: &str,
+        action: AuditAction,
+        tenant: Option<&TenantId>,
+        outcome: AuditOutcome,
+        resource: Option<&str>,
+    ) -> Result<(), StatusCode> {
+        let slot = self
+            .audit
+            .read()
+            .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+        if let Some(audit) = slot.as_ref() {
+            audit
+                .append(actor, action, tenant, outcome, resource)
+                .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+        }
+        Ok(())
     }
 
     fn runtime(
@@ -498,6 +545,211 @@ async fn replica_abort_handler(
     }
 }
 
+#[derive(Clone)]
+struct AdminApiState {
+    registry: Arc<PkiTenantRegistry>,
+    rbac: Arc<RbacStore>,
+    audit: Arc<AuditLog>,
+}
+#[derive(Deserialize)]
+struct SetIssuanceRequest {
+    enabled: bool,
+}
+#[derive(Serialize)]
+struct AdminTenantResponse {
+    tenant: String,
+    issuance_enabled: bool,
+    requests_per_minute: u32,
+}
+
+async fn admin_tenant_status_handler(
+    State(state): State<AdminApiState>,
+    Path(raw_tenant): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    let tenant = match TenantId::new(raw_tenant) {
+        Ok(tenant) => tenant,
+        Err(_) => return error(StatusCode::NOT_FOUND, "tenant unavailable"),
+    };
+    let principal = match authenticate_admin(&state, &headers, &tenant) {
+        Ok(principal) => principal,
+        Err(status) => return error(status, "administrative authorization denied"),
+    };
+    if !principal.allows(Permission::ReadHealth, Some(&tenant)) {
+        let _ = state.audit.append(
+            &principal.subject,
+            AuditAction::AuthorizationDenied,
+            Some(&tenant),
+            AuditOutcome::Denied,
+            Some("tenant-status"),
+        );
+        return error(StatusCode::FORBIDDEN, "administrative authorization denied");
+    }
+    let descriptor = match state.registry.catalog.get(&tenant) {
+        Ok(descriptor) => descriptor,
+        Err(_) => return error(StatusCode::NOT_FOUND, "tenant unavailable"),
+    };
+    if state
+        .audit
+        .append(
+            &principal.subject,
+            AuditAction::TenantStatusRead,
+            Some(&tenant),
+            AuditOutcome::Success,
+            Some("tenant-status"),
+        )
+        .is_err()
+    {
+        return error(StatusCode::SERVICE_UNAVAILABLE, "audit unavailable");
+    }
+    Json(AdminTenantResponse {
+        tenant: tenant.as_str().to_owned(),
+        issuance_enabled: descriptor.issuance_enabled,
+        requests_per_minute: descriptor.requests_per_minute,
+    })
+    .into_response()
+}
+
+async fn admin_set_issuance_handler(
+    State(state): State<AdminApiState>,
+    Path(raw_tenant): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<SetIssuanceRequest>,
+) -> Response {
+    let tenant = match TenantId::new(raw_tenant) {
+        Ok(tenant) => tenant,
+        Err(_) => return error(StatusCode::NOT_FOUND, "tenant unavailable"),
+    };
+    let principal = match authenticate_admin(&state, &headers, &tenant) {
+        Ok(principal) => principal,
+        Err(status) => return error(status, "administrative authorization denied"),
+    };
+    if !principal.allows(Permission::ManageTenant, Some(&tenant)) {
+        let _ = state.audit.append(
+            &principal.subject,
+            AuditAction::AuthorizationDenied,
+            Some(&tenant),
+            AuditOutcome::Denied,
+            Some("issuance-policy"),
+        );
+        return error(StatusCode::FORBIDDEN, "administrative authorization denied");
+    }
+    let previous = match state.registry.catalog.get(&tenant) {
+        Ok(descriptor) => descriptor.issuance_enabled,
+        Err(_) => return error(StatusCode::NOT_FOUND, "tenant unavailable"),
+    };
+    let resource = if request.enabled {
+        "issuance-enable"
+    } else {
+        "issuance-disable"
+    };
+    if state
+        .audit
+        .append(
+            &principal.subject,
+            AuditAction::TenantIssuanceChanged,
+            Some(&tenant),
+            AuditOutcome::Requested,
+            Some(resource),
+        )
+        .is_err()
+    {
+        return error(StatusCode::SERVICE_UNAVAILABLE, "audit unavailable");
+    }
+    if state
+        .registry
+        .catalog
+        .set_issuance(&tenant, request.enabled)
+        .is_err()
+    {
+        let _ = state.audit.append(
+            &principal.subject,
+            AuditAction::TenantIssuanceChanged,
+            Some(&tenant),
+            AuditOutcome::Failed,
+            Some(resource),
+        );
+        return error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "tenant policy update failed",
+        );
+    }
+    if state
+        .audit
+        .append(
+            &principal.subject,
+            AuditAction::TenantIssuanceChanged,
+            Some(&tenant),
+            AuditOutcome::Success,
+            Some(resource),
+        )
+        .is_err()
+    {
+        let _ = state.registry.catalog.set_issuance(&tenant, previous);
+        return error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "audit unavailable; policy change rolled back",
+        );
+    }
+    let descriptor = match state.registry.catalog.get(&tenant) {
+        Ok(descriptor) => descriptor,
+        Err(_) => return error(StatusCode::SERVICE_UNAVAILABLE, "tenant policy unavailable"),
+    };
+    Json(AdminTenantResponse {
+        tenant: tenant.as_str().to_owned(),
+        issuance_enabled: descriptor.issuance_enabled,
+        requests_per_minute: descriptor.requests_per_minute,
+    })
+    .into_response()
+}
+
+fn authenticate_admin(
+    state: &AdminApiState,
+    headers: &HeaderMap,
+    tenant: &TenantId,
+) -> Result<nexusq_admin::AdminPrincipal, StatusCode> {
+    let token = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("Bearer "));
+    let Some(token) = token else {
+        if state
+            .audit
+            .append(
+                "anonymous",
+                AuditAction::AuthorizationDenied,
+                Some(tenant),
+                AuditOutcome::Denied,
+                Some("admin-auth"),
+            )
+            .is_err()
+        {
+            return Err(StatusCode::SERVICE_UNAVAILABLE);
+        }
+        return Err(StatusCode::UNAUTHORIZED);
+    };
+    match state.rbac.authenticate(token) {
+        Ok(principal) => Ok(principal),
+        Err(AdminError::AuthenticationDenied) => {
+            if state
+                .audit
+                .append(
+                    "anonymous",
+                    AuditAction::AuthorizationDenied,
+                    Some(tenant),
+                    AuditOutcome::Denied,
+                    Some("admin-auth"),
+                )
+                .is_err()
+            {
+                return Err(StatusCode::SERVICE_UNAVAILABLE);
+            }
+            Err(StatusCode::UNAUTHORIZED)
+        }
+        Err(_) => Err(StatusCode::SERVICE_UNAVAILABLE),
+    }
+}
+
 fn authorized(headers: &HeaderMap, expected: &[u8; 32]) -> bool {
     let Some(value) = headers
         .get(header::AUTHORIZATION)
@@ -526,6 +778,18 @@ async fn enroll_handler(
         Err(status) => return error(status, "tenant unavailable"),
     };
     if !authorized(&headers, &runtime.bearer_token_sha256) {
+        if registry
+            .audit_event(
+                "anonymous",
+                AuditAction::AuthorizationDenied,
+                Some(&tenant),
+                AuditOutcome::Denied,
+                Some("enrollment-auth"),
+            )
+            .is_err()
+        {
+            return error(StatusCode::SERVICE_UNAVAILABLE, "audit unavailable");
+        }
         return error(StatusCode::UNAUTHORIZED, "authentication required");
     }
     if !descriptor.issuance_enabled {
@@ -544,6 +808,19 @@ async fn enroll_handler(
         Ok(csr) if !csr.is_empty() && csr.len() <= 256 * 1024 => csr,
         _ => return error(StatusCode::BAD_REQUEST, "invalid CSR encoding"),
     };
+    if registry
+        .audit_event(
+            &request.principal_id,
+            AuditAction::CertificateIssued,
+            Some(&tenant),
+            AuditOutcome::Requested,
+            Some("certificate-issuance"),
+        )
+        .is_err()
+    {
+        return error(StatusCode::SERVICE_UNAVAILABLE, "audit unavailable");
+    }
+    let actor = request.principal_id.clone();
     let authority = runtime.authority.clone();
     let principal = Principal {
         id: request.principal_id,
@@ -553,12 +830,27 @@ async fn enroll_handler(
             .await;
     match issued {
         Ok(Ok(certificate)) => match certificate.to_der() {
-            Ok(der) => Json(EnrollResponse {
-                tenant: tenant.as_str().to_owned(),
-                serial_number: certificate.tbs_certificate().serial_number().to_string(),
-                certificate_der_base64: STANDARD.encode(der),
-            })
-            .into_response(),
+            Ok(der) => {
+                let serial = certificate.tbs_certificate().serial_number().to_string();
+                if registry
+                    .audit_event(
+                        &actor,
+                        AuditAction::CertificateIssued,
+                        Some(&tenant),
+                        AuditOutcome::Success,
+                        Some(&serial),
+                    )
+                    .is_err()
+                {
+                    return error(StatusCode::SERVICE_UNAVAILABLE, "audit unavailable");
+                }
+                Json(EnrollResponse {
+                    tenant: tenant.as_str().to_owned(),
+                    serial_number: serial,
+                    certificate_der_base64: STANDARD.encode(der),
+                })
+                .into_response()
+            }
             Err(_) => error(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "certificate encoding failed",
@@ -598,21 +890,70 @@ async fn ocsp_handler(
     if let Err(status) = registry.allow_request(&tenant, &descriptor) {
         return error(status, "tenant rate limit exceeded");
     }
-    match runtime.ocsp.respond(&body) {
-        Ok(response) => (
-            StatusCode::OK,
-            [(header::CONTENT_TYPE, "application/ocsp-response")],
-            response,
+    if registry
+        .audit_event(
+            "anonymous",
+            AuditAction::OcspQuery,
+            Some(&tenant),
+            AuditOutcome::Requested,
+            Some("ocsp-query"),
         )
-            .into_response(),
+        .is_err()
+    {
+        return error(StatusCode::SERVICE_UNAVAILABLE, "audit unavailable");
+    }
+    match runtime.ocsp.respond(&body) {
+        Ok(response) => {
+            if registry
+                .audit_event(
+                    "anonymous",
+                    AuditAction::OcspQuery,
+                    Some(&tenant),
+                    AuditOutcome::Success,
+                    Some("ocsp-query"),
+                )
+                .is_err()
+            {
+                return error(StatusCode::SERVICE_UNAVAILABLE, "audit unavailable");
+            }
+            (
+                StatusCode::OK,
+                [(header::CONTENT_TYPE, "application/ocsp-response")],
+                response,
+            )
+                .into_response()
+        }
         Err(
             OcspError::Der(_)
             | OcspError::InvalidRequestSize
             | OcspError::UnsupportedHashAlgorithm
             | OcspError::IssuerMismatch
             | OcspError::UnsupportedRequestFeatures,
-        ) => error(StatusCode::BAD_REQUEST, "invalid OCSP request"),
-        Err(_) => error(StatusCode::SERVICE_UNAVAILABLE, "OCSP service unavailable"),
+        ) => {
+            if registry
+                .audit_event(
+                    "anonymous",
+                    AuditAction::OcspQuery,
+                    Some(&tenant),
+                    AuditOutcome::Denied,
+                    Some("ocsp-query"),
+                )
+                .is_err()
+            {
+                return error(StatusCode::SERVICE_UNAVAILABLE, "audit unavailable");
+            }
+            error(StatusCode::BAD_REQUEST, "invalid OCSP request")
+        }
+        Err(_) => {
+            let _ = registry.audit_event(
+                "anonymous",
+                AuditAction::OcspQuery,
+                Some(&tenant),
+                AuditOutcome::Failed,
+                Some("ocsp-query"),
+            );
+            error(StatusCode::SERVICE_UNAVAILABLE, "OCSP service unavailable")
+        }
     }
 }
 
@@ -627,14 +968,49 @@ async fn crl_handler(
     if let Err(status) = registry.allow_request(&tenant, &descriptor) {
         return error(status, "tenant rate limit exceeded");
     }
-    match runtime.ocsp.current_crl() {
-        Ok(crl) => (
-            StatusCode::OK,
-            [(header::CONTENT_TYPE, "application/pkix-crl")],
-            crl,
+    if registry
+        .audit_event(
+            "anonymous",
+            AuditAction::CrlRead,
+            Some(&tenant),
+            AuditOutcome::Requested,
+            Some("crl-read"),
         )
-            .into_response(),
-        Err(_) => error(StatusCode::SERVICE_UNAVAILABLE, "CRL service unavailable"),
+        .is_err()
+    {
+        return error(StatusCode::SERVICE_UNAVAILABLE, "audit unavailable");
+    }
+    match runtime.ocsp.current_crl() {
+        Ok(crl) => {
+            if registry
+                .audit_event(
+                    "anonymous",
+                    AuditAction::CrlRead,
+                    Some(&tenant),
+                    AuditOutcome::Success,
+                    Some("crl-read"),
+                )
+                .is_err()
+            {
+                return error(StatusCode::SERVICE_UNAVAILABLE, "audit unavailable");
+            }
+            (
+                StatusCode::OK,
+                [(header::CONTENT_TYPE, "application/pkix-crl")],
+                crl,
+            )
+                .into_response()
+        }
+        Err(_) => {
+            let _ = registry.audit_event(
+                "anonymous",
+                AuditAction::CrlRead,
+                Some(&tenant),
+                AuditOutcome::Failed,
+                Some("crl-read"),
+            );
+            error(StatusCode::SERVICE_UNAVAILABLE, "CRL service unavailable")
+        }
     }
 }
 
@@ -901,7 +1277,7 @@ mod tests {
         registry
             .mount_tenant(descriptor.clone(), authority, ocsp, &token)
             .unwrap();
-        let app = registry.router();
+        let app = registry.clone().router();
         let bad = app
             .clone()
             .oneshot(
@@ -941,6 +1317,92 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(health.status(), StatusCode::OK);
+        let rbac = Arc::new(RbacStore::open(dir.path().join("rbac.json")).unwrap());
+        let audit = Arc::new(AuditLog::open(dir.path().join("admin-audit.log"), [4; 32]).unwrap());
+        let root_token = format!("root-{}", "r".repeat(48));
+        rbac.bootstrap_root(
+            "root-admin",
+            &root_token,
+            std::collections::BTreeSet::from([descriptor.id.clone()]),
+            &audit,
+        )
+        .unwrap();
+        let admin_app = registry.clone().router_with_admin(rbac, audit.clone());
+        let unauthenticated_admin = admin_app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/admin/tenants/alpha")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(unauthenticated_admin.status(), StatusCode::UNAUTHORIZED);
+        let disabled = admin_app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/admin/tenants/alpha/issuance")
+                    .header("authorization", format!("Bearer {root_token}"))
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"enabled":false}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(disabled.status(), StatusCode::OK);
+        let disabled_health = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/tenants/alpha/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(disabled_health.status(), StatusCode::OK);
+        let enabled = admin_app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/admin/tenants/alpha/issuance")
+                    .header("authorization", format!("Bearer {root_token}"))
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"enabled":true}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(enabled.status(), StatusCode::OK);
+        let crl = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/tenants/alpha/crl")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(crl.status(), StatusCode::OK);
+        let bad_ocsp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/tenants/alpha/ocsp")
+                    .body(Body::from(vec![0u8]))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(bad_ocsp.status(), StatusCode::BAD_REQUEST);
         let csr_key = SigningKey::<MlDsa65>::generate();
         let mut csr_builder =
             RequestBuilder::new(Name::from_str("CN=service.example.com").unwrap()).unwrap();
@@ -970,5 +1432,6 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(issued.status(), StatusCode::OK);
+        audit.verify().unwrap();
     }
 }
