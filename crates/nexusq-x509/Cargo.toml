@@ -1,0 +1,31 @@
+[package]
+name = "nexusq-x509"
+version = "4.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "RFC 5280 X.509 certificate issuance with post-quantum signatures for NexusQ"
+exclude = ["interop/**"]
+
+[dependencies]
+ml_dsa = { package = "nexusq-ml-dsa", path = "../nexusq-ml-dsa", version = "4.1.0", features = ["pkcs8", "getrandom", "zeroize"] }
+slh_dsa = { package = "slh-dsa", version = "0.2.0-rc.5" }
+ed25519-dalek = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+rand = { version = "0.10", optional = true }
+der = { version = "0.8", features = ["pem"] }
+x509-cert = { version = "0.3.0", features = ["builder", "signature", "pem"] }
+signature = "3"
+
+[features]
+default = []
+# Draft-only composite ML-DSA-65 + Ed25519 profile. Do not use as a stable standard profile.
+experimental-composite = ["dep:ed25519-dalek", "dep:sha2", "dep:rand"]
+
+[dev-dependencies]
+rand = "0.10"
+
+[[example]]
+name = "issue_composite_root"
+required-features = ["experimental-composite"]

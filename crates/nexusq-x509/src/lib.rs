@@ -1,0 +1,343 @@
+//! X.509 certificate issuance using NexusQ post-quantum signing keys.
+//!
+//! ASN.1/X.509 encoding is delegated to `x509-cert`; signature algorithm identifiers
+//! come from the selected cryptographic key implementation.
+
+use core::time::Duration;
+
+/// Re-export the key and ASN.1 crates used by the public issuance API.
+pub use ml_dsa;
+pub use slh_dsa;
+pub use x509_cert;
+
+use der::EncodePem;
+use ml_dsa::{
+    MlDsa65, MlDsaParams, Signature as MlDsaSignature, SigningKey,
+    VerifyingKey as MlDsaVerifyingKey,
+};
+use signature::{Keypair, Signer};
+use slh_dsa::{
+    ParameterSet as SlhDsaParameterSet, Signature as SlhDsaSignature,
+    SigningKey as SlhDsaSigningKey,
+};
+use x509_cert::{
+    Certificate,
+    builder::{
+        Builder, CertificateBuilder, Error,
+        profile::{BuilderProfile, cabf},
+    },
+    name::Name,
+    serial_number::SerialNumber,
+    spki::{
+        DynSignatureAlgorithmIdentifier, EncodePublicKey, SignatureBitStringEncoding,
+        SubjectPublicKeyInfoOwned,
+    },
+    time::Validity,
+};
+
+/// Issue a certificate with an explicit profile, subject public key, and issuer signer.
+///
+/// The caller is responsible for selecting a profile appropriate to the certificate's
+/// purpose and ensuring that the issuer key is authorized to issue it.
+pub fn issue_certificate<P, S, Sig>(
+    profile: P,
+    serial_number: SerialNumber,
+    validity: Validity,
+    subject_public_key_info: SubjectPublicKeyInfoOwned,
+    issuer_signer: &S,
+) -> Result<Certificate, Error>
+where
+    P: BuilderProfile,
+    S: Signer<Sig> + Keypair + DynSignatureAlgorithmIdentifier,
+    S::VerifyingKey: EncodePublicKey,
+    Sig: SignatureBitStringEncoding,
+{
+    let builder =
+        CertificateBuilder::new(profile, serial_number, validity, subject_public_key_info)?;
+    builder.build::<S, Sig>(issuer_signer)
+}
+
+/// Issue a self-signed RFC 5280 root certificate using any supported ML-DSA parameter set.
+///
+/// The subject must satisfy the CA/Browser Forum root naming profile (`C`, `O`, and `CN`).
+/// Standard root-CA extensions and the selected ML-DSA algorithm identifier are supplied by
+/// the X.509 builder and key implementation.
+pub fn issue_self_signed_ml_dsa_root<P>(
+    subject: Name,
+    serial_number: SerialNumber,
+    validity: Validity,
+    signer: &SigningKey<P>,
+) -> Result<Certificate, Error>
+where
+    P: MlDsaParams,
+    SigningKey<P>: Signer<MlDsaSignature<P>> + Keypair + DynSignatureAlgorithmIdentifier,
+    <SigningKey<P> as Keypair>::VerifyingKey: EncodePublicKey,
+    MlDsaSignature<P>: SignatureBitStringEncoding,
+{
+    let profile = cabf::Root::new(false, subject)?;
+    let subject_public_key_info = SubjectPublicKeyInfoOwned::from_key(&signer.verifying_key())?;
+    issue_certificate::<_, _, MlDsaSignature<P>>(
+        profile,
+        serial_number,
+        validity,
+        subject_public_key_info,
+        signer,
+    )
+}
+
+/// Issue a self-signed RFC 5280 root certificate using ML-DSA-65.
+pub fn issue_self_signed_ml_dsa65_root(
+    subject: Name,
+    serial_number: SerialNumber,
+    validity: Validity,
+    signer: &SigningKey<MlDsa65>,
+) -> Result<Certificate, Error> {
+    issue_self_signed_ml_dsa_root(subject, serial_number, validity, signer)
+}
+
+/// Issue a subordinate CA certificate using any supported ML-DSA parameter set.
+pub fn issue_ml_dsa_subordinate_ca<P>(
+    subject: Name,
+    issuer: Name,
+    serial_number: SerialNumber,
+    validity: Validity,
+    subject_key: &MlDsaVerifyingKey<P>,
+    issuer_signer: &SigningKey<P>,
+    path_len_constraint: Option<u8>,
+) -> Result<Certificate, Error>
+where
+    P: MlDsaParams,
+    SigningKey<P>: Signer<MlDsaSignature<P>> + Keypair + DynSignatureAlgorithmIdentifier,
+    <SigningKey<P> as Keypair>::VerifyingKey: EncodePublicKey,
+    MlDsaSignature<P>: SignatureBitStringEncoding,
+    MlDsaVerifyingKey<P>: EncodePublicKey,
+{
+    let profile = cabf::tls::Subordinate {
+        issuer,
+        subject,
+        path_len_constraint,
+        emits_ocsp_response: false,
+        client_auth: false,
+    };
+    let subject_public_key_info = SubjectPublicKeyInfoOwned::from_key(subject_key)?;
+    issue_certificate::<_, _, MlDsaSignature<P>>(
+        profile,
+        serial_number,
+        validity,
+        subject_public_key_info,
+        issuer_signer,
+    )
+}
+
+/// Issue an ML-DSA-65 subordinate CA certificate signed by an ML-DSA-65 issuer.
+///
+/// The supplied subject key may be distinct from the issuer key. The profile adds CA
+/// constraints, key usage, subject-key identifier, and authority-key identifier extensions.
+pub fn issue_ml_dsa65_subordinate_ca(
+    subject: Name,
+    issuer: Name,
+    serial_number: SerialNumber,
+    validity: Validity,
+    subject_key: &MlDsaVerifyingKey<MlDsa65>,
+    issuer_signer: &SigningKey<MlDsa65>,
+    path_len_constraint: Option<u8>,
+) -> Result<Certificate, Error> {
+    issue_ml_dsa_subordinate_ca(
+        subject,
+        issuer,
+        serial_number,
+        validity,
+        subject_key,
+        issuer_signer,
+        path_len_constraint,
+    )
+}
+
+/// Issue a self-signed RFC 5280 root certificate using an SLH-DSA key.
+///
+/// The parameter set selects the FIPS 205 algorithm and its standard algorithm identifier.
+/// Interoperability depends on the consuming OpenSSL/Bouncy Castle version supporting that
+/// SLH-DSA parameter set and its X.509 algorithm identifier.
+pub fn issue_self_signed_slh_dsa_root<P>(
+    subject: Name,
+    serial_number: SerialNumber,
+    validity: Validity,
+    signer: &SlhDsaSigningKey<P>,
+) -> Result<Certificate, Error>
+where
+    P: SlhDsaParameterSet,
+    SlhDsaSigningKey<P>: Signer<SlhDsaSignature<P>> + Keypair + DynSignatureAlgorithmIdentifier,
+    <SlhDsaSigningKey<P> as Keypair>::VerifyingKey: EncodePublicKey,
+    SlhDsaSignature<P>: SignatureBitStringEncoding,
+{
+    let profile = cabf::Root::new(false, subject)?;
+    let subject_public_key_info = SubjectPublicKeyInfoOwned::from_key(&signer.verifying_key())?;
+    issue_certificate::<_, _, SlhDsaSignature<P>>(
+        profile,
+        serial_number,
+        validity,
+        subject_public_key_info,
+        signer,
+    )
+}
+
+/// Encode a certificate as PEM with the standard `CERTIFICATE` label.
+pub fn certificate_to_pem(certificate: &Certificate) -> Result<String, der::Error> {
+    certificate.to_pem(der::pem::LineEnding::LF)
+}
+
+/// Construct a validity period beginning now and ending after `duration`.
+pub fn validity_for(duration: Duration) -> Result<Validity, Error> {
+    Validity::from_now(duration).map_err(Error::from)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        issue_ml_dsa65_subordinate_ca, issue_self_signed_ml_dsa_root,
+        issue_self_signed_ml_dsa65_root, issue_self_signed_slh_dsa_root, validity_for,
+    };
+    use core::{str::FromStr, time::Duration};
+    use der::{Decode, DecodePem, Encode};
+    use ml_dsa::{Generate, Keypair, MlDsa44, MlDsa65, MlDsa87, Signature, SigningKey, Verifier};
+    use slh_dsa::{Shake128f, SigningKey as SlhSigningKey};
+    use x509_cert::spki::DynSignatureAlgorithmIdentifier;
+    use x509_cert::{Certificate, certificate::Version, name::Name, serial_number::SerialNumber};
+
+    #[test]
+    fn issues_and_verifies_ml_dsa65_root_certificate() {
+        let signer = SigningKey::<MlDsa65>::generate();
+        let subject = Name::from_str("CN=NexusQ Test Root,O=NexusQ,C=US").unwrap();
+        let validity = validity_for(Duration::from_secs(24 * 60 * 60)).unwrap();
+        let certificate =
+            issue_self_signed_ml_dsa65_root(subject, SerialNumber::from(42u32), validity, &signer)
+                .unwrap();
+
+        let der = certificate.to_der().unwrap();
+        let decoded = Certificate::from_der(&der).unwrap();
+        assert_eq!(decoded, certificate);
+        let pem = super::certificate_to_pem(&decoded).unwrap();
+        assert!(pem.starts_with("-----BEGIN CERTIFICATE-----"));
+        assert_eq!(Certificate::from_pem(&pem).unwrap(), decoded);
+        assert_eq!(decoded.tbs_certificate().version(), Version::V3);
+        assert_eq!(
+            decoded.signature_algorithm().oid,
+            signer.signature_algorithm_identifier().unwrap().oid
+        );
+
+        let tbs = decoded.tbs_certificate().to_der().unwrap();
+        let signature_bytes = decoded.signature().as_bytes().unwrap();
+        let signature = Signature::<MlDsa65>::try_from(signature_bytes).unwrap();
+        signer.verifying_key().verify(&tbs, &signature).unwrap();
+    }
+
+    #[test]
+    fn issues_roots_for_all_ml_dsa_parameter_sets() {
+        let subject = Name::from_str("CN=NexusQ ML-DSA Root,O=NexusQ,C=US").unwrap();
+        let validity = validity_for(Duration::from_secs(60)).unwrap();
+        let key44 = SigningKey::<MlDsa44>::generate();
+        let cert44 = issue_self_signed_ml_dsa_root(
+            subject.clone(),
+            SerialNumber::from(47u32),
+            validity,
+            &key44,
+        )
+        .unwrap();
+        assert_eq!(
+            cert44.signature_algorithm().oid,
+            key44.signature_algorithm_identifier().unwrap().oid
+        );
+
+        let key87 = SigningKey::<MlDsa87>::generate();
+        let cert87 =
+            issue_self_signed_ml_dsa_root(subject, SerialNumber::from(48u32), validity, &key87)
+                .unwrap();
+        assert_eq!(
+            cert87.signature_algorithm().oid,
+            key87.signature_algorithm_identifier().unwrap().oid
+        );
+    }
+
+    #[test]
+    fn issues_subordinate_ca_signed_by_ml_dsa65_issuer() {
+        let issuer_signer = SigningKey::<MlDsa65>::generate();
+        let subject_signer = SigningKey::<MlDsa65>::generate();
+        let issuer = Name::from_str("CN=NexusQ Root,O=NexusQ,C=US").unwrap();
+        let subject = Name::from_str("CN=NexusQ Subordinate,O=NexusQ,C=US").unwrap();
+        let validity = validity_for(Duration::from_secs(24 * 60 * 60)).unwrap();
+        let certificate = issue_ml_dsa65_subordinate_ca(
+            subject,
+            issuer,
+            SerialNumber::from(44u32),
+            validity,
+            &subject_signer.verifying_key(),
+            &issuer_signer,
+            Some(0),
+        )
+        .unwrap();
+
+        let tbs = certificate.tbs_certificate().to_der().unwrap();
+        let signature =
+            Signature::<MlDsa65>::try_from(certificate.signature().as_bytes().unwrap()).unwrap();
+        issuer_signer
+            .verifying_key()
+            .verify(&tbs, &signature)
+            .unwrap();
+        assert_eq!(
+            certificate.signature_algorithm().oid,
+            issuer_signer.signature_algorithm_identifier().unwrap().oid
+        );
+    }
+
+    #[test]
+    fn issues_and_verifies_slh_dsa_root_certificate() {
+        let mut rng = rand::rng();
+        let signer = SlhSigningKey::<Shake128f>::new(&mut rng);
+        let subject = Name::from_str("CN=NexusQ SLH Test Root,O=NexusQ,C=US").unwrap();
+        let validity = validity_for(Duration::from_secs(24 * 60 * 60)).unwrap();
+        let certificate =
+            issue_self_signed_slh_dsa_root(subject, SerialNumber::from(45u32), validity, &signer)
+                .unwrap();
+
+        let der = certificate.to_der().unwrap();
+        let decoded = Certificate::from_der(&der).unwrap();
+        assert_eq!(decoded, certificate);
+        let tbs = decoded.tbs_certificate().to_der().unwrap();
+        let signature =
+            slh_dsa::Signature::<Shake128f>::try_from(decoded.signature().as_bytes().unwrap())
+                .unwrap();
+        signer.verifying_key().verify(&tbs, &signature).unwrap();
+    }
+
+    #[test]
+    fn rejects_malformed_der_and_tampered_signature() {
+        assert!(Certificate::from_der(&[0x30, 0x00]).is_err());
+
+        let signer = SigningKey::<MlDsa65>::generate();
+        let subject = Name::from_str("CN=NexusQ Tamper Test Root,O=NexusQ,C=US").unwrap();
+        let validity = validity_for(Duration::from_secs(60)).unwrap();
+        let certificate =
+            issue_self_signed_ml_dsa65_root(subject, SerialNumber::from(46u32), validity, &signer)
+                .unwrap();
+        let tbs = certificate.tbs_certificate().to_der().unwrap();
+        let mut signature_bytes = certificate.signature().as_bytes().unwrap().to_vec();
+        signature_bytes[0] ^= 0x01;
+        let result = Signature::<MlDsa65>::try_from(signature_bytes.as_slice())
+            .and_then(|signature| signer.verifying_key().verify(&tbs, &signature));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn rejects_invalid_ca_subject_name() {
+        let signer = SigningKey::<MlDsa65>::generate();
+        let subject = Name::from_str("CN=Missing Required CA Attributes").unwrap();
+        let validity = validity_for(Duration::from_secs(60)).unwrap();
+        assert!(
+            issue_self_signed_ml_dsa65_root(subject, SerialNumber::from(43u32), validity, &signer,)
+                .is_err()
+        );
+    }
+}
+
+#[cfg(feature = "experimental-composite")]
+pub mod composite;
