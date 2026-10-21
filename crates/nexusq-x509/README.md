@@ -8,6 +8,7 @@ RFC 5280 X.509 certificate issuance using NexusQ's post-quantum signature implem
 - Self-signed CA roots using all supported ML-DSA parameter sets and SLH-DSA parameter sets.
 - ML-DSA-65 subordinate CA certificates signed by a separate ML-DSA-65 issuer key.
 - A generic `issue_certificate` entry point for custom RFC 5280 profiles and signers that implement the compatible `signature` / SPKI traits.
+- `RevocationUrls` and `issue_ml_dsa_subordinate_ca_with_revocation_urls` to advertise HTTPS OCSP and CRL locations in Authority Information Access and CRL Distribution Points extensions.
 - An opt-in `experimental-composite` feature for the draft ML-DSA-65 + Ed25519 profile (OID `1.3.6.1.5.5.7.6.48`), explicitly marked experimental because the LAMPS specification is not a final RFC.
 - Tests for DER and PEM round trips, valid signatures, malformed input, and modified signatures.
 

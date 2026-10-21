@@ -11,6 +11,7 @@ members = [
     "crates/nexusq-ml-kem",
     "crates/nexusq-ml-dsa",
     "crates/nexusq-x509",
+    "crates/nexusq-ocsp",
     "crates/nexusq",
 ]
 

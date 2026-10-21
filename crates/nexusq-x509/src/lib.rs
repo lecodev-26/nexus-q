@@ -10,7 +10,10 @@ pub use ml_dsa;
 pub use slh_dsa;
 pub use x509_cert;
 
-use der::EncodePem;
+use der::{
+    EncodePem,
+    asn1::{Ia5String, ObjectIdentifier},
+};
 use ml_dsa::{
     MlDsa65, MlDsaParams, Signature as MlDsaSignature, SigningKey,
     VerifyingKey as MlDsaVerifyingKey,
@@ -25,6 +28,14 @@ use x509_cert::{
     builder::{
         Builder, CertificateBuilder, Error,
         profile::{BuilderProfile, cabf},
+    },
+    ext::{
+        Extension, ToExtension,
+        pkix::{
+            AccessDescription, AuthorityInfoAccessSyntax, CrlDistributionPoints,
+            crl::dp::DistributionPoint,
+            name::{DistributionPointName, GeneralName},
+        },
     },
     name::Name,
     serial_number::SerialNumber,
@@ -129,6 +140,186 @@ where
     )
 }
 
+/// Validated HTTPS locations advertised by issued certificates for revocation checking.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RevocationUrls {
+    ocsp_url: String,
+    crl_url: String,
+}
+
+impl RevocationUrls {
+    /// Create revocation URLs. HTTPS, an authority/host, ASCII syntax, and no credentials or
+    /// fragments are required so the URLs can be safely embedded in X.509 IA5String fields.
+    pub fn new(
+        ocsp_url: impl Into<String>,
+        crl_url: impl Into<String>,
+    ) -> Result<Self, RevocationUrlError> {
+        let ocsp_url = ocsp_url.into();
+        let crl_url = crl_url.into();
+        if !valid_revocation_url(&ocsp_url) || !valid_revocation_url(&crl_url) {
+            return Err(RevocationUrlError);
+        }
+        Ok(Self { ocsp_url, crl_url })
+    }
+
+    /// OCSP responder URL embedded in the Authority Information Access extension.
+    pub fn ocsp_url(&self) -> &str {
+        &self.ocsp_url
+    }
+
+    /// CRL distribution URL embedded in the CRL Distribution Points extension.
+    pub fn crl_url(&self) -> &str {
+        &self.crl_url
+    }
+}
+
+/// Invalid or unsafe revocation URL supplied to [`RevocationUrls::new`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RevocationUrlError;
+
+impl core::fmt::Display for RevocationUrlError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(
+            "revocation URLs must be valid ASCII HTTPS URLs without credentials or fragments",
+        )
+    }
+}
+
+impl core::error::Error for RevocationUrlError {}
+
+fn valid_revocation_url(url: &str) -> bool {
+    if !url.is_ascii()
+        || url.chars().any(char::is_control)
+        || url.contains('#')
+        || url.contains('@')
+        || url.chars().any(char::is_whitespace)
+    {
+        return false;
+    }
+    let Some(authority_and_path) = url.strip_prefix("https://") else {
+        return false;
+    };
+    let authority = authority_and_path
+        .split(['/', '?'])
+        .next()
+        .unwrap_or_default();
+    if authority.is_empty() || authority.starts_with(':') || authority.contains('@') {
+        return false;
+    }
+    let host = if authority.starts_with('[') {
+        let Some(end) = authority.find(']') else {
+            return false;
+        };
+        if end <= 1 {
+            return false;
+        }
+        let suffix = &authority[end + 1..];
+        if !suffix.is_empty() && (!suffix.starts_with(':') || suffix[1..].parse::<u16>().is_err()) {
+            return false;
+        }
+        &authority[..=end]
+    } else {
+        let mut parts = authority.split(':');
+        let host = parts.next().unwrap_or_default();
+        if let Some(port) = parts.next() {
+            if port.is_empty() || port.parse::<u16>().is_err() || parts.next().is_some() {
+                return false;
+            }
+        }
+        host
+    };
+    !host.is_empty()
+        && host.bytes().all(|b| {
+            b.is_ascii_alphanumeric()
+                || b == b'.'
+                || b == b'-'
+                || b == b'['
+                || b == b']'
+                || b == b':'
+        })
+}
+
+struct RevocationAwareSubordinate {
+    inner: cabf::tls::Subordinate,
+    urls: RevocationUrls,
+}
+
+impl BuilderProfile for RevocationAwareSubordinate {
+    fn get_issuer(&self, subject: &Name) -> Name {
+        self.inner.get_issuer(subject)
+    }
+    fn get_subject(&self) -> Name {
+        self.inner.get_subject()
+    }
+    fn build_extensions(
+        &self,
+        spk: x509_cert::spki::SubjectPublicKeyInfoRef<'_>,
+        issuer_spk: x509_cert::spki::SubjectPublicKeyInfoRef<'_>,
+        tbs: &x509_cert::TbsCertificate,
+    ) -> Result<Vec<Extension>, Error> {
+        let mut extensions = self.inner.build_extensions(spk, issuer_spk, tbs)?;
+        let ocsp_access = AuthorityInfoAccessSyntax(vec![AccessDescription {
+            access_method: ObjectIdentifier::new_unwrap("1.3.6.1.5.5.7.48.1"),
+            access_location: GeneralName::UniformResourceIdentifier(Ia5String::new(
+                &self.urls.ocsp_url,
+            )?),
+        }]);
+        extensions.push(ocsp_access.to_extension(tbs.subject(), &extensions)?);
+        let crl_points = CrlDistributionPoints(vec![DistributionPoint {
+            distribution_point: Some(DistributionPointName::FullName(vec![
+                GeneralName::UniformResourceIdentifier(Ia5String::new(&self.urls.crl_url)?),
+            ])),
+            reasons: None,
+            crl_issuer: None,
+        }]);
+        extensions.push(crl_points.to_extension(tbs.subject(), &extensions)?);
+        Ok(extensions)
+    }
+}
+
+/// Issue an ML-DSA subordinate CA certificate with explicit OCSP and CRL discovery URLs.
+///
+/// In addition to the RFC 5280 CA extensions, the certificate advertises the OCSP endpoint in
+/// Authority Information Access and the CRL endpoint in CRL Distribution Points. The URLs must
+/// be HTTPS and are validated by [`RevocationUrls::new`].
+#[allow(clippy::too_many_arguments)] // Mirrors the existing subordinate issuer API and adds revocation endpoints.
+pub fn issue_ml_dsa_subordinate_ca_with_revocation_urls<P>(
+    subject: Name,
+    issuer: Name,
+    serial_number: SerialNumber,
+    validity: Validity,
+    subject_key: &MlDsaVerifyingKey<P>,
+    issuer_signer: &SigningKey<P>,
+    path_len_constraint: Option<u8>,
+    urls: RevocationUrls,
+) -> Result<Certificate, Error>
+where
+    P: MlDsaParams,
+    SigningKey<P>: Signer<MlDsaSignature<P>> + Keypair + DynSignatureAlgorithmIdentifier,
+    <SigningKey<P> as Keypair>::VerifyingKey: EncodePublicKey,
+    MlDsaSignature<P>: SignatureBitStringEncoding,
+    MlDsaVerifyingKey<P>: EncodePublicKey,
+{
+    let profile = RevocationAwareSubordinate {
+        inner: cabf::tls::Subordinate {
+            issuer,
+            subject,
+            path_len_constraint,
+            emits_ocsp_response: true,
+            client_auth: false,
+        },
+        urls,
+    };
+    let subject_public_key_info = SubjectPublicKeyInfoOwned::from_key(subject_key)?;
+    issue_certificate::<_, _, MlDsaSignature<P>>(
+        profile,
+        serial_number,
+        validity,
+        subject_public_key_info,
+        issuer_signer,
+    )
+}
+
 /// Issue an ML-DSA-65 subordinate CA certificate signed by an ML-DSA-65 issuer.
 ///
 /// The supplied subject key may be distinct from the issuer key. The profile adds CA
@@ -194,6 +385,7 @@ pub fn validity_for(duration: Duration) -> Result<Validity, Error> {
 #[cfg(test)]
 mod tests {
     use super::{
+        RevocationUrls, issue_ml_dsa_subordinate_ca_with_revocation_urls,
         issue_ml_dsa65_subordinate_ca, issue_self_signed_ml_dsa_root,
         issue_self_signed_ml_dsa65_root, issue_self_signed_slh_dsa_root, validity_for,
     };
@@ -287,6 +479,60 @@ mod tests {
             certificate.signature_algorithm().oid,
             issuer_signer.signature_algorithm_identifier().unwrap().oid
         );
+    }
+
+    #[test]
+    fn subordinate_certificate_publishes_ocsp_and_crl_urls() {
+        let issuer_signer = SigningKey::<MlDsa65>::generate();
+        let subject_signer = SigningKey::<MlDsa65>::generate();
+        let issuer = Name::from_str("CN=NexusQ Root,O=NexusQ,C=US").unwrap();
+        let subject = Name::from_str("CN=NexusQ Revocation Subordinate,O=NexusQ,C=US").unwrap();
+        let urls = RevocationUrls::new(
+            "https://pki.example.test/ocsp",
+            "https://pki.example.test/crl.pem",
+        )
+        .unwrap();
+        let certificate = issue_ml_dsa_subordinate_ca_with_revocation_urls(
+            subject,
+            issuer,
+            SerialNumber::from(49u32),
+            validity_for(Duration::from_secs(3600)).unwrap(),
+            &subject_signer.verifying_key(),
+            &issuer_signer,
+            Some(0),
+            urls,
+        )
+        .unwrap();
+        let tbs = certificate.tbs_certificate();
+        let ext_opt = tbs.extensions();
+        let extensions = ext_opt.as_ref().unwrap();
+        assert!(
+            extensions
+                .iter()
+                .any(|ext| ext.extn_id.to_string() == "1.3.6.1.5.5.7.1.1")
+        );
+        assert!(
+            extensions
+                .iter()
+                .any(|ext| ext.extn_id.to_string() == "2.5.29.31")
+        );
+    }
+
+    #[test]
+    fn revocation_urls_reject_http_credentials_and_fragments() {
+        assert!(RevocationUrls::new("http://pki.example/ocsp", "https://pki.example/crl").is_err());
+        assert!(
+            RevocationUrls::new("https://user@pki.example/ocsp", "https://pki.example/crl")
+                .is_err()
+        );
+        assert!(
+            RevocationUrls::new(
+                "https://pki.example/ocsp#fragment",
+                "https://pki.example/crl"
+            )
+            .is_err()
+        );
+        assert!(RevocationUrls::new("https://pki.example/ocsp", "https://pki.example/crl").is_ok());
     }
 
     #[test]
