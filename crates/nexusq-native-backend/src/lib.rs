@@ -42,7 +42,11 @@ pub unsafe extern "C" fn nq_randombytes(out: *mut u8, len: usize) -> i32 {
     }
     // SAFETY: the C callers pass a writable buffer of exactly `len` bytes.
     let buf = unsafe { core::slice::from_raw_parts_mut(out, len) };
-    match getrandom::fill(buf) {
+    #[cfg(feature = "aws-lc-rng")]
+    let result = aws_lc_rs::rand::fill(buf);
+    #[cfg(not(feature = "aws-lc-rng"))]
+    let result = getrandom::fill(buf);
+    match result {
         Ok(()) => 0,
         Err(_) => -1,
     }

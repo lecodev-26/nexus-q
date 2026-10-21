@@ -65,3 +65,23 @@ The first 20-iteration Phase 17 benchmark showed a misleading ML-KEM-1024 hybrid
 | Native backend | prepared public key | 115.7 / 316.0 µs | 115.7 / 130.8 µs |
 
 The high aggregate means did not reproduce in the native per-call median/P95 data; the default serialized-key path did show a high-variance second run. The cause of these outliers is not established; OS entropy or scheduler/backend latency are possibilities, not confirmed diagnoses. The local benchmark now reports per-call median and P95 for these APIs to avoid relying on a short aggregate mean. The native path was consistently faster at the median in these local runs, though the default path's tail variability needs further investigation before making a production-performance claim. These Android measurements are not substitutes for the issue's matched x86-64 AWS-LC/liboqs/CIRCL gate.
+
+### Matched-CSPRNG kernel-gate experiment (Android/AArch64)
+
+The standalone native runner previously called the OS `getrandom` syscall for every randomized kernel operation, while the AWS-LC C reference runner uses AWS-LC's `RAND_bytes` DRBG. To avoid charging different RNG implementations to the kernel comparison, the native backend now has an opt-in `aws-lc-rng` feature for the Arena runner only. The default library remains on `getrandom`; the native-backend gate builds its benchmark runner with `aws-lc-rng`, and the separate core-production gate continues to measure the real production RNG path. Every benchmark record emits `environment.rng_source` so the RNG mode is explicit.
+
+Three alternating local AArch64 rounds with 100 warmups and 1,000 samples per operation, using `aws-lc-rand-bytes` for both the native-assembly and portable-C variants, produced the following pooled sample statistics. Raw JSONL is stored outside the repository at `$HOME/nexusq-issue23-baseline/local-aarch64-common-rng/`.
+
+| Operation | Native median (µs) | Portable median (µs) | Median ratio | Native p95 (µs) | Portable p95 (µs) | p95 ratio |
+|---|---:|---:|---:|---:|---:|---:|
+| ML-DSA-65 keygen | 93.46 | 192.54 | 0.485× | 99.39 | 212.23 | 0.468× |
+| ML-DSA-65 sign | 215.73 | 586.88 | 0.368× | 599.69 | 1783.38 | 0.336× |
+| ML-DSA-65 verify | 88.31 | 179.46 | 0.492× | 89.92 | 193.00 | 0.466× |
+| ML-KEM-1024 decaps | 45.85 | 76.92 | 0.596× | 47.08 | 95.77 | 0.492× |
+| ML-KEM-1024 encaps | 36.92 | 66.54 | 0.555× | 38.15 | 68.85 | 0.554× |
+| ML-KEM-1024 keygen | 35.62 | 71.31 | 0.499× | 36.92 | 76.61 | 0.482× |
+| ML-KEM-768 decaps | 31.31 | 51.62 | 0.607× | 71.39 | 53.23 | 1.341× |
+| ML-KEM-768 encaps | 25.23 | 44.23 | 0.570× | 25.77 | 45.46 | 0.567× |
+| ML-KEM-768 keygen | 24.39 | 46.15 | 0.528× | 25.85 | 101.31 | 0.255× |
+
+The native assembly path remains faster in all nine medians under the matched RNG. Tail outliers persist on this mobile host (notably ML-KEM-768 decapsulation and portable key generation), so these local results remain directional, not a substitute for repeated x86-64 gate runs.

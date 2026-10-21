@@ -213,9 +213,23 @@ jobs:
           cc -D_POSIX_C_SOURCE=200809L -std=c11 -O3 -Wall -Wextra -Werror -I"$GITHUB_WORKSPACE/.arena-aws-lc/include" arena/adapters/aws-lc/runner.c -L"$GITHUB_WORKSPACE/.arena-aws-lc-build/crypto" -Wl,-rpath,"$GITHUB_WORKSPACE/.arena-aws-lc-build/crypto" -lcrypto -lm -o arena-aws-lc-runner
       - name: Build NEXUS-Q native-backend runner
         run: |
-          cargo build --manifest-path arena/runners/nexusq-native/Cargo.toml --release --locked
+          # Match the AWS-LC C reference runner's RAND_bytes DRBG for kernel-only timing.
+          # The core-production gate separately measures the production getrandom path.
+          cargo build --manifest-path arena/runners/nexusq-native/Cargo.toml --release --locked --features aws-lc-rng
           cp arena/runners/nexusq-native/target/release/nexusq-native-arena-runner ./nexusq-native-runner
           sha256sum nexusq-native-runner arena-aws-lc-runner | tee arena/results/ci/native-backend/binaries.sha256
+      - name: Verify kernel benchmark uses the matched AWS-LC RNG
+        run: |
+          set -euo pipefail
+          NEXUSQ_ITERATIONS=10 NEXUSQ_WARMUPS=2 NEXUSQ_RUN_ID=common-rng-smoke \
+            ./nexusq-native-runner > native-rng-smoke.jsonl
+          python3 - <<'PY'
+          import json
+          rows = [json.loads(line) for line in open('native-rng-smoke.jsonl') if line.strip()]
+          assert len(rows) == 9, f'expected nine operation rows, got {len(rows)}'
+          assert all(row['environment']['rng_source'] == 'aws-lc-rand-bytes' for row in rows)
+          print('Kernel gate uses the AWS-LC RAND_bytes DRBG for all nine operations')
+          PY
       - name: Run 12 alternating rounds (rounds 1-3 are the official gate input)
         env:
           NEXUSQ_ITERATIONS: "1000"

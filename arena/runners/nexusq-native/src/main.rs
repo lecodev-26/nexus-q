@@ -115,13 +115,14 @@ fn emit(alg: &str, ps: &str, op: &str, (ns, cy): (Vec<u128>, Vec<u64>), sizes: s
             "cpu":env::var("NEXUSQ_CPU").unwrap_or_else(|_| "unknown".into()),
             "cpu_features":env::var("NEXUSQ_CPU_FEATURES").unwrap_or_default().split(',').filter(|x| !x.is_empty()).collect::<Vec<_>>(),
             "compiler":"rustc+cc", "compiler_version":env::var("RUSTC_VERSION").unwrap_or_else(|_| "unknown".into()),
+            "rng_source":if cfg!(feature = "aws-lc-rng") { "aws-lc-rand-bytes" } else { "getrandom-os" },
             "c_compiler":env::var("NEXUSQ_CC_VERSION").unwrap_or_else(|_| "unknown".into()),
             "rustc_verbose":env::var("NEXUSQ_RUSTC_VERBOSE").unwrap_or_else(|_| "unknown".into()),
             "cargo_lock_sha256":env::var("NEXUSQ_CARGO_LOCK_SHA256").unwrap_or_else(|_| "unknown".into()),
             "cpu_frequency_khz":env::var("NEXUSQ_CPU_FREQUENCY_KHZ").ok().and_then(|x| x.parse::<u64>().ok()),
             "cpu_governor":env::var("NEXUSQ_CPU_GOVERNOR").unwrap_or_else(|_| "unknown".into()),
             "run_order":env::var("NEXUSQ_RUN_ORDER").unwrap_or_else(|_| "unknown".into()),
-            "optimization":"release lto=fat codegen-units=1; C -O3", "harness_version":"arena-v5-optional-cycle-counter"
+            "optimization":"release lto=fat codegen-units=1; C -O3", "harness_version":"arena-v6-configurable-rng"
         },
         "measurement": {
             "iterations":ns.len(), "warmups":warmups(), "measurement_timestamp_unix_ns":ts, "latency_ns":med as f64,
