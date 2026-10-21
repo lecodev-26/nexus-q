@@ -313,7 +313,8 @@ async fn cmp_handler(State(state): State<CmpState>, body: Bytes) -> impl IntoRes
         Err(CmpError::Enrollment(
             EnrollmentError::StateUnavailable
             | EnrollmentError::Issuance(_)
-            | EnrollmentError::Signing(_),
+            | EnrollmentError::Signing(_)
+            | EnrollmentError::ExternalSigning(_),
         )) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             [(header::CONTENT_TYPE, "text/plain")],

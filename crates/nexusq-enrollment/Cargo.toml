@@ -19,6 +19,7 @@ time = { version = "0.3.45", features = ["formatting"] }
 const-oid = { version = "0.10", features = ["db"] }
 der = { version = "0.8", features = ["std", "pem"] }
 nexusq-ml-dsa = { workspace = true, features = ["pkcs8", "getrandom", "zeroize"] }
+nexusq-x509 = { path = "../nexusq-x509", version = "4.1.0" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

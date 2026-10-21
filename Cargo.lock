@@ -568,6 +568,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "cryptoki"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "625cf4599c43d69a16996ce2573fc80745a0b0300c962f0bfa11d55b6cab2b2d"
+dependencies = [
+ "bitflags",
+ "cryptoki-sys",
+ "libloading",
+ "log",
+ "secrecy",
+]
+
+[[package]]
+name = "cryptoki-sys"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1fd850498411e4057f1cba79e6e2bc7cbe960544c1046ab46d4685c403a1121"
+dependencies = [
+ "libloading",
+]
+
+[[package]]
 name = "ctr"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1103,6 +1125,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "65cd87c9a6d60536580b316ad985726104730a5151c99845f2490428ef91240a"
 
 [[package]]
+name = "libloading"
+version = "0.8.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7c4b02199fee7c5d21a5ae7d8cfa79a6ef5bb2fc834d6e9058e89c825efdc55"
+dependencies = [
+ "cfg-if",
+ "windows-link",
+]
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1256,6 +1288,7 @@ dependencies = [
  "http-body-util",
  "josekit",
  "nexusq-ml-dsa 4.1.0",
+ "nexusq-x509",
  "rand 0.10.3",
  "serde",
  "serde_json",
@@ -1268,6 +1301,27 @@ dependencies = [
  "tokio",
  "tower",
  "x509-cert",
+]
+
+[[package]]
+name = "nexusq-hsm"
+version = "4.1.0"
+dependencies = [
+ "cryptoki",
+ "der",
+ "ed25519-dalek",
+ "getrandom 0.3.4",
+ "nexusq-enrollment",
+ "nexusq-ml-dsa 4.1.0",
+ "nexusq-x509",
+ "rand_core 0.9.5",
+ "serde",
+ "sha2",
+ "signature",
+ "thiserror",
+ "tokio",
+ "x509-cert",
+ "zeroize",
 ]
 
 [[package]]
@@ -1413,6 +1467,7 @@ dependencies = [
 name = "nexusq-x509"
 version = "4.1.0"
 dependencies = [
+ "const-oid",
  "der",
  "ed25519-dalek",
  "nexusq-ml-dsa 4.1.0",
@@ -1420,6 +1475,7 @@ dependencies = [
  "sha2",
  "signature",
  "slh-dsa",
+ "thiserror",
  "x509-cert",
 ]
 
@@ -1951,6 +2007,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502"
 dependencies = [
  "winapi-util",
+]
+
+[[package]]
+name = "secrecy"
+version = "0.10.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e891af845473308773346dc847b2c23ee78fe442e0472ac50e22a18a93d3ae5a"
+dependencies = [
+ "zeroize",
 ]
 
 [[package]]

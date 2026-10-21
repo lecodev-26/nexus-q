@@ -1,0 +1,33 @@
+[package]
+name = "nexusq-hsm"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "PKCS#11 ML-DSA-65 HSM signing and M-of-N CA key ceremonies for NexusQ"
+readme = "README.md"
+
+[dependencies]
+cryptoki = "0.12.1"
+nexusq-ml-dsa = { workspace = true }
+nexusq-x509 = { path = "../nexusq-x509", version = "4.1.0" }
+ed25519-dalek = { workspace = true }
+getrandom = { workspace = true }
+zeroize = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+sha2 = { workspace = true }
+signature = "3"
+
+[dev-dependencies]
+rand_core = { workspace = true }
+tokio = { workspace = true }
+nexusq-enrollment = { path = "../nexusq-enrollment", version = "4.1.0" }
+x509-cert = "0.3.0"
+der = "0.8.2"
+
+[features]
+default = []
+softhsm-tests = []

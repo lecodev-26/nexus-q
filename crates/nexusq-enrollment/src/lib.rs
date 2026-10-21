@@ -33,13 +33,16 @@ use der::{
     asn1::{Ia5String, ObjectIdentifier as DerOid},
 };
 use ml_dsa::{MlDsa65, Signature as MlDsaSignature, SigningKey, VerifyingKey};
+use nexusq_x509::{
+    ExternalSignError, MlDsa65Signer, build_certificate_with_external_ml_dsa65_signer,
+};
 use sha2::{Digest, Sha256};
-use signature::{Keypair, Verifier};
+use signature::Verifier;
 use spki::SubjectPublicKeyInfoRef;
 use subtle::ConstantTimeEq;
 use x509_cert::{
     Certificate,
-    builder::{Builder, CertificateBuilder, Error as BuilderError, profile::BuilderProfile},
+    builder::{CertificateBuilder, Error as BuilderError, profile::BuilderProfile},
     ext::{
         Extension, ToExtension,
         pkix::{
@@ -238,6 +241,9 @@ pub enum Error {
     /// Certificate signing failed.
     #[error("certificate signing failed")]
     Signing(#[from] signature::Error),
+    /// External HSM-backed signing or certificate assembly failed.
+    #[error("external certificate signing failed: {0}")]
+    ExternalSigning(#[from] ExternalSignError),
 }
 
 struct LeafProfile {
@@ -315,7 +321,7 @@ impl BuilderProfile for LeafProfile {
 /// Shared issuance engine used by protocol-specific enrollment adapters.
 pub struct EnrollmentAuthority {
     issuer_certificate: Certificate,
-    issuer_signer: SigningKey<MlDsa65>,
+    issuer_signer: Arc<dyn MlDsa65Signer>,
     policy: EnrollmentPolicy,
     next_serial: AtomicU64,
     rate: Mutex<HashMap<String, VecDeque<Instant>>>,
@@ -330,8 +336,26 @@ impl EnrollmentAuthority {
         policy: EnrollmentPolicy,
         first_serial: u64,
     ) -> Result<Self, Error> {
+        Self::new_with_signer(
+            issuer_certificate,
+            Arc::new(issuer_signer),
+            policy,
+            first_serial,
+        )
+    }
+
+    /// Configure an ML-DSA-65 CA using an external signer such as a PKCS#11 HSM key handle.
+    /// The private key is never imported into this process; only the public key and a sign callback
+    /// are used. The CA certificate public key must match the external signer.
+    pub fn new_with_signer(
+        issuer_certificate: Certificate,
+        issuer_signer: Arc<dyn MlDsa65Signer>,
+        policy: EnrollmentPolicy,
+        first_serial: u64,
+    ) -> Result<Self, Error> {
         policy.validate()?;
-        let spki = SubjectPublicKeyInfoOwned::from_key(&issuer_signer.verifying_key())
+        let verifying_key = issuer_signer.public_key();
+        let spki = SubjectPublicKeyInfoOwned::from_key(&verifying_key)
             .map_err(|_| Error::InvalidPolicy)?;
         if issuer_certificate
             .tbs_certificate()
@@ -485,7 +509,11 @@ impl EnrollmentAuthority {
             Validity::from_now(leaf_validity).map_err(|_| Error::InvalidPolicy)?,
             csr.info.public_key,
         )?;
-        Ok(builder.build::<SigningKey<MlDsa65>, MlDsaSignature<MlDsa65>>(&self.issuer_signer)?)
+        Ok(build_certificate_with_external_ml_dsa65_signer(
+            builder,
+            self.issuer_signer.public_key(),
+            |tbs_der| self.issuer_signer.sign(tbs_der),
+        )?)
     }
 
     fn check_rate_limit(&self, principal: &str) -> Result<(), Error> {
@@ -617,7 +645,7 @@ impl Error {
             Self::StateUnavailable => "state_unavailable",
             Self::Der(_) => "invalid_der",
             Self::Issuance(_) => "issuance_failed",
-            Self::Signing(_) => "signing_failed",
+            Self::Signing(_) | Self::ExternalSigning(_) => "signing_failed",
         }
     }
 }

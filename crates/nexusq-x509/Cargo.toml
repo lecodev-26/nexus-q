@@ -17,6 +17,8 @@ rand = { version = "0.10", optional = true }
 der = { version = "0.8", features = ["pem"] }
 x509-cert = { version = "0.3.0", features = ["builder", "signature", "pem"] }
 signature = "3"
+const-oid = { version = "0.10", features = ["db"] }
+thiserror = { workspace = true }
 
 [features]
 default = []

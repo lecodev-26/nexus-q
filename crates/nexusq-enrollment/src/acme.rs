@@ -922,7 +922,8 @@ fn finalize_order(
                 EnrollmentError::RateLimited => AcmeError::rate_limited(),
                 EnrollmentError::StateUnavailable
                 | EnrollmentError::Issuance(_)
-                | EnrollmentError::Signing(_) => AcmeError::server(),
+                | EnrollmentError::Signing(_)
+                | EnrollmentError::ExternalSigning(_) => AcmeError::server(),
                 _ => AcmeError::rejected(),
             });
         }

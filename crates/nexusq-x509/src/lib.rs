@@ -12,7 +12,7 @@ pub use x509_cert;
 
 use der::{
     EncodePem,
-    asn1::{Ia5String, ObjectIdentifier},
+    asn1::{BitString, Ia5String, ObjectIdentifier},
 };
 use ml_dsa::{
     MlDsa65, MlDsaParams, Signature as MlDsaSignature, SigningKey,
@@ -40,11 +40,83 @@ use x509_cert::{
     name::Name,
     serial_number::SerialNumber,
     spki::{
-        DynSignatureAlgorithmIdentifier, EncodePublicKey, SignatureBitStringEncoding,
-        SubjectPublicKeyInfoOwned,
+        AlgorithmIdentifierOwned, DynSignatureAlgorithmIdentifier, EncodePublicKey,
+        SignatureBitStringEncoding, SubjectPublicKeyInfoOwned,
     },
     time::Validity,
 };
+
+/// A signer interface for ML-DSA-65 private keys held outside the process, such as a PKCS#11 HSM.
+/// Implementations return only the public key and detached signature bytes; they must never export
+/// the private key material.
+pub trait MlDsa65Signer: Send + Sync {
+    /// Public key corresponding to the protected private key.
+    fn public_key(&self) -> MlDsaVerifyingKey<MlDsa65>;
+    /// Sign a message without exporting the private key.
+    fn sign(&self, message: &[u8]) -> Result<Vec<u8>, String>;
+}
+
+impl MlDsa65Signer for SigningKey<MlDsa65> {
+    fn public_key(&self) -> MlDsaVerifyingKey<MlDsa65> {
+        Keypair::verifying_key(self)
+    }
+    fn sign(&self, message: &[u8]) -> Result<Vec<u8>, String> {
+        let signature = Signer::<MlDsaSignature<MlDsa65>>::try_sign(self, message)
+            .map_err(|error| error.to_string())?;
+        Ok(signature.encode().to_vec())
+    }
+}
+
+/// Error returned when assembling a certificate with an external ML-DSA-65 signer.
+#[derive(Debug, thiserror::Error)]
+pub enum ExternalSignError {
+    /// Building the TBSCertificate failed.
+    #[error("X.509 builder failed: {0}")]
+    Builder(#[from] Error),
+    /// Encoding the signature BIT STRING failed.
+    #[error("invalid external signature encoding: {0}")]
+    Der(#[from] der::Error),
+    /// The external signer failed. Implementations should return sanitized error text.
+    #[error("external ML-DSA-65 signer failed: {0}")]
+    Signer(String),
+}
+
+struct ExternalPublicKeySigner(MlDsaVerifyingKey<MlDsa65>);
+impl Keypair for ExternalPublicKeySigner {
+    type VerifyingKey = MlDsaVerifyingKey<MlDsa65>;
+    fn verifying_key(&self) -> Self::VerifyingKey {
+        self.0.clone()
+    }
+}
+impl DynSignatureAlgorithmIdentifier for ExternalPublicKeySigner {
+    fn signature_algorithm_identifier(&self) -> x509_cert::spki::Result<AlgorithmIdentifierOwned> {
+        Ok(AlgorithmIdentifierOwned {
+            oid: const_oid::db::fips204::ID_ML_DSA_65,
+            parameters: None,
+        })
+    }
+}
+
+/// Assemble a certificate with a PKCS#11/HSM-backed ML-DSA-65 signing operation.
+///
+/// The builder first finalizes the exact DER TBSCertificate. The callback signs those bytes inside
+/// the external provider; this function then attaches the returned signature and algorithm ID.
+/// No private key bytes are accepted by or returned from this API.
+pub fn build_certificate_with_external_ml_dsa65_signer<P, F>(
+    mut builder: CertificateBuilder<P>,
+    public_key: MlDsaVerifyingKey<MlDsa65>,
+    sign: F,
+) -> Result<Certificate, ExternalSignError>
+where
+    P: BuilderProfile,
+    F: FnOnce(&[u8]) -> Result<Vec<u8>, String>,
+{
+    let signer = ExternalPublicKeySigner(public_key);
+    let tbs_der = builder.finalize(&signer)?;
+    let signature = sign(&tbs_der).map_err(ExternalSignError::Signer)?;
+    let signature = BitString::from_bytes(&signature)?;
+    Ok(builder.assemble(signature, &signer)?)
+}
 
 /// Issue a certificate with an explicit profile, subject public key, and issuer signer.
 ///

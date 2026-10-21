@@ -52,3 +52,7 @@ ML-DSA algorithm identifiers follow [RFC 9881](https://www.rfc-editor.org/rfc/rf
 - The issuer signer must be authorized for the chosen profile; the generic API cannot make that policy decision for the caller.
 - Certificate issuance is not a full path validator or a complete CA policy engine.
 - Keep signing keys protected; this crate does not persist or export private keys.
+
+## External ML-DSA-65 signers
+
+`MlDsa65Signer` and `build_certificate_with_external_ml_dsa65_signer` allow a PKCS#11/HSM-backed signer to sign the exact DER TBSCertificate bytes without importing its private key into the process. `nexusq-enrollment::EnrollmentAuthority::new_with_signer` uses this interface for CA issuance. The callback must return a valid raw ML-DSA-65 signature; the resulting certificate should be verified against the configured CA public key before activation.
