@@ -15,3 +15,7 @@ NEXUS-Q and liboqs therefore measure the same plain standardized primitives. NEX
 The adapter is built and executed in CI against the pinned liboqs release. Local Android/Termux execution is optional and is not represented by Arena results unless actually executed.
 
 liboqs is treated as an ecosystem benchmark/reference implementation, not as an automatic production-security endorsement; upstream describes the project as intended for research and prototyping rather than protecting sensitive production data.
+
+## Raw-sample best-comparator diagnostics
+
+The runner records 1,000 independently timed `samples_ns` by default and emits median and nearest-rank p95 using `clock_gettime(CLOCK_MONOTONIC)` around each operation, not an aggregate mean across the batch. CI builds only the three standardized algorithms required by Issue #23 and compiles with `-Wall -Wextra -Werror`. A successful build or schema check alone is not a performance claim: strict Issue #23 acceptance requires repeated, matched-host raw samples and median and p95 ratios at or below 1.00x for every operation.

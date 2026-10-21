@@ -34,7 +34,7 @@ def load(path, expected_impl):
         p95 = sorted_samples[math.ceil(n * 0.95) - 1]
         if int(measurement.get("warmups", -1)) < 100:
             raise SystemExit(f"need >=100 warmups in {path}:{line_no}: {key}")
-        if measurement.get("measurement_scope") not in ("nexusq_core_public_api", "nexusq_core_hybrid_public_api", "aws_lc_evp_primitive_operation", "aws_lc_nexusq_hybrid_api_comparator"):
+        if measurement.get("measurement_scope") not in ("nexusq_core_public_api", "nexusq_core_hybrid_public_api", "reference_implementation_operation", "aws_lc_evp_primitive_operation", "aws_lc_evp_preimported_public_key", "aws_lc_evp_preimported_secret_key", "aws_lc_nexusq_hybrid_api_comparator"):
             raise SystemExit(f"unexpected measurement scope in {path}:{line_no}: {key}")
         records[key] = {"median": median, "p95": p95, "samples": len(samples), "scope": measurement["measurement_scope"],
                         "cpu": row["environment"].get("cpu"), "run_order": row["environment"].get("run_order")}
@@ -62,7 +62,14 @@ def main():
     failed = []
     for key in OPS:
         expected_native_scope = "nexusq_core_hybrid_public_api" if key[0] == "ml-kem" and key[1] == "1024" else "nexusq_core_public_api"
-        expected_aws_scope = "aws_lc_nexusq_hybrid_api_comparator" if key[0] == "ml-kem" and key[1] == "1024" else "aws_lc_evp_primitive_operation"
+        if key[0] == "ml-kem" and key[1] == "1024":
+            expected_aws_scope = "aws_lc_nexusq_hybrid_api_comparator"
+        elif key[2] == "keygen":
+            expected_aws_scope = "reference_implementation_operation"
+        elif key[2] in ("encaps", "verify"):
+            expected_aws_scope = "aws_lc_evp_preimported_public_key"
+        else:  # ML-KEM decapsulation and ML-DSA signing use pre-imported secret keys.
+            expected_aws_scope = "aws_lc_evp_preimported_secret_key"
         if native[key]["scope"] != expected_native_scope or rustcrypto[key]["scope"] != expected_native_scope or aws[key]["scope"] != expected_aws_scope:
             raise SystemExit(f"scope mismatch for {key}: RustCrypto={rustcrypto[key]['scope']}, native={native[key]['scope']}, AWS-LC={aws[key]['scope']}; refuse incomparable gate")
     cpu = next(iter(all_cpu))

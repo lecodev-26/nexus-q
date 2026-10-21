@@ -1,6 +1,7 @@
-//! Arena runner for the experimental NEXUS-Q native backend. Same JSON schema, same env
-//! variables, same timing method (per-operation Instant + lfence/rdtsc) and same
-//! nearest-rank statistics as arena/runners/nexusq. Every operation follows the
+//! Arena runner for the experimental NEXUS-Q native backend. Same JSON schema, env
+//! variables, per-operation Instant timing and nearest-rank statistics as the main
+//! runner. x86-64 additionally records lfence/rdtsc ticks; other targets leave the
+//! optional cycle sample array empty. Every operation follows the
 //! FIPS contract used by the AWS-LC adapter: encaps/verify start from encoded
 //! public-key bytes, decaps/sign from encoded secret-key bytes; no cached
 //! expansion of A, t1 or H(pk).
@@ -11,6 +12,7 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 const MESSAGE: &[u8] = b"nexusq-pqc-arena-v1";
 
+#[cfg(target_arch = "x86_64")]
 #[inline]
 fn rdtsc() -> u64 {
     let lo: u32;
@@ -21,6 +23,27 @@ fn rdtsc() -> u64 {
     };
     ((hi as u64) << 32) | lo as u64
 }
+
+#[inline]
+fn cycles_now() -> Option<u64> {
+    #[cfg(target_arch = "x86_64")]
+    {
+        Some(rdtsc())
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        None
+    }
+}
+
+const fn cycle_counter_source() -> &'static str {
+    if cfg!(target_arch = "x86_64") {
+        "x86_64_tsc_ticks"
+    } else {
+        "unavailable_on_target"
+    }
+}
+
 fn count(name: &str, default: usize) -> usize {
     env::var(name)
         .ok()
@@ -41,12 +64,15 @@ fn measure<F: FnMut()>(mut f: F) -> (Vec<u128>, Vec<u64>) {
     let n = iterations();
     let (mut ns, mut cy) = (Vec::with_capacity(n), Vec::with_capacity(n));
     for _ in 0..n {
-        let c0 = rdtsc();
+        let c0 = cycles_now();
         let t0 = Instant::now();
         f();
-        let c1 = rdtsc();
-        ns.push(t0.elapsed().as_nanos());
-        cy.push(c1.wrapping_sub(c0));
+        let t1 = Instant::now();
+        let c1 = cycles_now();
+        ns.push(t1.duration_since(t0).as_nanos());
+        if let (Some(start), Some(end)) = (c0, c1) {
+            cy.push(end.wrapping_sub(start));
+        }
     }
     (ns, cy)
 }
@@ -90,13 +116,14 @@ fn emit(alg: &str, ps: &str, op: &str, (ns, cy): (Vec<u128>, Vec<u64>), sizes: s
             "cpu":env::var("NEXUSQ_CPU").unwrap_or_else(|_| "unknown".into()),
             "cpu_features":env::var("NEXUSQ_CPU_FEATURES").unwrap_or_default().split(',').filter(|x| !x.is_empty()).collect::<Vec<_>>(),
             "compiler":"rustc+cc", "compiler_version":env::var("RUSTC_VERSION").unwrap_or_else(|_| "unknown".into()),
+            "rng_source":if cfg!(feature = "aws-lc-rng") { "aws-lc-rand-bytes" } else { "getrandom-os" },
             "c_compiler":env::var("NEXUSQ_CC_VERSION").unwrap_or_else(|_| "unknown".into()),
             "rustc_verbose":env::var("NEXUSQ_RUSTC_VERBOSE").unwrap_or_else(|_| "unknown".into()),
             "cargo_lock_sha256":env::var("NEXUSQ_CARGO_LOCK_SHA256").unwrap_or_else(|_| "unknown".into()),
             "cpu_frequency_khz":env::var("NEXUSQ_CPU_FREQUENCY_KHZ").ok().and_then(|x| x.parse::<u64>().ok()),
             "cpu_governor":env::var("NEXUSQ_CPU_GOVERNOR").unwrap_or_else(|_| "unknown".into()),
             "run_order":env::var("NEXUSQ_RUN_ORDER").unwrap_or_else(|_| "unknown".into()),
-            "optimization":"release lto=fat codegen-units=1; C -O3", "harness_version":"arena-v4-cycle-counter"
+            "optimization":"release lto=fat codegen-units=1; C -O3", "harness_version":"arena-v6-configurable-rng"
         },
         "measurement": {
             "iterations":ns.len(), "warmups":warmups(), "measurement_timestamp_unix_ns":ts, "latency_ns":med as f64,
@@ -106,7 +133,7 @@ fn emit(alg: &str, ps: &str, op: &str, (ns, cy): (Vec<u128>, Vec<u64>), sizes: s
             "measurement_scope":"nexusq_native_backend_operation_from_encoded_keys",
             "samples_ns":ns,
             "statistics":{"sample_count":sorted.len(),"min_ns":sorted[0],"median_ns":med,"p95_ns":p95(&sorted),"stddev_ns":var.sqrt()},
-            "cycle_counter_source":"x86_64_tsc_ticks", "samples_cycles":cy
+            "cycle_counter_source":cycle_counter_source(), "samples_cycles":cy
         },
         "sizes": sizes
     });

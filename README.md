@@ -126,7 +126,7 @@ The reference document is [`docs/CRYPTOGRAPHY.md`](docs/CRYPTOGRAPHY.md). Planne
 
 </div>
 
-NEXUS-Q is **not presented as a universal performance leader**. On the v4.1.0 stable line, the opt-in native backend measures 0.86×–1.05× of AWS-LC median latency across the nine ML-KEM and ML-DSA operations on the same CI runner, passing the official 1.5× median-and-p95 gate on every operation. The default `nexusq-core` build, the CLI and the SDKs still use RustCrypto for production call paths; the native path is opt-in and experimental. Lower latency is better.
+NEXUS-Q is **not presented as a universal performance leader**. In the 2026-10-21 local x86-64 benchmark, the opt-in native backend was compared with the best eligible per-operation comparator using a matched AWS-LC RNG. Six of nine operations beat the comparator on both median and p95; the other three are close to parity: ML-DSA-65 signing (1.063× median / 1.115× p95), ML-KEM-1024 key generation (1.021× / 1.020×), and ML-KEM-768 key generation (1.015× / 1.013×). This is local diagnostic evidence from an Intel Core i3-N305 with the CPU governor set to `powersave`, not a hosted-runner release benchmark or a universal performance claim. The project owner accepted this result as sufficient to complete Issue [#23](https://github.com/lecodev-26/nexus-q/issues/23), treating 1.00× as an ideal target rather than an absolute closure requirement; the remaining deltas are documented in [`docs/performance/ISSUE_23_FINAL_GATE_AUDIT_2026-10-21.md`](docs/performance/ISSUE_23_FINAL_GATE_AUDIT_2026-10-21.md). The default `nexusq-core` build, CLI and SDKs still use RustCrypto for production call paths; the native path is opt-in and experimental. Lower latency is better.
 
 <div align="center">
 

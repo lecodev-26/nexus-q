@@ -13,6 +13,8 @@ description = "Arena runner for the experimental NEXUS-Q native backend (same JS
 [features]
 portable-only = ["nexusq-native-backend/portable-only"]
 upstream-c-keccak = ["nexusq-native-backend/upstream-c-keccak"]
+# Compare kernel paths using the same AWS-LC DRBG as the C reference runner.
+aws-lc-rng = ["nexusq-native-backend/aws-lc-rng"]
 
 [dependencies]
 nexusq-native-backend = { path = "../../../crates/nexusq-native-backend" }

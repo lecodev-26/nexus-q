@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 license = "Apache-2.0"
-description = "Experimental: NEXUS-Q Rust API over vendored mlkem-native/mldsa-native (the AWS-LC arithmetic core) with runtime-dispatched x86-64 assembly"
+description = "Experimental: NEXUS-Q Rust API over vendored mlkem-native/mldsa-native (the AWS-LC arithmetic core) with architecture-specific x86-64 and AArch64 assembly"
 repository = "https://github.com/lecodev-26/nexus-q"
 build = "build.rs"
 links = "nq_native_backend"
@@ -19,9 +19,12 @@ portable-only = []
 # Keep the AVX2 backends but use upstream's portable C 1-way Keccak instead of
 # the s2n-bignum routine (A/B measurement only).
 upstream-c-keccak = []
+# Benchmark-only: use the locked aws-lc-sys RAND_bytes C shim so kernel timings share the comparator's CSPRNG.
+aws-lc-rng = ["dep:aws-lc-rs"]
 
 [dependencies]
 getrandom = "0.3"
+aws-lc-rs = { version = "1", default-features = false, features = ["aws-lc-sys"], optional = true }
 zeroize = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
