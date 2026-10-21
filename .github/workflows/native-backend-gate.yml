@@ -29,7 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Test intermediate and final Issue #23 thresholds
-        run: python3 -m unittest arena/scripts/test_evaluate_native_assembly_gate.py -v
+        run: python3 -m unittest arena/scripts/test_evaluate_native_assembly_gate.py arena/scripts/test_evaluate_core_production_benchmark.py -v
 
   vendor-integrity:
     name: Vendored sources match upstream + upstream func/KAT/ACVP
@@ -252,7 +252,7 @@ jobs:
           export NEXUSQ_CARGO_LOCK_SHA256="$(sha256sum arena/runners/nexusq-native/Cargo.lock | cut -d' ' -f1)"
           export ARENA_CPU_FREQUENCY_KHZ="$(awk -F: '/cpu MHz/ {gsub(/ /,"",$2); printf "%d", $2*1000; exit}' /proc/cpuinfo)"; export NEXUSQ_CPU_FREQUENCY_KHZ="$ARENA_CPU_FREQUENCY_KHZ"
           export ARENA_CPU_GOVERNOR="unknown-hosted-runner" NEXUSQ_CPU_GOVERNOR="unknown-hosted-runner"
-          export ARENA_TARGET="x86_64-linux-gnu" ARENA_OS="Ubuntu"
+          export ARENA_TARGET="x86_64-linux-gnu" ARENA_OS="linux"
           steal() { awk '/^cpu /{print $9}' /proc/stat; }
           # Run and discard one complete pass for each implementation before
           # collecting gate samples. This primes lazy initialization, code/data
@@ -460,7 +460,7 @@ jobs:
           export CORE_CPU="$cpu" CORE_CPU_FEATURES="$features" ARENA_CPU="$cpu" ARENA_CPU_FEATURES="$features"
           export CORE_COMMIT="${{ github.event.pull_request.head.sha || github.sha }}"
           export RUSTC_VERSION="$(rustc --version)"
-          export ARENA_TARGET="x86_64-linux-gnu" ARENA_OS="Ubuntu" ARENA_OPT=release
+          export ARENA_TARGET="x86_64-linux-gnu" ARENA_OS="linux" ARENA_OPT=release
           export ARENA_CPU_FREQUENCY_KHZ="$(awk -F: '/cpu MHz/ {gsub(/ /,"",$2); printf "%d", $2*1000; exit}' /proc/cpuinfo)"
           export ARENA_CPU_GOVERNOR="unknown-hosted-runner"
           # Shared 2-vCPU hosted runners suffer periodic scheduling interference that

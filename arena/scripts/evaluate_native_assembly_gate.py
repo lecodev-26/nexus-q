@@ -11,6 +11,16 @@ EXPECTED = {(a, p, o) for a, p, ops in [
     ("ml-dsa", "65", ("keygen", "sign", "verify")),
 ] for o in ops}
 
+def normalize_os(value: object) -> str:
+    """Normalize equivalent Linux distribution labels before host matching."""
+    os_name = str(value).strip().lower()
+    if os_name == "ubuntu" or os_name.startswith("ubuntu-") or os_name.startswith("ubuntu "):
+        return "linux"
+    if os_name in {"gnu/linux", "linux-gnu"}:
+        return "linux"
+    return os_name
+
+
 def percentile(values: list[int], quantile: float) -> int:
     ordered = sorted(values)
     return ordered[max(0, math.ceil(quantile * len(ordered)) - 1)]
@@ -27,7 +37,7 @@ def read_rows(paths: list[Path], expected_id: str, *, require_all: bool = True, 
                 raise ValueError(f"{path}: expected implementation {expected_id!r}, got {impl!r}")
             env = row.get("environment", {})
             if env.get("target") and env.get("os") and env.get("cpu"):
-                host = (str(env["target"]).split("-")[0].lower(), str(env["os"]).lower(), str(env["cpu"]))
+                host = (str(env["target"]).split("-")[0].lower(), normalize_os(env["os"]), str(env["cpu"]))
                 hosts.add(host)
                 if host_registry is not None: host_registry.add(host)
             algorithm = row.get("algorithm", {})

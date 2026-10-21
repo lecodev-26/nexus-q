@@ -16,12 +16,13 @@ OPS = {
 }
 
 
-def write_round(path: Path, implementation: str, sample_ns: int) -> None:
+def write_round(path: Path, implementation: str, sample_ns: int, os_name: str | None = None) -> None:
     rows = []
     for (algorithm, parameter_set), operations in OPS.items():
         for operation in operations:
             rows.append({
                 "implementation": {"id": implementation},
+                **({"environment": {"target": "x86_64-linux-gnu", "os": os_name, "cpu": "CI CPU"}} if os_name else {}),
                 "algorithm": {"id": algorithm, "parameter_set": parameter_set},
                 "operation": operation,
                 "measurement": {"samples_ns": [sample_ns] * 1000, "measurement_scope": "reference_implementation_operation"},
@@ -30,12 +31,12 @@ def write_round(path: Path, implementation: str, sample_ns: int) -> None:
 
 
 class EvaluatorTests(unittest.TestCase):
-    def run_gate(self, root: Path, nexus_ns: int, aws_ns: int, limit: str | None = None) -> subprocess.CompletedProcess[str]:
+    def run_gate(self, root: Path, nexus_ns: int, aws_ns: int, limit: str | None = None, nexus_os: str | None = None, aws_os: str | None = None) -> subprocess.CompletedProcess[str]:
         nexus, aws = [], []
         for index in range(1, 4):
             n, a = root / f"nexus-{index}.jsonl", root / f"aws-{index}.jsonl"
-            write_round(n, "nexusq", nexus_ns)
-            write_round(a, "aws-lc", aws_ns)
+            write_round(n, "nexusq", nexus_ns, nexus_os)
+            write_round(a, "aws-lc", aws_ns, aws_os)
             nexus.append(str(n)); aws.append(str(a))
         report = root / "report.json"
         cmd = [sys.executable, str(SCRIPT), str(report)]
@@ -50,6 +51,12 @@ class EvaluatorTests(unittest.TestCase):
     def test_default_intermediate_gate_remains_1_5(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             result = self.run_gate(Path(temp), 120, 100)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('"status": "PASS"', result.stdout)
+
+    def test_equivalent_linux_distribution_labels_are_same_host(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            result = self.run_gate(Path(temp), 120, 100, nexus_os="linux", aws_os="Ubuntu")
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn('"status": "PASS"', result.stdout)
 
