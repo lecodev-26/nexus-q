@@ -21,8 +21,8 @@ Host: Intel Core i3-N305, x86-64 Linux; CPU affinity pinned to logical CPU 2; go
 **Accepted result: 6/9 operations beat or match the best eligible comparator on both statistics.** ML-DSA-65 signing is the largest residual gap; both ML-KEM key-generation operations are about 1–2% slower than the best comparator. The earlier strict-gate FAIL records below are historical evaluations of earlier artifacts and are retained for traceability; they are not the final project acceptance decision.
 
 
-**Date:** 2026-10-21  
-**Evidence source:** Native Backend Gate run [39050671654](https://github.com/lecodev-26/nexus-q/actions/runs/39050671654), six hosted-runner replicas; raw JSONL artifacts downloaded and re-evaluated with the original three official rounds per replica.  
+**Date:** 2026-10-21
+**Evidence source:** Native Backend Gate run [39050671654](https://github.com/lecodev-26/nexus-q/actions/runs/39050671654), six hosted-runner replicas; raw JSONL artifacts downloaded and re-evaluated with the original three official rounds per replica.
 **Measured revision:** `8a29d2ce41aea60481ed2455227d70017038a4c9`
 
 ## Result
