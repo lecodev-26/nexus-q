@@ -6,7 +6,8 @@
 
 use std::{
     collections::HashMap,
-    time::{Duration, SystemTime},
+    sync::RwLock,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use axum::{
@@ -18,7 +19,7 @@ use axum::{
     routing::{get, post},
 };
 use std::sync::{
-    Arc, RwLock,
+    Arc,
     atomic::{AtomicU64, Ordering},
 };
 
@@ -28,6 +29,8 @@ use der::{
     asn1::{Any, BitString, GeneralizedTime, Null, OctetString},
 };
 use ml_dsa::{MlDsa65, SigningKey};
+use nexusq_ha::{HaCoordinator, HaError, LeadershipLease};
+use serde::{Deserialize, Serialize};
 use sha1::Sha1;
 use sha2::{Digest, Sha256};
 use signature::Signer;
@@ -239,6 +242,12 @@ pub enum Error {
     /// The in-memory revocation store lock was poisoned.
     #[error("revocation store unavailable")]
     StoreUnavailable,
+    /// Durable HA replication or leader fencing failed.
+    #[error("HA replication failed: {0}")]
+    Ha(#[from] HaError),
+    /// Replicated OCSP mutation could not be decoded.
+    #[error("replicated OCSP state is corrupt")]
+    ReplicatedStateCorrupt,
     /// Signed requests, requestor names, or unsupported critical extensions are rejected.
     #[error("OCSP request uses an unsupported signed-request or critical-extension feature")]
     UnsupportedRequestFeatures,
@@ -442,6 +451,23 @@ pub fn build_ml_dsa65_crl(
     };
     Ok(crl.to_der()?)
 }
+fn reason_from_code(code: u32) -> Result<x509_cert::ext::pkix::crl::CrlReason, ()> {
+    use x509_cert::ext::pkix::crl::CrlReason;
+    match code {
+        0 => Ok(CrlReason::Unspecified),
+        1 => Ok(CrlReason::KeyCompromise),
+        2 => Ok(CrlReason::CaCompromise),
+        3 => Ok(CrlReason::AffiliationChanged),
+        4 => Ok(CrlReason::Superseded),
+        5 => Ok(CrlReason::CessationOfOperation),
+        6 => Ok(CrlReason::CertificateHold),
+        8 => Ok(CrlReason::RemoveFromCRL),
+        9 => Ok(CrlReason::PrivilegeWithdrawn),
+        10 => Ok(CrlReason::AaCompromise),
+        _ => Err(()),
+    }
+}
+
 fn time_to_x509(at: SystemTime) -> Result<Time, Error> {
     at.try_into().map_err(|_| Error::InvalidTime)
 }
@@ -455,6 +481,25 @@ pub fn validate_response_envelope(response_der: &[u8]) -> Result<(), Error> {
     Ok(())
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct OcspMutation {
+    serial_der: Vec<u8>,
+    state: OcspMutationState,
+    crl_number: u64,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+enum OcspMutationState {
+    Good,
+    Revoked {
+        at_unix_secs: u64,
+        reason_code: Option<u32>,
+    },
+}
+struct OcspHaContext {
+    coordinator: Arc<HaCoordinator>,
+    lease: RwLock<LeadershipLease>,
+}
+
 /// HTTP responder with `POST /ocsp` and `GET /crl` endpoints.
 ///
 /// Responses use `application/ocsp-response`; CRLs use `application/pkix-crl`. Status updates
@@ -466,6 +511,7 @@ pub struct OcspService {
     signer: SigningKey<MlDsa65>,
     store: RwLock<RevocationStore>,
     crl_number: AtomicU64,
+    ha: Option<OcspHaContext>,
 }
 
 impl OcspService {
@@ -481,16 +527,96 @@ impl OcspService {
             signer,
             store: RwLock::new(store),
             crl_number: AtomicU64::new(initial_crl_number),
+            ha: None,
         }
+    }
+
+    /// Construct an HA-enabled responder. The tenant journal is replayed before the service is returned.
+    pub fn new_ha(
+        issuer_certificate: Certificate,
+        signer: SigningKey<MlDsa65>,
+        store: RevocationStore,
+        initial_crl_number: u64,
+        coordinator: Arc<HaCoordinator>,
+        lease: LeadershipLease,
+    ) -> Result<Self, Error> {
+        lease.validate(coordinator.node_id(), SystemTime::now())?;
+        if !store.entries.is_empty() {
+            return Err(Error::ReplicatedStateCorrupt);
+        }
+        let records = coordinator.committed_records()?;
+        let mut service = Self::new(issuer_certificate, signer, store, initial_crl_number);
+        for record in records.iter().filter(|record| record.kind == "ocsp.status") {
+            let mutation: OcspMutation = serde_json::from_slice(&record.payload)
+                .map_err(|_| Error::ReplicatedStateCorrupt)?;
+            let serial = SerialNumber::from_der(&mutation.serial_der)
+                .map_err(|_| Error::ReplicatedStateCorrupt)?;
+            match mutation.state {
+                OcspMutationState::Good => service
+                    .store
+                    .get_mut()
+                    .map_err(|_| Error::StoreUnavailable)?
+                    .mark_good(&serial)?,
+                OcspMutationState::Revoked {
+                    at_unix_secs,
+                    reason_code,
+                } => {
+                    let reason = reason_code
+                        .map(reason_from_code)
+                        .transpose()
+                        .map_err(|_| Error::ReplicatedStateCorrupt)?;
+                    let at = UNIX_EPOCH
+                        .checked_add(Duration::from_secs(at_unix_secs))
+                        .ok_or(Error::InvalidTime)?;
+                    service
+                        .store
+                        .get_mut()
+                        .map_err(|_| Error::StoreUnavailable)?
+                        .revoke(&serial, at, reason)?;
+                }
+            }
+            service
+                .crl_number
+                .fetch_max(mutation.crl_number, Ordering::SeqCst);
+        }
+        service.ha = Some(OcspHaContext {
+            coordinator,
+            lease: RwLock::new(lease),
+        });
+        Ok(service)
+    }
+
+    /// Renew the leader lease after the deployment's consensus system grants a newer fencing epoch.
+    pub fn update_leadership_lease(&self, lease: LeadershipLease) -> Result<(), Error> {
+        let ha = self.ha.as_ref().ok_or(Error::ReplicatedStateCorrupt)?;
+        lease.validate(ha.coordinator.node_id(), SystemTime::now())?;
+        let mut current = ha.lease.write().map_err(|_| Error::StoreUnavailable)?;
+        if lease.term < current.term || lease.fencing_epoch < current.fencing_epoch {
+            return Err(Error::Ha(HaError::NotLeader));
+        }
+        *current = lease;
+        Ok(())
     }
 
     /// Mark a certificate known-good and advance the publication version.
     pub fn mark_good(&self, serial: &SerialNumber) -> Result<(), Error> {
-        self.store
-            .write()
-            .map_err(|_| Error::StoreUnavailable)?
-            .mark_good(serial)?;
-        self.crl_number.fetch_add(1, Ordering::SeqCst);
+        let mut store = self.store.write().map_err(|_| Error::StoreUnavailable)?;
+        let next_crl_number = self
+            .crl_number
+            .load(Ordering::SeqCst)
+            .checked_add(1)
+            .ok_or(Error::InvalidTime)?;
+        let mutation = OcspMutation {
+            serial_der: serial.to_der()?,
+            state: OcspMutationState::Good,
+            crl_number: next_crl_number,
+        };
+        let reconciliation_needed = self.commit_mutation(&mutation)?;
+        store.mark_good(serial)?;
+        self.crl_number.store(next_crl_number, Ordering::SeqCst);
+        if reconciliation_needed {
+            return Err(Error::Ha(HaError::CommitNeedsReconciliation));
+        }
         Ok(())
     }
 
@@ -501,12 +627,80 @@ impl OcspService {
         at: SystemTime,
         reason: Option<x509_cert::ext::pkix::crl::CrlReason>,
     ) -> Result<(), Error> {
-        self.store
-            .write()
-            .map_err(|_| Error::StoreUnavailable)?
-            .revoke(serial, at, reason)?;
-        self.crl_number.fetch_add(1, Ordering::SeqCst);
+        let mut store = self.store.write().map_err(|_| Error::StoreUnavailable)?;
+        let at_unix_secs = at
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| Error::InvalidTime)?
+            .as_secs();
+        let next_crl_number = self
+            .crl_number
+            .load(Ordering::SeqCst)
+            .checked_add(1)
+            .ok_or(Error::InvalidTime)?;
+        let mutation = OcspMutation {
+            serial_der: serial.to_der()?,
+            state: OcspMutationState::Revoked {
+                at_unix_secs,
+                reason_code: reason.map(|value| value as u32),
+            },
+            crl_number: next_crl_number,
+        };
+        let reconciliation_needed = self.commit_mutation(&mutation)?;
+        store.revoke(serial, at, reason)?;
+        self.crl_number.store(next_crl_number, Ordering::SeqCst);
+        if reconciliation_needed {
+            return Err(Error::Ha(HaError::CommitNeedsReconciliation));
+        }
         Ok(())
+    }
+
+    fn commit_mutation(&self, mutation: &OcspMutation) -> Result<bool, Error> {
+        if let Some(ha) = &self.ha {
+            let payload =
+                serde_json::to_vec(mutation).map_err(|_| Error::ReplicatedStateCorrupt)?;
+            let lease = ha
+                .lease
+                .read()
+                .map_err(|_| Error::StoreUnavailable)?
+                .clone();
+            match ha.coordinator.commit(&lease, "ocsp.status", &payload) {
+                Ok(_) => return Ok(false),
+                Err(HaError::CommitNeedsReconciliation) => return Ok(true),
+                Err(error) => return Err(Error::Ha(error)),
+            }
+        }
+        Ok(false)
+    }
+
+    /// Respond to a DER OCSP request for this tenant.
+    pub fn respond(&self, request_der: &[u8]) -> Result<Vec<u8>, Error> {
+        let store = self.store.read().map_err(|_| Error::StoreUnavailable)?;
+        respond_ml_dsa65(request_der, &self.issuer_certificate, &self.signer, &store)
+    }
+
+    /// Generate the current signed CRL for this tenant.
+    pub fn current_crl(&self) -> Result<Vec<u8>, Error> {
+        let store = self.store.read().map_err(|_| Error::StoreUnavailable)?;
+        build_ml_dsa65_crl(
+            self.issuer_certificate.tbs_certificate().subject(),
+            &self.signer,
+            &store,
+            self.crl_number.load(Ordering::SeqCst),
+        )
+    }
+
+    /// Issuer certificate associated with this responder.
+    pub fn issuer_certificate(&self) -> &Certificate {
+        &self.issuer_certificate
+    }
+
+    /// HA coordinator when this responder is configured for replicated state.
+    pub fn ha_coordinator(&self) -> Option<&Arc<HaCoordinator>> {
+        self.ha.as_ref().map(|ha| &ha.coordinator)
+    }
+    /// Tenant journal namespace when this responder is HA-enabled.
+    pub fn ha_tenant_id(&self) -> Option<&nexusq_ha::TenantId> {
+        self.ha.as_ref().map(|ha| ha.coordinator.tenant())
     }
 
     /// Return an Axum router exposing OCSP and CRL endpoints.
@@ -520,17 +714,7 @@ impl OcspService {
 }
 
 async fn ocsp_handler(State(service): State<Arc<OcspService>>, body: Bytes) -> impl IntoResponse {
-    let store = match service.store.read() {
-        Ok(store) => store,
-        Err(_) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                [(header::CONTENT_TYPE, "text/plain")],
-                b"revocation store unavailable".to_vec(),
-            );
-        }
-    };
-    match respond_ml_dsa65(&body, &service.issuer_certificate, &service.signer, &store) {
+    match service.respond(&body) {
         Ok(response) => (
             StatusCode::OK,
             [(header::CONTENT_TYPE, "application/ocsp-response")],
@@ -550,29 +734,13 @@ async fn ocsp_handler(State(service): State<Arc<OcspService>>, body: Bytes) -> i
         Err(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             [(header::CONTENT_TYPE, "text/plain")],
-            b"OCSP response generation failed".to_vec(),
+            b"OCSP response failed".to_vec(),
         ),
     }
 }
 
 async fn crl_handler(State(service): State<Arc<OcspService>>) -> impl IntoResponse {
-    let store = match service.store.read() {
-        Ok(store) => store,
-        Err(_) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                [(header::CONTENT_TYPE, "text/plain")],
-                b"revocation store unavailable".to_vec(),
-            );
-        }
-    };
-    let number = service.crl_number.load(Ordering::SeqCst);
-    match build_ml_dsa65_crl(
-        service.issuer_certificate.tbs_certificate().subject(),
-        &service.signer,
-        &store,
-        number,
-    ) {
+    match service.current_crl() {
         Ok(crl) => (
             StatusCode::OK,
             [(header::CONTENT_TYPE, "application/pkix-crl")],
@@ -657,6 +825,63 @@ mod tests {
         }
         .to_der()
         .unwrap()
+    }
+
+    #[test]
+    fn ha_ocsp_replays_revocation_state_and_crl_number_after_restart() {
+        use nexusq_ha::{DurableTenantJournal, HaCoordinator, LeadershipLease, TenantId};
+        let dir = tempfile::tempdir().unwrap();
+        let (key, issuer) = fixture();
+        let journal = Arc::new(
+            DurableTenantJournal::open(dir.path(), TenantId::new("tenant-a").unwrap()).unwrap(),
+        );
+        let coordinator = Arc::new(HaCoordinator::new("node-a", journal, vec![]).unwrap());
+        let lease = LeadershipLease {
+            leader_id: "node-a".into(),
+            term: 1,
+            expires_at: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+                + 300,
+            fencing_epoch: 1,
+        };
+        let good_serial = SerialNumber::from(41u32);
+        let revoked_serial = SerialNumber::from(42u32);
+        let service = OcspService::new_ha(
+            issuer.clone(),
+            key.clone(),
+            RevocationStore::new(),
+            7,
+            coordinator.clone(),
+            lease.clone(),
+        )
+        .unwrap();
+        service.mark_good(&good_serial).unwrap();
+        service
+            .revoke(
+                &revoked_serial,
+                SystemTime::now(),
+                Some(x509_cert::ext::pkix::crl::CrlReason::KeyCompromise),
+            )
+            .unwrap();
+        assert_eq!(service.crl_number.load(Ordering::SeqCst), 9);
+        drop(service);
+        let restored =
+            OcspService::new_ha(issuer, key, RevocationStore::new(), 7, coordinator, lease)
+                .unwrap();
+        assert!(matches!(
+            restored.store.read().unwrap().get(&good_serial).unwrap(),
+            Some(CertificateStatus::Good)
+        ));
+        assert!(matches!(
+            restored.store.read().unwrap().get(&revoked_serial).unwrap(),
+            Some(CertificateStatus::Revoked {
+                reason: Some(x509_cert::ext::pkix::crl::CrlReason::KeyCompromise),
+                ..
+            })
+        ));
+        assert_eq!(restored.crl_number.load(Ordering::SeqCst), 9);
     }
 
     #[test]

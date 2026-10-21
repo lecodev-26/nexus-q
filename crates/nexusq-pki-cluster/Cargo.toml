@@ -1,0 +1,31 @@
+[package]
+name = "nexusq-pki-cluster"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Tenant-routed CA and OCSP runtime for NexusQ HA deployments"
+
+[dependencies]
+axum = { workspace = true }
+base64 = "0.22"
+der = { version = "0.8", features = ["std", "pem"] }
+nexusq-ha = { path = "../nexusq-ha", version = "4.1.0" }
+nexusq-enrollment = { path = "../nexusq-enrollment", version = "4.1.0" }
+nexusq-ocsp = { path = "../nexusq-ocsp", version = "4.1.0" }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+subtle = "2"
+thiserror = { workspace = true }
+zeroize = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+ml-dsa = { package = "nexusq-ml-dsa", path = "../nexusq-ml-dsa", version = "4.1.0", features = ["pkcs8", "getrandom", "zeroize"] }
+rand = "0.10"
+tempfile = { workspace = true }
+tower = { workspace = true }
+x509-cert = { version = "0.3.0", features = ["std", "pem", "builder", "signature"] }

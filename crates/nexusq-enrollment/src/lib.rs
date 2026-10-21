@@ -33,6 +33,7 @@ use der::{
     asn1::{Ia5String, ObjectIdentifier as DerOid},
 };
 use ml_dsa::{MlDsa65, Signature as MlDsaSignature, SigningKey, VerifyingKey};
+use nexusq_ha::{HaCoordinator, HaError, LeadershipLease};
 use nexusq_x509::{
     ExternalSignError, MlDsa65Signer, build_certificate_with_external_ml_dsa65_signer,
 };
@@ -235,6 +236,9 @@ pub enum Error {
     /// Internal state lock is unavailable.
     #[error("enrollment state unavailable")]
     StateUnavailable,
+    /// Durable HA replication/fencing failed; the certificate was not returned to the caller.
+    #[error("HA replication failed: {0}")]
+    Ha(#[from] HaError),
     /// Certificate issuance failed.
     #[error("certificate issuance failed: {0}")]
     Issuance(#[from] BuilderError),
@@ -318,6 +322,23 @@ impl BuilderProfile for LeafProfile {
     }
 }
 
+struct HaContext {
+    coordinator: Arc<HaCoordinator>,
+    lease: RwLock<LeadershipLease>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SerialReservation {
+    serial: u64,
+    principal_id: String,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+struct IssuedCertificateRecord {
+    serial: u64,
+    principal_id: String,
+    certificate_der: Vec<u8>,
+}
+
 /// Shared issuance engine used by protocol-specific enrollment adapters.
 pub struct EnrollmentAuthority {
     issuer_certificate: Certificate,
@@ -326,6 +347,7 @@ pub struct EnrollmentAuthority {
     next_serial: AtomicU64,
     rate: Mutex<HashMap<String, VecDeque<Instant>>>,
     audit: RwLock<Vec<AuditEvent>>,
+    ha: Option<HaContext>,
 }
 
 impl EnrollmentAuthority {
@@ -403,7 +425,59 @@ impl EnrollmentAuthority {
             next_serial: AtomicU64::new(first_serial.max(1)),
             rate: Mutex::new(HashMap::new()),
             audit: RwLock::new(Vec::new()),
+            ha: None,
         })
+    }
+
+    /// Configure a CA whose serial reservations and issued certificates are committed through a
+    /// tenant-scoped HA coordinator before successful issuance is returned.
+    pub fn new_ha(
+        issuer_certificate: Certificate,
+        issuer_signer: Arc<dyn MlDsa65Signer>,
+        policy: EnrollmentPolicy,
+        first_serial: u64,
+        coordinator: Arc<HaCoordinator>,
+        lease: LeadershipLease,
+    ) -> Result<Self, Error> {
+        lease.validate(coordinator.node_id(), SystemTime::now())?;
+        let records = coordinator.committed_records()?;
+        let mut next_serial = first_serial.max(1);
+        for record in &records {
+            let serial = match record.kind.as_str() {
+                "ca.serial_reserved" => {
+                    serde_json::from_slice::<SerialReservation>(&record.payload)
+                        .map(|value| value.serial)
+                        .map_err(|_| Error::InvalidPolicy)?
+                }
+                "ca.certificate_issued" => {
+                    serde_json::from_slice::<IssuedCertificateRecord>(&record.payload)
+                        .map(|value| value.serial)
+                        .map_err(|_| Error::InvalidPolicy)?
+                }
+                _ => continue,
+            };
+            next_serial = next_serial.max(serial.checked_add(1).ok_or(Error::InvalidPolicy)?);
+        }
+        let mut authority =
+            Self::new_with_signer(issuer_certificate, issuer_signer, policy, next_serial)?;
+        authority.ha = Some(HaContext {
+            coordinator,
+            lease: RwLock::new(lease),
+        });
+        Ok(authority)
+    }
+
+    /// Replace the current leader lease after the external consensus system renews it. Terms and
+    /// fencing epochs may only move forward.
+    pub fn update_leadership_lease(&self, lease: LeadershipLease) -> Result<(), Error> {
+        let ha = self.ha.as_ref().ok_or(Error::InvalidPolicy)?;
+        lease.validate(ha.coordinator.node_id(), SystemTime::now())?;
+        let mut current = ha.lease.write().map_err(|_| Error::StateUnavailable)?;
+        if lease.term < current.term || lease.fencing_epoch < current.fencing_epoch {
+            return Err(Error::Ha(HaError::NotLeader));
+        }
+        *current = lease;
+        Ok(())
     }
 
     /// Issue a leaf certificate after validating the CSR signature, profile and principal policy.
@@ -483,6 +557,20 @@ impl EnrollmentAuthority {
                 current.checked_add(1)
             })
             .map_err(|_| Error::InvalidPolicy)?;
+        if let Some(ha) = &self.ha {
+            let reservation = serde_json::to_vec(&SerialReservation {
+                serial,
+                principal_id: principal.id.clone(),
+            })
+            .map_err(|_| Error::StateUnavailable)?;
+            let lease = ha
+                .lease
+                .read()
+                .map_err(|_| Error::StateUnavailable)?
+                .clone();
+            ha.coordinator
+                .commit(&lease, "ca.serial_reserved", &reservation)?;
+        }
         let profile = LeafProfile {
             issuer: self.issuer_certificate.tbs_certificate().subject().clone(),
             subject: csr.info.subject,
@@ -509,11 +597,27 @@ impl EnrollmentAuthority {
             Validity::from_now(leaf_validity).map_err(|_| Error::InvalidPolicy)?,
             csr.info.public_key,
         )?;
-        Ok(build_certificate_with_external_ml_dsa65_signer(
+        let certificate = build_certificate_with_external_ml_dsa65_signer(
             builder,
             self.issuer_signer.public_key(),
             |tbs_der| self.issuer_signer.sign(tbs_der),
-        )?)
+        )?;
+        if let Some(ha) = &self.ha {
+            let record = IssuedCertificateRecord {
+                serial,
+                principal_id: principal.id.clone(),
+                certificate_der: certificate.to_der()?,
+            };
+            let payload = serde_json::to_vec(&record).map_err(|_| Error::StateUnavailable)?;
+            let lease = ha
+                .lease
+                .read()
+                .map_err(|_| Error::StateUnavailable)?
+                .clone();
+            ha.coordinator
+                .commit(&lease, "ca.certificate_issued", &payload)?;
+        }
+        Ok(certificate)
     }
 
     fn check_rate_limit(&self, principal: &str) -> Result<(), Error> {
@@ -563,6 +667,15 @@ impl EnrollmentAuthority {
     /// CA certificate used by EST `/cacerts` and protocol adapters.
     pub fn issuer_certificate(&self) -> &Certificate {
         &self.issuer_certificate
+    }
+
+    /// HA coordinator when this authority is configured for replicated issuance.
+    pub fn ha_coordinator(&self) -> Option<&Arc<HaCoordinator>> {
+        self.ha.as_ref().map(|ha| &ha.coordinator)
+    }
+    /// Tenant journal namespace when this authority is HA-enabled.
+    pub fn ha_tenant_id(&self) -> Option<&nexusq_ha::TenantId> {
+        self.ha.as_ref().map(|ha| ha.coordinator.tenant())
     }
 
     /// Build the EST router. Basic credentials are supplied as username/password pairs and stored as hashes.
@@ -643,6 +756,7 @@ impl Error {
             Self::RateLimited => "rate_limited",
             Self::InvalidPolicy => "invalid_policy",
             Self::StateUnavailable => "state_unavailable",
+            Self::Ha(_) => "ha_replication_failed",
             Self::Der(_) => "invalid_der",
             Self::Issuance(_) => "issuance_failed",
             Self::Signing(_) | Self::ExternalSigning(_) => "signing_failed",
@@ -763,7 +877,7 @@ async fn est_simple_enroll(
             "enrollment rate limit exceeded",
         )
             .into_response(),
-        Err(Error::StateUnavailable | Error::Issuance(_) | Error::Signing(_)) => (
+        Err(Error::StateUnavailable | Error::Ha(_) | Error::Issuance(_) | Error::Signing(_)) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             "certificate issuance failed",
         )
@@ -894,6 +1008,82 @@ mod tests {
             .build::<SigningKey<MlDsa65>, MlDsaSignature<MlDsa65>>(&csr_key)
             .unwrap();
         (authority, csr_key, csr.to_der().unwrap())
+    }
+
+    #[test]
+    fn ha_enrollment_persists_serial_reservations_across_authority_restart() {
+        use nexusq_ha::{DurableTenantJournal, HaCoordinator, LeadershipLease, TenantId};
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let dir = tempfile::tempdir().unwrap();
+        let ca_key = SigningKey::<MlDsa65>::generate();
+        let ca_subject = Name::from_str("CN=NexusQ HA Test Root,O=NexusQ,C=US").unwrap();
+        let profile = cabf::Root::new(false, ca_subject).unwrap();
+        let ca_spki = SubjectPublicKeyInfoOwned::from_key(&ca_key.verifying_key()).unwrap();
+        let ca_builder = CertificateBuilder::new(
+            profile,
+            SerialNumber::from(1u32),
+            Validity::from_now(Duration::from_secs(365 * 24 * 60 * 60)).unwrap(),
+            ca_spki,
+        )
+        .unwrap();
+        let ca_cert = ca_builder
+            .build::<SigningKey<MlDsa65>, MlDsaSignature<MlDsa65>>(&ca_key)
+            .unwrap();
+        let policy = EnrollmentPolicy::new(vec!["example.com".to_owned()]).unwrap();
+        let journal = Arc::new(
+            DurableTenantJournal::open(dir.path(), TenantId::new("alpha").unwrap()).unwrap(),
+        );
+        let coordinator = Arc::new(HaCoordinator::new("node-a", journal, vec![]).unwrap());
+        let lease = LeadershipLease {
+            leader_id: "node-a".into(),
+            term: 1,
+            expires_at: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+                + 300,
+            fencing_epoch: 1,
+        };
+        let signer: Arc<dyn MlDsa65Signer> = Arc::new(ca_key.clone());
+        let first = EnrollmentAuthority::new_ha(
+            ca_cert.clone(),
+            signer.clone(),
+            policy.clone(),
+            100,
+            coordinator.clone(),
+            lease.clone(),
+        )
+        .unwrap();
+        let csr_key = SigningKey::<MlDsa65>::generate();
+        let subject = Name::from_str("CN=service.example.com").unwrap();
+        let mut request = RequestBuilder::new(subject).unwrap();
+        request
+            .add_extension(&SubjectAltName(vec![GeneralName::DnsName(
+                Ia5String::new("service.example.com").unwrap(),
+            )]))
+            .unwrap();
+        let csr = request
+            .build::<SigningKey<MlDsa65>, MlDsaSignature<MlDsa65>>(&csr_key)
+            .unwrap()
+            .to_der()
+            .unwrap();
+        let principal = Principal {
+            id: "device-ha".into(),
+        };
+        let cert_one = first.enroll_csr(&principal, Protocol::Est, &csr).unwrap();
+        assert_eq!(
+            cert_one.tbs_certificate().serial_number(),
+            &SerialNumber::from(100u32)
+        );
+        drop(first);
+        let second =
+            EnrollmentAuthority::new_ha(ca_cert, signer, policy, 100, coordinator, lease).unwrap();
+        let cert_two = second.enroll_csr(&principal, Protocol::Est, &csr).unwrap();
+        assert_eq!(
+            cert_two.tbs_certificate().serial_number(),
+            &SerialNumber::from(101u32)
+        );
+        assert_eq!(second.audit_events().last().unwrap().outcome, "issued");
     }
 
     #[test]

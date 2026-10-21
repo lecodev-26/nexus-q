@@ -921,6 +921,7 @@ fn finalize_order(
             return Err(match error {
                 EnrollmentError::RateLimited => AcmeError::rate_limited(),
                 EnrollmentError::StateUnavailable
+                | EnrollmentError::Ha(_)
                 | EnrollmentError::Issuance(_)
                 | EnrollmentError::Signing(_)
                 | EnrollmentError::ExternalSigning(_) => AcmeError::server(),

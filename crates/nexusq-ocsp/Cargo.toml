@@ -16,6 +16,9 @@ signature = "3"
 spki = "0.8"
 x509-cert = { version = "0.3.0", features = ["std", "pem", "builder", "signature"] }
 nexusq-ml-dsa = { workspace = true, features = ["pkcs8", "getrandom", "zeroize"] }
+nexusq-ha = { path = "../nexusq-ha", version = "4.1.0" }
+serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 axum = { workspace = true }
 
@@ -24,3 +27,4 @@ rand = "0.10"
 tower = { workspace = true }
 http-body-util = "0.1"
 tokio = { workspace = true }
+tempfile = { workspace = true }

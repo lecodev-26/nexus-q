@@ -20,6 +20,7 @@ const-oid = { version = "0.10", features = ["db"] }
 der = { version = "0.8", features = ["std", "pem"] }
 nexusq-ml-dsa = { workspace = true, features = ["pkcs8", "getrandom", "zeroize"] }
 nexusq-x509 = { path = "../nexusq-x509", version = "4.1.0" }
+nexusq-ha = { path = "../nexusq-ha", version = "4.1.0" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
@@ -34,3 +35,4 @@ x509-cert = { version = "0.3.0", features = ["std", "pem", "builder", "signature
 tower = { workspace = true }
 http-body-util = "0.1"
 rand = "0.10"
+tempfile = { workspace = true }
