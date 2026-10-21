@@ -12,6 +12,11 @@ repository.workspace = true
 name = "nexusq"
 path = "src/main.rs"
 
+[features]
+default = []
+native-backend = ["nexusq-core/native-backend"]
+native-backend-portable = ["nexusq-core/native-backend-portable"]
+
 [dependencies]
 nexusq-core = { workspace = true }
 thiserror = { workspace = true }

@@ -9,7 +9,7 @@
 import { mkdtempSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Vault, version } from "./index";
+import { Vault, backendInfo, version } from "./index";
 
 function fail(message: string): never {
   console.error(message);
@@ -17,6 +17,10 @@ function fail(message: string): never {
 }
 
 console.log(`nexusq version: ${version()}`);
+const provider = backendInfo();
+if (!provider.name || provider.nativeAvailable !== (provider.name === "native-experimental")) fail("invalid backend metadata");
+if (provider.experimental !== provider.nativeAvailable) fail("backend experimental flag is inconsistent");
+console.log(`PQC backend: ${provider.name}`);
 
 const dir = mkdtempSync(join(tmpdir(), "nexusq_ts_smoke_"));
 const path = join(dir, "vault.nqv");

@@ -55,6 +55,26 @@ fn write_password(dir: &Path, name: &str, password: &str) -> PathBuf {
 // =============================================================================
 
 #[test]
+fn backend_command_reports_build_time_provider_as_json() {
+    let out = run(&["--output", "json", "backend"]);
+    assert_eq!(code_of(&out), 0);
+    let value: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    #[cfg(feature = "native-backend")]
+    {
+        assert_eq!(value["name"], "native-experimental");
+        assert_eq!(value["experimental"], true);
+        assert_eq!(value["native_available"], true);
+    }
+    #[cfg(not(feature = "native-backend"))]
+    {
+        assert_eq!(value["name"], "rustcrypto");
+        assert_eq!(value["experimental"], false);
+        assert_eq!(value["native_available"], false);
+    }
+    assert_eq!(value["selection"], "compile-time Cargo feature");
+}
+
+#[test]
 fn version_exits_zero_and_prints_name() {
     let out = run(&["--version"]);
     assert_eq!(code_of(&out), 0);

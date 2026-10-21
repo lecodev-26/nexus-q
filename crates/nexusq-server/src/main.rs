@@ -211,6 +211,9 @@ struct VersionResponse {
 #[derive(Serialize)]
 struct HealthResponse {
     status: &'static str,
+    pqc_backend: &'static str,
+    pqc_backend_experimental: bool,
+    native_pqc_backend_available: bool,
 }
 
 #[derive(Serialize)]
@@ -579,7 +582,13 @@ fn is_bearer_authorized(value: &str, expected: &str) -> bool {
 }
 
 async fn health() -> Json<HealthResponse> {
-    Json(HealthResponse { status: "ok" })
+    let provider = nexusq_core::backend_info();
+    Json(HealthResponse {
+        status: "ok",
+        pqc_backend: provider.name,
+        pqc_backend_experimental: provider.experimental,
+        native_pqc_backend_available: provider.native_available,
+    })
 }
 
 async fn ready(State(state): State<AppState>) -> (StatusCode, Json<ReadinessResponse>) {
@@ -1121,6 +1130,13 @@ mod tests {
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         assert!(response.headers().contains_key("x-request-id"));
+        let health_body = to_bytes(response.into_body(), 64 * 1024).await.unwrap();
+        let health: serde_json::Value = serde_json::from_slice(&health_body).unwrap();
+        assert_eq!(health["pqc_backend"], nexusq_core::backend_info().name);
+        assert_eq!(
+            health["pqc_backend_experimental"],
+            nexusq_core::backend_info().experimental
+        );
 
         let response = app
             .oneshot(

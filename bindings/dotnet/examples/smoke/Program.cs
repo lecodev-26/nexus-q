@@ -4,6 +4,9 @@
 //   NEXUSQ_LIBRARY=target/debug/libnexusq.so dotnet run --project bindings/dotnet/examples/smoke
 
 Console.WriteLine($"nexusq version: {Nexusq.Version()}");
+var provider = Nexusq.CryptoBackendInfo();
+if (string.IsNullOrWhiteSpace(provider.Name) || provider.NativeAvailable != (provider.Name == "native-experimental") || provider.Experimental != provider.NativeAvailable) { Console.Error.WriteLine("invalid backend metadata"); return 1; }
+Console.WriteLine($"crypto backend: {provider.Name}");
 
 string dir = Path.Combine(Path.GetTempPath(), $"nexusq_dotnet_smoke_{Path.GetRandomFileName()}");
 Directory.CreateDirectory(dir);

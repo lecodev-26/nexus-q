@@ -26,15 +26,26 @@ public static partial class Nexusq
         // Resolve "nexusq" through NEXUSQ_LIBRARY when set; otherwise fall
         // back to the OS loader search.
         NativeLibrary.SetDllImportResolver(typeof(Nexusq).Assembly, (name, _, _) =>
-            name == LibraryName && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("NEXUSQ_LIBRARY"))
-                ? NativeLibrary.Load(Environment.GetEnvironmentVariable("NEXUSQ_LIBRARY")!)
-                : IntPtr.Zero);
+        {
+            if (name != LibraryName) return IntPtr.Zero;
+            var overridePath = Environment.GetEnvironmentVariable("NEXUSQ_LIBRARY");
+            if (!string.IsNullOrEmpty(overridePath)) return NativeLibrary.Load(overridePath);
+            if (RuntimeInformation.RuntimeIdentifier.Contains("musl", StringComparison.OrdinalIgnoreCase))
+                throw new DllNotFoundException("NEXUS-Q prebuilt Linux runtimes require glibc, not musl/Alpine. Set NEXUSQ_LIBRARY to a compatible build.");
+            return IntPtr.Zero;
+        });
     }
 
     // The C SDK takes and returns NUL-terminated UTF-8 strings; the marshalling
     // below pins that contract explicitly on every platform.
     [LibraryImport(LibraryName, EntryPoint = "nexusq_version", StringMarshalling = StringMarshalling.Utf8)]
     private static partial IntPtr version_ptr();
+
+    [LibraryImport(LibraryName, EntryPoint = "nexusq_backend_name", StringMarshalling = StringMarshalling.Utf8)]
+    private static partial IntPtr backend_name_ptr();
+
+    [LibraryImport(LibraryName, EntryPoint = "nexusq_backend_is_experimental")]
+    private static partial byte backend_experimental();
 
     [LibraryImport(LibraryName, EntryPoint = "nexusq_last_error_message", StringMarshalling = StringMarshalling.Utf8)]
     private static partial IntPtr last_error_ptr();
@@ -49,6 +60,15 @@ public static partial class Nexusq
 
     /// <summary>Returns the library version string.</summary>
     public static string Version() => PtrToString(version_ptr());
+
+    /// <summary>Reports the provider compiled into the loaded library; this does not switch providers.</summary>
+    public static BackendInfo CryptoBackendInfo()
+    {
+        string name = PtrToString(backend_name_ptr());
+        return new BackendInfo(name, backend_experimental() != 0, name == "native-experimental");
+    }
+
+    public sealed record BackendInfo(string Name, bool Experimental, bool NativeAvailable);
 
     /// <summary>Returns the last error message on the calling thread, or null.</summary>
     public static string? LastError()

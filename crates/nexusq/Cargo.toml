@@ -9,8 +9,13 @@ license.workspace = true
 repository.workspace = true
 readme = "README.md"
 
+[features]
+default = []
+native-backend = ["nexusq-core/native-backend"]
+native-backend-portable = ["nexusq-core/native-backend-portable"]
+
 [dependencies]
-nexusq-core = { version = "4.1.0" }
+nexusq-core = { path = "../nexusq-core", version = "4.1.0" }
 nexusq-kernels = { version = "4.1.0" }
 nexusq_ml_kem = { package = "nexusq-ml-kem", version = "4.1.0" }
 nexusq_ml_dsa = { package = "nexusq-ml-dsa", version = "4.1.0" }

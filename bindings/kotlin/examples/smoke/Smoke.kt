@@ -12,6 +12,11 @@ import java.nio.file.Files
  */
 fun main() {
     println("nexusq version: ${Nexusq.version()}")
+    val provider = Nexusq.backendInfo()
+    check(provider.name.isNotBlank()) { "backend name must not be empty" }
+    check(provider.nativeAvailable == (provider.name == "native-experimental")) { "inconsistent backend metadata" }
+    check(provider.experimental == provider.nativeAvailable) { "inconsistent experimental flag" }
+    println("crypto backend: ${provider.name}")
 
     val dir = Files.createTempDirectory("nexusq_kotlin_smoke_")
     val path = dir.resolve("vault.nqv")

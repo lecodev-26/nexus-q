@@ -18,6 +18,8 @@ typedef _VersionDart = Pointer<Char> Function();
 
 typedef _LastErrorC = Pointer<Char> Function();
 typedef _LastErrorDart = Pointer<Char> Function();
+typedef _BackendExperimentalC = Uint8 Function();
+typedef _BackendExperimentalDart = int Function();
 
 typedef _VaultCreateC = Int32 Function(
     Pointer<Utf8> path, Pointer<Utf8> password, Pointer<Utf8> label);
@@ -29,13 +31,34 @@ typedef _VaultFormatVersionDart = int Function(Pointer<Utf8> path);
 
 final DynamicLibrary _lib = () {
   final fromEnv = Platform.environment['NEXUSQ_LIBRARY'];
-  return DynamicLibrary.open(fromEnv ?? 'libnexusq.so');
+  if (fromEnv != null && fromEnv.isNotEmpty) return _openLibrary(fromEnv);
+
+  if (Platform.isLinux) {
+    if (File('/lib/ld-musl-x86_64.so.1').existsSync() ||
+        File('/lib/ld-musl-aarch64.so.1').existsSync()) {
+      throw StateError('NEXUS-Q prebuilt Linux runtimes require glibc, not musl/Alpine. Set NEXUSQ_LIBRARY to a compatible build.');
+    }
+    return _openLibrary('libnexusq.so');
+  }
+  if (Platform.isMacOS) return _openLibrary('libnexusq.dylib');
+  if (Platform.isWindows) return _openLibrary('nexusq.dll');
+  throw UnsupportedError('NEXUS-Q Dart FFI has no configured runtime name for ${Platform.operatingSystem}; set NEXUSQ_LIBRARY to a compatible library.');
 }();
+
+DynamicLibrary _openLibrary(String name) {
+  try {
+    return DynamicLibrary.open(name);
+  } catch (error) {
+    throw StateError('Unable to load NEXUS-Q native library "$name". Install a compatible libnexusq runtime or set NEXUSQ_LIBRARY. Original error: $error');
+  }
+}
 
 final _version = _lib
     .lookupFunction<_VersionC, _VersionDart>('nexusq_version');
 final _lastError = _lib
     .lookupFunction<_LastErrorC, _LastErrorDart>('nexusq_last_error_message');
+final _backendName = _lib.lookupFunction<_VersionC, _VersionDart>('nexusq_backend_name');
+final _backendExperimental = _lib.lookupFunction<_BackendExperimentalC, _BackendExperimentalDart>('nexusq_backend_is_experimental');
 final _vaultCreate = _lib
     .lookupFunction<_VaultCreateC, _VaultCreateDart>('nexusq_vault_create');
 final _vaultFormatVersion = _lib.lookupFunction<_VaultFormatVersionC,
@@ -48,6 +71,12 @@ String? _borrowed(Pointer<Char> p) {
 
 /// Returns the library version string.
 String version() => _borrowed(_version())!;
+
+/// Reports the provider compiled into the loaded library; this does not switch providers.
+Map<String, Object> backendInfo() {
+  final name = _borrowed(_backendName())!;
+  return {'name': name, 'experimental': _backendExperimental() != 0, 'nativeAvailable': name == 'native-experimental'};
+}
 
 /// Returns the last error message on the calling thread, or null.
 String? lastError() => _borrowed(_lastError());

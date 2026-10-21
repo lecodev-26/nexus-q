@@ -6,6 +6,7 @@
   "types": "dist/index.d.ts",
   "files": [
     "dist",
+    "scripts",
     "README.md",
     "LICENSE-MIT",
     "LICENSE-APACHE"
@@ -13,6 +14,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "smoke": "node dist/smoke.js",
+    "postinstall": "node scripts/postinstall.cjs",
     "prepare": "npm run build"
   },
   "keywords": [

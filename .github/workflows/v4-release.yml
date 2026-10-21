@@ -17,6 +17,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          submodules: recursive
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -155,6 +156,8 @@ jobs:
         os: [ubuntu-latest, macos-14, windows-latest]
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.85.1
@@ -166,20 +169,30 @@ jobs:
         if: matrix.os != 'macos-14'
         run: cargo build --workspace --locked --release
 
+  sdk-runtime:
+    name: Build version-matched default-provider SDK runtimes
+    if: github.ref == 'refs/tags/v4.1.0' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    needs: [release-gate]
+    uses: ./.github/workflows/sdk-runtime.yml
+    permissions:
+      contents: read
+
   public-release:
     name: Publish GitHub v4.1.0 release
-    if: startsWith(github.ref, 'refs/tags/v4.1.0')
-    needs: [release-gate, platform-gate]
+    if: github.ref == 'refs/tags/v4.1.0' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    needs: [release-gate, platform-gate, sdk-runtime]
     runs-on: ubuntu-latest
     permissions:
       contents: write
       id-token: write
       attestations: write
     steps:
-      - name: Checkout release tag
+      - name: Checkout exact validated revision
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
+          submodules: recursive
 
       - name: Download validated release evidence
         uses: actions/download-artifact@v4
@@ -187,17 +200,66 @@ jobs:
           name: nexusq-v4.1.0-release-evidence
           path: release
 
-      - name: Attest validated release artifact
+      - name: Download native runtime artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: nexusq-sdk-runtime-*
+          path: native-runtimes
+          merge-multiple: false
+
+      - name: Package native runtime assets for release
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > release/NATIVE-RUNTIME-SHA256SUMS
+          for directory in native-runtimes/nexusq-sdk-runtime-*; do
+            test -d "$directory"
+            target=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["target"])' "$directory/runtime.json")
+            case "$target" in
+              x86_64-unknown-linux-gnu) asset="nexusq-sdk-runtime-linux-x64.so" ;;
+              aarch64-unknown-linux-gnu) asset="nexusq-sdk-runtime-linux-arm64.so" ;;
+              aarch64-apple-darwin) asset="nexusq-sdk-runtime-macos-arm64.dylib" ;;
+              x86_64-pc-windows-msvc) asset="nexusq-sdk-runtime-windows-x64.dll" ;;
+              *) echo "Unsupported native runtime target: $target" >&2; exit 1 ;;
+            esac
+            library=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["library"])' "$directory/runtime.json")
+            cp "$directory/$library" "release/$asset"
+            archive="release/$(basename "$directory").tar.gz"
+            tar -czf "$archive" -C native-runtimes "$(basename "$directory")"
+            (cd release && sha256sum "$(basename "$archive")" "$asset") >> release/NATIVE-RUNTIME-SHA256SUMS
+          done
+          test -s release/NATIVE-RUNTIME-SHA256SUMS
+          (cd release && sha256sum -c NATIVE-RUNTIME-SHA256SUMS)
+          test -s release/nexusq-sdk-runtime-linux-x64.so
+          test -s release/nexusq-sdk-runtime-linux-arm64.so
+          test -s release/nexusq-sdk-runtime-macos-arm64.dylib
+          test -s release/nexusq-sdk-runtime-windows-x64.dll
+
+      - name: Attest validated release artifacts
         uses: actions/attest-build-provenance@v2
         with:
-          subject-path: "release/*.tar.gz"
+          subject-path: |
+            release/*.tar.gz
+            release/nexusq-sdk-runtime-linux-x64.so
+            release/nexusq-sdk-runtime-linux-arm64.so
+            release/nexusq-sdk-runtime-macos-arm64.dylib
+            release/nexusq-sdk-runtime-windows-x64.dll
 
-      - name: Create GitHub release
+      - name: Publish or repair GitHub v4.1.0 release assets
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
-          gh release create v4.1.0 \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "NEXUS-Q v4.1.0" \
-            --notes-file docs/V4_RELEASE.md \
-            release/*.tar.gz release/SHA256SUMS release/*.cdx.json release/*-provenance.json
+          set -euo pipefail
+          assets=(release/*.tar.gz release/nexusq-sdk-runtime-linux-x64.so release/nexusq-sdk-runtime-linux-arm64.so release/nexusq-sdk-runtime-macos-arm64.dylib release/nexusq-sdk-runtime-windows-x64.dll release/SHA256SUMS release/NATIVE-RUNTIME-SHA256SUMS release/*.cdx.json release/*-provenance.json)
+          if gh release view v4.1.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload v4.1.0 --repo "$GITHUB_REPOSITORY" --clobber "${assets[@]}"
+          else
+            gh release create v4.1.0 \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "NEXUS-Q v4.1.0" \
+              --notes-file docs/V4_RELEASE.md \
+              "${assets[@]}"
+          fi
+          gh release view v4.1.0 --repo "$GITHUB_REPOSITORY" --json assets \
+            | python3 -c 'import json,sys; names={x["name"] for x in json.load(sys.stdin)["assets"]}; required={"nexusq-sdk-runtime-linux-x64.so","nexusq-sdk-runtime-linux-arm64.so","nexusq-sdk-runtime-macos-arm64.dylib","nexusq-sdk-runtime-windows-x64.dll","NATIVE-RUNTIME-SHA256SUMS"}; missing=required-names; print("Release runtime assets:", ", ".join(sorted(required & names))); sys.exit(1 if missing else 0)'

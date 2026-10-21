@@ -8,8 +8,14 @@ anything: every call goes through `libnexusq`.
 
 - Dart 3 or newer.
 - The C SDK built (`cargo build -p nexusq-c`).
-- `libnexusq.so` available at runtime through `LD_LIBRARY_PATH` or
-  `NEXUSQ_LIBRARY`.
+- On supported published releases, use `scripts/with-runtime.sh` to download
+  the version-matched runtime, verify the release and archive checksums, and
+  run Dart with `NEXUSQ_LIBRARY` configured for Linux x64/ARM64 glibc or macOS
+  ARM64. The Dart package itself does not run install hooks, so this wrapper is
+  required unless you install a compatible library yourself.
+- Windows, musl/Alpine, and other unsupported targets require a compatible
+  library built/installed separately. Missing libraries produce an actionable
+  error rather than silently choosing another provider.
 
 ## Usage
 
@@ -28,7 +34,8 @@ void main() {
 Run with:
 
 ```bash
-NEXUSQ_LIBRARY=/path/to/nexusq/target/debug/libnexusq.so dart run your_program.dart
+cd bindings/dart
+./scripts/with-runtime.sh dart run your_program.dart
 ```
 
 ## What is available
@@ -48,8 +55,9 @@ More operations land as the C SDK grows.
 Run the smoke test and the unit suite from the repository root:
 
 ```bash
-NEXUSQ_LIBRARY=target/debug/libnexusq.so dart run bindings/dart/example/smoke.dart
-NEXUSQ_LIBRARY=target/debug/libnexusq.so dart test bindings/dart
+cd bindings/dart
+NEXUSQ_LIBRARY=../../target/debug/libnexusq.so dart run example/smoke.dart
+NEXUSQ_LIBRARY=../../target/debug/libnexusq.so dart test
 ```
 
 The Dart binding is intentionally a thin wrapper over the C SDK, matching

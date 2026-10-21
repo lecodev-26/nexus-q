@@ -10,9 +10,10 @@ It does not reimplement anything: every call goes through `libnexusq`.
 
 - Kotlin 2.1 or newer (JVM), a JDK 11 or newer.
 - The JNA jar on the classpath.
-- The C SDK built (`cargo build -p nexusq-c`).
-- `libnexusq.so` available at runtime through `LD_LIBRARY_PATH` or
-  `NEXUSQ_LIBRARY`.
+- Published releases automatically obtain and SHA-256-verify the matching
+  native runtime on Linux x64/ARM64 glibc, macOS ARM64, and Windows x64. Users
+  do not need Rust; the runtime is cached under `~/.cache/nexusq/<version>/<runtime-asset>`.
+- `NEXUSQ_LIBRARY` remains an advanced override for local/custom libraries.
 
 ## Usage
 

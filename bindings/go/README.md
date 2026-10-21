@@ -7,9 +7,12 @@ through `libnexusq`.
 ## Requirements
 
 - Go 1.21 or newer.
-- The C SDK built (`cargo build -p nexusq-c`).
-- The directory holding `libnexusq.so` in `LD_LIBRARY_PATH` at
-  runtime.
+- On supported published releases, the helper script downloads the matching
+  RustCrypto runtime and header, verifies the release and archive checksums,
+  and configures cgo for Linux x64/ARM64 glibc and macOS ARM64. Go consumers do
+  not need Rust; the downloaded runtime is cached under `~/.cache/nexusq`.
+- Windows, musl/Alpine, macOS Intel, and other unsupported targets still need a
+  compatible library built/installed separately.
 
 ## Usage
 
@@ -33,17 +36,22 @@ func main() {
 }
 ```
 
-Build and run:
+Build and run (the first call downloads and verifies the runtime):
 
 ```bash
-LD_LIBRARY_PATH=/path/to/nexusq/target/debug \
-go run ./your_program
+cd bindings/go
+./scripts/with-runtime.sh go run ./examples/smoke
+cd nexusq
+../scripts/with-runtime.sh go test ./...
 ```
 
-The #cgo directives in nexusq/nexusq.go point at the C SDK's
-include directory and the Cargo target/debug directory relative to
-this repository. When you vendor the Go module elsewhere, adjust
-those paths or set CGO_CFLAGS and CGO_LDFLAGS.
+For an advanced local build, set `NEXUSQ_LIBRARY` to an installed
+`libnexusq.so`/`libnexusq.dylib` (the helper still downloads the matching header),
+or set `CGO_CFLAGS`, `CGO_LDFLAGS`, and the platform loader path explicitly.
+
+The helper sets `CGO_CFLAGS`, `CGO_LDFLAGS`, and `LD_LIBRARY_PATH` (or
+`DYLD_LIBRARY_PATH`) for the child command. When you vendor the Go module
+elsewhere, run the helper from the checkout or set those variables yourself.
 
 What is available
 
@@ -62,8 +70,7 @@ with:
 
 ```bash
 cd bindings/go
-LD_LIBRARY_PATH="$(pwd)/../../target/debug" \
-go run ./examples/smoke
+./scripts/with-runtime.sh go run ./examples/smoke
 ```
 
 Expected output:

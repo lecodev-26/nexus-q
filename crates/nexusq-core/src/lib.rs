@@ -30,6 +30,45 @@ pub mod vault;
 pub use error::{Error, Result};
 pub use observability::{Metrics, OBSERVABILITY_SCHEMA_VERSION};
 
+/// Build-time cryptographic backend selected for ML-KEM and ML-DSA.
+///
+/// This reports the compiled provider; it is not a runtime selector. The
+/// native provider is experimental and must be explicitly enabled with the
+/// `native-backend` Cargo feature.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BackendInfo {
+    /// Stable machine-readable provider identifier.
+    pub name: &'static str,
+    /// Whether the selected provider is experimental and unaudited.
+    pub experimental: bool,
+    /// Whether native backend support was compiled into this build.
+    pub native_available: bool,
+}
+
+/// Describes the cryptographic provider compiled into this build.
+///
+/// RustCrypto remains the default. Enabling `native-backend` selects the
+/// experimental native implementation at compile time; it does not provide
+/// a runtime fallback or change the provider of an already-built binary.
+pub const fn backend_info() -> BackendInfo {
+    #[cfg(feature = "native-backend")]
+    {
+        BackendInfo {
+            name: "native-experimental",
+            experimental: true,
+            native_available: true,
+        }
+    }
+    #[cfg(not(feature = "native-backend"))]
+    {
+        BackendInfo {
+            name: "rustcrypto",
+            experimental: false,
+            native_available: false,
+        }
+    }
+}
+
 /// Common imports.
 ///
 /// Bringing this module into scope provides the types most callers
@@ -65,4 +104,24 @@ pub mod prelude {
     pub use crate::crypto::random::{OsRandomSource, RandomSource};
 
     pub use crate::hardware::SoftwareBackend;
+}
+
+#[cfg(test)]
+mod backend_info_tests {
+    use super::backend_info;
+
+    #[test]
+    fn reports_the_compiled_provider_consistently() {
+        let info = backend_info();
+        #[cfg(feature = "native-backend")]
+        assert_eq!(
+            (info.name, info.experimental, info.native_available),
+            ("native-experimental", true, true)
+        );
+        #[cfg(not(feature = "native-backend"))]
+        assert_eq!(
+            (info.name, info.experimental, info.native_available),
+            ("rustcrypto", false, false)
+        );
+    }
 }

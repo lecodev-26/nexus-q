@@ -8,9 +8,11 @@ It does not reimplement anything: every call goes through `libnexusq`.
 
 - Java 11 or newer.
 - Maven 3.6 or newer (to build).
-- The C SDK built (`cargo build -p nexusq-c`).
-- `libnexusq.so` available at runtime through `LD_LIBRARY_PATH` or
-  `NEXUSQ_LIBRARY`.
+- Published releases download the version-matched native runtime on supported
+  targets (Linux x64/ARM64 glibc, macOS ARM64, Windows x64) and verify its
+  SHA-256 checksum before loading it. Consumers do not need Rust installed.
+- The runtime is cached under `~/.cache/nexusq/<version>/<runtime-asset>`.
+- `NEXUSQ_LIBRARY` remains an advanced override for a custom/local library.
 
 ## Usage
 
@@ -24,11 +26,13 @@ System.out.println("vault created at " + vault.path);
 System.out.println("format version: " + vault.formatVersion);
 ```
 
-Run with:
+Run normally after installing the published Java SDK:
 
 ```bash
-NEXUSQ_LIBRARY=/path/to/nexusq/target/debug/libnexusq.so java -cp ... your.Main
+java -cp ... your.Main
 ```
+
+For a source checkout or custom build, set `NEXUSQ_LIBRARY` to the library path.
 
 ## What is available
 

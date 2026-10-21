@@ -7,6 +7,13 @@ final class NexusqTests: XCTestCase {
         XCTAssertTrue(Nexusq.version().hasPrefix("4.1.0"))
     }
 
+    func testBackendMetadataIsConsistent() {
+        let info = Nexusq.backendInfo()
+        XCTAssertFalse(info.name.isEmpty)
+        XCTAssertEqual(info.nativeAvailable, info.name == "native-experimental")
+        XCTAssertEqual(info.experimental, info.nativeAvailable)
+    }
+
     func testVaultCreateRoundTrip() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("nexusq_swift_test_\(UUID().uuidString)", isDirectory: true)

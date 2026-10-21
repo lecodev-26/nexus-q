@@ -8,9 +8,11 @@ through `libnexusq`.
 
 - Ruby 3.0 or newer.
 - The `ffi` gem (`gem install ffi`).
-- The C SDK built (`cargo build -p nexusq-c`).
-- `libnexusq.so` available at runtime through `LD_LIBRARY_PATH` or
-  `NEXUSQ_LIBRARY`.
+- Published releases automatically download the version-matched runtime and
+  verify its SHA-256 checksum on Linux x64/ARM64 glibc, macOS ARM64, and Windows
+  x64. Rust is not required by SDK consumers; the library is cached under
+  `~/.cache/nexusq/<version>/<runtime-asset>`.
+- `NEXUSQ_LIBRARY` remains an advanced override for a local/custom library.
 
 ## Usage
 
@@ -25,17 +27,13 @@ puts "vault created at #{vault.path}"
 puts "format version: #{vault.format_version}"
 ```
 
-Run with:
+Run normally after installing the published SDK:
 
 ```bash
-NEXUSQ_LIBRARY=/path/to/nexusq/target/debug/libnexusq.so ruby your_program.rb
+ruby your_program.rb
 ```
 
-If the library directory is already on the dynamic loader path:
-
-```bash
-LD_LIBRARY_PATH=/path/to/nexusq/target/debug ruby your_program.rb
-```
+For source-checkout smoke tests or a custom build, set `NEXUSQ_LIBRARY` to the library path.
 
 ## What is available
 

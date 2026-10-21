@@ -1024,7 +1024,7 @@ dependencies = [
 name = "nexusq"
 version = "4.1.0"
 dependencies = [
- "nexusq-core 4.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "nexusq-core",
  "nexusq-kernels",
  "nexusq-ml-dsa 4.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "nexusq-ml-kem 4.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1034,7 +1034,7 @@ dependencies = [
 name = "nexusq-c"
 version = "4.1.0"
 dependencies = [
- "nexusq-core 4.1.0",
+ "nexusq-core",
  "tempfile",
 ]
 
@@ -1044,7 +1044,7 @@ version = "4.1.0"
 dependencies = [
  "clap",
  "hex",
- "nexusq-core 4.1.0",
+ "nexusq-core",
  "rpassword",
  "serde_json",
  "tempfile",
@@ -1081,39 +1081,6 @@ dependencies = [
  "slh-dsa",
  "subtle",
  "tempfile",
- "thiserror",
- "tracing",
- "x25519-dalek",
- "zeroize",
-]
-
-[[package]]
-name = "nexusq-core"
-version = "4.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02c05f628c3b4cdfdb58a01fd4fba39a882adff7b89d99b1e91253e4fb53eb2f"
-dependencies = [
- "aes-gcm",
- "argon2",
- "base64",
- "chacha20poly1305",
- "ciborium",
- "crc32c",
- "ed25519-dalek",
- "getrandom 0.3.4",
- "hex",
- "hkdf",
- "hmac",
- "hybrid-array",
- "nexusq-ml-dsa 4.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "nexusq-ml-kem 4.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "rand_core 0.9.5",
- "serde",
- "serde_bytes",
- "sha2",
- "sha3",
- "slh-dsa",
- "subtle",
  "thiserror",
  "tracing",
  "x25519-dalek",
@@ -1162,11 +1129,9 @@ dependencies = [
  "ctutils",
  "hybrid-array",
  "module-lattice",
- "nexusq-kernels",
  "pkcs8",
  "shake",
  "signature",
- "zeroize",
 ]
 
 [[package]]
@@ -1200,11 +1165,9 @@ dependencies = [
  "hybrid-array",
  "kem",
  "module-lattice",
- "nexusq-kernels",
  "pkcs8",
  "rand_core 0.10.1",
  "sha3",
- "zeroize",
 ]
 
 [[package]]
@@ -1220,7 +1183,7 @@ dependencies = [
 name = "nexusq-py"
 version = "4.1.0"
 dependencies = [
- "nexusq-core 4.1.0",
+ "nexusq-core",
  "pyo3",
  "tempfile",
 ]
@@ -1231,7 +1194,7 @@ version = "4.1.0"
 dependencies = [
  "axum",
  "base64",
- "nexusq-core 4.1.0",
+ "nexusq-core",
  "serde",
  "serde_json",
  "subtle",

@@ -58,6 +58,20 @@ inline std::string version() {
     return v ? std::string(v) : std::string{};
 }
 
+/// Compile-time cryptographic provider metadata; this does not switch providers.
+struct BackendInfo {
+    std::string name;
+    bool experimental;
+    bool native_available;
+};
+
+inline BackendInfo backend_info() {
+    const char* name = nexusq_backend_name();
+    std::string provider = name ? std::string(name) : std::string{};
+    const bool experimental = nexusq_backend_is_experimental() != 0;
+    return {provider, experimental, provider == "native-experimental"};
+}
+
 /// A vault file on disk.
 ///
 /// This is a thin handle: it stores the path and the format version.

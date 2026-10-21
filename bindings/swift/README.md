@@ -7,12 +7,12 @@ call goes through `libnexusq`.
 
 ## Requirements
 
-- Swift 5.9 or newer.
-- The C SDK built and *installed* so the linker and the dynamic loader can
-  find it (`cargo build -p nexusq-c`, then `LD_LIBRARY_PATH=target/debug`
-  from the repository root).
-- On Apple platforms, install `libnexusq.dylib` into a standard library
-  path (for example `/usr/local/lib`).
+- Swift 5.9 or newer on macOS 12+.
+- Published releases automatically download the version-matched RustCrypto
+  runtime and verify its SHA-256 checksum on macOS ARM64. The runtime is cached
+  under `~/.cache/nexusq/<version>/<runtime-asset>`; Rust is not required.
+- macOS Intel and non-Apple targets are not currently supported by the prebuilt
+  runtime. `NEXUSQ_LIBRARY` remains an advanced override for a compatible build.
 
 ## Usage
 
@@ -45,8 +45,9 @@ More operations land as the C SDK grows.
 Run the smoke test and the XCTest suite from the repository root:
 
 ```bash
-LD_LIBRARY_PATH=target/debug swift run Smoke
-LD_LIBRARY_PATH=target/debug swift test
+cd bindings/swift
+NEXUSQ_LIBRARY=../../target/debug/libnexusq.dylib swift run Smoke
+NEXUSQ_LIBRARY=../../target/debug/libnexusq.dylib swift test
 ```
 
 The Swift binding is intentionally a thin wrapper over the C SDK, matching

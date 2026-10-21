@@ -23,6 +23,12 @@
 
 int main() {
     std::cout << "nexusq version: " << nexusq::version() << "\n";
+    const auto provider = nexusq::backend_info();
+    if (provider.name.empty() || provider.native_available != (provider.name == "native-experimental") || provider.experimental != provider.native_available) {
+        std::cerr << "invalid backend metadata\n";
+        return 1;
+    }
+    std::cout << "crypto backend: " << provider.name << "\n";
 
     const char* home = std::getenv("HOME");
     if (home == nullptr) {
