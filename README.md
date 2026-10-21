@@ -12,7 +12,7 @@
 
 </div>
 
-> **Current project status (2026-10-19):** the workspace is versioned **4.1.0 — the stable line release** of the V4 work, ready for the final independent audit. V1 (`v1.0.0`), V2 (`v2.0.0`) and V3 (`v3-engineering-2026-10-09`) are retained engineering baselines; V4 native-backend work is integrated into `main` by [PR #54](https://github.com/lecodev-26/nexus-q/pull/54) at commit [`1c03968`](https://github.com/lecodev-26/nexus-q/commit/1c03968e9b8d5578020e571e2f25edc5a7165607) and was tagged [`v4-engineering-2026-10-16`](https://github.com/lecodev-26/nexus-q/tree/v4-engineering-2026-10-16) as an engineering snapshot before this release line. The official 1.5× median-and-p95 performance gate passed in the reviewed native-backend CI, and PR [#55](https://github.com/lecodev-26/nexus-q/pull/55) wires the backend into `nexusq-core` behind an explicitly opt-in `native-backend` feature. **The native backend remains experimental: the default `nexusq-core` build, the CLI and the SDKs still use RustCrypto for production call paths; the native path is opt-in only and is not enabled by default anywhere.** The production-path benchmark (native vs RustCrypto vs AWS-LC) passed the unchanged 1.5× median-and-p95 gate. Do not infer an independent audit, FIPS 140-3 validation, production readiness, or v1.0 release readiness. Evaluation commands and feature scope are documented in [`docs/performance/NATIVE_BACKEND_FEATURE.md`](docs/performance/NATIVE_BACKEND_FEATURE.md). See [`docs/performance/NATIVE_BACKEND.md`](docs/performance/NATIVE_BACKEND.md) and [`docs/V3_V4_ROADMAP.md`](docs/V3_V4_ROADMAP.md). Published package channels verified on 2026-10-19: crates.io (Rust library, core, CLI, server, C SDK and PQC crates), PyPI, npm, RubyGems, Maven Central (Java and Kotlin), Packagist, Go via pkg.go.dev, and Swift Package Manager (Git tag `4.1.0`). NuGet and pub.dev did not resolve public packages at verification time and are not described as published; see the Installation section.
+> **Current project status (2026-10-21):** the repository is on the **4.1.0 stable line**. Recent mainline work includes [PR #72](https://github.com/lecodev-26/nexus-q/pull/72) (merged): the Issue #23 matched-RNG benchmark diagnostic, configurable median/p95 ratio checks, regression tests and owner-approved near-parity closure criteria; and [PR #74](https://github.com/lecodev-26/nexus-q/pull/74) (merged): the unified `publicar.sh` SDK publisher, publishing documentation, Maven Central Java/Kotlin packaging/signing setup, and removal of duplicate registry-specific publishing workflows. [PR #63](https://github.com/lecodev-26/nexus-q/pull/63) integrated PQC backend metadata and runtime-aware packaging across SDKs. The Arena schema/metadata fixes and CIRCL dependency pinning are also in `main`. Issue #23's owner-approved local result passes both median and p95 against the best eligible comparator in 6/9 operations; the remaining three deltas are explicitly accepted and documented in [`docs/performance/ISSUE_23_FINAL_GATE_AUDIT_2026-10-21.md`](docs/performance/ISSUE_23_FINAL_GATE_AUDIT_2026-10-21.md). This is local diagnostic evidence, not a hosted-runner result for the strict 1.00× target. The official native production-path gate remains the 1.5× median-and-p95 gate. **The native backend remains experimental and opt-in**: RustCrypto remains the default production path for the core, CLI and SDKs. No independent audit, FIPS 140-3 validation, certification or production-readiness claim is made. Release channel status: crates.io, PyPI, npm, RubyGems, Maven Central (existing Java/Kotlin 4.1.0 artifacts), Packagist, Go/pkg.go.dev, Swift Package Manager and pub.dev (`nexusq` 4.1.0) have published packages. NuGet's OIDC publishing workflow is configured but its post-CI run still needs a successful end-to-end verification. The Maven Central 4.1.0 artifacts already exist; the remaining Maven package refresh/republication work is deferred until the PC is available. See Installation below.
 
 <div align="center">
 
@@ -236,7 +236,7 @@ These are single-runner CI measurements on an AMD EPYC 7763 hosted runner, not u
 | V2 | [`v2.0.0`](https://github.com/lecodev-26/nexus-q/releases/tag/v2.0.0) · `nexusqv2` | Security/correctness engineering line | Frozen |
 | V3 | [`v3-engineering-2026-10-09`](https://github.com/lecodev-26/nexus-q/releases/tag/v3-engineering-2026-10-09) · `nexusqv3` | Hardened implementation and benchmark evidence | Engineering release |
 | V4 | [`v4-engineering-2026-10-16`](https://github.com/lecodev-26/nexus-q/tree/v4-engineering-2026-10-16) · `nexusqv4` | Experimental native backend and performance work | Engineering snapshot (pre-release) |
-| V4.1 | [`v4.1.0`](https://github.com/lecodev-26/nexus-q/releases/tag/v4.1.0) · `main` | Stable line release: opt-in native-backend production-path wiring | **Current stable line — ready for the final independent audit (Phase 21)** |
+| V4.1 | [`v4.1.0`](https://github.com/lecodev-26/nexus-q/releases/tag/v4.1.0) · `main` | Stable line release: opt-in native-backend production-path wiring | **Current stable line; independent external audit remains pending (Phase 21)** |
 
 <details>
 <summary><b>V3 engineering release and V4 snapshot</b></summary>
@@ -292,7 +292,7 @@ The generated archive contains the CLI, server, non-secret configuration example
 
 ## Installation
 
-The 4.1.0 stable line has published packages across several language registries; availability varies by SDK, and NuGet/pub.dev were not visible at verification time. The installation channel for each SDK:
+The 4.1.0 stable line has packages published across the registries listed below. NuGet is pending successful end-to-end verification of its OIDC publishing workflow. Existing Maven Central 4.1.0 Java/Kotlin artifacts are published; the remaining Maven package refresh/republication work is deferred until the PC is available. Dart/Flutter 4.1.0 is live on pub.dev.
 
 | Channel | Install | Status |
 |---|---|---|
@@ -307,9 +307,9 @@ The 4.1.0 stable line has published packages across several language registries;
 | TypeScript / Node.js | `npm install nexusq` | Available — npm, `nexusq@4.1.0` (latest) |
 | Java | Maven Central dependency `io.github.lecodev-26:nexusq:4.1.0` | Published — [Maven Central](https://central.sonatype.com/artifact/io.github.lecodev-26/nexusq) |
 | Kotlin | Maven Central artifact `io.github.lecodev-26:nexusq-kotlin:4.1.0` | Published — [Maven Central](https://central.sonatype.com/artifact/io.github.lecodev-26/nexusq-kotlin) |
-| C# / .NET | `dotnet add package Nexusq` | Not yet visible on NuGet at verification time; do not treat as published |
+| C# / .NET | `dotnet add package Nexusq` | Publication workflow configured; pending successful NuGet OIDC/CI verification — not yet confirmed published |
 | Swift | `.package(url: "https://github.com/lecodev-26/nexus-q.git", from: "4.1.0")`, product `Nexusq` | Available — tag `4.1.0` (`bindings/swift`) |
-| Dart / Flutter | `dart pub add nexusq` | Not yet visible on pub.dev at verification time; do not treat as published |
+| Dart / Flutter | `dart pub add nexusq` | Published — [pub.dev](https://pub.dev/packages/nexusq), version `4.1.0` |
 | Go | `go get github.com/lecodev-26/nexus-q/bindings/go/nexusq` | Available — pkg.go.dev, module tag `bindings/go/nexusq/v0.1.0` |
 | PHP | `composer require lecodev-26/nexusq` | Published — [Packagist](https://packagist.org/packages/lecodev-26/nexusq), version `4.1.0` |
 | Ruby | `gem install nexusq` | Available — RubyGems.org, `nexusq 4.1.0` |
@@ -318,7 +318,7 @@ Notes:
 
 - The Go, PHP, Ruby, TypeScript, Java (JNA), Kotlin (JNA) and Dart bindings are thin FFI wrappers over the C SDK (`libnexusq`); build and install the C library first. The C#/.NET binding uses P/Invoke and the Swift binding links the C SDK through a Swift Package Manager system-library target, so both need the C library built and on the loader path as well.
 - The Python package is a native extension module built from `crates/nexusq-py` (PyO3).
-- Java and Kotlin are published on Maven Central:
+- Java and Kotlin 4.1.0 artifacts are already published on Maven Central. The remaining Maven refresh/republication task is pending PC access; do not interpret that pending update as meaning the existing artifacts are absent:
 
   ```xml
   <!-- Maven -->
