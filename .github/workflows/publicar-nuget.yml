@@ -10,19 +10,20 @@ on:
   workflow_run:
     workflows: ["NEXUS-Q Sequential CI Pipeline"]
     types: [completed]
+    branches: [main]
 permissions:
   contents: read
 
 jobs:
   sdk-runtime:
-    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     name: Build RID-specific RustCrypto SDK runtime assets
     uses: ./.github/workflows/sdk-runtime.yml
     permissions:
       contents: read
 
   publish:
-    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     needs: sdk-runtime
     permissions:
       contents: read
