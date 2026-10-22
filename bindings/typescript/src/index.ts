@@ -4,11 +4,9 @@
  * This is a thin FFI wrapper over the stable C SDK. It does not reimplement
  * cryptography or business logic; every operation delegates to libnexusq.
  *
- * The library is resolved from `NEXUSQ_LIBRARY` when set, otherwise the
- * system loader default (`nexusq`) is used. Build the C SDK first:
- *
- *   cargo build -p nexusq-c
- *   NEXUSQ_LIBRARY=target/debug/libnexusq.so node dist/smoke.js
+ * Published packages download and SHA-256-verify the version-matched native
+ * runtime during postinstall. `NEXUSQ_LIBRARY` remains an advanced override
+ * for source builds, custom libraries, and offline tests.
  */
 import koffi from "koffi";
 import path from "node:path";

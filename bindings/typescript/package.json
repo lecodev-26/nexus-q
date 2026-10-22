@@ -1,6 +1,6 @@
 {
   "name": "nexusq",
-  "version": "4.1.0",
+  "version": "4.1.1",
   "description": "Thin FFI bindings over the NEXUS-Q C SDK (libnexusq): post-quantum vault, version and error surface",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

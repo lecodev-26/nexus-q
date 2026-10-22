@@ -125,9 +125,9 @@ jobs:
           mkdir -p /tmp/nexusq-clean-consumer
           dotnet new console --framework net9.0 --output /tmp/nexusq-clean-consumer --no-restore
           printf 'Console.WriteLine(Nexusq.Version());\n' > /tmp/nexusq-clean-consumer/Program.cs
-          dotnet add /tmp/nexusq-clean-consumer/nexusq-clean-consumer.csproj package Nexusq --version 4.1.0 --source "$package_dir"
+          dotnet add /tmp/nexusq-clean-consumer/nexusq-clean-consumer.csproj package Nexusq --version 4.1.1 --source "$package_dir"
           actual=$(dotnet run --project /tmp/nexusq-clean-consumer/nexusq-clean-consumer.csproj)
-          test "$actual" = "4.1.0"
+          test "$actual" = "4.1.1"
 
   swift:
     name: Swift Package bindings
@@ -247,16 +247,14 @@ jobs:
         run: cargo build -p nexusq-c --locked --release
       - name: Validate Go runtime bootstrap helper
         run: bash -n bindings/go/scripts/with-runtime.sh
-      - name: Test Go SDK against packaged C ABI
+      - name: Test Go SDK against local C ABI override
         env:
-          CGO_CFLAGS: -I${{ github.workspace }}/crates/nexusq-c/include
-          CGO_LDFLAGS: -L${{ github.workspace }}/target/release -lnexusq
-          LD_LIBRARY_PATH: ${{ github.workspace }}/target/release
+          NEXUSQ_LIBRARY: ${{ github.workspace }}/target/release/libnexusq.so
         run: |
           cd bindings/go/nexusq
-          go test ./...
+          CGO_ENABLED=0 go test ./...
           cd ..
-          go run ./examples/smoke
+          CGO_ENABLED=0 go run ./examples/smoke
 
   ruby:
     name: Ruby FFI SDK
@@ -280,14 +278,14 @@ jobs:
         run: |
           set -euo pipefail
           gem build nexusq.gemspec
-          gem specification nexusq-4.1.0.gem --yaml > /tmp/nexusq-gem-spec.yml
-          grep -Fq 'version: 4.1.0' /tmp/nexusq-gem-spec.yml
+          gem specification nexusq-4.1.1.gem --yaml > /tmp/nexusq-gem-spec.yml
+          grep -Fq 'version: 4.1.1' /tmp/nexusq-gem-spec.yml
           grep -Fq -- '- MIT' /tmp/nexusq-gem-spec.yml
           grep -Fq -- '- Apache-2.0' /tmp/nexusq-gem-spec.yml
           grep -Fq -- '- lib/nexusq.rb' /tmp/nexusq-gem-spec.yml
           grep -Fq -- '- examples/smoke/smoke.rb' /tmp/nexusq-gem-spec.yml
           grep -Fq -- '- README.md' /tmp/nexusq-gem-spec.yml
-          rm -f nexusq-4.1.0.gem
+          rm -f nexusq-4.1.1.gem
 
   php:
     name: PHP FFI SDK
@@ -306,3 +304,28 @@ jobs:
         env:
           NEXUSQ_LIBRARY: ${{ github.workspace }}/target/release/libnexusq.so
         run: php bindings/php/smoke.php
+
+  runtime-download-smoke:
+    name: Clean first-use native runtime downloads (Go, Dart, TypeScript)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.x'
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: '3.13.6'
+      - name: Build default-provider C ABI runtime
+        run: cargo build -p nexusq-c --locked --release
+      - name: Install SDK development dependencies without release downloads
+        run: |
+          npm ci --prefix bindings/typescript --ignore-scripts
+          npm run build --prefix bindings/typescript
+          cd bindings/dart && dart pub get
+      - name: Test first-use download, checksum validation, cache, and crypto smoke
+        run: scripts/test-sdk-runtime-downloads.sh

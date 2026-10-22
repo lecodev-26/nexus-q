@@ -10,7 +10,7 @@ The shipped bindings wrap the same Rust core and do not reimplement cryptography
 | C | C ABI | vault/version and provider metadata |
 | C++ | header-only C ABI wrapper | vault/version and provider metadata |
 | Python | PyO3 | version and limited vault surface |
-| Go | cgo over the C SDK | vault/version surface |
+| Go | pure-Go dynamic loader over the C ABI | vault/version surface; verified runtime download on first use |
 | PHP | FFI over the C SDK | vault/version surface |
 | Ruby | FFI over the C SDK | vault/version surface |
 | TypeScript / Node.js | koffi FFI over the C SDK | vault/version surface |
@@ -18,7 +18,7 @@ The shipped bindings wrap the same Rust core and do not reimplement cryptography
 | Kotlin | JNA over the C SDK | vault/version surface |
 | C# / .NET | P/Invoke over the C SDK | vault/version surface |
 | Swift | SwiftPM wrapper with verified runtime `dlopen` | vault/version surface |
-| Dart | dart:ffi over the C SDK | vault/version surface |
+| Dart | dart:ffi over the C ABI | vault/version surface; verified runtime download on first use |
 
 See each binding's README for its exact current API and toolchain requirements.
 

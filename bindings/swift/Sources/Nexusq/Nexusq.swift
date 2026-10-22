@@ -87,7 +87,7 @@ public enum Nexusq {
 /// library installation. The downloaded binary is version-matched and verified
 /// against the release SHA-256 manifest before dlopen.
 private enum NativeRuntime {
-    private static let runtimeVersion = "4.1.0"
+    private static let runtimeVersion = "4.1.1"
     private static let assetName = "nexusq-sdk-runtime-macos-arm64.dylib"
     private static let localName = "libnexusq.dylib"
 

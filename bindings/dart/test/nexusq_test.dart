@@ -5,7 +5,7 @@ import 'package:test/test.dart';
 
 void main() {
   test('version is reported', () {
-    expect(version(), startsWith('4.1.0'));
+    expect(version(), startsWith('4.1.1'));
   });
 
   test('backend metadata is consistent', () {

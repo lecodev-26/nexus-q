@@ -1,16 +1,14 @@
-# NEXUS-Q v4.1.0 Stable Line Release
+# NEXUS-Q v4.1.1 Stable Line Release
 
 ## Release identity
 
-- Version: 4.1.0
-- Git tag: v4.1.0
-- Release branch: `main` (after PR [#55](https://github.com/lecodev-26/nexus-q/pull/55) is merged)
-- Release type: stable line release of the V4 work, ready for the final independent audit
-- Public GitHub release: published by the tag-gated `v4-release.yml` path after the full release gate passes
+- Version: 4.1.1
+- Git tag: v4.1.1
+- Release branch: `main` (after the 4.1.1 development branch has passed review and is merged)
+- Release type: proposed 4.1.1 candidate; not yet released
+- Public GitHub release: not published; the release workflow remains a gated/manual operation
 
-The v4.1.0 release is produced from `main` after the PR #55 review gates are
-green and the two four-hour fuzz soaks have been executed and confirmed green
-on the exact merged SHA. The release gate re-runs correctness, security-sensitive
+The v4.1.1 release candidate is prepared on `work/4.1.1-development`. A release may be produced from `main` only after branch CI is green, review is complete, and the required fuzz soaks have been executed and confirmed green on the exact merged SHA. This document describes the intended release contract, not evidence that those remote gates have already passed. The release gate re-runs correctness, security-sensitive
 regression, build and packaging checks from the final version.
 
 ## What this release contains
@@ -31,7 +29,7 @@ regression, build and packaging checks from the final version.
 
 The release is eligible for publication only when:
 
-1. Every NEXUS-Q workspace package resolves to 4.1.0.
+1. Every NEXUS-Q workspace package and versioned SDK manifest resolves to 4.1.1; Cargo.lock is consistent with the workspace.
 2. Formatting, locked checks, Clippy with -D warnings, debug tests and release
    tests pass.
 3. C, Python, CLI and server smoke tests pass.
@@ -40,16 +38,17 @@ The release is eligible for publication only when:
    from the same runner/build output.
 6. SHA-256 checksums, a CycloneDX 1.5 SBOM and machine-readable provenance
    are emitted as release evidence.
-7. The public `v4.1.0` tag path generates a GitHub build-provenance attestation
-   for the release archive.
+7. The release tag path generates a GitHub build-provenance attestation for the release archive. **Tag blocker:** a remote bare `4.1.1` tag already exists for an earlier Swift Package Manager commit. Do not move or overwrite it. The owner must resolve the semantic-version/tag collision before cutting or pushing a new 4.1.1 release tag; a new `v4.1.1` tag alone may leave SwiftPM resolving the old `4.1.1` tag.
 8. The GitHub Release is created only after the complete gate is green.
 
-## Pre-tag requirements (before cutting v4.1.0)
+## Pre-tag requirements (before cutting v4.1.1)
 
-1. PR #55 merged into `main`.
-2. The two four-hour fuzz soaks (vault parser, envelope parser) executed and
-   confirmed green on the exact merged SHA.
-3. Post-merge `main` CI green.
+1. The 4.1.1 branch review is complete and the branch is merged into `main`.
+2. Required multi-hour fuzz soaks (vault parser, envelope parser) are executed and confirmed green on the exact merged SHA.
+3. Post-merge `main` CI is green.
+4. All release artifacts and native runtime checksums are generated and verified for 4.1.1.
+5. Resolve the existing remote `4.1.1` SwiftPM tag collision without rewriting a published tag.
+6. The owner explicitly authorizes tag push and publication; preparing this branch alone does not publish anything.
 
 ## Publication boundary
 

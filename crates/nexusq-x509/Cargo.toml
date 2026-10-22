@@ -1,6 +1,6 @@
 [package]
 name = "nexusq-x509"
-version = "4.1.0"
+version = "4.1.1"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -9,7 +9,7 @@ description = "RFC 5280 X.509 certificate issuance with post-quantum signatures 
 exclude = ["interop/**"]
 
 [dependencies]
-ml_dsa = { package = "nexusq-ml-dsa", path = "../nexusq-ml-dsa", version = "4.1.0", features = ["pkcs8", "getrandom", "zeroize"] }
+ml_dsa = { package = "nexusq-ml-dsa", path = "../nexusq-ml-dsa", version = "4.1.1", features = ["pkcs8", "getrandom", "zeroize"] }
 slh_dsa = { package = "slh-dsa", version = "0.2.0-rc.5" }
 ed25519-dalek = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }

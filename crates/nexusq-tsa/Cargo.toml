@@ -11,7 +11,7 @@ description = "RFC 3161 timestamp authority with ML-DSA post-quantum signatures"
 cms = { version = "0.3.0-rc.0", features = ["builder"] }
 const-oid = { version = "0.10", features = ["db"] }
 der = { version = "0.8", features = ["std", "pem"] }
-ml-dsa = { package = "nexusq-ml-dsa", path = "../nexusq-ml-dsa", version = "4.1.0", features = ["pkcs8", "getrandom", "zeroize", "nexusq-kernels"] }
+ml-dsa = { package = "nexusq-ml-dsa", path = "../nexusq-ml-dsa", version = "4.1.1", features = ["pkcs8", "getrandom", "zeroize", "nexusq-kernels"] }
 sha2 = { workspace = true }
 signature = "3"
 spki = "0.8"

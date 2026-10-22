@@ -12,7 +12,7 @@
 
 </div>
 
-> **Current project status (2026-10-21):** the repository is on the **4.1.0 stable line**. Recent mainline work includes [PR #72](https://github.com/lecodev-26/nexus-q/pull/72) (merged): the Issue #23 matched-RNG benchmark diagnostic, configurable median/p95 ratio checks, regression tests and owner-approved near-parity closure criteria; and [PR #74](https://github.com/lecodev-26/nexus-q/pull/74) (merged): the unified `publicar.sh` SDK publisher, publishing documentation, Maven Central Java/Kotlin packaging/signing setup, and removal of duplicate registry-specific publishing workflows. [PR #63](https://github.com/lecodev-26/nexus-q/pull/63) integrated PQC backend metadata and runtime-aware packaging across SDKs. The Arena schema/metadata fixes and CIRCL dependency pinning are also in `main`. Issue #23's owner-approved local result passes both median and p95 against the best eligible comparator in 6/9 operations; the remaining three deltas are explicitly accepted and documented in [`docs/performance/ISSUE_23_FINAL_GATE_AUDIT_2026-10-21.md`](docs/performance/ISSUE_23_FINAL_GATE_AUDIT_2026-10-21.md). This is local diagnostic evidence, not a hosted-runner result for the strict 1.00× target. The official native production-path gate remains the 1.5× median-and-p95 gate. **The native backend remains experimental and opt-in**: RustCrypto remains the default production path for the core, CLI and SDKs. No independent audit, FIPS 140-3 validation, certification or production-readiness claim is made. Release channel status: crates.io, PyPI, npm, RubyGems, Maven Central (existing Java/Kotlin 4.1.0 artifacts), Packagist, Go/pkg.go.dev, Swift Package Manager and pub.dev (`nexusq` 4.1.0) have published packages. NuGet's OIDC publishing workflow is configured but its post-CI run still needs a successful end-to-end verification. The Maven Central 4.1.0 artifacts already exist; the remaining Maven package refresh/republication work is deferred until the PC is available. See Installation below.
+> **Current project status (2026-10-22):** the local `work/4.1.1-development` branch is preparing the **NexusQ 4.1.1 release candidate**. Issues #64–#71 have implementation commits in this branch, and the Rust workspace and lockfile now resolve at 4.1.1 locally. This is not yet a merged or published release: branch CI, the required multi-hour fuzz soaks, post-merge CI, and final release artifact checks still need to pass. The previously published 4.1.0 packages and tags remain unchanged until an explicitly authorized release. A remote bare `4.1.1` tag already points to an older Swift Package Manager commit, so the 4.1.1 release tag collision must be resolved before release; that tag will not be overwritten. The native ML-KEM/ML-DSA backend remains experimental and opt-in; RustCrypto remains the default production path. No independent external audit, FIPS 140-3 validation, certification, or production-readiness claim is made. NuGet's OIDC workflow still requires successful end-to-end verification. See [`docs/V4_RELEASE.md`](docs/V4_RELEASE.md) and [`docs/NATIVE_RUNTIME_PACKAGING.md`](docs/NATIVE_RUNTIME_PACKAGING.md).
 
 <div align="center">
 
@@ -236,7 +236,8 @@ These are single-runner CI measurements on an AMD EPYC 7763 hosted runner, not u
 | V2 | [`v2.0.0`](https://github.com/lecodev-26/nexus-q/releases/tag/v2.0.0) · `nexusqv2` | Security/correctness engineering line | Frozen |
 | V3 | [`v3-engineering-2026-10-09`](https://github.com/lecodev-26/nexus-q/releases/tag/v3-engineering-2026-10-09) · `nexusqv3` | Hardened implementation and benchmark evidence | Engineering release |
 | V4 | [`v4-engineering-2026-10-16`](https://github.com/lecodev-26/nexus-q/tree/v4-engineering-2026-10-16) · `nexusqv4` | Experimental native backend and performance work | Engineering snapshot (pre-release) |
-| V4.1 | [`v4.1.0`](https://github.com/lecodev-26/nexus-q/releases/tag/v4.1.0) · `main` | Stable line release: opt-in native-backend production-path wiring | **Current stable line; independent external audit remains pending (Phase 21)** |
+| V4.1.1 | local `work/4.1.1-development` | Release candidate with issues #64–#71 implemented; CI and release gates pending | **Not merged or published; independent external audit remains open** |
+| V4.1 | [`v4.1.0`](https://github.com/lecodev-26/nexus-q/releases/tag/v4.1.0) · `main` | Previous stable line release: opt-in native-backend production-path wiring | Historical release; independent external audit remains pending (Phase 21) |
 
 <details>
 <summary><b>V3 engineering release and V4 snapshot</b></summary>
@@ -292,7 +293,7 @@ The generated archive contains the CLI, server, non-secret configuration example
 
 ## Installation
 
-The 4.1.0 stable line has packages published across the registries listed below. NuGet is pending successful end-to-end verification of its OIDC publishing workflow. Existing Maven Central 4.1.0 Java/Kotlin artifacts are published; the remaining Maven package refresh/republication work is deferred until the PC is available. Dart/Flutter 4.1.0 is live on pub.dev.
+The local 4.1.1 candidate is not published yet. The install commands and registry versions below describe the currently published 4.1.0 packages until the 4.1.1 release is explicitly authorized and completed. NuGet still requires successful end-to-end verification of its OIDC publishing workflow.
 
 | Channel | Install | Status |
 |---|---|---|
@@ -316,7 +317,7 @@ The 4.1.0 stable line has packages published across the registries listed below.
 
 Notes:
 
-- The Go, PHP, Ruby, TypeScript, Java (JNA), Kotlin (JNA) and Dart bindings are thin FFI wrappers over the C SDK (`libnexusq`); build and install the C library first. The C#/.NET binding uses P/Invoke and the Swift binding links the C SDK through a Swift Package Manager system-library target, so both need the C library built and on the loader path as well.
+- Several SDKs are thin FFI/P/Invoke wrappers over the stable C ABI (`libnexusq`). The 4.1.1 candidate adds version-matched runtime download/resolution for supported targets in the SDKs documented in [`docs/NATIVE_RUNTIME_PACKAGING.md`](docs/NATIVE_RUNTIME_PACKAGING.md); Go and Dart currently use explicit runtime helpers, and .NET relies on native assets included in the NuGet package. Do not assume every platform is supported or that every package has the same first-run behavior; the candidate remains subject to clean-consumer CI.
 - The Python package is a native extension module built from `crates/nexusq-py` (PyO3).
 - Java and Kotlin 4.1.0 artifacts are already published on Maven Central. The remaining Maven refresh/republication task is pending PC access; do not interpret that pending update as meaning the existing artifacts are absent:
 

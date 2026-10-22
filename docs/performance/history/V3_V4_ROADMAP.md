@@ -13,8 +13,8 @@ Updated: 2026-10-12
 
 ## Evidence and artifacts
 
-- [`../artifact-archive/README.md`](../artifact-archive/README.md) indexes the archived artifacts, their provenance, checksums and limitations.
-- [`../artifact-archive/research-results/issue-41-v1-v3-latency-root-cause.md`](../artifact-archive/research-results/issue-41-v1-v3-latency-root-cause.md) documents the V1/V3 paired benchmark observations and separates supported findings from unproven causal explanations.
+- [`../../../artifact-archive/README.md`](../../../artifact-archive/README.md) indexes the archived artifacts, their provenance, checksums and limitations.
+- [`../../../artifact-archive/research-results/issue-41-v1-v3-latency-root-cause.md`](../../../artifact-archive/research-results/issue-41-v1-v3-latency-root-cause.md) documents the V1/V3 paired benchmark observations and separates supported findings from unproven causal explanations.
 - The archive includes raw JSONL and environment metadata from Arena run [37918298351](https://github.com/lecodev-26/nexus-q/actions/runs/37918298351) and security-gate artifacts from run [37918321901](https://github.com/lecodev-26/nexus-q/actions/runs/37918321901), plus earlier recovered ZIP snapshots. It is not a claim that every historical Actions artifact has been recovered.
 
 ## V3 closure record

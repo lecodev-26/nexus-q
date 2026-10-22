@@ -1,6 +1,6 @@
 # Installation
 
-NEXUS-Q can be installed from the language package registries (4.1.0 stable line) or built from source.
+NEXUS-Q can be installed from the language package registries (the published release line is 4.1.0; the local 4.1.1 candidate is not yet published) or built from this source branch.
 
 ## From package registries
 
@@ -12,17 +12,17 @@ NEXUS-Q can be installed from the language package registries (4.1.0 stable line
 | Rust server | `cargo install nexusq-server` | Available — crates.io |
 | C / C++ SDK | `cargo cinstall -p nexusq-c` (requires [cargo-c](https://github.com/lu-zero/cargo-c)), or build the C library from source | Available — crates.io |
 | Python | `pip install nexusq` | Available — PyPI |
-| TypeScript / Node.js | `npm install nexusq` | Pending first npm publication — binding verified locally and wired into SDK CI (`bindings/typescript`) |
-| Java | dependency `io.github.lecodev-26:nexusq` | Pending first Maven Central publication — binding verified locally and wired into SDK CI (`bindings/java`) |
-| Kotlin | artifact `io.github.lecodev-26:nexusq-kotlin` | Pending first Maven Central publication — binding verified locally and wired into SDK CI (`bindings/kotlin`) |
-| C# / .NET | `dotnet add package Nexusq` | Pending first NuGet publication — binding verified locally and wired into SDK CI (`bindings/dotnet`) |
-| Swift | Swift Package Manager package at this repository (`bindings/swift`) | Pending first tagged release — binding verified locally and wired into SDK CI (`bindings/swift`) |
-| Dart / Flutter | `dart pub add nexusq` | Pending first pub.dev publication — binding verified locally and wired into SDK CI (`bindings/dart`) |
+| TypeScript / Node.js | `npm install nexusq` | Published 4.1.0; 4.1.1 candidate pending release |
+| Java | `io.github.lecodev-26:nexusq:4.1.0` | Published on Maven Central; 4.1.1 candidate pending release |
+| Kotlin | `io.github.lecodev-26:nexusq-kotlin:4.1.0` | Published on Maven Central; 4.1.1 candidate pending release |
+| C# / .NET | `dotnet add package Nexusq` | NuGet OIDC configured; end-to-end publication still pending |
+| Swift | Swift Package Manager package at this repository (`bindings/swift`) | Tag `4.1.1` exists for the earlier SPM package; do not overwrite it for this candidate |
+| Dart / Flutter | `dart pub add nexusq` | Published 4.1.0 on pub.dev; 4.1.1 candidate pending release |
 | Go | `go get github.com/lecodev-26/nexus-q/bindings/go/nexusq` | Available — pkg.go.dev |
 | PHP | `composer require lecodev-26/nexusq` | Available — Packagist |
 | Ruby | `gem install nexusq` | Available — RubyGems.org |
 
-The Go, PHP and Ruby bindings are thin FFI wrappers over the C SDK (`libnexusq`). Ruby and PHP fetch and verify the matching release runtime on first use; Go uses `bindings/go/scripts/with-runtime.sh` to obtain the header/library and set cgo flags for the command. The `nexusq` metacrate groups the published Rust library crates (`nexusq-core`, `nexusq-kernels`, `nexusq-ml-kem`, `nexusq-ml-dsa`) so a single `cargo add nexusq` pulls them all in; prefer individual crates for a minimal dependency tree. The Python package is a self-contained PyO3 native extension. The GitHub release includes the CLI/server package and separate versioned C ABI runtime archives/assets.
+The Go, PHP, Ruby, TypeScript, Java, Kotlin and Dart SDKs resolve or download a version-matched runtime on supported targets; downloads verify SHA-256. Go uses a pure-Go loader and does not require cgo. Dart uses `curl` for its synchronous first-use download. `NEXUSQ_LIBRARY` remains an advanced override for development and offline tests. The `nexusq` metacrate groups the published Rust library crates (`nexusq-core`, `nexusq-kernels`, `nexusq-ml-kem`, `nexusq-ml-dsa`) so a single `cargo add nexusq` pulls them all in; prefer individual crates for a minimal dependency tree. The Python package is a self-contained PyO3 native extension. The GitHub release includes the CLI/server package and separate versioned C ABI runtime archives/assets.
 
 ## From source
 
@@ -71,7 +71,7 @@ Before starting the server:
 5. Keep the server bound to loopback unless a trusted TLS termination layer is present.
 6. Configure a supervisor to allow graceful SIGTERM/SIGINT shutdown.
 
-Docker, systemd, .deb, .rpm, and registry publication are not required by the current deployment boundary. For the registry installation channels of the 4.1.0 line see the table above; their availability does not change the deployment boundary or imply any validation claim.
+Docker, systemd, .deb, .rpm, and registry publication are not required by the current deployment boundary. For registry installation channels, see the table above; it describes the published 4.1.0 packages until the 4.1.1 candidate is released; their availability does not change the deployment boundary or imply any validation claim.
 
 
 The reproducible GitHub release includes versioned C ABI runtime archives and
@@ -80,5 +80,4 @@ direct per-platform assets, each with `include/nexusq.h` and the matching librar
 SDK artifacts use the default RustCrypto provider. The separate native-backend
 CI artifacts are experimental and are not substituted into ordinary SDK packages.
 See [native runtime packaging](../NATIVE_RUNTIME_PACKAGING.md) for exact targets,
-ABI/libc limits, download behavior, and the SDKs that still require a wrapper or
-manual linker setup.
+ABI/libc limits, download behavior, and remaining platform limitations.

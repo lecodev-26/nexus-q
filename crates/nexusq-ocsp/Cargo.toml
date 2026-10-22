@@ -16,7 +16,7 @@ signature = "3"
 spki = "0.8"
 x509-cert = { version = "0.3.0", features = ["std", "pem", "builder", "signature"] }
 nexusq-ml-dsa = { workspace = true, features = ["pkcs8", "getrandom", "zeroize"] }
-nexusq-ha = { path = "../nexusq-ha", version = "4.1.0" }
+nexusq-ha = { path = "../nexusq-ha", version = "4.1.1" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

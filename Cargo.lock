@@ -1544,17 +1544,17 @@ dependencies = [
 
 [[package]]
 name = "nexusq"
-version = "4.1.0"
+version = "4.1.1"
 dependencies = [
  "nexusq-core",
  "nexusq-kernels",
- "nexusq-ml-dsa 4.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "nexusq-ml-kem 4.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "nexusq-ml-dsa",
+ "nexusq-ml-kem",
 ]
 
 [[package]]
 name = "nexusq-admin"
-version = "4.1.0"
+version = "4.1.1"
 dependencies = [
  "argon2",
  "chacha20poly1305",
@@ -1572,7 +1572,7 @@ dependencies = [
 
 [[package]]
 name = "nexusq-c"
-version = "4.1.0"
+version = "4.1.1"
 dependencies = [
  "nexusq-core",
  "tempfile",
@@ -1580,7 +1580,7 @@ dependencies = [
 
 [[package]]
 name = "nexusq-cli"
-version = "4.1.0"
+version = "4.1.1"
 dependencies = [
  "clap",
  "hex",
@@ -1594,7 +1594,7 @@ dependencies = [
 
 [[package]]
 name = "nexusq-core"
-version = "4.1.0"
+version = "4.1.1"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -1609,8 +1609,8 @@ dependencies = [
  "hkdf",
  "hmac",
  "hybrid-array",
- "nexusq-ml-dsa 4.1.0",
- "nexusq-ml-kem 4.1.0",
+ "nexusq-ml-dsa",
+ "nexusq-ml-kem",
  "nexusq-native-backend",
  "proptest",
  "rand_core 0.9.5",
@@ -1629,7 +1629,7 @@ dependencies = [
 
 [[package]]
 name = "nexusq-enrollment"
-version = "4.1.0"
+version = "4.1.1"
 dependencies = [
  "async-trait",
  "axum",
@@ -1642,7 +1642,7 @@ dependencies = [
  "http-body-util",
  "josekit",
  "nexusq-ha",
- "nexusq-ml-dsa 4.1.0",
+ "nexusq-ml-dsa",
  "nexusq-x509",
  "rand 0.10.3",
  "serde",
@@ -1661,7 +1661,7 @@ dependencies = [
 
 [[package]]
 name = "nexusq-ha"
-version = "4.1.0"
+version = "4.1.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -1672,14 +1672,14 @@ dependencies = [
 
 [[package]]
 name = "nexusq-hsm"
-version = "4.1.0"
+version = "4.1.1"
 dependencies = [
  "cryptoki",
  "der",
  "ed25519-dalek",
  "getrandom 0.3.4",
  "nexusq-enrollment",
- "nexusq-ml-dsa 4.1.0",
+ "nexusq-ml-dsa",
  "nexusq-x509",
  "rand_core 0.9.5",
  "serde",
@@ -1693,7 +1693,7 @@ dependencies = [
 
 [[package]]
 name = "nexusq-kernels"
-version = "4.1.0"
+version = "4.1.1"
 dependencies = [
  "hybrid-array",
  "module-lattice",
@@ -1701,7 +1701,7 @@ dependencies = [
 
 [[package]]
 name = "nexusq-ml-dsa"
-version = "4.1.0"
+version = "4.1.1"
 dependencies = [
  "const-oid",
  "criterion",
@@ -1723,24 +1723,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "nexusq-ml-dsa"
-version = "4.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3b4b73cc7ca2f51b56f2608758e66f95ca9f89cea406c7f7d2b10d55a1ef3d9"
-dependencies = [
- "const-oid",
- "crypto-common",
- "ctutils",
- "hybrid-array",
- "module-lattice",
- "pkcs8",
- "shake",
- "signature",
-]
-
-[[package]]
 name = "nexusq-ml-kem"
-version = "4.1.0"
+version = "4.1.1"
 dependencies = [
  "const-oid",
  "criterion",
@@ -1761,20 +1745,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nexusq-ml-kem"
-version = "4.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77427f1a05f6e9a035022d3c1b17588050615bac978dbdd0e5809e70a402e2a1"
-dependencies = [
- "hybrid-array",
- "kem",
- "module-lattice",
- "pkcs8",
- "rand_core 0.10.1",
- "sha3",
-]
-
-[[package]]
 name = "nexusq-native-backend"
 version = "0.1.0"
 dependencies = [
@@ -1785,14 +1755,14 @@ dependencies = [
 
 [[package]]
 name = "nexusq-ocsp"
-version = "4.1.0"
+version = "4.1.1"
 dependencies = [
  "axum",
  "const-oid",
  "der",
  "http-body-util",
  "nexusq-ha",
- "nexusq-ml-dsa 4.1.0",
+ "nexusq-ml-dsa",
  "rand 0.10.3",
  "serde",
  "serde_json",
@@ -1809,7 +1779,7 @@ dependencies = [
 
 [[package]]
 name = "nexusq-pki-cluster"
-version = "4.1.0"
+version = "4.1.1"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -1817,7 +1787,7 @@ dependencies = [
  "nexusq-admin",
  "nexusq-enrollment",
  "nexusq-ha",
- "nexusq-ml-dsa 4.1.0",
+ "nexusq-ml-dsa",
  "nexusq-ocsp",
  "rand 0.10.3",
  "reqwest",
@@ -1835,7 +1805,7 @@ dependencies = [
 
 [[package]]
 name = "nexusq-py"
-version = "4.1.0"
+version = "4.1.1"
 dependencies = [
  "nexusq-core",
  "pyo3",
@@ -1844,7 +1814,7 @@ dependencies = [
 
 [[package]]
 name = "nexusq-server"
-version = "4.1.0"
+version = "4.1.1"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -1862,12 +1832,12 @@ dependencies = [
 
 [[package]]
 name = "nexusq-tsa"
-version = "4.1.0"
+version = "4.1.1"
 dependencies = [
  "cms",
  "const-oid",
  "der",
- "nexusq-ml-dsa 4.1.0",
+ "nexusq-ml-dsa",
  "rand 0.10.3",
  "sha2",
  "signature",
@@ -1878,12 +1848,12 @@ dependencies = [
 
 [[package]]
 name = "nexusq-x509"
-version = "4.1.0"
+version = "4.1.1"
 dependencies = [
  "const-oid",
  "der",
  "ed25519-dalek",
- "nexusq-ml-dsa 4.1.0",
+ "nexusq-ml-dsa",
  "rand 0.10.3",
  "sha2",
  "signature",

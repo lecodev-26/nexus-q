@@ -2,7 +2,7 @@
 # Download and verify the version-matched default RustCrypto runtime, then run
 # a Dart command with NEXUSQ_LIBRARY set for this process.
 set -euo pipefail
-VERSION="4.1.0"
+VERSION="4.1.1"
 OS="$(uname -s)"
 ARCH="$(uname -m)"
 case "$OS/$ARCH" in

@@ -46,19 +46,19 @@ escape hatch, not the standard installation flow.
   the library without `NEXUSQ_LIBRARY`.
 - **Swift:** macOS ARM64 uses runtime `dlopen` and downloads/verifies the matching
   runtime on first use, without a compile-time system-library dependency.
-- **Go:** `bindings/go/scripts/with-runtime.sh` downloads the matching archive,
-  verifies both the release-asset and in-archive checksums, validates that the
-  provider is RustCrypto, and supplies cgo/linker variables for Linux x64/ARM64
-  glibc and macOS ARM64. Go/cgo still needs that wrapper around build/test/run;
-  plain `go get` does not execute package install hooks, so fully transparent
-  acquisition remains open.
+- **Go:** the 4.1.1 candidate uses a pure-Go dynamic loader. First use downloads
+  the matching direct runtime asset, verifies SHA-256, checks the loaded provider
+  is the default RustCrypto provider, and caches it per user/version. This avoids
+  cgo and a C compiler. The legacy `with-runtime.sh` remains an advanced source-
+  checkout helper; normal use should not require it. Clean-consumer verification
+  must pass in CI before release.
 - **C/C++:** versioned release archives contain the library and public header;
   consumers still need the ecosystem's normal linker/runtime configuration.
-- **Dart:** `bindings/dart/scripts/with-runtime.sh` downloads and verifies the
-  matching runtime for Linux x64/ARM64 glibc and macOS ARM64, then runs a Dart
-  command with `NEXUSQ_LIBRARY` configured. Dart's current package setup has no
-  install hook, so the wrapper is required unless a compatible library is
-  installed separately.
+- **Dart:** the 4.1.1 candidate resolves the runtime on first use for Linux
+  x64/ARM64 glibc, macOS ARM64, and Windows x64. It downloads the version-matched
+  direct asset via `curl`, verifies SHA-256, and caches it per user/version.
+  `NEXUSQ_LIBRARY` remains an advanced override. Clean-consumer tests still need
+  to verify this flow against a locally served release fixture before publication.
 
 ## Release procedure
 
