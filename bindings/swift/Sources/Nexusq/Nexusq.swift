@@ -136,7 +136,14 @@ private enum NativeRuntime {
             return library.path
         }
 
-        let base = URL(string: "https://github.com/lecodev-26/nexus-q/releases/download/v\(runtimeVersion)/")!
+        let configuredBase = ProcessInfo.processInfo.environment["NEXUSQ_RUNTIME_BASE_URL"]
+            ?? "https://github.com/lecodev-26/nexus-q/releases/download/v\(runtimeVersion)/"
+        let baseString = configuredBase.hasSuffix("/") ? configuredBase : configuredBase + "/"
+        guard let base = URL(string: baseString),
+              let scheme = base.scheme?.lowercased(),
+              scheme == "https" || (scheme == "http" && ["localhost", "127.0.0.1", "::1"].contains(base.host?.lowercased() ?? "")) else {
+            throw RuntimeError("NEXUSQ_RUNTIME_BASE_URL must use HTTPS (HTTP is allowed only for loopback CI fixtures)")
+        }
         let checksums = try download(base.appendingPathComponent("NATIVE-RUNTIME-SHA256SUMS"))
         let checksumText = String(decoding: checksums, as: UTF8.self)
         guard let line = checksumText.split(separator: "\n").first(where: { String($0).trimmingCharacters(in: .whitespaces).hasSuffix("  \(assetName)") }),

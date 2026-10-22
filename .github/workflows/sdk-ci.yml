@@ -130,21 +130,54 @@ jobs:
           test "$actual" = "4.1.1"
 
   swift:
-    name: Swift Package bindings
+    name: Swift Package bindings (macOS ARM64)
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Build C SDK
+      - name: Build C SDK runtime
         run: cargo build -p nexusq-c --locked --release
-      - name: Build and test Swift package
+      - name: Validate repository-root Swift package manifest and tests
         env:
           NEXUSQ_LIBRARY: ${{ github.workspace }}/target/release/libnexusq.dylib
         run: |
+          set -euo pipefail
+          swift package dump-package >/dev/null
+          swift test
+      - name: Build, test and smoke-test the Swift binding against local runtime
+        env:
+          NEXUSQ_LIBRARY: ${{ github.workspace }}/target/release/libnexusq.dylib
+        run: |
+          set -euo pipefail
           cd bindings/swift
+          swift package resolve
           swift build
           swift test
           swift run Smoke
+      - name: Verify automatic runtime download in a clean consumer environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture="$RUNNER_TEMP/nexusq-swift-runtime-fixture"
+          clean_home="$RUNNER_TEMP/nexusq-swift-clean-home"
+          mkdir -p "$fixture" "$clean_home"
+          cp target/release/libnexusq.dylib "$fixture/nexusq-sdk-runtime-macos-arm64.dylib"
+          (cd "$fixture" && shasum -a 256 nexusq-sdk-runtime-macos-arm64.dylib > NATIVE-RUNTIME-SHA256SUMS)
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory "$fixture" > "$RUNNER_TEMP/nexusq-swift-http.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8765/NATIVE-RUNTIME-SHA256SUMS >/dev/null; then break; fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:8765/NATIVE-RUNTIME-SHA256SUMS >/dev/null
+          cd bindings/swift
+          env -u NEXUSQ_LIBRARY \
+            NEXUSQ_RUNTIME_BASE_URL=http://127.0.0.1:8765/ \
+            HOME="$clean_home" \
+            .build/debug/Smoke
+          test -f "$clean_home/.cache/nexusq/4.1.1/nexusq-sdk-runtime-macos-arm64.dylib/libnexusq.dylib"
+          test -f "$clean_home/.cache/nexusq/4.1.1/nexusq-sdk-runtime-macos-arm64.dylib/libnexusq.dylib.sha256"
 
   dart:
     name: Dart FFI bindings

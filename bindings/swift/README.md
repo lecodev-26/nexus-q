@@ -1,9 +1,8 @@
 # NEXUS-Q Swift SDK
 
 Swift bindings for NEXUS-Q. A thin wrapper over the
-[C SDK](../../crates/nexusq-c) exposed through Swift Package Manager's
-`CNexusq` system-library target. It does not reimplement anything: every
-call goes through `libnexusq`.
+[C SDK](../../crates/nexusq-c) through a version-matched dynamic runtime.
+It does not reimplement anything: every call goes through `libnexusq`.
 
 ## Requirements
 
