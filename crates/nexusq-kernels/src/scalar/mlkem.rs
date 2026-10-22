@@ -475,7 +475,7 @@ mod tests {
         // Candidates: 1, 2, 3328, 3329, 4095, 0.
         let candidates = [1_u16, 2, 3328, 3329, 4095, 0];
         let mut bytes = Vec::new();
-        for pair in candidates.chunks_exact(2) {
+        for pair in candidates.as_chunks::<2>().0 {
             bytes.push(pair[0] as u8);
             bytes.push(((pair[0] >> 8) as u8) | ((pair[1] as u8) << 4));
             bytes.push((pair[1] >> 4) as u8);
