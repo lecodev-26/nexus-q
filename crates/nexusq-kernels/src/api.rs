@@ -71,7 +71,7 @@ impl ShakeX4 {
             // Most callers absorb complete byte strings into an empty sponge.
             // XOR complete little-endian lanes at once instead of performing
             // eight shifts and four per-byte updates for every 64-bit word.
-            if self.absorb_position % 8 == 0
+            if self.absorb_position.is_multiple_of(8)
                 && len - position >= 8
                 && self.absorb_position + 8 <= self.rate
             {
@@ -139,7 +139,7 @@ impl ShakeX4 {
             // Emit complete little-endian words in one operation. Sampling
             // callers usually request long, equal-sized streams, so this
             // avoids repeating lane/shift arithmetic for every output byte.
-            if self.squeeze_position % 8 == 0
+            if self.squeeze_position.is_multiple_of(8)
                 && len - position >= 8
                 && self.squeeze_position + 8 <= self.rate
             {

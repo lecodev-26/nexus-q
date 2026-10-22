@@ -307,7 +307,9 @@ pub fn rejection_sample(input: &[u8]) -> Vec<i16> {
         "input must contain complete 3-byte groups"
     );
     let mut out = Vec::with_capacity(input.len() / 3 * 2);
-    for chunk in input.chunks_exact(3) {
+    let (chunks, remainder) = input.as_chunks::<3>();
+    debug_assert!(remainder.is_empty());
+    for chunk in chunks {
         let first = u16::from(chunk[0]) | (u16::from(chunk[1] & 0x0f) << 8);
         let second = u16::from(chunk[1] >> 4) | (u16::from(chunk[2]) << 4);
         if first < Q as u16 {
