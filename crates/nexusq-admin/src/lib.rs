@@ -783,7 +783,13 @@ impl BackupManager {
         OsRng
             .try_fill_bytes(&mut random)
             .map_err(|_| AdminError::Randomness)?;
-        let random_hex: String = random.iter().map(|byte| format!("{byte:02x}")).collect();
+        let random_hex = random.iter().fold(
+            String::with_capacity(random.len() * 2),
+            |mut output, byte| {
+                let _ = std::fmt::Write::write_fmt(&mut output, format_args!("{byte:02x}"));
+                output
+            },
+        );
         let backup_id = format!("backup-{timestamp}-{random_hex}.nqab");
         let path = directory.join(&backup_id);
         export_encrypted_snapshot(snapshot, tenant, &path, passphrase)?;
@@ -897,7 +903,13 @@ impl BackupManager {
 
     fn tenant_directory(&self, tenant: &TenantId) -> PathBuf {
         let digest = Sha256::digest(tenant.as_str().as_bytes());
-        let name: String = digest.iter().map(|byte| format!("{byte:02x}")).collect();
+        let name = digest.iter().fold(
+            String::with_capacity(digest.len() * 2),
+            |mut output, byte| {
+                let _ = std::fmt::Write::write_fmt(&mut output, format_args!("{byte:02x}"));
+                output
+            },
+        );
         self.root.join(name)
     }
 }

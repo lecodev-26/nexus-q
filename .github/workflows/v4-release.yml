@@ -161,6 +161,15 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.85.1
+      - name: Install OpenSSL for Windows release build
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $vcpkg = $env:VCPKG_INSTALLATION_ROOT
+          if (-not $vcpkg) { throw "VCPKG_INSTALLATION_ROOT is not set on this runner" }
+          & "$vcpkg\vcpkg.exe" install openssl:x64-windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "OPENSSL_DIR=$vcpkg\installed\x64-windows" >> $env:GITHUB_ENV
       - name: Release build (macOS Rust workspace)
         if: matrix.os == 'macos-14'
         run: cargo build --workspace --locked --release --exclude nexusq-py

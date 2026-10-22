@@ -224,10 +224,13 @@ impl CeremonyCoordinator {
         let mut nonce = [0u8; 32];
         fill(&mut id_bytes).map_err(|_| CeremonyError::Randomness)?;
         fill(&mut nonce).map_err(|_| CeremonyError::Randomness)?;
-        let id = id_bytes
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>();
+        let id = id_bytes.iter().fold(
+            String::with_capacity(id_bytes.len() * 2),
+            |mut output, byte| {
+                let _ = std::fmt::Write::write_fmt(&mut output, format_args!("{byte:02x}"));
+                output
+            },
+        );
         let request = CeremonyRequest {
             id: id.clone(),
             action,
