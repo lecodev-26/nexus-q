@@ -241,10 +241,10 @@ async fn dispatch(
 }
 
 fn add_response_headers(state: &AcmeState, mut response: Response) -> Response {
-    if let Ok(nonce) = state.fresh_nonce() {
-        if let Ok(value) = HeaderValue::from_str(&nonce) {
-            response.headers_mut().insert("Replay-Nonce", value);
-        }
+    if let Ok(nonce) = state.fresh_nonce()
+        && let Ok(value) = HeaderValue::from_str(&nonce)
+    {
+        response.headers_mut().insert("Replay-Nonce", value);
     }
     if let Ok(value) = HeaderValue::from_str(&format!(
         "<{}/acme/directory>;rel=\"index\"",
@@ -278,14 +278,13 @@ impl AcmeState {
         let now = Instant::now();
         let mut nonces = self.nonces.lock().map_err(|_| AcmeError::server())?;
         nonces.retain(|_, created| now.duration_since(*created) <= NONCE_LIFETIME);
-        if nonces.len() >= 10_000 {
-            if let Some(oldest) = nonces
+        if nonces.len() >= 10_000
+            && let Some(oldest) = nonces
                 .iter()
                 .min_by_key(|(_, created)| *created)
                 .map(|(token, _)| token.clone())
-            {
-                nonces.remove(&oldest);
-            }
+        {
+            nonces.remove(&oldest);
         }
         nonces.insert(token.clone(), now);
         Ok(token)
@@ -825,15 +824,14 @@ async fn challenge_resource(
                 .is_some_and(|authz| authz.status == "invalid")
         })
     };
-    if all_authzs_valid || any_authz_invalid {
-        if let Some(order) = state
+    if (all_authzs_valid || any_authz_invalid)
+        && let Some(order) = state
             .orders
             .write()
             .map_err(|_| AcmeError::server())?
             .get_mut(&authz_order_id)
-        {
-            order.status = if all_authzs_valid { "ready" } else { "invalid" }.to_owned();
-        }
+    {
+        order.status = if all_authzs_valid { "ready" } else { "invalid" }.to_owned();
     }
     Ok(json_response(
         StatusCode::OK,

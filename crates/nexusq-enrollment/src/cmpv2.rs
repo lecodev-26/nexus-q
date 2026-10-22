@@ -505,14 +505,13 @@ fn handle_cmp(state: &CmpState, body: &[u8]) -> Result<Vec<u8>, CmpError> {
         if replay.contains_key(&replay_key) {
             return Err(CmpError::Authentication);
         }
-        if replay.len() >= 10_000 {
-            if let Some(oldest) = replay
+        if replay.len() >= 10_000
+            && let Some(oldest) = replay
                 .iter()
                 .min_by_key(|(_, seen)| *seen)
                 .map(|(key, _)| key.clone())
-            {
-                replay.remove(&oldest);
-            }
+        {
+            replay.remove(&oldest);
         }
         replay.insert(replay_key, Instant::now());
     }
