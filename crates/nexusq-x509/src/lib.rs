@@ -293,10 +293,10 @@ fn valid_revocation_url(url: &str) -> bool {
     } else {
         let mut parts = authority.split(':');
         let host = parts.next().unwrap_or_default();
-        if let Some(port) = parts.next() {
-            if port.is_empty() || port.parse::<u16>().is_err() || parts.next().is_some() {
-                return false;
-            }
+        if let Some(port) = parts.next()
+            && (port.is_empty() || port.parse::<u16>().is_err() || parts.next().is_some())
+        {
+            return false;
         }
         host
     };
