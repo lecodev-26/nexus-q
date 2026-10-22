@@ -126,8 +126,16 @@ private enum NativeRuntime {
         throw RuntimeError("Prebuilt Swift runtime is currently available only for macOS ARM64")
         #endif
 
-        let cache = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".cache/nexusq/\(runtimeVersion)/\(assetName)", isDirectory: true)
+        let cacheRoot: URL
+        if let configuredCache = ProcessInfo.processInfo.environment["NEXUSQ_CACHE_DIR"], !configuredCache.isEmpty {
+            cacheRoot = URL(fileURLWithPath: configuredCache, isDirectory: true)
+        } else {
+            cacheRoot = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent(".cache/nexusq", isDirectory: true)
+        }
+        let cache = cacheRoot
+            .appendingPathComponent(runtimeVersion, isDirectory: true)
+            .appendingPathComponent(assetName, isDirectory: true)
         try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
         let library = cache.appendingPathComponent(localName)
         let digestFile = cache.appendingPathComponent(localName + ".sha256")

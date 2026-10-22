@@ -159,8 +159,8 @@ jobs:
         run: |
           set -euo pipefail
           fixture="$RUNNER_TEMP/nexusq-swift-runtime-fixture"
-          clean_home="$RUNNER_TEMP/nexusq-swift-clean-home"
-          mkdir -p "$fixture" "$clean_home"
+          clean_cache="$RUNNER_TEMP/nexusq-swift-clean-cache"
+          mkdir -p "$fixture" "$clean_cache"
           cp target/release/libnexusq.dylib "$fixture/nexusq-sdk-runtime-macos-arm64.dylib"
           (cd "$fixture" && shasum -a 256 nexusq-sdk-runtime-macos-arm64.dylib > NATIVE-RUNTIME-SHA256SUMS)
           python3 -m http.server 8765 --bind 127.0.0.1 --directory "$fixture" > "$RUNNER_TEMP/nexusq-swift-http.log" 2>&1 &
@@ -174,10 +174,10 @@ jobs:
           cd bindings/swift
           env -u NEXUSQ_LIBRARY \
             NEXUSQ_RUNTIME_BASE_URL=http://127.0.0.1:8765/ \
-            HOME="$clean_home" \
+            NEXUSQ_CACHE_DIR="$clean_cache" \
             .build/debug/Smoke
-          test -f "$clean_home/.cache/nexusq/4.1.1/nexusq-sdk-runtime-macos-arm64.dylib/libnexusq.dylib"
-          test -f "$clean_home/.cache/nexusq/4.1.1/nexusq-sdk-runtime-macos-arm64.dylib/libnexusq.dylib.sha256"
+          test -f "$clean_cache/4.1.1/nexusq-sdk-runtime-macos-arm64.dylib/libnexusq.dylib"
+          test -f "$clean_cache/4.1.1/nexusq-sdk-runtime-macos-arm64.dylib/libnexusq.dylib.sha256"
 
   dart:
     name: Dart FFI bindings
