@@ -261,12 +261,19 @@ impl<K: TimeSource> TimestampAuthority<K> {
             }
             *last = Some(now);
         }
-        let serial = self
-            .serial
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |value| {
-                value.checked_add(1)
-            })
-            .map_err(|_| TsaError::Cms)?;
+        let serial = loop {
+            let current = self.serial.load(Ordering::SeqCst);
+            let next = current.checked_add(1).ok_or(TsaError::Cms)?;
+            match self.serial.compare_exchange_weak(
+                current,
+                next,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            ) {
+                Ok(_) => break current,
+                Err(_) => continue,
+            }
+        };
         let serial_bytes = serial.to_be_bytes();
         let serial_bytes = serial_bytes
             .iter()

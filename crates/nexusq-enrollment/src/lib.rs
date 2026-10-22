@@ -555,12 +555,19 @@ impl EnrollmentAuthority {
                 return Err(Error::UnauthorizedIdentity);
             }
         }
-        let serial = self
-            .next_serial
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
-                current.checked_add(1)
-            })
-            .map_err(|_| Error::InvalidPolicy)?;
+        let serial = loop {
+            let current = self.next_serial.load(Ordering::SeqCst);
+            let next = current.checked_add(1).ok_or(Error::InvalidPolicy)?;
+            match self.next_serial.compare_exchange_weak(
+                current,
+                next,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            ) {
+                Ok(_) => break current,
+                Err(_) => continue,
+            }
+        };
         if let Some(ha) = &self.ha {
             let reservation = serde_json::to_vec(&SerialReservation {
                 serial,
