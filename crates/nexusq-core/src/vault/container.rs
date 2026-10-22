@@ -357,10 +357,10 @@ impl Vault {
                 let audit_auth = audit_key(kek.as_ref())?;
                 let log = AuditLog::open_with(&resolved, AuditLogConfig::default(), &audit_auth)?;
                 log.verify_all()?;
-                if let Some(anchor) = body.audit_anchor.as_deref() {
-                    if !log.contains_event_hash(anchor) {
-                        return Err(crate::storage::DbError::AuditAnchorMismatch.into());
-                    }
+                if let Some(anchor) = body.audit_anchor.as_deref()
+                    && !log.contains_event_hash(anchor)
+                {
+                    return Err(crate::storage::DbError::AuditAnchorMismatch.into());
                 }
                 RefCell::new(Some(log))
             }
@@ -944,21 +944,21 @@ impl Session {
             old_record.metadata.status = retired;
         }
 
-        if let Some(old_credential_key) = old_credential_key.as_ref() {
-            if old_credential_key != &old_signing_key {
-                let record = self
-                    .body
-                    .find_key_mut(old_credential_key)
-                    .ok_or_else(|| LifecycleError::KeyNotFound(old_credential_key.clone()))?;
-                let rotating = record
-                    .metadata
-                    .status
-                    .transition_to(KeyStatus::Rotating)
-                    .map_err(LifecycleError::from)?;
-                record.metadata.status = rotating
-                    .transition_to(KeyStatus::Retired)
-                    .map_err(LifecycleError::from)?;
-            }
+        if let Some(old_credential_key) = old_credential_key.as_ref()
+            && old_credential_key != &old_signing_key
+        {
+            let record = self
+                .body
+                .find_key_mut(old_credential_key)
+                .ok_or_else(|| LifecycleError::KeyNotFound(old_credential_key.clone()))?;
+            let rotating = record
+                .metadata
+                .status
+                .transition_to(KeyStatus::Rotating)
+                .map_err(LifecycleError::from)?;
+            record.metadata.status = rotating
+                .transition_to(KeyStatus::Retired)
+                .map_err(LifecycleError::from)?;
         }
 
         // Update the identity: swap the signing key, bump the version.
@@ -1958,16 +1958,13 @@ fn write_vault_file(
 
     // fsync the directory so the rename is durable. Best-effort on
     // platforms that do not support directory fsync.
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() {
-            if let Ok(dir) = fs::File::open(parent) {
-                if let Err(e) = dir.sync_all() {
-                    if e.kind() != std::io::ErrorKind::Unsupported {
-                        return Err(VaultError::Io(e));
-                    }
-                }
-            }
-        }
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+        && let Ok(dir) = fs::File::open(parent)
+        && let Err(e) = dir.sync_all()
+        && e.kind() != std::io::ErrorKind::Unsupported
+    {
+        return Err(VaultError::Io(e));
     }
 
     Ok(())

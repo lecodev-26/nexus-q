@@ -235,16 +235,16 @@ impl KeyRecord {
             return Err(RecordValidationError::DerivedWithoutParent);
         }
 
-        if let Some(exp) = md.expires_at {
-            if exp < md.created_at {
-                return Err(RecordValidationError::ExpiredBeforeCreation);
-            }
+        if let Some(exp) = md.expires_at
+            && exp < md.created_at
+        {
+            return Err(RecordValidationError::ExpiredBeforeCreation);
         }
 
-        if let Some(rot) = md.rotation_due {
-            if rot < md.created_at {
-                return Err(RecordValidationError::RotationBeforeCreation);
-            }
+        if let Some(rot) = md.rotation_due
+            && rot < md.created_at
+        {
+            return Err(RecordValidationError::RotationBeforeCreation);
         }
 
         Ok(())

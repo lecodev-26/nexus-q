@@ -148,10 +148,10 @@ pub fn verify_report_structure(report: &AttestationReport) -> Result<(), Attesta
             return Err(AttestationError::MalformedReport);
         }
     }
-    if let Some(sig) = &report.signature {
-        if sig.is_empty() {
-            return Err(AttestationError::MalformedReport);
-        }
+    if let Some(sig) = &report.signature
+        && sig.is_empty()
+    {
+        return Err(AttestationError::MalformedReport);
     }
     Ok(())
 }
