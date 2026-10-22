@@ -222,10 +222,10 @@ impl<K: TimeSource> TimestampAuthority<K> {
         if request.version != Uint::new(&[1])? {
             return Err(TsaError::InvalidRequest);
         }
-        if let Some(policy) = request.req_policy {
-            if policy != self.policy {
-                return Err(TsaError::UnsupportedPolicy);
-            }
+        if let Some(policy) = request.req_policy
+            && policy != self.policy
+        {
+            return Err(TsaError::UnsupportedPolicy);
         }
         if request
             .extensions
@@ -254,10 +254,10 @@ impl<K: TimeSource> TimestampAuthority<K> {
         }
         {
             let mut last = self.last_time.lock().map_err(|_| TsaError::TimeSource)?;
-            if let Some(previous) = *last {
-                if now < previous {
-                    return Err(TsaError::TimeSource);
-                }
+            if let Some(previous) = *last
+                && now < previous
+            {
+                return Err(TsaError::TimeSource);
             }
             *last = Some(now);
         }
