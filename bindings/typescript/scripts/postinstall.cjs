@@ -24,7 +24,7 @@ if (!selected) {
 }
 
 const [asset, localName] = selected;
-const base = `https://github.com/lecodev-26/nexus-q/releases/download/v${pkg.version}`;
+const base = (process.env.NEXUSQ_TEST_RUNTIME_BASE_URL || `https://github.com/lecodev-26/nexus-q/releases/download/v${pkg.version}`).replace(/\/$/, "");
 const destination = path.join(__dirname, "..", "vendor", localName);
 const temp = `${destination}.download`;
 

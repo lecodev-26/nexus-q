@@ -7,7 +7,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <LangVersion>latest</LangVersion>
     <PackageId>Nexusq</PackageId>
-    <Version>4.1.0</Version>
+    <Version>4.1.1</Version>
     <Description>Thin P/Invoke bindings over the NEXUS-Q C SDK (libnexusq): post-quantum vault, version and error surface</Description>
     <PackageLicenseExpression>MIT OR Apache-2.0</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/lecodev-26/nexus-q</RepositoryUrl>

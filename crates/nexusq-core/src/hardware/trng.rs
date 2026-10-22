@@ -131,12 +131,12 @@ pub fn check_sample(sample: &[u8], previous: Option<&[u8]>) -> HealthStatus {
     }
 
     // Repetition: identical to the previous sample.
-    if let Some(prev) = previous {
-        if prev == sample {
-            return HealthStatus::Degraded {
-                reason: HealthFailure::Repetition,
-            };
-        }
+    if let Some(prev) = previous
+        && prev == sample
+    {
+        return HealthStatus::Degraded {
+            reason: HealthFailure::Repetition,
+        };
     }
 
     HealthStatus::Healthy

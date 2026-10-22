@@ -87,7 +87,7 @@ public enum Nexusq {
 /// library installation. The downloaded binary is version-matched and verified
 /// against the release SHA-256 manifest before dlopen.
 private enum NativeRuntime {
-    private static let runtimeVersion = "4.1.0"
+    private static let runtimeVersion = "4.1.1"
     private static let assetName = "nexusq-sdk-runtime-macos-arm64.dylib"
     private static let localName = "libnexusq.dylib"
 
@@ -126,8 +126,16 @@ private enum NativeRuntime {
         throw RuntimeError("Prebuilt Swift runtime is currently available only for macOS ARM64")
         #endif
 
-        let cache = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".cache/nexusq/\(runtimeVersion)/\(assetName)", isDirectory: true)
+        let cacheRoot: URL
+        if let configuredCache = ProcessInfo.processInfo.environment["NEXUSQ_CACHE_DIR"], !configuredCache.isEmpty {
+            cacheRoot = URL(fileURLWithPath: configuredCache, isDirectory: true)
+        } else {
+            cacheRoot = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent(".cache/nexusq", isDirectory: true)
+        }
+        let cache = cacheRoot
+            .appendingPathComponent(runtimeVersion, isDirectory: true)
+            .appendingPathComponent(assetName, isDirectory: true)
         try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
         let library = cache.appendingPathComponent(localName)
         let digestFile = cache.appendingPathComponent(localName + ".sha256")
@@ -136,7 +144,14 @@ private enum NativeRuntime {
             return library.path
         }
 
-        let base = URL(string: "https://github.com/lecodev-26/nexus-q/releases/download/v\(runtimeVersion)/")!
+        let configuredBase = ProcessInfo.processInfo.environment["NEXUSQ_RUNTIME_BASE_URL"]
+            ?? "https://github.com/lecodev-26/nexus-q/releases/download/v\(runtimeVersion)/"
+        let baseString = configuredBase.hasSuffix("/") ? configuredBase : configuredBase + "/"
+        guard let base = URL(string: baseString),
+              let scheme = base.scheme?.lowercased(),
+              scheme == "https" || (scheme == "http" && ["localhost", "127.0.0.1", "::1"].contains(base.host?.lowercased() ?? "")) else {
+            throw RuntimeError("NEXUSQ_RUNTIME_BASE_URL must use HTTPS (HTTP is allowed only for loopback CI fixtures)")
+        }
         let checksums = try download(base.appendingPathComponent("NATIVE-RUNTIME-SHA256SUMS"))
         let checksumText = String(decoding: checksums, as: UTF8.self)
         guard let line = checksumText.split(separator: "\n").first(where: { String($0).trimmingCharacters(in: .whitespaces).hasSuffix("  \(assetName)") }),

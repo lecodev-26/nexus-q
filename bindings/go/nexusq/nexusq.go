@@ -1,64 +1,73 @@
 // Package nexusq provides Go bindings for NEXUS-Q.
 //
-// It is a thin wrapper over the C SDK. Every exported function and
-// type delegates to libnexusq; no cryptography and no business logic
-// live here.
-//
-// Build: the C SDK (libnexusq) must be built and available. Set CGO_CFLAGS
-// and CGO_LDFLAGS to point at the header and library, e.g. from a repository
-// checkout:
-//
-//	CGO_CFLAGS="-I $(pwd)/crates/nexusq-c/include" \
-//	CGO_LDFLAGS="-L $(pwd)/target/release -lnexusq" \
-//	go build
-//
-// With a cargo-c install (cargo cinstall -p nexusq-c) pkg-config metadata is
-// generated, and the flags can be produced with:
-//
-//	CGO_CFLAGS="$(pkg-config --cflags nexusq)" \
-//	CGO_LDFLAGS="$(pkg-config --libs nexusq)" \
-//	go build
-//
-// At runtime, LD_LIBRARY_PATH must include the directory holding
-// libnexusq.so.
+// The SDK downloads and verifies the version-matched native runtime on first
+// use for supported targets. No C compiler, cgo flags, or manual library path
+// is required. Set NEXUSQ_LIBRARY only to override the resolver for development.
 package nexusq
-
-/*
-#include <stdlib.h>
-#include "nexusq.h"
-*/
-import "C"
 
 import (
 	"errors"
 	"unsafe"
 )
 
-// Version returns the library version.
-func Version() string {
-	return C.GoString(C.nexusq_version())
+var (
+	_nativeLibrary             uintptr
+	_nativeVersion             func() unsafe.Pointer
+	_nativeBackendName         func() unsafe.Pointer
+	_nativeBackendExperimental func() uint8
+	_nativeLastError           func() unsafe.Pointer
+	_nativeVaultCreate         func(unsafe.Pointer, unsafe.Pointer, unsafe.Pointer) int32
+	_nativeVaultFormatVersion  func(unsafe.Pointer) int32
+)
+
+func init() {
+	var err error
+	_nativeLibrary, err = openNativeLibrary(resolveRuntime())
+	if err != nil {
+		panic("NEXUS-Q: unable to load native runtime: " + err.Error())
+	}
+	registerNativeFunctions(_nativeLibrary)
+	if CryptoBackendInfo().Name != "rustcrypto" || CryptoBackendInfo().Experimental {
+		panic("NEXUS-Q: refusing a runtime that is not the default RustCrypto provider")
+	}
 }
 
-// BackendInfo reports the provider compiled into libnexusq. It does not switch providers.
+func cString(ptr unsafe.Pointer) string {
+	if ptr == nil {
+		return ""
+	}
+	n := 0
+	for *(*byte)(unsafe.Add(ptr, n)) != 0 {
+		n++
+	}
+	return unsafe.String((*byte)(ptr), n)
+}
+
+func cBuffer(value string) []byte { return append([]byte(value), 0) }
+
+// Version returns the loaded library version.
+func Version() string { return cString(_nativeVersion()) }
+
+// BackendInfo reports the provider compiled into the loaded library; it never switches providers.
 type BackendInfo struct {
 	Name            string
 	Experimental    bool
 	NativeAvailable bool
 }
 
+// CryptoBackendInfo reports the provider compiled into libnexusq.
 func CryptoBackendInfo() BackendInfo {
-	name := C.GoString(C.nexusq_backend_name())
-	experimental := C.nexusq_backend_is_experimental() != 0
+	name := cString(_nativeBackendName())
+	experimental := _nativeBackendExperimental() != 0
 	return BackendInfo{Name: name, Experimental: experimental, NativeAvailable: name == "native-experimental"}
 }
 
-// lastError returns the last error message, if any.
 func lastError() error {
-	msg := C.nexusq_last_error_message()
-	if msg == nil {
+	msg := cString(_nativeLastError())
+	if msg == "" {
 		return errors.New("unknown NEXUS-Q error")
 	}
-	return errors.New(C.GoString(msg))
+	return errors.New(msg)
 }
 
 // Vault is a handle to a vault file on disk.
@@ -67,39 +76,29 @@ type Vault struct {
 	formatVersion int
 }
 
-// CreateVault creates a new vault at path with the given password and
-// label. Pass an empty string for label if none is wanted.
+// CreateVault creates a new vault at path with the given password and label.
+// Pass an empty label when no label is required.
 func CreateVault(path, password, label string) (*Vault, error) {
-	cPath := C.CString(path)
-	cPassword := C.CString(password)
-	defer C.free(unsafe.Pointer(cPath))
-	defer C.free(unsafe.Pointer(cPassword))
-
-	var cLabel *C.char
+	cPath, cPassword := cBuffer(path), cBuffer(password)
+	var labelPtr unsafe.Pointer
+	var cLabel []byte
 	if label != "" {
-		cLabel = C.CString(label)
-		defer C.free(unsafe.Pointer(cLabel))
+		cLabel = cBuffer(label)
+		labelPtr = unsafe.Pointer(&cLabel[0])
 	}
-
-	rc := C.nexusq_vault_create(cPath, cPassword, cLabel)
+	rc := _nativeVaultCreate(unsafe.Pointer(&cPath[0]), unsafe.Pointer(&cPassword[0]), labelPtr)
 	if rc != 0 {
 		return nil, lastError()
 	}
-
-	version := C.nexusq_vault_format_version(cPath)
+	version := _nativeVaultFormatVersion(unsafe.Pointer(&cPath[0]))
 	if version < 0 {
 		return nil, lastError()
 	}
-
 	return &Vault{path: path, formatVersion: int(version)}, nil
 }
 
 // Path returns the path of the vault file.
-func (v *Vault) Path() string {
-	return v.path
-}
+func (v *Vault) Path() string { return v.path }
 
-// FormatVersion returns the format version of the vault file.
-func (v *Vault) FormatVersion() int {
-	return v.formatVersion
-}
+// FormatVersion returns the vault format version.
+func (v *Vault) FormatVersion() int { return v.formatVersion }

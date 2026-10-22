@@ -73,7 +73,7 @@ NEXUSQ_LIBRARY=target/debug/libnexusq.so npm --prefix bindings/typescript run sm
 Expected output:
 
 ```
-nexusq version: 4.1.0
+nexusq version: 4.1.1
 vault created at /tmp/nexusq_ts_smoke_XXXXXX/vault.nqv
 vault format version: 1
 error propagation: ok

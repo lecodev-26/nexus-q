@@ -1,0 +1,38 @@
+[package]
+name = "nexusq-enrollment"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Policy-driven PQC certificate enrollment with EST and ACME support"
+
+[dependencies]
+axum = { workspace = true }
+base64 = "0.22"
+cms = "0.3.0-rc.0"
+getrandom = "0.3"
+hmac = "0.13"
+async-trait = "0.1"
+josekit = "0.10.3"
+time = { version = "0.3.47", features = ["formatting"] }
+const-oid = { version = "0.10", features = ["db"] }
+der = { version = "0.8", features = ["std", "pem"] }
+nexusq-ml-dsa = { workspace = true, features = ["pkcs8", "getrandom", "zeroize"] }
+nexusq-x509 = { path = "../nexusq-x509", version = "4.1.1" }
+nexusq-ha = { path = "../nexusq-ha", version = "4.1.1" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+signature = "3"
+spki = "0.8"
+subtle = "2"
+thiserror = { workspace = true }
+tokio = { workspace = true }
+x509-cert = { version = "0.3.0", features = ["std", "pem", "builder", "signature"] }
+
+[dev-dependencies]
+tower = { workspace = true }
+http-body-util = "0.1"
+rand = "0.10"
+tempfile = { workspace = true }

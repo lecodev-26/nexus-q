@@ -121,7 +121,7 @@ fi
 
 # NuGet must stay in GitHub Actions with OIDC; never use a local API key.
 say "Lanzando workflow OIDC de NuGet"
-run gh workflow run publicar-nuget.yml --ref main
+run gh workflow run publish-nuget.yml --ref main
 
 # Go and Swift are distributed from the repository's versioned tags.
 git rev-parse "refs/tags/v$VERSION" >/dev/null 2>&1 || say "AVISO: no existe tag local v$VERSION; Go/Swift dependen de tags GitHub."

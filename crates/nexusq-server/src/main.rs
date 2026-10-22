@@ -384,14 +384,14 @@ impl RateLimiter {
         let now = Instant::now();
         let mut entries = self.entries.lock().expect("rate limiter mutex poisoned");
         entries.retain(|_, entry| now.duration_since(entry.0) < self.window);
-        if entries.len() >= 4096 && !entries.contains_key(client) {
-            if let Some(oldest) = entries
+        if entries.len() >= 4096
+            && !entries.contains_key(client)
+            && let Some(oldest) = entries
                 .iter()
                 .min_by_key(|(_, entry)| entry.0)
                 .map(|(key, _)| key.clone())
-            {
-                entries.remove(&oldest);
-            }
+        {
+            entries.remove(&oldest);
         }
         let entry = entries.entry(client.to_owned()).or_insert((now, 0));
         if now.duration_since(entry.0) >= self.window {
@@ -532,26 +532,26 @@ async fn session_timeout_middleware(
 ) -> Response {
     {
         let mut server_vault = state.vault.lock().await;
-        if let Some(last_activity) = server_vault.last_activity {
-            if last_activity.elapsed() >= SESSION_TIMEOUT {
-                if let Some(session) = server_vault.session.take() {
-                    match session.lock() {
-                        Ok(vault) => {
-                            server_vault.vault = vault;
-                            server_vault.last_activity = None;
-                            tracing::info!("vault session expired due to inactivity");
-                        }
-                        Err(err) => {
-                            server_vault.session = None;
-                            server_vault.last_activity = None;
-                            tracing::error!(error = %err, "failed to persist expired vault session");
-                            return (StatusCode::INTERNAL_SERVER_ERROR, "internal server error")
-                                .into_response();
-                        }
+        if let Some(last_activity) = server_vault.last_activity
+            && last_activity.elapsed() >= SESSION_TIMEOUT
+        {
+            if let Some(session) = server_vault.session.take() {
+                match session.lock() {
+                    Ok(vault) => {
+                        server_vault.vault = vault;
+                        server_vault.last_activity = None;
+                        tracing::info!("vault session expired due to inactivity");
                     }
-                } else {
-                    server_vault.last_activity = None;
+                    Err(err) => {
+                        server_vault.session = None;
+                        server_vault.last_activity = None;
+                        tracing::error!(error = %err, "failed to persist expired vault session");
+                        return (StatusCode::INTERNAL_SERVER_ERROR, "internal server error")
+                            .into_response();
+                    }
                 }
+            } else {
+                server_vault.last_activity = None;
             }
         }
     }

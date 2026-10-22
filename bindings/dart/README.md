@@ -1,21 +1,13 @@
 # NEXUS-Q Dart SDK
 
-Dart bindings for NEXUS-Q. A thin wrapper over the
-[C SDK](../../crates/nexusq-c) using `dart:ffi`. It does not reimplement
-anything: every call goes through `libnexusq`.
+Dart bindings for NEXUS-Q. A thin `dart:ffi` wrapper over the stable C ABI (`libnexusq`); it does not reimplement cryptography or business logic.
 
 ## Requirements
 
 - Dart 3 or newer.
-- The C SDK built (`cargo build -p nexusq-c`).
-- On supported published releases, use `scripts/with-runtime.sh` to download
-  the version-matched runtime, verify the release and archive checksums, and
-  run Dart with `NEXUSQ_LIBRARY` configured for Linux x64/ARM64 glibc or macOS
-  ARM64. The Dart package itself does not run install hooks, so this wrapper is
-  required unless you install a compatible library yourself.
-- Windows, musl/Alpine, and other unsupported targets require a compatible
-  library built/installed separately. Missing libraries produce an actionable
-  error rather than silently choosing another provider.
+- Dart 3 or newer and `curl` on supported targets.
+- Network access on first use; the SDK downloads the 4.1.1 runtime, verifies its SHA-256 checksum, and caches it per user/version. No C compiler or manually configured library path is required.
+- Prebuilt targets: Linux x64/ARM64 with glibc, macOS ARM64, and Windows x64. Linux musl/Alpine and other unsupported targets require a compatible custom runtime.
 
 ## Usage
 
@@ -31,12 +23,13 @@ void main() {
 }
 ```
 
-Run with:
+Run normally; the first call resolves and verifies the runtime automatically:
 
 ```bash
-cd bindings/dart
-./scripts/with-runtime.sh dart run your_program.dart
+dart run your_program.dart
 ```
+
+`NEXUSQ_LIBRARY` remains an advanced override for development and offline tests.
 
 ## What is available
 
@@ -60,6 +53,4 @@ NEXUSQ_LIBRARY=../../target/debug/libnexusq.so dart run example/smoke.dart
 NEXUSQ_LIBRARY=../../target/debug/libnexusq.so dart test
 ```
 
-The Dart binding is intentionally a thin wrapper over the C SDK, matching
-the Go SDK architecture. No cryptography or business logic is duplicated
-in Dart.
+The Dart binding is intentionally a thin wrapper over the C ABI. No cryptography or business logic is duplicated in Dart.

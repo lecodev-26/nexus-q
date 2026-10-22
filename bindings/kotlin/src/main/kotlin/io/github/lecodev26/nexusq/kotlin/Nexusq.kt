@@ -42,7 +42,7 @@ object Nexusq {
         fun nexusq_vault_format_version(path: String): Int
     }
 
-    private const val RUNTIME_VERSION = "4.1.0"
+    private const val RUNTIME_VERSION = "4.1.1"
 
     private val C: CApi = Native.load(resolveLibrary(), CApi::class.java)
 

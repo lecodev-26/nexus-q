@@ -3,6 +3,12 @@
 
 [advisories]
 version = 2
+# No upstream fix exists yet. RUSTSEC-2023-0071 concerns RSA private-key
+# decryption timing; Nexus-Q uses cms only for ContentInfo parsing and ML-DSA
+# SignedData construction, not RSA private-key decryption. Revisit on CMS/RSA updates.
+ignore = [
+    { id = "RUSTSEC-2023-0071", reason = "Transitive cms builder dependency; no RSA private-key decryption is used by Nexus-Q; no upstream fix available." },
+]
 
 [licenses]
 version = 2
@@ -16,6 +22,7 @@ allow = [
     "Unicode-3.0",
     "Zlib",
     "MPL-2.0",
+    "CDLA-Permissive-2.0",
 ]
 confidence-threshold = 0.8
 

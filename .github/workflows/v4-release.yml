@@ -1,4 +1,4 @@
-name: NEXUS-Q v4.1.0 Stable Line Release
+name: NEXUS-Q v4.1.1 Stable Line Release
 
 on:
   workflow_dispatch:
@@ -6,7 +6,7 @@ permissions:
   contents: read
 
 env:
-  RELEASE_VERSION: "4.1.0"
+  RELEASE_VERSION: "4.1.1"
 
 jobs:
   release-gate:
@@ -108,14 +108,14 @@ jobs:
           bom = {
               "bomFormat":"CycloneDX",
               "specVersion":"1.5",
-              "serialNumber":"urn:nexusq:release:4.1.0",
+              "serialNumber":"urn:nexusq:release:4.1.1",
               "version":1,
               "metadata":{
-                  "component":{"type":"application","name":"nexusq","version":"4.1.0"}
+                  "component":{"type":"application","name":"nexusq","version":"4.1.1"}
               },
               "components":components,
           }
-          Path("release/nexusq-v4.1.0-sbom.cdx.json").write_text(json.dumps(bom,indent=2)+"\n")
+          Path("release/nexusq-v4.1.1-sbom.cdx.json").write_text(json.dumps(bom,indent=2)+"\n")
 
       - name: Generate release provenance
         shell: python3 {0}
@@ -128,7 +128,7 @@ jobs:
           checksums = Path("release/SHA256SUMS").read_text().splitlines()
           p = {
               "schema":"nexusq-release-provenance-v1",
-              "release":"4.1.0",
+              "release":"4.1.1",
               "commit":os.environ["RELEASE_SHA"],
               "repository":os.environ["GITHUB_REPOSITORY"],
               "ref":os.environ["RELEASE_REF"],
@@ -138,12 +138,12 @@ jobs:
               "github_attestation":"required for public tag release",
               "status":"stable line release evidence; independent external audit (Phase 21) pending",
           }
-          Path("release/nexusq-v4.1.0-provenance.json").write_text(json.dumps(p,indent=2)+"\n")
+          Path("release/nexusq-v4.1.1-provenance.json").write_text(json.dumps(p,indent=2)+"\n")
 
       - name: Upload release evidence
         uses: actions/upload-artifact@v4
         with:
-          name: nexusq-v4.1.0-release-evidence
+          name: nexusq-v4.1.1-release-evidence
           path: release/
           if-no-files-found: error
 
@@ -161,6 +161,15 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.85.1
+      - name: Install OpenSSL for Windows release build
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $vcpkg = $env:VCPKG_INSTALLATION_ROOT
+          if (-not $vcpkg) { throw "VCPKG_INSTALLATION_ROOT is not set on this runner" }
+          & "$vcpkg\vcpkg.exe" install openssl:x64-windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "OPENSSL_DIR=$vcpkg\installed\x64-windows" >> $env:GITHUB_ENV
       - name: Release build (macOS Rust workspace)
         if: matrix.os == 'macos-14'
         run: cargo build --workspace --locked --release --exclude nexusq-py
@@ -171,15 +180,15 @@ jobs:
 
   sdk-runtime:
     name: Build version-matched default-provider SDK runtimes
-    if: github.ref == 'refs/tags/v4.1.0' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    if: github.ref == 'refs/tags/v4.1.1' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     needs: [release-gate]
     uses: ./.github/workflows/sdk-runtime.yml
     permissions:
       contents: read
 
   public-release:
-    name: Publish GitHub v4.1.0 release
-    if: github.ref == 'refs/tags/v4.1.0' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    name: Publish GitHub v4.1.1 release
+    if: github.ref == 'refs/tags/v4.1.1' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     needs: [release-gate, platform-gate, sdk-runtime]
     runs-on: ubuntu-latest
     permissions:
@@ -197,7 +206,7 @@ jobs:
       - name: Download validated release evidence
         uses: actions/download-artifact@v4
         with:
-          name: nexusq-v4.1.0-release-evidence
+          name: nexusq-v4.1.1-release-evidence
           path: release
 
       - name: Download native runtime artifacts
@@ -245,21 +254,21 @@ jobs:
             release/nexusq-sdk-runtime-macos-arm64.dylib
             release/nexusq-sdk-runtime-windows-x64.dll
 
-      - name: Publish or repair GitHub v4.1.0 release assets
+      - name: Publish or repair GitHub v4.1.1 release assets
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
           assets=(release/*.tar.gz release/nexusq-sdk-runtime-linux-x64.so release/nexusq-sdk-runtime-linux-arm64.so release/nexusq-sdk-runtime-macos-arm64.dylib release/nexusq-sdk-runtime-windows-x64.dll release/SHA256SUMS release/NATIVE-RUNTIME-SHA256SUMS release/*.cdx.json release/*-provenance.json)
-          if gh release view v4.1.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload v4.1.0 --repo "$GITHUB_REPOSITORY" --clobber "${assets[@]}"
+          if gh release view v4.1.1 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload v4.1.1 --repo "$GITHUB_REPOSITORY" --clobber "${assets[@]}"
           else
-            gh release create v4.1.0 \
+            gh release create v4.1.1 \
               --repo "$GITHUB_REPOSITORY" \
-              --title "NEXUS-Q v4.1.0" \
+              --title "NEXUS-Q v4.1.1" \
               --notes-file docs/V4_RELEASE.md \
               "${assets[@]}"
           fi
-          gh release view v4.1.0 --repo "$GITHUB_REPOSITORY" --json assets \
+          gh release view v4.1.1 --repo "$GITHUB_REPOSITORY" --json assets \
             | python3 -c 'import json,sys; names={x["name"] for x in json.load(sys.stdin)["assets"]}; required={"nexusq-sdk-runtime-linux-x64.so","nexusq-sdk-runtime-linux-arm64.so","nexusq-sdk-runtime-macos-arm64.dylib","nexusq-sdk-runtime-windows-x64.dll","NATIVE-RUNTIME-SHA256SUMS"}; missing=required-names; print("Release runtime assets:", ", ".join(sorted(required & names))); sys.exit(1 if missing else 0)'

@@ -237,7 +237,7 @@ dependencies = [
 
 [[package]]
 name = "nexusq-ml-dsa"
-version = "4.1.0"
+version = "4.1.1"
 dependencies = [
  "const-oid",
  "crypto-common",
@@ -252,7 +252,7 @@ dependencies = [
 
 [[package]]
 name = "nexusq-ml-kem"
-version = "4.1.0"
+version = "4.1.1"
 dependencies = [
  "hybrid-array",
  "kem",
@@ -446,3 +446,7 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[patch.unused]]
+name = "nexusq-kernels"
+version = "4.1.1"

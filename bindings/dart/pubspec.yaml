@@ -1,6 +1,6 @@
 name: nexusq
 description: Thin FFI bindings over the NEXUS-Q C SDK (libnexusq) with post-quantum vault, version and error surface.
-version: 4.1.0
+version: 4.1.1
 repository: https://github.com/lecodev-26/nexus-q
 issue_tracker: https://github.com/lecodev-26/nexus-q/issues
 topics:
@@ -11,6 +11,7 @@ topics:
 environment:
   sdk: ^3.0.0
 dependencies:
+  crypto: ^3.0.6
   ffi: ^2.1.0
 dev_dependencies:
   test: ^1.25.0

@@ -1,0 +1,22 @@
+[package]
+name = "nexusq-tsa"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "RFC 3161 timestamp authority with ML-DSA post-quantum signatures"
+
+[dependencies]
+cms = { version = "0.3.0-rc.0", features = ["builder"] }
+const-oid = { version = "0.10", features = ["db"] }
+der = { version = "0.8", features = ["std", "pem"] }
+ml-dsa = { package = "nexusq-ml-dsa", path = "../nexusq-ml-dsa", version = "4.1.1", features = ["pkcs8", "getrandom", "zeroize", "nexusq-kernels"] }
+sha2 = { workspace = true }
+signature = "3"
+spki = "0.8"
+thiserror = { workspace = true }
+x509-cert = { version = "0.3.0", features = ["std", "pem", "builder", "signature"] }
+
+[dev-dependencies]
+rand = "0.10"

@@ -10,13 +10,21 @@ members = [
     "crates/nexusq-py",
     "crates/nexusq-ml-kem",
     "crates/nexusq-ml-dsa",
+    "crates/nexusq-x509",
+    "crates/nexusq-ocsp",
+    "crates/nexusq-enrollment",
+    "crates/nexusq-hsm",
+    "crates/nexusq-tsa",
+    "crates/nexusq-ha",
+    "crates/nexusq-pki-cluster",
+    "crates/nexusq-admin",
     "crates/nexusq",
 ]
 
 [workspace.package]
-version = "4.1.0"
+version = "4.1.1"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 authors = ["lecodev-26 <325287752+lecodev-26@users.noreply.github.com>"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/lecodev-26/nexus-q"
@@ -25,7 +33,7 @@ repository = "https://github.com/lecodev-26/nexus-q"
 nexusq-kernels = { path = "crates/nexusq-kernels" }
 
 [workspace.dependencies]
-nexusq-core = { path = "crates/nexusq-core", version = "4.1.0" }
+nexusq-core = { path = "crates/nexusq-core", version = "4.1.1" }
 
 thiserror = "2"
 
@@ -45,9 +53,9 @@ hkdf = "0.13.0-rc.5"
 hmac = { version = "0.13", features = ["zeroize"] }
 aes-gcm = { version = "0.11.0-rc.5", features = ["zeroize"] }
 chacha20poly1305 = { version = "0.11.0-rc.5", features = ["zeroize"] }
-nexusq-ml-kem = { path = "crates/nexusq-ml-kem", version = "4.1.0", features = ["getrandom", "zeroize", "nexusq-kernels"] }
+nexusq-ml-kem = { path = "crates/nexusq-ml-kem", version = "4.1.1", features = ["getrandom", "zeroize", "nexusq-kernels"] }
 module-lattice = "0.2.3"
-nexusq-ml-dsa = { path = "crates/nexusq-ml-dsa", version = "4.1.0", features = ["zeroize", "nexusq-kernels"] }
+nexusq-ml-dsa = { path = "crates/nexusq-ml-dsa", version = "4.1.1", features = ["zeroize", "nexusq-kernels"] }
 slh-dsa = { version = "0.2.0-rc.5", features = ["zeroize"] }
 x25519-dalek = { version = "3", features = ["getrandom", "static_secrets", "zeroize"] }
 aws-lc-rs = { version = "1", default-features = false, features = ["aws-lc-sys"] }

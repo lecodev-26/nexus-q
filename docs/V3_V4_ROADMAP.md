@@ -2,7 +2,7 @@
 
 Updated: 2026-10-19
 
-This document describes the repository as it exists on `main`. It is a status record, not a declaration that NEXUS-Q is production-ready or that all planned integration work is complete. The workspace is versioned 4.1.0 (stable line release); the `v4.1.0` tag and GitHub release are cut after PR #55 merges and its four-hour fuzz soaks are green, via the tag-gated `v4-release.yml` gate and `docs/V4_RELEASE.md`.
+This document describes the repository as it exists on `main`. It is a status record, not a declaration that NEXUS-Q is production-ready or that all planned integration work is complete. The current local development branch is preparing the 4.1.1 release candidate. The published 4.1.0 line and its historical tag remain immutable. The 4.1.1 release must wait for branch CI, the required fuzz soaks, post-merge validation, resolution of the existing remote `4.1.1` SwiftPM tag collision, and explicit publication authorization; see `docs/V4_RELEASE.md`.
 
 ## Version lines
 
@@ -12,7 +12,8 @@ This document describes the repository as it exists on `main`. It is a status re
 | V2 | branch `nexusqv2`, tag [`v2.0.0`](https://github.com/lecodev-26/nexus-q/releases/tag/v2.0.0) | Security, correctness/interoperability and release-gate work | Frozen engineering line |
 | V3 | branch `nexusqv3`, tag [`v3-engineering-2026-10-09`](https://github.com/lecodev-26/nexus-q/releases/tag/v3-engineering-2026-10-09) | Hardened implementation, reproducible Arena and retained evidence | Engineering release |
 | V4 | branch `nexusqv4`, tag [`v4-engineering-2026-10-16`](https://github.com/lecodev-26/nexus-q/tree/v4-engineering-2026-10-16) | Experimental native backend and performance work | Integrated into `main`; production-path wiring completed by PR #55 |
-| V4.1 | workspace version `4.1.0`, tag `v4.1.0` (cut after the PR #55 merge and green soaks) | Stable line release of the V4 work | Current stable line, ready for the final independent audit (Phase 21) |
+| V4.1.1 | workspace/package candidate `4.1.1`; branch `work/4.1.1-development` | Release candidate with issues #64–#71 integrated locally | Awaiting hosted branch CI, required fuzz soaks, post-merge CI, and explicit publication approval; independent external audit remains open |
+| V4.1 | workspace version `4.1.0`, tag `v4.1.0` | Previous stable line release of the V4 work | Historical release record; not overwritten by the 4.1.1 candidate |
 
 ## Current `main` snapshot
 
@@ -37,6 +38,6 @@ The intended retained branches are `main`, `nexusqv2`, `nexusqv3`, and `nexusqv4
 
 ## Engineering boundary
 
-The next production-integration work is deliberately separate from the completed V4 snapshot. It must connect the native backend to the real `nexusq-core` ML-KEM/ML-DSA call paths before claiming production use, then verify differential correctness, standardized test vectors, fallback/dispatch behavior, security properties, CLI/SDK behavior and end-to-end performance. The 1.5× gate must not be weakened, and isolated kernel/backend measurements must not be represented as full application-path measurements.
+The native backend is now connected to the real `nexusq-core` ML-KEM/ML-DSA call paths behind the explicit `native-backend` Cargo feature; RustCrypto remains the default and the native feature remains experimental and off by default. See [`performance/NATIVE_BACKEND_PRODUCTION_WIRING.md`](performance/NATIVE_BACKEND_PRODUCTION_WIRING.md) for integration scope and historical benchmark evidence, and [`security/issue-71-kernel-integration.md`](security/issue-71-kernel-integration.md) for the local validation record. Remaining release gates include the required long fuzz soaks on the exact candidate SHA and review of all current CI evidence. The Valgrind constant-time harness is one assurance signal, not a proof of constant-time behavior. Do not promote the native backend to the default or claim production readiness while those gates and the independent external audit remain open. The 1.5× median-and-p95 performance gate must not be weakened, and isolated kernel/backend measurements must not be represented as full application-path measurements.
 
 The former Issue #48 tracking issue is closed by project decision. Its checklist and supporting migration notes are retained as historical records, not as an active tracker or a claim that every original checklist item is complete.

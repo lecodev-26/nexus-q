@@ -2,28 +2,19 @@
 import PackageDescription
 
 // Root Swift Package manifest for NEXUS-Q.
-//
-// Swift Package Manager resolves a repository dependency against the
-// Package.swift at its root, so this manifest re-exports the binding that
-// lives under bindings/swift. It is intentionally identical in structure to
-// bindings/swift/Package.swift; the two manifests describe the same targets.
-//
-// The binding is a thin wrapper over the C SDK (`libnexusq`): build and
-// install the C library first (`cargo build -p nexusq-c`) so that both the
-// linker and the dynamic loader can find it.
+// Keep the root package aligned with bindings/swift/Package.swift so SwiftPM
+// consumers can use the repository root without a stale system-library target.
+// The current binding loads the version-matched C ABI runtime dynamically.
 let package = Package(
     name: "nexusq",
+    platforms: [.macOS(.v12)],
     products: [
         .library(name: "Nexusq", targets: ["Nexusq"]),
+        .executable(name: "Smoke", targets: ["Smoke"]),
     ],
     targets: [
-        .systemLibrary(
-            name: "CNexusq",
-            path: "bindings/swift/Sources/CNexusq"
-        ),
         .target(
             name: "Nexusq",
-            dependencies: ["CNexusq"],
             path: "bindings/swift/Sources/Nexusq"
         ),
         .testTarget(

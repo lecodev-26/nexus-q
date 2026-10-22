@@ -3,7 +3,7 @@
 # a Go command with the cgo header/library paths configured for this process.
 set -euo pipefail
 
-VERSION="4.1.0"
+VERSION="4.1.1"
 OS="$(uname -s)"
 ARCH="$(uname -m)"
 case "$OS/$ARCH" in
