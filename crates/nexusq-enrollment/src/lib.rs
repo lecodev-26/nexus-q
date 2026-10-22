@@ -487,10 +487,14 @@ impl EnrollmentAuthority {
         protocol: Protocol,
         csr_der: &[u8],
     ) -> Result<Certificate, Error> {
-        let digest = Sha256::digest(csr_der)
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>();
+        let digest = Sha256::digest(csr_der);
+        let digest = digest.iter().fold(
+            String::with_capacity(digest.len() * 2),
+            |mut output, byte| {
+                let _ = std::fmt::Write::write_fmt(&mut output, format_args!("{byte:02x}"));
+                output
+            },
+        );
         let result = self.enroll_inner(principal, csr_der);
         let (outcome, serial) = match &result {
             Ok(cert) => (

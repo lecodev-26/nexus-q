@@ -439,10 +439,14 @@ impl CeremonyCoordinator {
         participant_id: Option<&str>,
         approval_count: usize,
     ) {
-        let transcript_sha256 = Sha256::digest(request.approval_payload())
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect();
+        let digest = Sha256::digest(request.approval_payload());
+        let transcript_sha256 = digest.iter().fold(
+            String::with_capacity(digest.len() * 2),
+            |mut output, byte| {
+                let _ = std::fmt::Write::write_fmt(&mut output, format_args!("{byte:02x}"));
+                output
+            },
+        );
         let item = CeremonyAuditEvent {
             ceremony_id: request.id.clone(),
             event: event.to_owned(),
