@@ -10,7 +10,56 @@ permissions:
   contents: read
 
 jobs:
+  detect-changes:
+    name: Detect documentation-only changes
+    runs-on: ubuntu-latest
+    outputs:
+      docs_only: ${{ steps.classify.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Classify changed paths (fail closed to full CI)
+        id: classify
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BASE: ${{ github.event.before }}
+          PUSH_HEAD: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          if [[ "$EVENT_NAME" == pull_request ]]; then
+            base="$PR_BASE"; head="$PR_HEAD"
+          elif [[ "$EVENT_NAME" == push ]]; then
+            base="$PUSH_BASE"; head="$PUSH_HEAD"
+          else
+            exit 0
+          fi
+          # First push / missing refs / diff errors always run the full pipeline.
+          [[ -n "$base" && -n "$head" && "$base" != 0000000000000000000000000000000000000000 ]] || exit 0
+          files=$(git diff --name-only "$base" "$head") || exit 0
+          [[ -n "$files" ]] || exit 0
+          docs_only=true
+          while IFS= read -r file; do
+            [[ -n "$file" ]] || continue
+            if [[ "$file" == docs/* ]]; then
+              continue
+            fi
+            # Root-level documentation only; Markdown files under source/config
+            # directories must not accidentally bypass CI.
+            if [[ "$file" != */* && ( "$file" == *.md || "$file" == LICENSE || "$file" == LICENSE.* || "$file" == CHANGELOG* || "$file" == CONTRIBUTING* || "$file" == CODE_OF_CONDUCT* || "$file" == SECURITY.md ) ]]; then
+              continue
+            fi
+            docs_only=false
+            break
+          done <<< "$files"
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
   build-runtime:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.docs_only != 'true'
     name: Build ${{ matrix.target }} RustCrypto SDK runtime
     runs-on: ${{ matrix.runner }}
     strategy:

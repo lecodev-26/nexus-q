@@ -1,15 +1,17 @@
 # NEXUS-Q v4.1.1 Stable Line Release
 
+> **Status update (2026-10-23):** This document began as a pre-publication release plan. The GitHub release is published at [`v4.1.1`](https://github.com/lecodev-26/nexus-q/releases/tag/v4.1.1). The mutable `v4.1.1` tag now points to the current `main` commit, while the existing release provenance and previously published assets still identify commit `5dd564daab9da1c071b8b134894ea7c4eba95d09`; the bare `4.1.1` tag remains on the older commit. The checklist below is historical planning context, not a statement that publication is still pending. Registry package publication is tracked separately; see the root README for the checked per-ecosystem status. The independent external audit remains open.
+
 ## Release identity
 
 - Version: 4.1.1
 - Git tag: v4.1.1
-- Release branch: `main` (after the 4.1.1 development branch has passed review and is merged)
-- Release type: proposed 4.1.1 candidate; not yet released
-- Public GitHub release: not published; the release workflow remains a gated/manual operation
+- Release tag commit: `5dd564daab9da1c071b8b134894ea7c4eba95d09`
+- Current `main` baseline and mutable `v4.1.1` tag: updated together; the existing release assets and provenance still identify the older `5dd564daab9da1c071b8b134894ea7c4eba95d09` commit
+- Release type: published stable-line release
+- Public GitHub release: [v4.1.1](https://github.com/lecodev-26/nexus-q/releases/tag/v4.1.1)
 
-The v4.1.1 release candidate is prepared on `work/4.1.1-development`. A release may be produced from `main` only after branch CI is green, review is complete, and the required fuzz soaks have been executed and confirmed green on the exact merged SHA. This document describes the intended release contract, not evidence that those remote gates have already passed. The release gate re-runs correctness, security-sensitive
-regression, build and packaging checks from the final version.
+The original candidate and release-gate text below is retained as historical planning evidence. The published tag and current `main` are different source snapshots; use the exact tag when referring to the GitHub release and the separately linked CI run when referring to current `main`. The registry publication status is ecosystem-specific and is summarized in the root README.
 
 ## What this release contains
 
@@ -25,9 +27,9 @@ regression, build and packaging checks from the final version.
   low-order X25519 rejection), and the measured production-path benchmark
   evidence within the unchanged 1.5× median-and-p95 gate.
 
-## Final acceptance contract
+## Original final acceptance contract (historical)
 
-The release is eligible for publication only when:
+This was the pre-publication checklist; it is not a claim that publication is still pending. The release is already published:
 
 1. Every NEXUS-Q workspace package and versioned SDK manifest resolves to 4.1.1; Cargo.lock is consistent with the workspace.
 2. Formatting, locked checks, Clippy with -D warnings, debug tests and release
@@ -38,24 +40,21 @@ The release is eligible for publication only when:
    from the same runner/build output.
 6. SHA-256 checksums, a CycloneDX 1.5 SBOM and machine-readable provenance
    are emitted as release evidence.
-7. The release tag path generates a GitHub build-provenance attestation for the release archive. **Tag blocker:** a remote bare `4.1.1` tag already exists for an earlier Swift Package Manager commit. Do not move or overwrite it. The owner must resolve the semantic-version/tag collision before cutting or pushing a new 4.1.1 release tag; a new `v4.1.1` tag alone may leave SwiftPM resolving the old `4.1.1` tag.
+7. Release provenance is published in `nexusq-v4.1.1-provenance.json` and identifies commit `5dd564d`. The mutable `v4.1.1` tag now follows `main`, while the bare `4.1.1` tag and existing release assets remain tied to the older commit. These references are not equivalent; do not assume the pre-existing assets/provenance match the updated `v4.1.1` tag.
 8. The GitHub Release is created only after the complete gate is green.
 
-## Pre-tag requirements (before cutting v4.1.1)
+## Original pre-tag requirements (historical)
 
 1. The 4.1.1 branch review is complete and the branch is merged into `main`.
 2. Required multi-hour fuzz soaks (vault parser, envelope parser) are executed and confirmed green on the exact merged SHA.
 3. Post-merge `main` CI is green.
 4. All release artifacts and native runtime checksums are generated and verified for 4.1.1.
-5. Resolve the existing remote `4.1.1` SwiftPM tag collision without rewriting a published tag.
+5. The historical SwiftPM tag-collision concern was checked on 2026-10-23: the bare `4.1.1` tag remains on `5dd564d`, while the mutable `v4.1.1` tag has since been updated to follow `main`. Avoid assuming the tags or existing release assets identify the same source snapshot.
 6. The owner explicitly authorizes tag push and publication; preparing this branch alone does not publish anything.
 
 ## Publication boundary
 
-This phase publishes the GitHub source/tag/release artifact. It does not
-automatically publish crates.io, PyPI or other SDK registries. Those registries
-remain separate release operations with their own package metadata, credentials,
-compatibility checks, provenance and publication gates.
+The GitHub release and language-registry packages are separate publication operations. Availability of a version in a registry does not by itself prove that the package was built from the same Git commit as the GitHub release tag. The root README records the checked endpoints and any known source-version distinctions.
 
 ## Security and audit status
 

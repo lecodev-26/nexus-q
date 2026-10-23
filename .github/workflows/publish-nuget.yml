@@ -13,18 +13,49 @@ on:
     branches: [main]
 permissions:
   contents: read
+  actions: read
 
 jobs:
+  ci-publication-gate:
+    name: Confirm full CI passed before publishing
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.gate.outputs.publish }}
+    steps:
+      - name: Require the full sequential CI pipeline to pass
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          CI_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          CI_RUN_ID: ${{ github.event.workflow_run.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "publish=false" >> "$GITHUB_OUTPUT"
+          if [[ "$EVENT_NAME" != workflow_run ]]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          [[ "$CI_CONCLUSION" == success && -n "$CI_RUN_ID" ]] || exit 0
+          conclusion=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CI_RUN_ID/jobs?per_page=100" \
+            --jq '[.jobs[] | select(.name | startswith("Phase 11 — Final sequential four-hour fuzz campaigns /")) | .conclusion] | if length == 3 and all(.[]; . == "success") then "success" else "not-success" end')
+          # All three four-hour campaigns must have run and passed. If the full
+          # pipeline was skipped (docs-only), do not build or publish a package.
+          [[ "$conclusion" == success ]] || exit 0
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+
   sdk-runtime:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    needs: ci-publication-gate
+    if: needs.ci-publication-gate.outputs.publish == 'true'
     name: Build RID-specific RustCrypto SDK runtime assets
     uses: ./.github/workflows/sdk-runtime.yml
     permissions:
       contents: read
 
   publish:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
-    needs: sdk-runtime
+    needs: [ci-publication-gate, sdk-runtime]
+    if: needs.ci-publication-gate.outputs.publish == 'true'
     permissions:
       contents: read
       id-token: write

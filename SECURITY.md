@@ -2,9 +2,13 @@
 
 ## Supported security line
 
-The `main` branch is the engineering baseline. Until an explicitly published
-release exists, security fixes are developed against the active release branch
-and backported only when maintainers judge the change safe and applicable.
+The GitHub release `v4.1.1` is published. The mutable `v4.1.1` tag currently
+points to the `main` commit recorded in the repository; however, the existing
+release provenance and previously published assets identify the older commit
+`5dd564daab9da1c071b8b134894ea7c4eba95d09`. The bare `4.1.1` tag and existing
+release assets must not be assumed to match the current `v4.1.1` tag. Security
+fixes are developed against the active engineering baseline and backported only
+when maintainers judge the change safe and applicable.
 
 NEXUS-Q does **not** claim FIPS validation, Common Criteria certification,
 formal verification, or completion of an independent external security audit
