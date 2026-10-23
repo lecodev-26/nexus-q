@@ -135,8 +135,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Build C SDK runtime
-        run: cargo build -p nexusq-c --locked --release
+      - name: Build C SDK runtime (retry transient registry failures)
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if cargo build -p nexusq-c --locked --release; then
+              exit 0
+            fi
+            if [[ "$attempt" -lt 3 ]]; then
+              echo "Cargo build failed (attempt $attempt/3); retrying after a short delay for transient registry/network errors."
+              sleep 10
+            fi
+          done
+          echo "Cargo build failed after 3 attempts."
+          exit 1
       - name: Validate repository-root Swift package manifest and tests
         env:
           NEXUSQ_LIBRARY: ${{ github.workspace }}/target/release/libnexusq.dylib
