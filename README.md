@@ -189,6 +189,12 @@ NEXUS-Q is **not presented as a universal performance leader**. In the 2026-10-2
 
 <sub>v4.1.0 stable line, 2026-10-19: official 1.5× median-and-p95 production-path gate (opt-in native backend vs AWS-LC) from the green release CI on the merged v4.1.0 code — three alternating rounds per implementation, pooled medians and nearest-rank p95, 3,000 samples per operation per implementation on an AMD EPYC 7763 CI runner. The full PQC Benchmark Arena run of the same release (241 normalized measurements, eight comparators plus the V1/V1+zeroize/V3 controls) is retained as CI artifacts. Reported without a composite score.</sub>
 
+<div align="center">
+
+<img src="assets/light/benchmark-comparison.svg" alt="Measured median latency ratio for nine NEXUS-Q native-backend operations versus AWS-LC in the v4.1.0 hosted CI run; values below 1.0 mean lower NEXUS-Q median latency for that run" width="100%">
+
+</div>
+
 | Operation | NEXUS-Q | AWS-LC | NEXUS-Q / AWS-LC |
 |---|---:|---:|---:|
 | ML-KEM-768 keygen | 12.90 µs | 12.33 µs | 1.05× |
