@@ -19,6 +19,28 @@
 
 > **Current project status (checked 2026-10-23):** GitHub release [v4.1.1](https://github.com/lecodev-26/nexus-q/releases/tag/v4.1.1) is published and its Git tag points to the current [`main` branch](https://github.com/lecodev-26/nexus-q/tree/main). Important: the existing `nexusq-v4.1.1-provenance.json` still records commit [`5dd564d`](https://github.com/lecodev-26/nexus-q/commit/5dd564daab9da1c071b8b134894ea7c4eba95d09), and the previously published release binaries, checksums and SBOM were not regenerated when the tag moved. The tag therefore points to `main`, but the existing release assets do not yet have matching provenance for that commit. The release-tag manifest declares Rust 1.85, while current `main` declares Rust 1.88; the 1.88 requirement below applies to building current `main`, not automatically to every published package. Public endpoint checks confirm 4.1.1 availability for published crates.io packages, PyPI (`nexusq`, source distribution only), npm, RubyGems, Packagist, pub.dev, NuGet (`Nexusq`), and Maven Central Java (`io.github.lecodev-26:nexusq`) and Kotlin (`io.github.lecodev-26:nexusq-kotlin`) artifacts. These checks establish registry availability, not source-commit provenance for every registry package. `nexusq-pki-cluster 4.1.1` was successfully published to crates.io on 2026-10-23 after updating the Cargo API token. The successful upload was confirmed by Cargo; public registry propagation may take a short time. `nexusq-hsm` is published. The NuGet 4.1.1 archive contains the .NET 9 assembly and native runtime assets for Linux x64/ARM64, macOS ARM64 and Windows x64; its publish workflow completed successfully for `main` commit `5b8a663` on 2026-10-23 ([run details](https://github.com/lecodev-26/nexus-q/actions/runs/39909889694)). Maven POM, JAR, sources JAR and Javadoc JAR endpoints returned HTTP 200 for both 4.1.1 artifacts. The Go module uses its own `v0.1.0` version. SwiftPM's bare `4.1.1` tag still resolves to the original release commit `5dd564d`; Git tag `v4.1.1` points to current `main`. These tags are not equivalent. SwiftPM users must not assume these two tags identify the same source snapshot. The native ML-KEM/ML-DSA backend remains experimental and opt-in; RustCrypto remains the default production path. CI run [`39820696137`](https://github.com/lecodev-26/nexus-q/actions/runs/39820696137) for `main` commit `5b8a663` completed successfully: 62 jobs passed, two optional/manual jobs were skipped, and none failed. Its Cargo audit and Cargo deny jobs passed. The previously reported `time` advisory was addressed by updating the lockfile to `time 0.3.47`. On 2026-10-23, the newly published `RUSTSEC-2026-0385` advisory for `ctutils 0.4.2` was addressed by updating the workspace and native-backend lockfiles to `ctutils 0.4.4` (the advisory fix requires Rust 1.87; current `main` requires Rust 1.88). Both lockfiles are covered by the native-backend security workflow. The Swift SDK workflow now retries its C runtime build up to three times to tolerate transient crates.io DNS/registry failures observed on hosted macOS runners; persistent failures still fail the job. `RUSTSEC-2023-0071` for `rsa` remains an explicitly documented exception in [`.cargo/audit.toml`](.cargo/audit.toml) and [`deny.toml`](deny.toml); this is not a claim that every advisory is fixed. No independent external audit, FIPS 140-3 validation, certification, or production-readiness claim is made. See [`docs/V4_RELEASE.md`](docs/V4_RELEASE.md) and [`docs/NATIVE_RUNTIME_PACKAGING.md`](docs/NATIVE_RUNTIME_PACKAGING.md).
 
+## Quick navigation
+
+| Start here | Explore deeper |
+|---|---|
+| [Overview and design](#overview) · [Cryptography](#cryptography) · [Quick start](#quick-start) | [Architecture](docs/ARCHITECTURE.md) · [Threat model](docs/THREAT_MODEL.md) · [Security model](docs/SECURITY_MODEL.md) |
+| [Benchmarks and measured results](#benchmarks) · [Installation](#installation) | [Benchmark Arena and methodology](arena/README.md) · [Benchmark index](BENCHMARKS.md) · [Performance reports](docs/performance/) |
+| [Project status and versions](#status) · [Security and assurance](#security-and-assurance) | [Roadmap](docs/ROADMAP.md) · [Release notes](docs/V4_RELEASE.md) · [Security policy](SECURITY.md) |
+| [Documentation index](#documentation) · [Contributing](#contributing) · [License](#license) | [Website](https://nexus-q.link) · [Releases](https://github.com/lecodev-26/nexus-q/releases) · [Discussions](https://github.com/lecodev-26/nexus-q/discussions) |
+
+### Project at a glance
+
+| Item | Current project position |
+|---|---|
+| Language | Rust, edition 2024 |
+| Current `main` toolchain | Rust 1.88 or newer; see the release-provenance note above before assuming published artifacts match `main` |
+| Cryptography | Standardized classical and post-quantum primitives; see [Cryptography](#cryptography) and [`docs/CRYPTOGRAPHY.md`](docs/CRYPTOGRAPHY.md) |
+| Default implementation path | RustCrypto; the native backend is experimental and opt-in |
+| Interfaces | Rust library, CLI, server, C ABI and language SDKs; availability and packaging vary by ecosystem |
+| License | MIT OR Apache-2.0 |
+| Assurance boundary | Security CI, fuzz targets and documented threat model; no independent external audit or certification claimed |
+
+
 <div align="center">
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/dark/stats.svg"><img src="assets/light/stats.svg" alt="5 Rust crates, 5 SDK languages, 8 Arena implementations, 57 measurements" width="100%"></picture>
@@ -30,6 +52,8 @@
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/dark/h-overview.svg"><img src="assets/light/h-overview.svg" alt="Overview" width="100%"></picture>
 
 </div>
+
+## Overview
 
 NEXUS-Q is a post-quantum cryptographic security engine designed to protect:
 
@@ -93,6 +117,8 @@ Every operation goes through the same building blocks: a password unlocks an enc
 
 </div>
 
+## Cryptography
+
 | Family | Purpose | Implemented |
 |---|---|---|
 | Randomness | Entropy for keys, nonces and salts | OS CSPRNG, TRNG support with health checks and mixing |
@@ -109,6 +135,8 @@ The reference document is [`docs/CRYPTOGRAPHY.md`](docs/CRYPTOGRAPHY.md). Planne
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/dark/h-status.svg"><img src="assets/light/h-status.svg" alt="Status" width="100%"></picture>
 
 </div>
+
+## Status
 
 **Completed:**
 
@@ -130,6 +158,12 @@ The reference document is [`docs/CRYPTOGRAPHY.md`](docs/CRYPTOGRAPHY.md). Planne
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/dark/h-bench.svg"><img src="assets/light/h-bench.svg" alt="Benchmarks" width="100%"></picture>
 
 </div>
+
+## Benchmarks
+
+The benchmark tables below intentionally retain the recorded measurements, historical comparisons, and known caveats. They are real project benchmark results, not illustrative figures. Each dataset has its own context: local diagnostics, hosted-runner release gates, and historical Arena runs must not be compared as if they were one controlled experiment.
+
+For reproducibility and fuller context, start with the [PQC Benchmark Arena documentation](arena/README.md), the [benchmark index](BENCHMARKS.md), the [V4 release notes](docs/V4_RELEASE.md), and the linked per-run CI artifacts/reports. Hardware, CPU governor, runner environment, sample count, warmups, comparator versions, and aggregation method matter. Latency ratios are operation-specific; there is no composite score here. Lower latency is better, and a benchmark pass is not an end-to-end application performance or security certification claim.
 
 NEXUS-Q is **not presented as a universal performance leader**. In the 2026-10-21 local x86-64 benchmark, the opt-in native backend was compared with the best eligible per-operation comparator using a matched AWS-LC RNG. Six of nine operations beat the comparator on both median and p95; the other three are close to parity: ML-DSA-65 signing (1.063× median / 1.115× p95), ML-KEM-1024 key generation (1.021× / 1.020×), and ML-KEM-768 key generation (1.015× / 1.013×). This is local diagnostic evidence from an Intel Core i3-N305 with the CPU governor set to `powersave`, not a hosted-runner release benchmark or a universal performance claim. The project owner accepted this result as sufficient to complete Issue [#23](https://github.com/lecodev-26/nexus-q/issues/23), treating 1.00× as an ideal target rather than an absolute closure requirement; the remaining deltas are documented in [`docs/performance/ISSUE_23_FINAL_GATE_AUDIT_2026-10-21.md`](docs/performance/ISSUE_23_FINAL_GATE_AUDIT_2026-10-21.md). The default `nexusq-core` build, CLI and SDKs still use RustCrypto for production call paths; the native path is opt-in and experimental. Lower latency is better.
 
@@ -268,6 +302,10 @@ The v1.0 engineering baseline is complete and intentionally frozen. The final CI
 
 </div>
 
+## Quick start
+
+From the repository root, with Rust 1.88+ installed:
+
 ```bash
 # build the workspace
 cargo build --workspace --release
@@ -364,6 +402,8 @@ implementation("io.github.lecodev-26:nexusq-kotlin:4.1.1")
 
 </div>
 
+## Documentation
+
 User-facing documentation starts at [`docs/user/README.md`](docs/user/README.md). Technical and reference documentation lives in `docs/`:
 
 | Document | Covers |
@@ -393,6 +433,8 @@ User-facing documentation starts at [`docs/user/README.md`](docs/user/README.md)
 
 </div>
 
+## Security and assurance
+
 V1–V4 are engineering version lines/snapshots, not proof of production readiness. A GitHub release does not imply an independent security audit, certification, FIPS validation, or production readiness; the same applies to registry publication, which is a distribution channel and not a validation claim. The V4 native backend remains experimental and opt-in; it is wired into `nexusq-core` behind the `native-backend` feature but is not enabled by default in the core, CLI, server, or SDKs. The performance gate result applies to the benchmarked backend and must not be read as an end-to-end application performance claim. Check [current `main` CI](https://github.com/lecodev-26/nexus-q/actions) before relying on any validation statement.
 
 | ✅ Claimed and evidenced | ❌ Not claimed |
@@ -406,10 +448,33 @@ V1–V4 are engineering version lines/snapshots, not proof of production readine
 
 Report suspected vulnerabilities privately through GitHub Security Advisories. See [`SECURITY.md`](SECURITY.md).
 
+## Contributing
+
+Issues, reproducible bug reports, documentation improvements, and focused pull requests are welcome. Before opening a change:
+
+1. Read the [architecture](docs/ARCHITECTURE.md), [threat model](docs/THREAT_MODEL.md), [cryptographic rules](docs/CRYPTOGRAPHY.md), and [security policy](SECURITY.md) relevant to the change.
+2. Keep cryptographic primitives delegated to established libraries; do not introduce home-grown cryptography or silently change serialized formats.
+3. Add or update tests and documentation alongside behavior changes. For performance work, include reproducible measurements and preserve the benchmark conditions and raw evidence.
+4. Run the relevant local checks before submitting. A useful baseline for Rust changes is:
+
+   ```bash
+   cargo fmt --all -- --check
+   cargo test --workspace
+   cargo build --workspace --release
+   ```
+
+   Run the checks applicable to the crates and SDKs you changed; CI remains the authoritative check for the full supported matrix.
+5. Describe security-impacting changes and compatibility implications clearly in the pull request. Never include secrets, private keys, vault contents, production credentials, or sensitive logs.
+
+Please report suspected vulnerabilities privately using the process in [`SECURITY.md`](SECURITY.md), rather than publishing exploitable details in a public issue.
+
+
 <div align="center">
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/dark/h-license.svg"><img src="assets/light/h-license.svg" alt="License" width="100%"></picture>
 
 </div>
+
+## License
 
 Dual-licensed under your choice of the [MIT License](LICENSE-MIT) or the [Apache License 2.0](LICENSE-APACHE). This follows the Rust ecosystem convention (the same choice as Rust, Tokio and Serde).
