@@ -569,6 +569,8 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')closeMenu()}
 addEventListener('resize',function(){if(innerWidth>1080)closeMenu()});
 var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('on');io.unobserve(e.target)}})},{threshold:.1});
 document.querySelectorAll('.rv').forEach(function(el){io.observe(el)});
+/* Keep SDK disclosure cards independent: opening one closes any other open SDK card. */
+var sdkCards=document.querySelectorAll('.sdk-card');sdkCards.forEach(function(card){card.addEventListener('toggle',function(){if(!card.open)return;sdkCards.forEach(function(other){if(other!==card&&other.open)other.open=false})})});
 document.querySelectorAll('.copy').forEach(function(b){b.addEventListener('click',function(){var t=b.parentNode.querySelector('pre').innerText;(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){b.textContent='Copied'},function(){b.textContent='Select + copy'});setTimeout(function(){b.textContent='Copy'},1600)})});
 
 
