@@ -21,13 +21,13 @@
 <link rel="canonical" href="https://nexus-q.link/">
 <meta name="google-site-verification" content="uxWm8El2GOsP6QysZ7LhFuo-IBxQUeFpS2Lgpgq3T5I" />
 <meta name="keywords" content="post-quantum cryptography, ML-KEM, ML-DSA, Kyber, Dilithium, FIPS 203, FIPS 204, Rust, encryption, key management, vault">
-<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://nexus-q.link/#website","url":"https://nexus-q.link/","name":"NEXUS-Q","alternateName":["NEXUS-Q PQC","NEXUS-Q post-quantum"],"description":"Open source Rust engine for protecting data, keys and identities with post-quantum cryptography.","inLanguage":"en","publisher":{"@id":"https://nexus-q.link/#org"}},{"@type":"Organization","@id":"https://nexus-q.link/#org","name":"NEXUS-Q","url":"https://nexus-q.link/","logo":{"@type":"ImageObject","url":"https://nexus-q.link/icon-192.png","width":192,"height":192},"founder":{"@type":"Person","name":"lecodev-26","url":"https://github.com/lecodev-26"},"sameAs":["https://github.com/lecodev-26/nexus-q"]},{"@type":"SoftwareSourceCode","name":"NEXUS-Q","description":"Post-quantum cryptographic security engine written in Rust for protecting data, keys and identities.","url":"https://nexus-q.link/","codeRepository":"https://github.com/lecodev-26/nexus-q","programmingLanguage":"Rust","license":["https://opensource.org/license/mit","https://www.apache.org/licenses/LICENSE-2.0"],"author":{"@type":"Person","name":"lecodev-26","url":"https://github.com/lecodev-26"},"@id":"https://nexus-q.link/#software","image":"https://nexus-q.link/og.jpg","publisher":{"@id":"https://nexus-q.link/#org"}}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://nexus-q.link/#website","url":"https://nexus-q.link/","name":"NEXUS-Q","alternateName":["NEXUS-Q PQC","NEXUS-Q post-quantum"],"description":"Open source Rust engine for protecting data, keys and identities with post-quantum cryptography.","inLanguage":"en","publisher":{"@id":"https://nexus-q.link/#org"}},{"@type":"Organization","@id":"https://nexus-q.link/#org","name":"NEXUS-Q","url":"https://nexus-q.link/","logo":{"@type":"ImageObject","url":"https://nexus-q.link/nexus-q-logo.png","width":192,"height":192},"founder":{"@type":"Person","name":"lecodev-26","url":"https://github.com/lecodev-26"},"sameAs":["https://github.com/lecodev-26/nexus-q"]},{"@type":"SoftwareSourceCode","name":"NEXUS-Q","description":"Post-quantum cryptographic security engine written in Rust for protecting data, keys and identities.","url":"https://nexus-q.link/","codeRepository":"https://github.com/lecodev-26/nexus-q","programmingLanguage":"Rust","license":["https://opensource.org/license/mit","https://www.apache.org/licenses/LICENSE-2.0"],"author":{"@type":"Person","name":"lecodev-26","url":"https://github.com/lecodev-26"},"@id":"https://nexus-q.link/#software","image":"https://nexus-q.link/og.jpg","publisher":{"@id":"https://nexus-q.link/#org"}}]}</script>
 <meta name="application-name" content="NEXUS-Q">
 <meta name="theme-color" content="#06080b">
 <link rel="icon" href="https://nexus-q.link/favicon.ico" sizes="48x48">
 <link rel="icon" type="image/png" sizes="48x48" href="https://nexus-q.link/favicon-48.png">
 <link rel="icon" type="image/png" sizes="96x96" href="https://nexus-q.link/favicon-96.png">
-<link rel="icon" type="image/png" sizes="192x192" href="https://nexus-q.link/icon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="https://nexus-q.link/nexus-q-logo.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -168,8 +168,30 @@ summary::-webkit-details-marker{display:none}
 summary:after{content:"+";color:var(--acc);font-size:22px;line-height:1}
 details[open] summary:after{content:"–"}
 details p{color:var(--mut);padding:0 0 18px;max-width:75ch}
+.sdk-grid{display:flex;align-items:flex-start;gap:16px;margin:28px 0 22px;padding:8px 2px 18px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scrollbar-width:thin;scrollbar-color:var(--acc) var(--line)}
+.sdk-card{flex:0 0 clamp(280px,31vw,360px);min-width:0;align-self:flex-start;scroll-snap-align:start;background:var(--card);border:1px solid var(--line);border-radius:20px;overflow:hidden;transition:border-color .2s,transform .2s}
+.sdk-card:hover{border-color:color-mix(in srgb,var(--acc) 65%,var(--line));transform:translateY(-3px)}
+.sdk-card[open]{border-color:var(--acc)}
+.sdk-card summary{padding:20px;align-items:center;justify-content:flex-start;gap:14px}
+.sdk-card summary:after{margin-left:auto;flex:none}
+.sdk-logo{width:48px;height:48px;object-fit:contain;flex:none;padding:5px;border-radius:12px;background:color-mix(in srgb,var(--fg) 5%,var(--bg))}
+.sdk-heading{display:flex;flex-direction:column;gap:3px;min-width:0}
+.sdk-heading strong{font-size:19px;line-height:1.2}
+.sdk-heading small{font-size:12px;color:var(--mut);font-weight:400}
+.sdk-body{padding:0 20px 20px}
+.sdk-body p{font-size:13px;color:var(--mut);margin:0 0 12px}
+.sdk-crates{display:grid;gap:8px;margin:12px 0 16px}
+.sdk-crate{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:13px;min-width:0}
+.sdk-crate code{font-size:12px;overflow-wrap:anywhere}
+.sdk-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.sdk-link{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:13px;font-weight:600;color:var(--fg);transition:border-color .2s,background .2s}
+.sdk-link.primary{background:var(--acc);border-color:var(--acc);color:var(--ink)}
+.sdk-link:hover{border-color:var(--acc)}
+.sdk-note{border-top:1px solid var(--line);padding-top:14px;margin-top:14px!important}
+@media(max-width:900px){.sdk-card{flex-basis: min(78vw,340px)}}
+@media(max-width:560px){.sdk-grid{gap:12px;margin-right:-20px;padding-right:20px}.sdk-card{flex-basis: min(84vw,340px)}.sdk-card summary{padding:17px}.sdk-body{padding:0 17px 17px}.sdk-logo{width:44px;height:44px}}
 footer{border-top:1px solid var(--line);padding:40px 0 60px;color:var(--mut);font-size:14px}
-footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px}
+footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px;align-items:center}.footer-links{display:flex;flex-wrap:wrap;gap:10px 16px;justify-content:flex-end}.footer-links a:hover{color:var(--acc)}@media(max-width:700px){footer .wrap{align-items:flex-start;flex-direction:column}.footer-links{justify-content:flex-start}}
 .rv{opacity:0;transform:translateY(28px);transition:opacity .8s,transform .8s}.rv.on{opacity:1;transform:none}
 @media (prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}.rv{opacity:1;transform:none}.bar{transition:none}}
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
@@ -194,27 +216,70 @@ h2{font-size:clamp(36px,10vw,60px);max-width:none}
 .table td:first-child{white-space:normal}
 }
 @media (max-width:380px){.btn{padding:9px 14px;font-size:13px}}
+
+/* NEXUS-Q visual refresh: precise graphite panels, fine grid and explicit theme picker */
+:root{--bg:#101112;--fg:#f4f4f5;--mut:#b0b0b5;--line:#303034;--card:#19191c;--acc:#f2f2f4;--acc2:#bfc0c6;--ink:#111113;--warn:#e8bd73;--bad:#ff8989}
+:root[data-theme="light"]{--bg:#f4f4f2;--fg:#171719;--mut:#626269;--line:#d7d7d4;--card:#fff;--acc:#202024;--acc2:#65656e;--ink:#fff;--warn:#99651d;--bad:#b3261e}
+:root[data-theme="dark"]{--bg:#101112;--fg:#f4f4f5;--mut:#b0b0b5;--line:#303034;--card:#19191c;--acc:#f2f2f4;--acc2:#bfc0c6;--ink:#111113;--warn:#e8bd73;--bad:#ff8989}
+body{background-color:var(--bg);background-image:linear-gradient(to right,color-mix(in srgb,var(--fg) 4%,transparent) 1px,transparent 1px),linear-gradient(to bottom,color-mix(in srgb,var(--fg) 4%,transparent) 1px,transparent 1px);background-size:22px 22px}
+nav{background:color-mix(in srgb,var(--bg) 92%,transparent);border:1px solid var(--line);border-radius:10px;top:max(14px,env(safe-area-inset-top,0px));left:max(16px,calc((100vw - 1120px)/2));right:max(16px,calc((100vw - 1120px)/2));box-shadow:0 10px 36px #0002}
+nav .wrap{height:68px;max-width:none;padding:0 26px}.logo{font-family:"Instrument Sans",sans-serif;font-weight:700;letter-spacing:.1em;font-size:21px}.logo img{width:32px;height:32px;object-fit:contain;border-radius:6px}.logo i{background:var(--fg);color:var(--bg)}
+.links{color:var(--fg);gap:20px}.links a{font-weight:600}.navr{gap:12px}.btn,.tg{border-radius:5px}.btn.p{background:var(--fg);border-color:var(--fg);color:var(--bg)}.btn.p:hover{background:var(--card);color:var(--fg)}
+.theme-picker{display:flex;align-items:center;gap:3px;border:1px solid var(--line);padding:3px;border-radius:6px;background:var(--card)}.theme-choice{font:600 12px "Instrument Sans",sans-serif;border:1px solid transparent;border-radius:4px;background:transparent;color:var(--mut);padding:7px 9px;cursor:pointer;white-space:nowrap}.theme-choice[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}.theme-choice:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.hero{padding:142px 0 70px;min-height:500px;border-bottom:1px solid var(--line);background:linear-gradient(100deg,color-mix(in srgb,var(--bg) 98%,transparent) 8%,color-mix(in srgb,var(--bg) 72%,transparent) 62%,color-mix(in srgb,var(--card) 70%,transparent))}.hero:after{background:linear-gradient(90deg,var(--bg) 0%,color-mix(in srgb,var(--bg) 85%,transparent) 40%,transparent 100%);opacity:.82}#cv{opacity:.58;mask-image:linear-gradient(90deg,transparent 12%,#000 52%)}
+.chip{border-radius:4px;background:var(--card);color:var(--mut)}h1{font-family:"Instrument Sans",sans-serif;font-weight:750;letter-spacing:-.055em;line-height:1.04;font-size:clamp(44px,6.4vw,78px);max-width:11ch;margin:24px 0 18px}h1 em{color:var(--fg)}.lead{color:var(--fg);max-width:58ch;font-size:clamp(17px,1.7vw,20px)}.aud,.by{font-size:14px;color:var(--mut)}.cta{margin:26px 0 30px}.cta .btn{border-radius:5px}
+section{padding:clamp(48px,6vw,76px) 0}.eyebrow{font:700 12px "Instrument Sans",sans-serif;letter-spacing:.16em;color:var(--mut)}h2{font-family:"Instrument Sans",sans-serif;font-weight:750;letter-spacing:-.045em;line-height:1.08;font-size:clamp(32px,4.4vw,54px);max-width:22ch}.sec-lead{font-size:16px}.grid{gap:14px}.card,.step,.ver,.panel,details{border-radius:5px;box-shadow:0 2px 9px #00008}.card{padding:24px;background:color-mix(in srgb,var(--card) 95%,transparent)}.card h3{font-size:19px}.ico{border-radius:5px;background:transparent;border:1px solid var(--line)}.tw{border-radius:5px}.table th,.table td{padding:12px}.ver{border-radius:5px}.code{border-radius:5px}details{border-radius:5px}.docs a{border-radius:5px}footer{background:color-mix(in srgb,var(--card) 65%,transparent);padding:36px 0 48px}
+:root[data-theme="light"] #cv{opacity:.24}:root[data-theme="light"] .hero{background:linear-gradient(100deg,#f4f4f2 0%,#f4f4f2e8 45%,#dfe0e2aa 100%)}
+@media(max-width:1080px){nav .wrap{padding:0 16px}.theme-choice{padding:7px 8px}}
+@media(max-width:700px){nav{left:8px;right:8px;top:max(8px,env(safe-area-inset-top,0px))}nav .wrap{height:62px;padding:0 10px;gap:8px}.logo{font-size:17px;gap:7px}.logo img{width:27px;height:27px}.navr{gap:6px}.theme-picker{gap:1px}.theme-choice{font-size:11px;padding:7px 6px}.navr>.btn.p{display:none}.hero{padding:112px 0 50px;min-height:0}.hero:after{background:linear-gradient(90deg,var(--bg) 0%,color-mix(in srgb,var(--bg) 78%,transparent) 70%,transparent)}h1{font-size:clamp(43px,12vw,66px);max-width:11ch}.stats{grid-template-columns:1fr 1fr}}
+@media(max-width:390px){.logo{font-size:15px}.logo img{width:24px;height:24px}.theme-choice{font-size:10px;padding:6px 5px}.navr{gap:4px}}
+/* Compact, balanced mobile navigation: no oversized empty rows. */
+@media(max-width:1080px){
+  .links.open{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:14px;top:calc(100% + 8px);left:0;right:0;max-height:calc(100dvh - 105px);overflow-y:auto;border:1px solid var(--line);border-radius:8px;background:var(--bg);box-shadow:0 16px 40px #0004}
+  .links a,.links .mo{display:flex;align-items:center;min-height:44px;padding:10px 12px;border:1px solid var(--line);border-radius:5px;background:var(--card);font-size:14px;line-height:1.3;color:var(--fg);font-weight:600}
+  .links a:hover,.links a:focus-visible{border-color:var(--acc);background:color-mix(in srgb,var(--acc) 8%,var(--card))}
+  .links .mo{grid-column:1/-1;justify-content:center;color:var(--fg);background:var(--card)}
+  .mb[aria-expanded="true"]{border-color:var(--fg);background:var(--fg);color:var(--bg)}
+}
+@media(max-width:380px){.links.open{padding:10px;gap:6px}.links a,.links .mo{padding:9px;font-size:13px}}
+
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}#cv{display:none}}
 </style>
 </head>
 <body>
 <nav><div class="wrap">
-<a class="logo notranslate" translate="no" href="#top"><img src="/icon-192.png" alt="" width="30" height="30">NEXUS-Q</a>
-<div class="links" id="menu"><a href="#overview">Overview</a><a href="#how">How it works</a><a href="#crypto">Crypto</a><a href="#packages">Packages</a><a href="#benchmarks">Benchmarks</a><a href="#versions">Versions</a><a href="#quickstart">Quick start</a><a href="#contribute">Contribute</a><a href="#faq">FAQ</a><a class="mo" href="https://github.com/lecodev-26/nexus-q" target="_blank" rel="noopener">GitHub</a></div>
-<div class="navr"><button class="tg" id="tg" type="button" aria-label="Switch between light and dark mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><span id="tgt">Light</span></button><a class="btn p" href="https://github.com/lecodev-26/nexus-q" target="_blank" rel="noopener">GitHub</a><button class="mb" id="mb" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button></div>
+<a class="logo notranslate" translate="no" href="#top"><img src="/nexus-q-logo.png" alt="" width="30" height="30">NEXUS-Q</a>
+<div class="links" id="menu"><a href="#overview">Overview</a><a href="#release">v4.1.1 release</a><a href="#how">How it works</a><a href="#crypto">Crypto</a><a href="#packages">Packages</a><a href="#benchmarks">Benchmarks</a><a href="#versions">Versions</a><a href="#quickstart">Quick start</a><a href="#docs">Documentation</a><a href="#contribute">Contribute</a><a href="#faq">FAQ</a><a class="mo" href="https://github.com/lecodev-26/nexus-q" target="_blank" rel="noopener">GitHub</a></div>
+<div class="navr"><div class="theme-picker" role="group" aria-label="Choose color theme"><button class="theme-choice" id="theme-light" type="button" aria-pressed="false" title="Use light mode">☀ Claro</button><button class="theme-choice" id="theme-dark" type="button" aria-pressed="false" title="Use dark mode">☾ Oscuro</button></div><a class="btn p" href="https://github.com/lecodev-26/nexus-q" target="_blank" rel="noopener">GitHub</a><button class="mb" id="mb" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button></div>
 </div></nav>
 
 <header class="hero" id="top">
 <canvas id="cv" aria-hidden="true"></canvas>
 <div class="wrap">
-<span class="chip"><b></b>v4.1.1 release candidate · Oct 22, 2026 · CI and independent audit pending</span>
+<span class="chip"><b></b>v4.1.1 final release · Oct 22, 2026 · independent audit not claimed</span>
 <h1 class="d">Post-quantum security, <em>built in the open.</em></h1>
-<p class="lead">NEXUS-Q is a Rust engine for protecting <strong>data, keys and identities</strong> with ML-KEM, ML-DSA and a tamper-evident audit log, plus an honest account of what it does and does not prove. This page explains the whole project, so you do not have to audit the repository to understand it.</p>
+<p class="lead">NEXUS-Q is a Rust cryptographic engine for protecting <strong>data, keys and identities</strong> with ML-KEM, ML-DSA, a tamper-evident audit log and a growing PKI/SDK ecosystem. Version 4.1.1 adds certificate lifecycle, signing, timestamping, runtime and high-availability capabilities—with security limitations stated explicitly.</p>
 <p class="aud"><strong>Built for</strong> developers and teams who embed cryptography in applications and servers that must protect secrets for the long term.</p>
 <p class="by">Maintained by <a class="lk" href="https://github.com/lecodev-26" target="_blank" rel="noopener">lecodev-26</a> · <a class="lk" href="https://github.com/lecodev-26/nexus-q/graphs/contributors" target="_blank" rel="noopener">contributors</a></p>
 <div class="cta"><a class="btn p" href="#quickstart">Quick start</a><a class="btn" href="https://github.com/lecodev-26/nexus-q" target="_blank" rel="noopener">View repository</a><a class="btn" href="https://github.com/lecodev-26/nexus-q/releases/latest" target="_blank" rel="noopener">Latest release</a><a class="btn" href="#contribute">Contribute</a></div>
-<div class="stats"><div><b>4.1.1</b><span>local release candidate · not published</span></div><div><b>241</b><span>official normalized Arena measurements</span></div><div><b>9/9</b><span>native production-path operations passed the 1.5× median and p95 gate</span></div><div><b>Opt-in</b><span>native backend remains experimental; CLI and SDKs default to RustCrypto</span></div></div>
+<div class="stats"><div><b>4.1.1</b><span>published GitHub release · final release designation</span></div><div><b>241</b><span>normalized Arena measurements in the v4.1.0 benchmark record</span></div><div><b>62</b><span>CI jobs passed on main commit 5b8a663; 2 optional jobs skipped</span></div><div><b>Opt-in</b><span>native backend is experimental; normal production paths default to RustCrypto</span></div></div>
 </div>
 </header>
+
+<section id="release"><div class="wrap">
+<div class="eyebrow rv">/ latest release · 2026-10-22</div>
+<h2 class="d rv">v4.1.1 final release: what changed</h2>
+<p class="sec-lead rv">The GitHub release <a class="lk" href="https://github.com/lecodev-26/nexus-q/releases/tag/v4.1.1" target="_blank" rel="noopener">NEXUS-Q v4.1.1</a> consolidates the 4.1.1 development cycle across the Rust core, PKI, signing, SDKs and native runtime distribution. It is a published release—not a claim of independent certification or production readiness.</p>
+<div class="grid g3">
+<div class="card rv"><h3>Post-quantum PKI</h3><p>PQC X.509 certificate issuance, OCSP responses and CRL publication, plus ACME, EST and CMPv2 enrollment workflows.</p></div>
+<div class="card rv"><h3>Signing and timestamping</h3><p>PKCS#11-based ML-DSA signing integration, M-of-N signing ceremonies and RFC 3161 timestamp tokens using ML-DSA.</p></div>
+<div class="card rv"><h3>Availability and administration</h3><p>Tenant-scoped CA/OCSP replication and recovery, role-based access control, encrypted backups and audit logging.</p></div>
+<div class="card rv"><h3>SDKs and runtime</h3><p>Consolidated Rust/C, Python, .NET, TypeScript, Java/Kotlin, Swift, Go, Ruby, PHP and Dart integration, with version-matched runtime assets and SHA-256 checks where supported.</p></div>
+<div class="card rv"><h3>Engineering evidence</h3><p>The main CI run for commit <code>5b8a663</code> completed with 62 jobs passed, two optional/manual jobs skipped and none failed. Automated checks are evidence for tested configurations, not proof that vulnerabilities are absent.</p><p style="margin-top:10px"><a class="lk" href="https://github.com/lecodev-26/nexus-q/actions/runs/39820696137" target="_blank" rel="noopener">Main CI run</a> · <a class="lk" href="https://github.com/lecodev-26/nexus-q/actions/runs/39909889694" target="_blank" rel="noopener">NuGet publish workflow</a></p></div>
+<div class="card n rv"><h3>Release asset provenance caveat</h3><p>The v4.1.1 Git tag points to current <code>main</code>, but <code>nexusq-v4.1.1-provenance.json</code> still names commit <code>5dd564d</code>; release binaries, checksums and SBOM were not regenerated when the tag moved. Do not assume the current tag and all existing release assets describe the same source snapshot.</p><p style="margin-top:10px"><a class="lk" href="https://github.com/lecodev-26/nexus-q/releases/tag/v4.1.1" target="_blank" rel="noopener">Review release assets</a> · <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/README.md" target="_blank" rel="noopener">Full project status in README</a></p></div>
+</div>
+<p class="sec-lead rv" style="margin-top:24px">Security status: no independent external audit, FIPS 140-3 validation, formal verification or blanket production-readiness claim is made. The native ML-KEM/ML-DSA backend remains experimental and opt-in; RustCrypto remains the default for normal production call paths. <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/V4_RELEASE.md" target="_blank" rel="noopener">Release notes</a> · <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/NATIVE_RUNTIME_PACKAGING.md" target="_blank" rel="noopener">Native runtime packaging</a>.</p>
+</div></section>
 
 <section id="overview"><div class="wrap">
 <div class="eyebrow rv">/ overview</div>
@@ -258,14 +323,16 @@ h2{font-size:clamp(36px,10vw,60px);max-width:none}
 <tr><td>nexusq-core</td><td>The library. All cryptography, vault, key management, identity, policy, storage and hardware abstraction live here.</td></tr>
 <tr><td>nexusq-cli</td><td>The <code>nexusq</code> binary: vault, key, data, sign, identity, credential and audit commands. A thin wrapper over the library.</td></tr>
 <tr><td>nexusq-server</td><td>The <code>nexusq-server</code> binary and authenticated HTTP service, with health, readiness and Prometheus-style metrics endpoints.</td></tr>
-<tr><td>nexusq-c · nexusq-py</td><td>The C SDK and the Python binding, built on the core library.</td></tr>
+<tr><td>nexusq-c · nexusq-py</td><td>The C ABI and Python extension, built on the core library; the Python 4.1.1 registry upload is source distribution only.</td></tr>
+<tr><td>Optional Rust services</td><td><code>nexusq-admin</code>, <code>nexusq-enrollment</code>, <code>nexusq-ha</code>, <code>nexusq-hsm</code>, <code>nexusq-ocsp</code>, <code>nexusq-pki-cluster</code>, <code>nexusq-tsa</code>, <code>nexusq-x509</code> — administration, enrollment, HA/recovery, HSM and PKI modules. Consult module docs for their operational boundaries.</td></tr>
+<tr><td>Language SDKs</td><td>TypeScript/Node.js, Java, Kotlin, .NET, Swift, Dart, Go, PHP and Ruby. Many are thin FFI bindings over <code>libnexusq</code>; package status, platform support and native runtime requirements differ by ecosystem.</td></tr>
 <tr><td>bindings/go · php · ruby</td><td>Language bindings covered by a dedicated SDK CI workflow.</td></tr>
 <tr><td>arena/</td><td>The PQC Benchmark Arena: pinned external implementations, a normalized JSONL protocol and retained CI artifacts.</td></tr>
 <tr><td>fuzz/ · artifact-archive/</td><td>Fuzz targets, and the archived V1/V2/V3 evidence with SHA-256 manifests.</td></tr>
 </table></div>
 <div class="grid g4" style="margin-top:18px">
 <div class="card rv"><h3>Targets</h3><p>Linux x86_64 and aarch64, Android/Termux aarch64, and RISC-V (riscv64gc) with a verified build.</p></div>
-<div class="card rv"><h3>Requirements</h3><p>Rust 1.85 or newer (edition 2024) and Git. SDK toolchains are only needed for the binding you build.</p></div>
+<div class="card rv"><h3>Requirements</h3><p>Building current <code>main</code> requires Rust 1.88 or newer (edition 2024) and Git. Published packages can have different source provenance and toolchain requirements; check the specific package before targeting an older compiler. SDK toolchains are only needed for the binding you build.</p></div>
 <div class="card rv"><h3>Storage</h3><p>Encrypted vault, envelope format, backup bundles and a storage database, all with documented formats.</p></div>
 <div class="card rv"><h3>Observability</h3><p>Request IDs, aggregate metrics, health and readiness probes. Secrets are kept out of logs.</p></div>
 </div>
@@ -274,27 +341,42 @@ h2{font-size:clamp(36px,10vw,60px);max-width:none}
 <section id="packages"><div class="wrap">
 <div class="eyebrow rv">/ packages & distribution</div>
 <h2 class="d rv">Install NEXUS-Q from package registries</h2>
-<p class="sec-lead rv">The 4.1.x packages are published across Rust, Python, JavaScript, Java, Kotlin, Go, PHP, Ruby and Swift channels. Registry publication is a distribution milestone only; it does not imply an independent security audit, certification, or production readiness. Most FFI SDKs require the NEXUS-Q C library (<code>libnexusq</code>) to be installed on the system first.</p>
-<div class="tw rv"><table class="table">
-<tr><th>Ecosystem</th><th>Published package</th><th>Install / dependency</th><th>Registry</th></tr>
-<tr><td colspan="4"><strong>4.1.1 is a local release candidate only; registry versions below remain the actually published 4.1.0 artifacts until coordinated publication.</strong></td></tr>
-<tr><td>Rust · library</td><td><code>nexusq</code> 4.1.0</td><td><code>cargo add nexusq</code></td><td><a class="lk" href="https://crates.io/crates/nexusq" target="_blank" rel="noopener">crates.io</a></td></tr>
-<tr><td>Rust · core</td><td><code>nexusq-core</code> 4.1.0</td><td><code>cargo add nexusq-core</code></td><td><a class="lk" href="https://crates.io/crates/nexusq-core" target="_blank" rel="noopener">crates.io</a></td></tr>
-<tr><td>Rust · ML-KEM</td><td><code>nexusq-ml-kem</code> 4.1.0</td><td><code>cargo add nexusq-ml-kem</code></td><td><a class="lk" href="https://crates.io/crates/nexusq-ml-kem" target="_blank" rel="noopener">crates.io</a></td></tr>
-<tr><td>Rust · ML-DSA</td><td><code>nexusq-ml-dsa</code> 4.1.0</td><td><code>cargo add nexusq-ml-dsa</code></td><td><a class="lk" href="https://crates.io/crates/nexusq-ml-dsa" target="_blank" rel="noopener">crates.io</a></td></tr>
-<tr><td>Rust · CLI</td><td><code>nexusq-cli</code> 4.1.0</td><td><code>cargo install nexusq-cli</code></td><td><a class="lk" href="https://crates.io/crates/nexusq-cli" target="_blank" rel="noopener">crates.io</a></td></tr>
-<tr><td>Rust · server</td><td><code>nexusq-server</code> 4.1.0</td><td><code>cargo install nexusq-server</code></td><td><a class="lk" href="https://crates.io/crates/nexusq-server" target="_blank" rel="noopener">crates.io</a></td></tr>
-<tr><td>C / C++</td><td><code>nexusq-c</code> 4.1.0</td><td><code>cargo build -p nexusq-c</code> or <code>cargo cinstall -p nexusq-c</code></td><td><a class="lk" href="https://crates.io/crates/nexusq-c" target="_blank" rel="noopener">crates.io</a></td></tr>
-<tr><td>Python</td><td><code>nexusq</code> 4.1.0</td><td><code>pip install nexusq</code></td><td><a class="lk" href="https://pypi.org/project/nexusq/" target="_blank" rel="noopener">PyPI</a></td></tr>
-<tr><td>TypeScript / Node.js</td><td><code>nexusq</code> 4.1.0</td><td><code>npm install nexusq</code></td><td><a class="lk" href="https://www.npmjs.com/package/nexusq" target="_blank" rel="noopener">npm</a></td></tr>
-<tr><td>Java</td><td><code>io.github.lecodev-26:nexusq:4.1.0</code></td><td>Maven / Gradle dependency</td><td><a class="lk" href="https://central.sonatype.com/artifact/io.github.lecodev-26/nexusq" target="_blank" rel="noopener">Maven Central</a></td></tr>
-<tr><td>Kotlin</td><td><code>io.github.lecodev-26:nexusq-kotlin:4.1.0</code></td><td>Maven / Gradle dependency</td><td><a class="lk" href="https://central.sonatype.com/artifact/io.github.lecodev-26/nexusq-kotlin" target="_blank" rel="noopener">Maven Central</a></td></tr>
-<tr><td>Go</td><td><code>bindings/go/nexusq</code> v0.1.0</td><td><code>go get github.com/lecodev-26/nexus-q/bindings/go/nexusq</code></td><td><a class="lk" href="https://pkg.go.dev/github.com/lecodev-26/nexus-q/bindings/go/nexusq" target="_blank" rel="noopener">pkg.go.dev</a></td></tr>
-<tr><td>PHP</td><td><code>lecodev-26/nexusq</code> 4.1.0</td><td><code>composer require lecodev-26/nexusq</code></td><td><a class="lk" href="https://packagist.org/packages/lecodev-26/nexusq" target="_blank" rel="noopener">Packagist</a></td></tr>
-<tr><td>Ruby</td><td><code>nexusq</code> 4.1.0</td><td><code>gem install nexusq</code></td><td><a class="lk" href="https://rubygems.org/gems/nexusq" target="_blank" rel="noopener">RubyGems</a></td></tr>
-<tr><td>Swift</td><td>Swift package tag <code>4.1.0</code></td><td><code>.package(url: "https://github.com/lecodev-26/nexus-q.git", from: "4.1.0")</code></td><td><a class="lk" href="https://github.com/lecodev-26/nexus-q/tree/4.1.0/bindings/swift" target="_blank" rel="noopener">Swift Package Manager / Git tag</a></td></tr>
-</table></div>
-<p class="sec-lead rv" style="margin-top:18px">The NuGet package <code>Nexusq</code> and the Dart package <code>nexusq</code> did not resolve in the public registries at the time this page was checked (October 19, 2026), so they are not listed as published. See the <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/main/README.md#installation" target="_blank" rel="noopener">repository installation matrix</a> for source-build and SDK details.</p>
+<p class="sec-lead rv">Version 4.1.1 is published across Rust, Python, JavaScript, Java, Kotlin, .NET, Dart, PHP and Ruby channels, with a separate Go module version and a Swift tag caveat. Registry availability is not proof that every artifact was built from the same Git commit, nor does publication imply an independent audit, certification or production readiness. Most FFI SDKs require the NEXUS-Q C library (<code>libnexusq</code>) to be installed on the system first.</p>
+<div class="sdk-grid">
+<details class="sdk-card rv"><summary><img class="sdk-logo" src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/rust/rust-original.svg" alt="Rust logo" loading="lazy"><span class="sdk-heading"><strong>Rust</strong><small>Core crates · CLI · server · PKI</small></span></summary><div class="sdk-body"><p>Open a crate directly on crates.io or expand this card to browse the Rust packages in the 4.1.1 family.</p><div class="sdk-crates">
+<div class="sdk-crate"><code>nexusq</code><a class="lk" href="https://crates.io/crates/nexusq" target="_blank" rel="noopener">crates.io ↗</a></div>
+<div class="sdk-crate"><code>nexusq-core</code><a class="lk" href="https://crates.io/crates/nexusq-core" target="_blank" rel="noopener">crates.io ↗</a></div>
+<div class="sdk-crate"><code>nexusq-kernels</code><a class="lk" href="https://crates.io/crates/nexusq-kernels" target="_blank" rel="noopener">crates.io ↗</a></div>
+<div class="sdk-crate"><code>nexusq-ml-kem</code><a class="lk" href="https://crates.io/crates/nexusq-ml-kem" target="_blank" rel="noopener">crates.io ↗</a></div>
+<div class="sdk-crate"><code>nexusq-ml-dsa</code><a class="lk" href="https://crates.io/crates/nexusq-ml-dsa" target="_blank" rel="noopener">crates.io ↗</a></div>
+<div class="sdk-crate"><code>nexusq-cli</code><a class="lk" href="https://crates.io/crates/nexusq-cli" target="_blank" rel="noopener">crates.io ↗</a></div>
+<div class="sdk-crate"><code>nexusq-server</code><a class="lk" href="https://crates.io/crates/nexusq-server" target="_blank" rel="noopener">crates.io ↗</a></div>
+<div class="sdk-crate"><code>nexusq-c</code><a class="lk" href="https://crates.io/crates/nexusq-c" target="_blank" rel="noopener">crates.io ↗</a></div>
+<div class="sdk-crate"><code>nexusq-admin</code><a class="lk" href="https://crates.io/crates/nexusq-admin" target="_blank" rel="noopener">crates.io ↗</a></div>
+<div class="sdk-crate"><code>nexusq-pki-cluster</code><a class="lk" href="https://crates.io/crates/nexusq-pki-cluster" target="_blank" rel="noopener">crates.io ↗</a></div>
+<div class="sdk-crate"><code>nexusq-hsm</code><a class="lk" href="https://crates.io/crates/nexusq-hsm" target="_blank" rel="noopener">crates.io ↗</a></div>
+<div class="sdk-crate"><code>nexusq-enrollment</code><a class="lk" href="https://crates.io/crates/nexusq-enrollment" target="_blank" rel="noopener">crates.io ↗</a></div>
+<div class="sdk-crate"><code>nexusq-ha</code><a class="lk" href="https://crates.io/crates/nexusq-ha" target="_blank" rel="noopener">crates.io ↗</a></div>
+<div class="sdk-crate"><code>nexusq-ocsp</code><a class="lk" href="https://crates.io/crates/nexusq-ocsp" target="_blank" rel="noopener">crates.io ↗</a></div>
+<div class="sdk-crate"><code>nexusq-tsa</code><a class="lk" href="https://crates.io/crates/nexusq-tsa" target="_blank" rel="noopener">crates.io ↗</a></div>
+<div class="sdk-crate"><code>nexusq-x509</code><a class="lk" href="https://crates.io/crates/nexusq-x509" target="_blank" rel="noopener">crates.io ↗</a></div>
+<div class="sdk-crate"><code>nexusq-py</code><a class="lk" href="https://crates.io/crates/nexusq-py" target="_blank" rel="noopener">crates.io ↗</a></div>
+<div class="sdk-crate"><code>nexusq-native-backend</code><a class="lk" href="https://crates.io/crates/nexusq-native-backend" target="_blank" rel="noopener">crates.io ↗</a></div>
+</div><p class="sdk-note">Experimental: <code>nexusq-native-backend</code> 0.1.0 is opt-in only.</p><div class="sdk-actions"><a class="sdk-link primary" href="https://crates.io/search?q=nexusq" target="_blank" rel="noopener">Browse all Rust crates ↗</a><a class="sdk-link" href="https://github.com/lecodev-26/nexus-q/tree/docs/readme-refresh-full-ci/crates" target="_blank" rel="noopener">Source code ↗</a></div></div></details>
+<details class="sdk-card rv"><summary><img class="sdk-logo" src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/c/c-original.svg" alt="C language logo" loading="lazy"><span class="sdk-heading"><strong>C / C++</strong><small>Native FFI library</small></span></summary><div class="sdk-body"><p><code>nexusq-c</code> 4.1.1 · C ABI used by many of the language bindings.</p><div class="sdk-actions"><a class="sdk-link primary" href="https://crates.io/crates/nexusq-c" target="_blank" rel="noopener">Open package ↗</a></div></div></details>
+<details class="sdk-card rv"><summary><img class="sdk-logo" src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg" alt="Python logo" loading="lazy"><span class="sdk-heading"><strong>Python</strong><small>PyPI · source distribution</small></span></summary><div class="sdk-body"><p><code>nexusq==4.1.1</code> · currently published as a source distribution only; no wheel is listed.</p><div class="code"><pre>pip install nexusq==4.1.1</pre></div><div class="sdk-actions"><a class="sdk-link primary" href="https://pypi.org/project/nexusq/4.1.1/" target="_blank" rel="noopener">Open on PyPI ↗</a><a class="sdk-link" href="https://github.com/lecodev-26/nexus-q/tree/docs/readme-refresh-full-ci/bindings/python" target="_blank" rel="noopener">Source ↗</a></div></div></details>
+<details class="sdk-card rv"><summary><img class="sdk-logo" src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/typescript/typescript-original.svg" alt="TypeScript logo" loading="lazy"><span class="sdk-heading"><strong>TypeScript / Node.js</strong><small>npm · koffi binding</small></span></summary><div class="sdk-body"><p><code>nexusq</code> 4.1.1</p><div class="code"><pre>npm install nexusq@4.1.1</pre></div><div class="sdk-actions"><a class="sdk-link primary" href="https://www.npmjs.com/package/nexusq/v/4.1.1" target="_blank" rel="noopener">Open on npm ↗</a><a class="sdk-link" href="https://github.com/lecodev-26/nexus-q/tree/docs/readme-refresh-full-ci/bindings/typescript" target="_blank" rel="noopener">Source ↗</a></div></div></details>
+<details class="sdk-card rv"><summary><img class="sdk-logo" src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/java/java-original.svg" alt="Java logo" loading="lazy"><span class="sdk-heading"><strong>Java</strong><small>Maven Central · JNA</small></span></summary><div class="sdk-body"><p><code>io.github.lecodev-26:nexusq:4.1.1</code></p><div class="code"><pre>implementation("io.github.lecodev-26:nexusq:4.1.1")</pre></div><div class="sdk-actions"><a class="sdk-link primary" href="https://repo.maven.apache.org/maven2/io/github/lecodev-26/nexusq/4.1.1/" target="_blank" rel="noopener">Open artifact ↗</a><a class="sdk-link" href="https://github.com/lecodev-26/nexus-q/tree/docs/readme-refresh-full-ci/bindings/java" target="_blank" rel="noopener">Source ↗</a></div></div></details>
+<details class="sdk-card rv"><summary><img class="sdk-logo" src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/kotlin/kotlin-original.svg" alt="Kotlin logo" loading="lazy"><span class="sdk-heading"><strong>Kotlin</strong><small>Maven Central · JNA</small></span></summary><div class="sdk-body"><p><code>io.github.lecodev-26:nexusq-kotlin:4.1.1</code></p><div class="code"><pre>implementation("io.github.lecodev-26:nexusq-kotlin:4.1.1")</pre></div><div class="sdk-actions"><a class="sdk-link primary" href="https://repo.maven.apache.org/maven2/io/github/lecodev-26/nexusq-kotlin/4.1.1/" target="_blank" rel="noopener">Open artifact ↗</a><a class="sdk-link" href="https://github.com/lecodev-26/nexus-q/tree/docs/readme-refresh-full-ci/bindings/kotlin" target="_blank" rel="noopener">Source ↗</a></div></div></details>
+<details class="sdk-card rv"><summary><img class="sdk-logo" src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/csharp/csharp-original.svg" alt="C sharp logo" loading="lazy"><span class="sdk-heading"><strong>C# / .NET</strong><small>NuGet · .NET 9</small></span></summary><div class="sdk-body"><p><code>Nexusq</code> 4.1.1 · includes native runtime assets.</p><div class="code"><pre>dotnet add package Nexusq --version 4.1.1</pre></div><div class="sdk-actions"><a class="sdk-link primary" href="https://www.nuget.org/packages/Nexusq/4.1.1" target="_blank" rel="noopener">Open on NuGet ↗</a><a class="sdk-link" href="https://github.com/lecodev-26/nexus-q/tree/docs/readme-refresh-full-ci/bindings/dotnet" target="_blank" rel="noopener">Source ↗</a></div></div></details>
+<details class="sdk-card rv"><summary><img class="sdk-logo" src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/swift/swift-original.svg" alt="Swift logo" loading="lazy"><span class="sdk-heading"><strong>Swift</strong><small>SwiftPM · tag caveat</small></span></summary><div class="sdk-body"><p>Check the exact tag before consuming: bare <code>4.1.1</code> points to <code>5dd564d</code>, while <code>v4.1.1</code> points to current <code>main</code>.</p><div class="sdk-actions"><a class="sdk-link primary" href="https://github.com/lecodev-26/nexus-q/releases/tag/v4.1.1" target="_blank" rel="noopener">Check release tag ↗</a><a class="sdk-link" href="https://github.com/lecodev-26/nexus-q/tree/docs/readme-refresh-full-ci/bindings/swift" target="_blank" rel="noopener">Source ↗</a></div></div></details>
+<details class="sdk-card rv"><summary><img class="sdk-logo" src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/dart/dart-original.svg" alt="Dart logo" loading="lazy"><span class="sdk-heading"><strong>Dart / Flutter</strong><small>pub.dev · dart:ffi</small></span></summary><div class="sdk-body"><p><code>nexusq</code> 4.1.1</p><div class="code"><pre>dart pub add nexusq:^4.1.1</pre></div><div class="sdk-actions"><a class="sdk-link primary" href="https://pub.dev/packages/nexusq/versions/4.1.1" target="_blank" rel="noopener">Open on pub.dev ↗</a><a class="sdk-link" href="https://github.com/lecodev-26/nexus-q/tree/docs/readme-refresh-full-ci/bindings/dart" target="_blank" rel="noopener">Source ↗</a></div></div></details>
+<details class="sdk-card rv"><summary><img class="sdk-logo" src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/go/go-original.svg" alt="Go logo" loading="lazy"><span class="sdk-heading"><strong>Go</strong><small>pkg.go.dev · v0.1.0</small></span></summary><div class="sdk-body"><p>Go binding has its own versioning (<code>v0.1.0</code>).</p><div class="code"><pre>go get github.com/lecodev-26/nexus-q/bindings/go/nexusq</pre></div><div class="sdk-actions"><a class="sdk-link primary" href="https://pkg.go.dev/github.com/lecodev-26/nexus-q/bindings/go/nexusq" target="_blank" rel="noopener">Open on pkg.go.dev ↗</a><a class="sdk-link" href="https://github.com/lecodev-26/nexus-q/tree/docs/readme-refresh-full-ci/bindings/go" target="_blank" rel="noopener">Source ↗</a></div></div></details>
+<details class="sdk-card rv"><summary><img class="sdk-logo" src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/php/php-original.svg" alt="PHP logo" loading="lazy"><span class="sdk-heading"><strong>PHP</strong><small>Packagist · FFI</small></span></summary><div class="sdk-body"><p><code>lecodev-26/nexusq</code> 4.1.1</p><div class="code"><pre>composer require lecodev-26/nexusq:4.1.1</pre></div><div class="sdk-actions"><a class="sdk-link primary" href="https://packagist.org/packages/lecodev-26/nexusq" target="_blank" rel="noopener">Open on Packagist ↗</a><a class="sdk-link" href="https://github.com/lecodev-26/nexus-q/tree/docs/readme-refresh-full-ci/bindings/php" target="_blank" rel="noopener">Source ↗</a></div></div></details>
+<details class="sdk-card rv"><summary><img class="sdk-logo" src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/ruby/ruby-original.svg" alt="Ruby logo" loading="lazy"><span class="sdk-heading"><strong>Ruby</strong><small>RubyGems · FFI</small></span></summary><div class="sdk-body"><p><code>nexusq</code> 4.1.1</p><div class="code"><pre>gem install nexusq -v 4.1.1</pre></div><div class="sdk-actions"><a class="sdk-link primary" href="https://rubygems.org/gems/nexusq/versions/4.1.1" target="_blank" rel="noopener">Open on RubyGems ↗</a><a class="sdk-link" href="https://github.com/lecodev-26/nexus-q/tree/docs/readme-refresh-full-ci/bindings/ruby" target="_blank" rel="noopener">Source ↗</a></div></div></details>
+</div>
+<p class="sec-lead rv" style="margin-top:18px">Most FFI SDKs need the NEXUS-Q C library (<code>libnexusq</code>) installed locally first. Registry availability does not prove every artifact came from the same Git commit. The Python 4.1.1 upload is source-only, Go uses its own <code>v0.1.0</code> version, and Swift's bare <code>4.1.1</code> tag differs from <code>v4.1.1</code>. Read the <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/README.md#installation" target="_blank" rel="noopener">installation matrix</a> and <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/NATIVE_RUNTIME_PACKAGING.md" target="_blank" rel="noopener">runtime packaging guide</a> for details.</p>
+<p class="sec-lead rv" style="margin-top:18px">Native runtime selection and platform support differ by SDK; many language bindings are thin FFI wrappers over <code>libnexusq</code>. The Python 4.1.1 upload is source-only, Go uses its own <code>v0.1.0</code> version, and Swift's bare <code>4.1.1</code> tag does not identify the same snapshot as <code>v4.1.1</code>. Check the <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/README.md#installation" target="_blank" rel="noopener">repository installation matrix</a> and <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/NATIVE_RUNTIME_PACKAGING.md" target="_blank" rel="noopener">runtime packaging guide</a> for exact requirements.</p>
 </div></section>
 
 <section id="crypto"><div class="wrap">
@@ -310,37 +392,50 @@ h2{font-size:clamp(36px,10vw,60px);max-width:none}
 <tr><td>KEM</td><td>Post-quantum key encapsulation</td><td>ML-KEM-768 and ML-KEM-1024, hybrid with X25519</td></tr>
 <tr><td>Signatures</td><td>Authenticity and non-repudiation</td><td>Ed25519, ML-DSA-65, SLH-DSA-SHAKE-128f</td></tr>
 </table></div>
-<p class="sec-lead rv" style="margin-top:22px">Planned algorithms are never described as available until they are implemented and tested. The reference document is <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/CRYPTOGRAPHY.md" target="_blank" rel="noopener">docs/CRYPTOGRAPHY.md</a>.</p>
+<p class="sec-lead rv" style="margin-top:22px">Planned algorithms are never described as available until they are implemented and tested. The reference document is <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/CRYPTOGRAPHY.md" target="_blank" rel="noopener">docs/CRYPTOGRAPHY.md</a>.</p>
 </div></section>
 
 <section id="benchmarks"><div class="wrap">
 <div class="eyebrow rv">/ benchmarks</div>
 <h2 class="d rv">v4.1.0 official production-path benchmark</h2>
 <p class="sec-lead rv">The official 2026-10-19 run records 241 normalized PQC Benchmark Arena measurements. The opt-in native backend passed the unchanged 1.5× median-and-p95 gate against AWS-LC on all nine ML-KEM and ML-DSA production-path operations. Lower latency is better; these are measurements from one AMD EPYC 7763 hosted CI runner, not universal performance claims.</p>
-<div class="tw rv"><table class="table">
-<tr><th>Operation</th><th>NEXUS-Q median</th><th>NEXUS-Q p95</th><th>AWS-LC median</th><th>Median ratio</th><th>p95 ratio</th><th>Gate</th></tr>
-<tr><td>ML-KEM-768 keygen</td><td>12.90 µs</td><td>13.38 µs</td><td>12.33 µs</td><td>1.046×</td><td>1.041×</td><td>Pass</td></tr>
-<tr><td>ML-KEM-768 encaps</td><td>12.94 µs</td><td>13.00 µs</td><td>12.75 µs</td><td>1.015×</td><td>1.013×</td><td>Pass</td></tr>
-<tr><td>ML-KEM-768 decaps</td><td>15.38 µs</td><td>15.44 µs</td><td>15.43 µs</td><td>0.997×</td><td>0.994×</td><td>Pass</td></tr>
-<tr><td>ML-KEM-1024 keygen</td><td>18.34 µs</td><td>18.86 µs</td><td>17.85 µs</td><td>1.028×</td><td>1.025×</td><td>Pass</td></tr>
-<tr><td>ML-KEM-1024 encaps</td><td>18.66 µs</td><td>18.76 µs</td><td>18.56 µs</td><td>1.005×</td><td>0.985×</td><td>Pass</td></tr>
-<tr><td>ML-KEM-1024 decaps</td><td>22.01 µs</td><td>22.10 µs</td><td>22.19 µs</td><td>0.992×</td><td>0.977×</td><td>Pass</td></tr>
-<tr><td>ML-DSA-65 keygen</td><td>35.79 µs</td><td>36.62 µs</td><td>40.00 µs</td><td>0.895×</td><td>0.885×</td><td>Pass</td></tr>
-<tr><td>ML-DSA-65 sign</td><td>83.22 µs</td><td>235.40 µs</td><td>96.57 µs</td><td>0.862×</td><td>0.846×</td><td>Pass</td></tr>
-<tr><td>ML-DSA-65 verify</td><td>33.54 µs</td><td>34.01 µs</td><td>34.31 µs</td><td>0.978×</td><td>0.976×</td><td>Pass</td></tr>
-</table></div>
-<div class="note rv"><b>Important scope note.</b> The native backend is experimental and opt-in only. The default <code>nexusq-core</code> build, CLI, server and SDK production call paths continue to use RustCrypto. The 1.5× gate is a performance gate, not a security audit or certification. Independent external audit remains pending. <a class="lk" href="https://github.com/lecodev-26/nexus-q/actions/runs/39186079459" target="_blank" rel="noopener">Official Arena run (241 measurements)</a> · <a class="lk" href="https://github.com/lecodev-26/nexus-q/actions/runs/39182674176" target="_blank" rel="noopener">Production-path gate</a> · <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/performance/NATIVE_BACKEND_FEATURE.md" target="_blank" rel="noopener">Feature and scope documentation</a>.</div>
+<style>
+.bench-chart{display:grid;gap:14px;margin:28px 0 22px;padding:22px;background:var(--card);border:1px solid var(--line);border-radius:20px}
+.bench-legend{display:flex;flex-wrap:wrap;gap:18px;color:var(--mut);font-size:13px}
+.bench-key{display:inline-flex;align-items:center;gap:8px}.bench-swatch{width:11px;height:11px;border-radius:3px;background:var(--acc)}.bench-swatch.aws{background:#8b9bb0}
+.bench-row{display:grid;grid-template-columns:minmax(130px,180px) minmax(0,1fr);gap:16px;align-items:center;padding:11px 0;border-top:1px solid var(--line)}
+.bench-op{font-size:13px;font-weight:600}.bench-bars{display:grid;gap:7px;min-width:0}.bench-track{height:12px;background:color-mix(in srgb,var(--fg) 7%,var(--bg));border-radius:99px;overflow:hidden}.bench-bar{height:100%;border-radius:99px;background:var(--acc);min-width:2px}.bench-bar.aws{background:#8b9bb0}
+.bench-axis{display:flex;justify-content:space-between;margin-left:calc(180px + 16px);color:var(--mut);font-size:11px}.bench-caption{color:var(--mut);font-size:12px;margin:0}
+@media(max-width:560px){.bench-chart{padding:15px;gap:10px}.bench-row{grid-template-columns:1fr;gap:8px}.bench-axis{margin-left:0}}
+</style>
+<div class="bench-chart rv" role="img" aria-label="Horizontal bar chart comparing median latency of NEXUS-Q native backend and AWS-LC across nine ML-KEM and ML-DSA operations. Shorter bars indicate lower latency.">
+<div class="bench-legend"><span class="bench-key"><i class="bench-swatch"></i>NEXUS-Q native</span><span class="bench-key"><i class="bench-swatch aws"></i>AWS-LC</span><span>Median latency · shorter is faster</span></div>
+<div class="bench-row"><div class="bench-op">ML-KEM-768 · Keygen</div><div class="bench-bars"><div class="bench-track"><div class="bench-bar" style="width:12.90%"></div></div><div class="bench-track"><div class="bench-bar aws" style="width:12.33%"></div></div></div></div>
+<div class="bench-row"><div class="bench-op">ML-KEM-768 · Encaps</div><div class="bench-bars"><div class="bench-track"><div class="bench-bar" style="width:12.94%"></div></div><div class="bench-track"><div class="bench-bar aws" style="width:12.75%"></div></div></div></div>
+<div class="bench-row"><div class="bench-op">ML-KEM-768 · Decaps</div><div class="bench-bars"><div class="bench-track"><div class="bench-bar" style="width:15.38%"></div></div><div class="bench-track"><div class="bench-bar aws" style="width:15.43%"></div></div></div></div>
+<div class="bench-row"><div class="bench-op">ML-KEM-1024 · Keygen</div><div class="bench-bars"><div class="bench-track"><div class="bench-bar" style="width:18.34%"></div></div><div class="bench-track"><div class="bench-bar aws" style="width:17.85%"></div></div></div></div>
+<div class="bench-row"><div class="bench-op">ML-KEM-1024 · Encaps</div><div class="bench-bars"><div class="bench-track"><div class="bench-bar" style="width:18.66%"></div></div><div class="bench-track"><div class="bench-bar aws" style="width:18.56%"></div></div></div></div>
+<div class="bench-row"><div class="bench-op">ML-KEM-1024 · Decaps</div><div class="bench-bars"><div class="bench-track"><div class="bench-bar" style="width:22.01%"></div></div><div class="bench-track"><div class="bench-bar aws" style="width:22.19%"></div></div></div></div>
+<div class="bench-row"><div class="bench-op">ML-DSA-65 · Keygen</div><div class="bench-bars"><div class="bench-track"><div class="bench-bar" style="width:35.79%"></div></div><div class="bench-track"><div class="bench-bar aws" style="width:40%"></div></div></div></div>
+<div class="bench-row"><div class="bench-op">ML-DSA-65 · Sign</div><div class="bench-bars"><div class="bench-track"><div class="bench-bar" style="width:83.22%"></div></div><div class="bench-track"><div class="bench-bar aws" style="width:96.57%"></div></div></div></div>
+<div class="bench-row"><div class="bench-op">ML-DSA-65 · Verify</div><div class="bench-bars"><div class="bench-track"><div class="bench-bar" style="width:33.54%"></div></div><div class="bench-track"><div class="bench-bar aws" style="width:34.31%"></div></div></div></div>
+<div class="bench-axis"><span>0</span><span>25</span><span>50</span><span>75</span><span>100 µs</span></div>
+<p class="bench-caption">Visual comparison of the recorded median latency. Exact median/p95 values and methodology remain available in <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/BENCHMARKS.md" target="_blank" rel="noopener">BENCHMARKS.md</a>.</p>
+</div>
+<div class="panel rv" style="margin-top:22px"><h3 style="margin-bottom:8px">Issue #23 — local final-gate diagnostic (Oct 21, 2026)</h3><p class="cap">Separate from the official v4.1.0 hosted AMD EPYC benchmark above. On an Intel Core i3-N305 Linux host in powersave mode, the owner-accepted local matched-RNG comparison beat or matched the best eligible comparator on median and p95 for 6 of 9 operations. Three residual gaps remain accepted: ML-DSA-65 signing (1.063× median / 1.115× p95), ML-KEM-1024 keygen (1.021× / 1.020×) and ML-KEM-768 keygen (1.015× / 1.013×). These local results are not hosted CI evidence and do not replace the official 1.5× gate.</p><p><a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/performance/ISSUE_23_FINAL_GATE_AUDIT_2026-10-21.md" target="_blank" rel="noopener">Read full report, methodology and historical decisions</a></p></div>
+<div class="note rv"><b>Important scope note.</b> The native backend is experimental and opt-in only. The default <code>nexusq-core</code> build, CLI, server and SDK production call paths continue to use RustCrypto. The 1.5× gate is a performance gate, not a security audit or certification. Independent external audit remains pending. <a class="lk" href="https://github.com/lecodev-26/nexus-q/actions/runs/39186079459" target="_blank" rel="noopener">Official Arena run (241 measurements)</a> · <a class="lk" href="https://github.com/lecodev-26/nexus-q/actions/runs/39182674176" target="_blank" rel="noopener">Production-path gate</a> · <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/performance/NATIVE_BACKEND_FEATURE.md" target="_blank" rel="noopener">Feature and scope documentation</a>.</div>
 </div></section>
 
 <section id="versions"><div class="wrap">
 <div class="eyebrow rv">/ versions & roadmap</div>
 <h2 class="d rv">Current stable line and engineering history</h2>
-<p class="sec-lead rv">V1, V2 and V3 remain historical engineering baselines. v4.1.0 is the previous published stable line; 4.1.1 is still a local candidate. A release or passing performance gate does not imply an independent audit, certification, or production readiness.</p>
+<p class="sec-lead rv">V1, V2 and V3 remain historical engineering baselines. v4.1.1 is the latest published GitHub release; v4.1.0 retains the official benchmark record described above. The v4.1.1 tag and existing release assets have a documented provenance mismatch, and neither a release nor a passing performance gate implies an independent audit, certification or production readiness.</p>
 <div class="tl">
 <div class="ver rv"><span class="tag">v1.0.0 · Oct 7, 2026</span><h3>V1</h3><p>The frozen engineering baseline: crypto core, vault, keys, identities, policy, audit log, CLI, server and SDKs. Its Arena result showed NEXUS-Q slower than the fastest implementations, which became the main target.</p><span class="st">Frozen</span></div>
 <div class="ver rv"><span class="tag">v2.0.0 · Oct 8, 2026</span><h3>V2</h3><p>Correctness, interoperability, security fuzzing, backend strategy and release gates. The final record claims no performance improvement over V1, and the performance question stayed open.</p><span class="st">Frozen on nexusqv2</span></div>
 <div class="ver rv"><span class="tag">Oct 9, 2026 · PR #45</span><h3>V3</h3><p>Hardened implementation, reproducible Arena, corrected benchmark sampling and retained evidence archive with SHA-256 manifest.</p><span class="st">Engineering release</span></div>
-<div class="ver cur rv"><span class="tag">Oct 19, 2026 · 4.1.0 · PR #55</span><h3>V4.1</h3><p>Stable line release: the native backend passed the 1.5× median-and-p95 gates and PR #55 wires it into nexusq-core behind an explicitly opt-in feature. Default builds, the CLI and SDKs still use RustCrypto; the native path is opt-in only.</p><span class="st">Stable line · final independent audit pending</span></div>
+<div class="ver rv"><span class="tag">Oct 19, 2026 · v4.1.0</span><h3>V4.1</h3><p>Previous stable line and source of the published 241-measurement Arena record. The native backend passed the 1.5× median-and-p95 gates in the recorded configuration but remains explicitly opt-in.</p><span class="st">Previous stable line</span></div>
+<div class="ver cur rv"><span class="tag">Oct 22, 2026 · v4.1.1</span><h3>V4.1.1</h3><p>Final release designation consolidating PKI certificate issuance, OCSP/CRL, ACME/EST/CMPv2 enrollment, PKCS#11 ML-DSA signing, RFC 3161 timestamping, HA/recovery, administrative controls and multi-language SDK/runtime work.</p><span class="st">Latest published release · audit not claimed</span></div>
 </div>
 </div></section>
 
@@ -366,13 +461,13 @@ h2{font-size:clamp(36px,10vw,60px);max-width:none}
 <li>Hardware isolation from the default software backend</li>
 <li>Performance leadership</li></ul></div>
 </div>
-<p class="sec-lead rv" style="margin-top:24px">Found a vulnerability? Report it privately through GitHub Security Advisories, not a public issue. See <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/main/SECURITY.md" target="_blank" rel="noopener">SECURITY.md</a>.</p>
+<p class="sec-lead rv" style="margin-top:24px">Found a vulnerability? Report it privately through GitHub Security Advisories, not a public issue. See <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/SECURITY.md" target="_blank" rel="noopener">SECURITY.md</a>.</p>
 </div></section>
 
 <section id="quickstart"><div class="wrap">
 <div class="eyebrow rv">/ quick start</div>
 <h2 class="d rv">Build it and use it</h2>
-<p class="sec-lead rv">You need Rust 1.85 or newer. Linux and Android/Termux are the environments exercised most.</p>
+<p class="sec-lead rv">To build current <code>main</code>, use Rust 1.88 or newer. Linux and Android/Termux are the environments exercised most; published packages may have different toolchain requirements.</p>
 <div class="qs">
 <div class="rv"><h3 style="margin-bottom:8px">1 · Build</h3>
 <div class="code" translate="no"><button class="copy" type="button">Copy</button><pre><span class="c"># clone and build the workspace</span>
@@ -394,7 +489,7 @@ cargo build --workspace --release</pre></div>
 ./target/release/nexusq data decrypt ./example.nqv \
   ./secret.txt.nqx ./secret.out</pre></div></div>
 </div>
-<p class="sec-lead rv" style="margin-top:14px">Prefer <code>--password-file</code> over typing a password on the command line, and never commit that file. The full command list is in the <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/user/CLI.md" target="_blank" rel="noopener">CLI guide</a>. Server setup is in <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/SERVER.md" target="_blank" rel="noopener">docs/SERVER.md</a>.</p>
+<p class="sec-lead rv" style="margin-top:14px">Prefer <code>--password-file</code> over typing a password on the command line, and never commit that file. The full command list is in the <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/user/CLI.md" target="_blank" rel="noopener">CLI guide</a>. Server setup is in <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/SERVER.md" target="_blank" rel="noopener">docs/SERVER.md</a>.</p>
 </div></section>
 
 <section id="contribute"><div class="wrap">
@@ -402,32 +497,56 @@ cargo build --workspace --release</pre></div>
 <h2 class="d rv">How you can help</h2>
 <p class="sec-lead rv">NEXUS-Q is built in the open and is still young. The most useful help right now is scrutiny: more eyes, more hardware and more honest measurements. Some of these need no cryptography background.</p>
 <div class="grid g2">
-<div class="card rv"><h3>Run the Arena on your hardware</h3><p>Reproduce the benchmark numbers on your own CPU and share what you find in an issue. Differences between machines affect reproducibility; treat local results as observations, not official gate evidence. Start with <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/main/arena/README.md" target="_blank" rel="noopener">arena/README.md</a>.</p></div>
-<div class="card rv"><h3>Review the threat model</h3><p>Read the <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/THREAT_MODEL.md" target="_blank" rel="noopener">threat model</a> and the <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/SECURITY_MODEL.md" target="_blank" rel="noopener">security model</a>, and tell us what is missing or wrong. A gap in the reasoning is worth more than praise.</p></div>
+<div class="card rv"><h3>Run the Arena on your hardware</h3><p>Reproduce the benchmark numbers on your own CPU and share what you find in an issue. Differences between machines affect reproducibility; treat local results as observations, not official gate evidence. Start with <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/arena/README.md" target="_blank" rel="noopener">arena/README.md</a>.</p></div>
+<div class="card rv"><h3>Review the threat model</h3><p>Read the <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/THREAT_MODEL.md" target="_blank" rel="noopener">threat model</a> and the <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/SECURITY_MODEL.md" target="_blank" rel="noopener">security model</a>, and tell us what is missing or wrong. A gap in the reasoning is worth more than praise.</p></div>
 <div class="card rv"><h3>Test on your platform</h3><p>Build the workspace and run the tests on Linux, Android/Termux or RISC-V, and report anything that fails or behaves differently.</p></div>
-<div class="card rv"><h3>V4 engineering status</h3><p>The native backend is experimental and opt-in: PR #55 wires it into nexusq-core behind an explicit feature flag, but the default build, the CLI and the SDKs still use RustCrypto, and the feature is not enabled by default anywhere. Independent external audit is still open.</p></div>
+<div class="card rv"><h3>V4 engineering status</h3><p>The native ML-KEM/ML-DSA backend is experimental and opt-in. Normal production call paths in the core, CLI, server and SDKs default to RustCrypto. The v4.1.1 release does not claim an independent external audit, FIPS 140-3 validation, formal verification or blanket production readiness.</p></div>
 </div>
-<div class="cta rv" style="margin:26px 0 0"><a class="btn p" href="https://github.com/lecodev-26/nexus-q/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Read CONTRIBUTING.md</a><a class="btn" href="https://github.com/lecodev-26/nexus-q/tree/v4-engineering-2026-10-16" target="_blank" rel="noopener">V4 engineering snapshot</a><a class="btn" href="https://github.com/lecodev-26/nexus-q/issues" target="_blank" rel="noopener">Open issues</a></div>
-<p class="sec-lead rv" style="margin:22px 0 0">Found a vulnerability? Please report it privately through GitHub Security Advisories, not in a public issue. See <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/main/SECURITY.md" target="_blank" rel="noopener">SECURITY.md</a>.</p>
+<div class="cta rv" style="margin:26px 0 0"><a class="btn p" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/CONTRIBUTING.md" target="_blank" rel="noopener">Read CONTRIBUTING.md</a><a class="btn" href="https://github.com/lecodev-26/nexus-q/tree/v4-engineering-2026-10-16" target="_blank" rel="noopener">V4 engineering snapshot</a><a class="btn" href="https://github.com/lecodev-26/nexus-q/issues" target="_blank" rel="noopener">Open issues</a></div>
+<p class="sec-lead rv" style="margin:22px 0 0">Found a vulnerability? Please report it privately through GitHub Security Advisories, not in a public issue. See <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/SECURITY.md" target="_blank" rel="noopener">SECURITY.md</a>.</p>
 </div></section>
 
 <section id="docs"><div class="wrap">
 <div class="eyebrow rv">/ documentation</div>
 <h2 class="d rv">Where to read next</h2>
-<p class="sec-lead rv">Everything below lives in the repository. Start with the user guide, then go as deep as you need.</p>
+<p class="sec-lead rv">The repository has task guides, API and deployment references, architecture decisions, CI documentation, security assessments and historical performance evidence. Start with a task guide or browse by topic. Implementation, package publication and operational readiness are separate statuses.</p>
 <div class="grid g3 docs">
-<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/user/README.md" target="_blank" rel="noopener">User guide<span>start here</span></a>
-<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/ARCHITECTURE.md" target="_blank" rel="noopener">Architecture<span>system design</span></a>
-<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/THREAT_MODEL.md" target="_blank" rel="noopener">Threat model<span>what we defend against</span></a>
-<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/CRYPTOGRAPHY.md" target="_blank" rel="noopener">Cryptography<span>algorithms and rules</span></a>
-<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/KEY_MANAGEMENT.md" target="_blank" rel="noopener">Key management<span>lifecycle</span></a>
-<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/SECURITY_MODEL.md" target="_blank" rel="noopener">Security model<span>guarantees</span></a>
-<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/STORAGE.md" target="_blank" rel="noopener">Storage<span>persistent formats</span></a>
-<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/POLICY.md" target="_blank" rel="noopener">Policy<span>access control</span></a>
-<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/user/SDK.md" target="_blank" rel="noopener">SDK guide<span>C, Python, Go, PHP, Ruby</span></a>
-<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/DEPLOYMENT.md" target="_blank" rel="noopener">Deployment<span>running the server</span></a>
-<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/BENCHMARKS.md" target="_blank" rel="noopener">Benchmarks<span>raw numbers</span></a>
-<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/V3_V4_ROADMAP.md" target="_blank" rel="noopener">V3 and V4 status<span>version history and current boundaries</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/user/README.md" target="_blank" rel="noopener">User guide<span>start here</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/user/INSTALLATION.md" target="_blank" rel="noopener">Installation<span>packages and source build</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/user/GETTING_STARTED.md" target="_blank" rel="noopener">Getting started<span>first steps</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/user/TROUBLESHOOTING.md" target="_blank" rel="noopener">Troubleshooting<span>diagnose common problems</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/API.md" target="_blank" rel="noopener">API reference<span>interfaces and contracts</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/CROSS_COMPILE.md" target="_blank" rel="noopener">Cross-compilation<span>build for other targets</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/ARCHITECTURE.md" target="_blank" rel="noopener">Architecture<span>system design</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/THREAT_MODEL.md" target="_blank" rel="noopener">Threat model<span>what we defend against</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/CRYPTOGRAPHY.md" target="_blank" rel="noopener">Cryptography<span>algorithms and rules</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/KEY_MANAGEMENT.md" target="_blank" rel="noopener">Key management<span>lifecycle</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/SECURITY_MODEL.md" target="_blank" rel="noopener">Security model<span>guarantees</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/STORAGE.md" target="_blank" rel="noopener">Storage<span>persistent formats</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/POLICY.md" target="_blank" rel="noopener">Policy<span>access control</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/user/SDK.md" target="_blank" rel="noopener">SDK guide<span>binding overview</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/tree/docs/readme-refresh-full-ci/bindings/typescript" target="_blank" rel="noopener">TypeScript SDK<span>Node.js / koffi</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/tree/docs/readme-refresh-full-ci/bindings/java" target="_blank" rel="noopener">Java SDK<span>JNA binding</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/tree/docs/readme-refresh-full-ci/bindings/kotlin" target="_blank" rel="noopener">Kotlin SDK<span>JNA binding</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/tree/docs/readme-refresh-full-ci/bindings/dotnet" target="_blank" rel="noopener">.NET SDK<span>P/Invoke + native assets</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/tree/docs/readme-refresh-full-ci/bindings/swift" target="_blank" rel="noopener">Swift SDK<span>SwiftPM system library</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/tree/docs/readme-refresh-full-ci/bindings/dart" target="_blank" rel="noopener">Dart SDK<span>dart:ffi</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/tree/docs/readme-refresh-full-ci/bindings/go" target="_blank" rel="noopener">Go SDK<span>separate v0.1.0 version</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/tree/docs/readme-refresh-full-ci/bindings/php" target="_blank" rel="noopener">PHP SDK<span>FFI runtime</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/tree/docs/readme-refresh-full-ci/bindings/ruby" target="_blank" rel="noopener">Ruby SDK<span>FFI runtime</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/DEPLOYMENT.md" target="_blank" rel="noopener">Deployment<span>running the server</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/SERVER.md" target="_blank" rel="noopener">HTTP server<span>configuration and operations</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/NATIVE_RUNTIME_PACKAGING.md" target="_blank" rel="noopener">Native runtime packaging<span>ABI and platform limits</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/SECURE_BOOT.md" target="_blank" rel="noopener">Secure boot<span>measured boot design</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/ci-pipeline.md" target="_blank" rel="noopener">CI pipeline<span>workflow phases and gates</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/tree/docs/readme-refresh-full-ci/docs/adr" target="_blank" rel="noopener">Architecture decisions<span>ADRs 0001–0004</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/tree/docs/readme-refresh-full-ci/docs/security" target="_blank" rel="noopener">Security assessments<span>issues #70–#71 and follow-ups</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/COMMERCIAL_READINESS.md" target="_blank" rel="noopener">Commercial readiness<span>deployment and release gaps</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/ROADMAP.md" target="_blank" rel="noopener">Project roadmap<span>phases and priorities</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/BENCHMARKS.md" target="_blank" rel="noopener">Benchmarks<span>raw numbers and methodology</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/performance/ISSUE_23_FINAL_GATE_AUDIT_2026-10-21.md" target="_blank" rel="noopener">Issue #23 final audit<span>local results and residual gaps</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/V4_RELEASE.md" target="_blank" rel="noopener">Release notes<span>scope and release caveats</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/V3_V4_ROADMAP.md" target="_blank" rel="noopener">V3 and V4 status<span>version history and current boundaries</span></a>
 </div>
 </div></section>
 
@@ -437,23 +556,23 @@ cargo build --workspace --release</pre></div>
 <div class="rv">
 <details><summary>Is NEXUS-Q ready for production?</summary><p>The project does not claim production readiness. It is an engineering project with strong CI gates, but there has been no independent audit or certification. Evaluate it, review it, and treat it accordingly.</p></details>
 <details><summary>Has it been audited?</summary><p>No independent external audit has been completed, and none is implied by a GitHub release. The project states it will link a public evidence package from the repository if one exists.</p></details>
-<details><summary>Why is it slower than AWS-LC and others?</summary><p>V1 was built to be correct and secure first. Its Arena run measured it roughly 2 to 4.5 times slower than the fastest implementations. V3 keeps zeroization and hardening and accepts the cost. V4 includes an experimental native backend. It has passed the measured-backend and production-path 1.5× median-and-p95 gates in the reviewed CI, but the native path is opt-in only and this result is not an end-to-end application benchmark.</p></details>
+<details><summary>How does NEXUS-Q perform compared with AWS-LC?</summary><p>Performance depends on the backend and operation, so a blanket claim that NEXUS-Q is slower would be misleading. The default build uses RustCrypto; the opt-in native backend passed the reviewed CI gate of at most 1.5× AWS-LC latency for both median and p95 across all nine measured ML-KEM and ML-DSA operations. That gate allows some operations to be slower; it does not claim the native backend is faster in every case, and primitive benchmarks are not end-to-end application benchmarks.</p></details>
 <details><summary>Why combine ML-KEM with X25519?</summary><p>A hybrid keeps the key exchange protected as long as at least one of the two schemes holds up. That is the usual reasoning for hybrids while post-quantum algorithms are still young in deployment.</p></details>
 <details><summary>Can I use it from Python, Go, C, PHP or Ruby?</summary><p>Yes. Python is published on PyPI; Go is available via pkg.go.dev; PHP on Packagist; and Ruby on RubyGems. The C SDK is published on crates.io. The FFI wrappers require the C library (libnexusq) to be installed locally first. See the package table and SDK guide.</p></details>
 <details><summary>What license is it under?</summary><p>You can choose either the MIT license or the Apache License 2.0, the same dual license used by much of the Rust ecosystem.</p></details>
-<details><summary>How can I help?</summary><p>Read the threat model, run the Arena yourself, review the code, and open an issue or a pull request. The 4.1.0 line is the previous published release; the 4.1.1 candidate awaits CI/release gates, and the independent external audit (Phase 21) remains open. Security reports go through GitHub Security Advisories.</p></details>
+<details><summary>How can I help?</summary><p>Read the threat model, run the Arena yourself, review the code, and open an issue or a pull request. v4.1.1 is the latest published GitHub release; independent external audit remains open, and the release tag/assets have a documented provenance mismatch. Security reports go through GitHub Security Advisories.</p></details>
 </div>
 </div></section>
 
-<footer><div class="wrap"><div>NEXUS-Q · MIT OR Apache-2.0 · an engineering project by <a class="lk" href="https://github.com/lecodev-26" target="_blank" rel="noopener">lecodev-26</a></div><div><a href="https://github.com/lecodev-26/nexus-q" target="_blank" rel="noopener">Repository</a> · <a href="https://github.com/lecodev-26/nexus-q/issues" target="_blank" rel="noopener">Issues</a> · <a href="https://github.com/lecodev-26/nexus-q/blob/main/SECURITY.md" target="_blank" rel="noopener">Security</a></div></div></footer>
+<footer><div class="wrap"><div>NEXUS-Q · MIT OR Apache-2.0 · an engineering project by <a class="lk" href="https://github.com/lecodev-26" target="_blank" rel="noopener">lecodev-26</a></div><div class="footer-links"><a href="https://github.com/lecodev-26/nexus-q" target="_blank" rel="noopener">Repository</a><a href="https://github.com/lecodev-26/nexus-q/issues" target="_blank" rel="noopener">Issues</a><a href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/SECURITY.md" target="_blank" rel="noopener">Security</a><a href="/legal">Legal notice</a><a href="/privacy">Privacy</a><a href="/cookies">Cookies</a><a href="/accessibility">Accessibility</a></div></div></footer>
 
 <script>
 (function(){
-var root=document.documentElement,tg=document.getElementById('tg'),tt=document.getElementById('tgt');
+var root=document.documentElement,lightBtn=document.getElementById('theme-light'),darkBtn=document.getElementById('theme-dark');
 function cur(){var t=root.getAttribute('data-theme');return t||(matchMedia('(prefers-color-scheme:light)').matches?'light':'dark')}
-function lab(){tt.textContent=cur()==='dark'?'Light':'Dark'}
+function applyTheme(t){root.setAttribute('data-theme',t);lightBtn.setAttribute('aria-pressed',t==='light'?'true':'false');darkBtn.setAttribute('aria-pressed',t==='dark'?'true':'false');try{localStorage.setItem('nq-theme',t)}catch(e){}}
 try{var s=localStorage.getItem('nq-theme');if(s==='light'||s==='dark')root.setAttribute('data-theme',s)}catch(e){}
-lab();tg.addEventListener('click',function(){var n=cur()==='dark'?'light':'dark';root.setAttribute('data-theme',n);try{localStorage.setItem('nq-theme',n)}catch(e){}lab()});
+applyTheme(cur());lightBtn.addEventListener('click',function(){applyTheme('light')});darkBtn.addEventListener('click',function(){applyTheme('dark')});
 var mb=document.getElementById('mb'),menu=document.getElementById('menu');
 function closeMenu(){menu.classList.remove('open');mb.setAttribute('aria-expanded','false')}
 mb.addEventListener('click',function(){var o=menu.classList.toggle('open');mb.setAttribute('aria-expanded',o?'true':'false')});
@@ -462,6 +581,7 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')closeMenu()}
 addEventListener('resize',function(){if(innerWidth>1080)closeMenu()});
 var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('on');io.unobserve(e.target)}})},{threshold:.1});
 document.querySelectorAll('.rv').forEach(function(el){io.observe(el)});
+/* SDK cards live in a horizontal snap carousel; each disclosure opens independently. */
 document.querySelectorAll('.copy').forEach(function(b){b.addEventListener('click',function(){var t=b.parentNode.querySelector('pre').innerText;(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){b.textContent='Copied'},function(){b.textContent='Select + copy'});setTimeout(function(){b.textContent='Copy'},1600)})});
 
 

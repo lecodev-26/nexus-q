@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="500" viewBox="0 0 1000 500" role="img" aria-labelledby="title desc">
+<title id="title">NEXUS-Q native backend versus AWS-LC median latency ratios</title>
+<desc id="desc">Nine measured operations from the documented v4.1.0 hosted-runner release gate. Ratio is NEXUS-Q median divided by AWS-LC median. Values below 1.0 indicate lower median latency for NEXUS-Q in this run; values above 1.0 indicate higher median latency. The native backend is experimental and opt-in.</desc>
+<rect width="100%" height="100%" rx="16" fill="#ffffff"/>
+<text x="36" y="38" font-family="Inter,Arial,sans-serif" font-size="22" font-weight="700" fill="#172033">Measured median latency ratio · NEXUS-Q / AWS-LC</text>
+<text x="36" y="65" font-family="Inter,Arial,sans-serif" font-size="14" fill="#475569">v4.1.0 hosted CI run · AMD EPYC 7763 · lower is better · no composite score</text>
+<line x1="260.0" y1="82" x2="260.0" y2="430" stroke="#d7dee8" stroke-width="1" stroke-dasharray="2 5"/>
+<text x="260.0" y="87" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="12" fill="#475569">0.8×</text>
+<line x1="473.3" y1="82" x2="473.3" y2="430" stroke="#d7dee8" stroke-width="1" stroke-dasharray="2 5"/>
+<text x="473.3" y="87" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="12" fill="#475569">0.9×</text>
+<line x1="686.7" y1="82" x2="686.7" y2="430" stroke="#0f766e" stroke-width="2" stroke-dasharray="5 4"/>
+<text x="686.7" y="87" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="12" fill="#475569">1.0×</text>
+<line x1="900.0" y1="82" x2="900.0" y2="430" stroke="#d7dee8" stroke-width="1" stroke-dasharray="2 5"/>
+<text x="900.0" y="87" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="12" fill="#475569">1.1×</text>
+<text x="36" y="120" font-family="Inter,Arial,sans-serif" font-size="14" fill="#172033">ML-KEM-768 keygen</text>
+<rect x="686.7" y="105" width="98.1" height="19" rx="4" fill="#64748b"/>
+<text x="793.8" y="119" text-anchor="start" font-family="Inter,Arial,sans-serif" font-size="13" font-weight="700" fill="#172033">1.046×</text>
+<text x="36" y="157" font-family="Inter,Arial,sans-serif" font-size="14" fill="#172033">ML-KEM-768 encaps</text>
+<rect x="686.7" y="142" width="32.0" height="19" rx="4" fill="#64748b"/>
+<text x="727.7" y="156" text-anchor="start" font-family="Inter,Arial,sans-serif" font-size="13" font-weight="700" fill="#172033">1.015×</text>
+<text x="36" y="194" font-family="Inter,Arial,sans-serif" font-size="14" fill="#172033">ML-KEM-768 decaps</text>
+<rect x="680.3" y="179" width="6.4" height="19" rx="4" fill="#0f766e"/>
+<text x="671.3" y="193" text-anchor="end" font-family="Inter,Arial,sans-serif" font-size="13" font-weight="700" fill="#172033">0.997×</text>
+<text x="36" y="231" font-family="Inter,Arial,sans-serif" font-size="14" fill="#172033">ML-KEM-1024 keygen</text>
+<rect x="686.7" y="216" width="59.7" height="19" rx="4" fill="#64748b"/>
+<text x="755.4" y="230" text-anchor="start" font-family="Inter,Arial,sans-serif" font-size="13" font-weight="700" fill="#172033">1.028×</text>
+<text x="36" y="268" font-family="Inter,Arial,sans-serif" font-size="14" fill="#172033">ML-KEM-1024 encaps</text>
+<rect x="686.7" y="253" width="10.7" height="19" rx="4" fill="#64748b"/>
+<text x="706.3" y="267" text-anchor="start" font-family="Inter,Arial,sans-serif" font-size="13" font-weight="700" fill="#172033">1.005×</text>
+<text x="36" y="305" font-family="Inter,Arial,sans-serif" font-size="14" fill="#172033">ML-KEM-1024 decaps</text>
+<rect x="669.6" y="290" width="17.1" height="19" rx="4" fill="#0f766e"/>
+<text x="660.6" y="304" text-anchor="end" font-family="Inter,Arial,sans-serif" font-size="13" font-weight="700" fill="#172033">0.992×</text>
+<text x="36" y="342" font-family="Inter,Arial,sans-serif" font-size="14" fill="#172033">ML-DSA-65 keygen</text>
+<rect x="462.7" y="327" width="224.0" height="19" rx="4" fill="#0f766e"/>
+<text x="453.7" y="341" text-anchor="end" font-family="Inter,Arial,sans-serif" font-size="13" font-weight="700" fill="#172033">0.895×</text>
+<text x="36" y="379" font-family="Inter,Arial,sans-serif" font-size="14" fill="#172033">ML-DSA-65 sign</text>
+<rect x="392.3" y="364" width="294.4" height="19" rx="4" fill="#0f766e"/>
+<text x="383.3" y="378" text-anchor="end" font-family="Inter,Arial,sans-serif" font-size="13" font-weight="700" fill="#172033">0.862×</text>
+<text x="36" y="416" font-family="Inter,Arial,sans-serif" font-size="14" fill="#172033">ML-DSA-65 verify</text>
+<rect x="639.7" y="401" width="46.9" height="19" rx="4" fill="#0f766e"/>
+<text x="630.7" y="415" text-anchor="end" font-family="Inter,Arial,sans-serif" font-size="13" font-weight="700" fill="#172033">0.978×</text>
+<text x="36" y="474" font-family="Inter,Arial,sans-serif" font-size="12" fill="#475569">One recorded run, not a universal performance claim. See README benchmark table and docs/V4_RELEASE.md for p95, sample counts and methodology.</text>
+</svg>

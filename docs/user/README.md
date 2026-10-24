@@ -2,7 +2,7 @@
 
 NEXUS-Q is a Rust-based cryptographic security engine with a CLI, library API, authenticated HTTP server, and native bindings.
 
-**Project status (2026-10-16):** the V4 native backend is an experimental engineering snapshot. It is not yet wired into `nexusq-core`, CLI, or SDK production cryptographic paths. The repository and its engineering releases do not claim production readiness, independent audit, or FIPS validation.
+**Project status:** the V4 native backend is experimental and opt-in. It is wired into `nexusq-core` behind the `native-backend` feature, but the default core build, CLI, server and SDK production paths continue to use RustCrypto. The repository and its engineering releases do not claim production readiness, independent audit, or FIPS validation. See the root README and [`docs/performance/NATIVE_BACKEND_FEATURE.md`](../performance/NATIVE_BACKEND_FEATURE.md) for the current boundary.
 
 This guide describes the current implemented surface. Features described as CI-only, planned, hardware-dependent, or future are not presented as available local features.
 
@@ -23,7 +23,7 @@ This guide describes the current implemented surface. Features described as CI-o
 
 ## Current support boundary
 
-The local delivery boundary includes the Rust core, CLI, C FFI, limited Python binding, and authenticated HTTP server. Other language SDKs and external publication are not claimed as shipped.
+The repository includes the Rust core, CLI, C FFI, Python binding and authenticated HTTP server, along with language bindings under `bindings/`. Package availability, platform support and release provenance vary by ecosystem; verify each package against the root README installation table and its binding-specific instructions.
 
 The default server bind is loopback. Remote exposure requires a trusted TLS termination boundary; NEXUS-Q does not terminate TLS itself.
 
