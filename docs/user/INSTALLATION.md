@@ -1,6 +1,6 @@
 # Installation
 
-NEXUS-Q can be installed from the language package registries (the published release line is 4.1.0; the local 4.1.1 candidate is not yet published) or built from this source branch.
+NEXUS-Q 4.1.1 is available through several package registries and can also be built from source. Registry availability is not proof that every package was built from the same Git commit: the GitHub v4.1.1 tag points to current `main`, while the existing release provenance manifest and binary/checksum/SBOM assets were not regenerated after the tag moved. Review the status note in the root README before relying on release-archive provenance.
 
 ## From package registries
 
@@ -12,23 +12,23 @@ NEXUS-Q can be installed from the language package registries (the published rel
 | Rust server | `cargo install nexusq-server` | Available — crates.io |
 | C / C++ SDK | `cargo cinstall -p nexusq-c` (requires [cargo-c](https://github.com/lu-zero/cargo-c)), or build the C library from source | Available — crates.io |
 | Python | `pip install nexusq` | Available — PyPI |
-| TypeScript / Node.js | `npm install nexusq` | Published 4.1.0; 4.1.1 candidate pending release |
-| Java | `io.github.lecodev-26:nexusq:4.1.0` | Published on Maven Central; 4.1.1 candidate pending release |
-| Kotlin | `io.github.lecodev-26:nexusq-kotlin:4.1.0` | Published on Maven Central; 4.1.1 candidate pending release |
-| C# / .NET | `dotnet add package Nexusq` | NuGet OIDC configured; end-to-end publication still pending |
-| Swift | Swift Package Manager package at this repository (`bindings/swift`) | Tag `4.1.1` exists for the earlier SPM package; do not overwrite it for this candidate |
-| Dart / Flutter | `dart pub add nexusq` | Published 4.1.0 on pub.dev; 4.1.1 candidate pending release |
+| TypeScript / Node.js | `npm install nexusq` | Published 4.1.1 on npm |
+| Java | `io.github.lecodev-26:nexusq:4.1.1` | Published 4.1.1 on Maven Central |
+| Kotlin | `io.github.lecodev-26:nexusq-kotlin:4.1.1` | Published 4.1.1 on Maven Central |
+| C# / .NET | `dotnet add package Nexusq` | Published 4.1.1; see runtime assets and workflow evidence in root README |
+| Swift | Swift Package Manager package at this repository (`bindings/swift`) | Bare tag `4.1.1` resolves to commit `5dd564d`, while `v4.1.1` resolves to current `main`; verify the exact tag before consuming |
+| Dart / Flutter | `dart pub add nexusq` | Published 4.1.1 on pub.dev |
 | Go | `go get github.com/lecodev-26/nexus-q/bindings/go/nexusq` | Available — pkg.go.dev |
 | PHP | `composer require lecodev-26/nexusq` | Available — Packagist |
 | Ruby | `gem install nexusq` | Available — RubyGems.org |
 
-The Go, PHP, Ruby, TypeScript, Java, Kotlin and Dart SDKs resolve or download a version-matched runtime on supported targets; downloads verify SHA-256. Go uses a pure-Go loader and does not require cgo. Dart uses `curl` for its synchronous first-use download. `NEXUSQ_LIBRARY` remains an advanced override for development and offline tests. The `nexusq` metacrate groups the published Rust library crates (`nexusq-core`, `nexusq-kernels`, `nexusq-ml-kem`, `nexusq-ml-dsa`) so a single `cargo add nexusq` pulls them all in; prefer individual crates for a minimal dependency tree. The Python package is a self-contained PyO3 native extension. The GitHub release includes the CLI/server package and separate versioned C ABI runtime archives/assets.
+The Go, PHP, Ruby, TypeScript, Java, Kotlin and Dart SDKs resolve or download a version-matched runtime on supported targets; downloads verify SHA-256. Registry presence does not prove provenance alignment with a specific Git commit. Go uses a pure-Go loader and does not require cgo. Dart uses `curl` for its synchronous first-use download. `NEXUSQ_LIBRARY` remains an advanced override for development and offline tests. The `nexusq` metacrate groups the published Rust library crates (`nexusq-core`, `nexusq-kernels`, `nexusq-ml-kem`, `nexusq-ml-dsa`) so a single `cargo add nexusq` pulls them all in; prefer individual crates for a minimal dependency tree. The Python package is a self-contained PyO3 native extension. The GitHub release includes the CLI/server package and separate versioned C ABI runtime archives/assets.
 
 ## From source
 
 Requirements:
 
-- Rust 1.85 or newer.
+- Rust 1.88 or newer for current `main` (the published release-tag manifest declares Rust 1.85; do not infer that requirement for all package builds).
 - Git.
 
 Build:
@@ -71,7 +71,7 @@ Before starting the server:
 5. Keep the server bound to loopback unless a trusted TLS termination layer is present.
 6. Configure a supervisor to allow graceful SIGTERM/SIGINT shutdown.
 
-Docker, systemd, .deb, .rpm, and registry publication are not required by the current deployment boundary. For registry installation channels, see the table above; it describes the published 4.1.0 packages until the 4.1.1 candidate is released; their availability does not change the deployment boundary or imply any validation claim.
+Docker, systemd, .deb, .rpm, and registry publication are not required by the current deployment boundary. For registry installation channels, see the table above; it lists currently available registry packages; their availability does not change the deployment boundary or imply any validation claim.
 
 
 The reproducible GitHub release includes versioned C ABI runtime archives and

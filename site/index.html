@@ -217,7 +217,7 @@ section{padding:clamp(48px,6vw,76px) 0}.eyebrow{font:700 12px "Instrument Sans",
 <body>
 <nav><div class="wrap">
 <a class="logo notranslate" translate="no" href="#top"><img src="/nexus-q-logo.png" alt="" width="30" height="30">NEXUS-Q</a>
-<div class="links" id="menu"><a href="#overview">Overview</a><a href="#release">v4.1.1 release</a><a href="#how">How it works</a><a href="#crypto">Crypto</a><a href="#packages">Packages</a><a href="#benchmarks">Benchmarks</a><a href="#versions">Versions</a><a href="#quickstart">Quick start</a><a href="#contribute">Contribute</a><a href="#faq">FAQ</a><a class="mo" href="https://github.com/lecodev-26/nexus-q" target="_blank" rel="noopener">GitHub</a></div>
+<div class="links" id="menu"><a href="#overview">Overview</a><a href="#release">v4.1.1 release</a><a href="#how">How it works</a><a href="#crypto">Crypto</a><a href="#packages">Packages</a><a href="#benchmarks">Benchmarks</a><a href="#versions">Versions</a><a href="#quickstart">Quick start</a><a href="#docs">Documentation</a><a href="#contribute">Contribute</a><a href="#faq">FAQ</a><a class="mo" href="https://github.com/lecodev-26/nexus-q" target="_blank" rel="noopener">GitHub</a></div>
 <div class="navr"><div class="theme-picker" role="group" aria-label="Choose color theme"><button class="theme-choice" id="theme-light" type="button" aria-pressed="false" title="Use light mode">☀ Claro</button><button class="theme-choice" id="theme-dark" type="button" aria-pressed="false" title="Use dark mode">☾ Oscuro</button></div><a class="btn p" href="https://github.com/lecodev-26/nexus-q" target="_blank" rel="noopener">GitHub</a><button class="mb" id="mb" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button></div>
 </div></nav>
 
@@ -291,7 +291,9 @@ section{padding:clamp(48px,6vw,76px) 0}.eyebrow{font:700 12px "Instrument Sans",
 <tr><td>nexusq-core</td><td>The library. All cryptography, vault, key management, identity, policy, storage and hardware abstraction live here.</td></tr>
 <tr><td>nexusq-cli</td><td>The <code>nexusq</code> binary: vault, key, data, sign, identity, credential and audit commands. A thin wrapper over the library.</td></tr>
 <tr><td>nexusq-server</td><td>The <code>nexusq-server</code> binary and authenticated HTTP service, with health, readiness and Prometheus-style metrics endpoints.</td></tr>
-<tr><td>nexusq-c · nexusq-py</td><td>The C SDK and the Python binding, built on the core library.</td></tr>
+<tr><td>nexusq-c · nexusq-py</td><td>The C ABI and Python extension, built on the core library; the Python 4.1.1 registry upload is source distribution only.</td></tr>
+<tr><td>Optional Rust services</td><td><code>nexusq-admin</code>, <code>nexusq-enrollment</code>, <code>nexusq-ha</code>, <code>nexusq-hsm</code>, <code>nexusq-ocsp</code>, <code>nexusq-pki-cluster</code>, <code>nexusq-tsa</code>, <code>nexusq-x509</code> — administration, enrollment, HA/recovery, HSM and PKI modules. Consult module docs for their operational boundaries.</td></tr>
+<tr><td>Language SDKs</td><td>TypeScript/Node.js, Java, Kotlin, .NET, Swift, Dart, Go, PHP and Ruby. Many are thin FFI bindings over <code>libnexusq</code>; package status, platform support and native runtime requirements differ by ecosystem.</td></tr>
 <tr><td>bindings/go · php · ruby</td><td>Language bindings covered by a dedicated SDK CI workflow.</td></tr>
 <tr><td>arena/</td><td>The PQC Benchmark Arena: pinned external implementations, a normalized JSONL protocol and retained CI artifacts.</td></tr>
 <tr><td>fuzz/ · artifact-archive/</td><td>Fuzz targets, and the archived V1/V2/V3 evidence with SHA-256 manifests.</td></tr>
@@ -367,6 +369,7 @@ section{padding:clamp(48px,6vw,76px) 0}.eyebrow{font:700 12px "Instrument Sans",
 <tr><td>ML-DSA-65 sign</td><td>83.22 µs</td><td>235.40 µs</td><td>96.57 µs</td><td>0.862×</td><td>0.846×</td><td>Pass</td></tr>
 <tr><td>ML-DSA-65 verify</td><td>33.54 µs</td><td>34.01 µs</td><td>34.31 µs</td><td>0.978×</td><td>0.976×</td><td>Pass</td></tr>
 </table></div>
+<div class="panel rv" style="margin-top:22px"><h3 style="margin-bottom:8px">Issue #23 — local final-gate diagnostic (Oct 21, 2026)</h3><p class="cap">Separate from the official v4.1.0 hosted AMD EPYC benchmark above. On an Intel Core i3-N305 Linux host in powersave mode, the owner-accepted local matched-RNG comparison beat or matched the best eligible comparator on median and p95 for 6 of 9 operations. Three residual gaps remain accepted: ML-DSA-65 signing (1.063× median / 1.115× p95), ML-KEM-1024 keygen (1.021× / 1.020×) and ML-KEM-768 keygen (1.015× / 1.013×). These local results are not hosted CI evidence and do not replace the official 1.5× gate.</p><p><a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/performance/ISSUE_23_FINAL_GATE_AUDIT_2026-10-21.md" target="_blank" rel="noopener">Read full report, methodology and historical decisions</a></p></div>
 <div class="note rv"><b>Important scope note.</b> The native backend is experimental and opt-in only. The default <code>nexusq-core</code> build, CLI, server and SDK production call paths continue to use RustCrypto. The 1.5× gate is a performance gate, not a security audit or certification. Independent external audit remains pending. <a class="lk" href="https://github.com/lecodev-26/nexus-q/actions/runs/39186079459" target="_blank" rel="noopener">Official Arena run (241 measurements)</a> · <a class="lk" href="https://github.com/lecodev-26/nexus-q/actions/runs/39182674176" target="_blank" rel="noopener">Production-path gate</a> · <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/performance/NATIVE_BACKEND_FEATURE.md" target="_blank" rel="noopener">Feature and scope documentation</a>.</div>
 </div></section>
 
@@ -453,9 +456,14 @@ cargo build --workspace --release</pre></div>
 <section id="docs"><div class="wrap">
 <div class="eyebrow rv">/ documentation</div>
 <h2 class="d rv">Where to read next</h2>
-<p class="sec-lead rv">Everything below lives in the repository. Start with the user guide, then go as deep as you need.</p>
+<p class="sec-lead rv">The repository has task guides, API and deployment references, architecture decisions, CI documentation, security assessments and historical performance evidence. Start with a task guide or browse by topic. Implementation, package publication and operational readiness are separate statuses.</p>
 <div class="grid g3 docs">
 <a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/user/README.md" target="_blank" rel="noopener">User guide<span>start here</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/user/INSTALLATION.md" target="_blank" rel="noopener">Installation<span>packages and source build</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/user/GETTING_STARTED.md" target="_blank" rel="noopener">Getting started<span>first steps</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/user/TROUBLESHOOTING.md" target="_blank" rel="noopener">Troubleshooting<span>diagnose common problems</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/API.md" target="_blank" rel="noopener">API reference<span>interfaces and contracts</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/CROSS_COMPILE.md" target="_blank" rel="noopener">Cross-compilation<span>build for other targets</span></a>
 <a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/ARCHITECTURE.md" target="_blank" rel="noopener">Architecture<span>system design</span></a>
 <a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/THREAT_MODEL.md" target="_blank" rel="noopener">Threat model<span>what we defend against</span></a>
 <a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/CRYPTOGRAPHY.md" target="_blank" rel="noopener">Cryptography<span>algorithms and rules</span></a>
@@ -463,9 +471,28 @@ cargo build --workspace --release</pre></div>
 <a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/SECURITY_MODEL.md" target="_blank" rel="noopener">Security model<span>guarantees</span></a>
 <a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/STORAGE.md" target="_blank" rel="noopener">Storage<span>persistent formats</span></a>
 <a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/POLICY.md" target="_blank" rel="noopener">Policy<span>access control</span></a>
-<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/user/SDK.md" target="_blank" rel="noopener">SDK guide<span>C, Python, Go, PHP, Ruby</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/user/SDK.md" target="_blank" rel="noopener">SDK guide<span>binding overview</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/tree/main/bindings/typescript" target="_blank" rel="noopener">TypeScript SDK<span>Node.js / koffi</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/tree/main/bindings/java" target="_blank" rel="noopener">Java SDK<span>JNA binding</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/tree/main/bindings/kotlin" target="_blank" rel="noopener">Kotlin SDK<span>JNA binding</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/tree/main/bindings/dotnet" target="_blank" rel="noopener">.NET SDK<span>P/Invoke + native assets</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/tree/main/bindings/swift" target="_blank" rel="noopener">Swift SDK<span>SwiftPM system library</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/tree/main/bindings/dart" target="_blank" rel="noopener">Dart SDK<span>dart:ffi</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/tree/main/bindings/go" target="_blank" rel="noopener">Go SDK<span>separate v0.1.0 version</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/tree/main/bindings/php" target="_blank" rel="noopener">PHP SDK<span>FFI runtime</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/tree/main/bindings/ruby" target="_blank" rel="noopener">Ruby SDK<span>FFI runtime</span></a>
 <a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/DEPLOYMENT.md" target="_blank" rel="noopener">Deployment<span>running the server</span></a>
-<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/BENCHMARKS.md" target="_blank" rel="noopener">Benchmarks<span>raw numbers</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/SERVER.md" target="_blank" rel="noopener">HTTP server<span>configuration and operations</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/NATIVE_RUNTIME_PACKAGING.md" target="_blank" rel="noopener">Native runtime packaging<span>ABI and platform limits</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/SECURE_BOOT.md" target="_blank" rel="noopener">Secure boot<span>measured boot design</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/ci-pipeline.md" target="_blank" rel="noopener">CI pipeline<span>workflow phases and gates</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/tree/main/docs/adr" target="_blank" rel="noopener">Architecture decisions<span>ADRs 0001–0004</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/tree/main/docs/security" target="_blank" rel="noopener">Security assessments<span>issues #70–#71 and follow-ups</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/COMMERCIAL_READINESS.md" target="_blank" rel="noopener">Commercial readiness<span>deployment and release gaps</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/ROADMAP.md" target="_blank" rel="noopener">Project roadmap<span>phases and priorities</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/BENCHMARKS.md" target="_blank" rel="noopener">Benchmarks<span>raw numbers and methodology</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/performance/ISSUE_23_FINAL_GATE_AUDIT_2026-10-21.md" target="_blank" rel="noopener">Issue #23 final audit<span>local results and residual gaps</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/V4_RELEASE.md" target="_blank" rel="noopener">Release notes<span>scope and release caveats</span></a>
 <a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/V3_V4_ROADMAP.md" target="_blank" rel="noopener">V3 and V4 status<span>version history and current boundaries</span></a>
 </div>
 </div></section>

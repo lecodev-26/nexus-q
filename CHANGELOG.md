@@ -1,11 +1,11 @@
 # Changelog
 
-## v4.1.1 — release candidate (2026-10-22; not published)
+## v4.1.1 — published release (2026-10-22; provenance caveat)
 
 - Integrates the local implementations for issues #64–#71: PQC X.509 issuer, OCSP/CRL, ACME/EST/CMPv2 enrollment, PKCS#11 and M-of-N ceremonies, RFC 3161 timestamping, tenant-scoped HA/recovery, RBAC/encrypted backups/audit logging, and the opt-in native ML-KEM/ML-DSA production path.
 - Bumps the Rust workspace, Python extension, and versioned SDK manifests/runtime pins to 4.1.1. The Rust workspace resolves offline with the updated lockfile.
 - Adds issue-specific implementation/verification notes under `docs/security/` and records the native-backend limitations: it remains opt-in, multi-hour fuzz soaks and the current-SHA hosted performance gate still require CI evidence, and an independent external audit remains open.
-- This is a local release candidate only. No registry package, GitHub release, or remote tag has been published by this work; registry consumers continue to receive the previously published versions until the coordinated release is explicitly authorized.
+- Publication status: the GitHub release and multiple ecosystem packages are available. However, the `v4.1.1` Git tag was moved to current `main` without regenerating the existing release binaries, checksums, SBOM and provenance manifest. The manifest still identifies commit `5dd564d`; do not assume those release assets describe the current tag. See the current status and installation matrix in `README.md`.
 
 ## v4.1.0 — stable line release (2026-10-19)
 
@@ -19,8 +19,7 @@
 - Post-release SDK additions (4.1.0 line): new thin bindings over the C SDK for TypeScript/Node.js (koffi), Java (JNA), Kotlin (JNA), C#/.NET (P/Invoke), Swift (Swift Package Manager system-library target) and Dart (dart:ffi), each with a vault/version surface and a smoke test (Java, Dart and Swift additionally ship unit test suites), all verified locally against `libnexusq` and wired into the SDK CI matrix (`bindings/typescript`, `bindings/java`, `bindings/kotlin`, `bindings/dotnet`, `bindings/swift`, `bindings/dart`). At the initial release cut, registry publication was pending; the 4.1.0 TypeScript, Java, Kotlin, Swift and Dart packages were subsequently published. NuGet remains pending successful end-to-end OIDC verification. These historical 4.1.0 artifacts are not the unpublished 4.1.1 candidate.
 
 
-All notable changes are recorded here. The project remains in engineering/release preparation; entries before a stable public
-release describe the repository state rather than a promise of API stability.
+All notable changes are recorded here. The project remains under active engineering. Publication does not imply independent audit, certification, or a blanket production-readiness claim; see the release caveats above.
 
 ## v3.0.0 — engineering release (2026-10-09)
 
