@@ -1,27 +1,502 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>NEXUS-Q — Post-Quantum Infrastructure</title><meta name="description" content="Open-source post-quantum cryptographic infrastructure in Rust. Explore ML-KEM, ML-DSA, key management, PQC PKI and developer tooling."><meta name="theme-color" content="#090a0d"><link rel="canonical" href="https://nexus-q.link/">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NEXUS-Q — Post-quantum cryptographic security engine</title>
+<meta name="description" content="NEXUS-Q is an open source Rust engine that protects data, keys and identities with post-quantum cryptography (ML-KEM, ML-DSA), a tamper-evident audit log and an honest account of what it does and does not prove.">
+<meta property="og:title" content="NEXUS-Q — Post-quantum cryptographic security engine">
+<meta property="og:description" content="Open source Rust engine for protecting data, keys and identities. ML-KEM-768 + X25519, ML-DSA-65, vaults, audit log, SDKs. No independent audit implied.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="NEXUS-Q">
+<meta property="og:url" content="https://nexus-q.link/">
+<meta property="og:image" content="https://nexus-q.link/og.jpg">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="NEXUS-Q: post-quantum cryptographic security engine">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="NEXUS-Q — Post-quantum cryptographic security engine">
+<meta name="twitter:description" content="Open source Rust engine for protecting data, keys and identities with ML-KEM and ML-DSA. No independent audit implied.">
+<meta name="twitter:image" content="https://nexus-q.link/og.jpg">
+<link rel="canonical" href="https://nexus-q.link/">
+<meta name="google-site-verification" content="uxWm8El2GOsP6QysZ7LhFuo-IBxQUeFpS2Lgpgq3T5I" />
+<meta name="keywords" content="post-quantum cryptography, ML-KEM, ML-DSA, Kyber, Dilithium, FIPS 203, FIPS 204, Rust, encryption, key management, vault">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","@id":"https://nexus-q.link/#website","url":"https://nexus-q.link/","name":"NEXUS-Q","alternateName":["NEXUS-Q PQC","NEXUS-Q post-quantum"],"description":"Open source Rust engine for protecting data, keys and identities with post-quantum cryptography.","inLanguage":"en","publisher":{"@id":"https://nexus-q.link/#org"}},{"@type":"Organization","@id":"https://nexus-q.link/#org","name":"NEXUS-Q","url":"https://nexus-q.link/","logo":{"@type":"ImageObject","url":"https://nexus-q.link/icon-192.png","width":192,"height":192},"founder":{"@type":"Person","name":"lecodev-26","url":"https://github.com/lecodev-26"},"sameAs":["https://github.com/lecodev-26/nexus-q"]},{"@type":"SoftwareSourceCode","name":"NEXUS-Q","description":"Post-quantum cryptographic security engine written in Rust for protecting data, keys and identities.","url":"https://nexus-q.link/","codeRepository":"https://github.com/lecodev-26/nexus-q","programmingLanguage":"Rust","license":["https://opensource.org/license/mit","https://www.apache.org/licenses/LICENSE-2.0"],"author":{"@type":"Person","name":"lecodev-26","url":"https://github.com/lecodev-26"},"@id":"https://nexus-q.link/#software","image":"https://nexus-q.link/og.jpg","publisher":{"@id":"https://nexus-q.link/#org"}}]}</script>
+<meta name="application-name" content="NEXUS-Q">
+<meta name="theme-color" content="#06080b">
+<link rel="icon" href="https://nexus-q.link/favicon.ico" sizes="48x48">
+<link rel="icon" type="image/png" sizes="48x48" href="https://nexus-q.link/favicon-48.png">
+<link rel="icon" type="image/png" sizes="96x96" href="https://nexus-q.link/favicon-96.png">
+<link rel="icon" type="image/png" sizes="192x192" href="https://nexus-q.link/icon-192.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-:root{color-scheme:dark;--bg:#090a0d;--surface:#101217;--surface2:#151820;--line:#292e39;--text:#f1f4f8;--muted:#9ba5b5;--lime:#c5f56a;--blue:#83a9ff;--max:1160px}*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:90px}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 Manrope,system-ui,sans-serif;overflow-x:hidden}body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;background:radial-gradient(ellipse at 82% 8%,#202a3940,transparent 38%),linear-gradient(#fff008 1px,transparent 1px),linear-gradient(90deg,#fff008 1px,transparent 1px);background-size:auto,42px 42px,42px 42px;mask-image:linear-gradient(to bottom,#000 0%,transparent 78%)}a{color:inherit;text-decoration:none}button{font:inherit;color:inherit}.wrap{width:min(var(--max),calc(100% - 48px));margin-inline:auto}.mono,.eyebrow,.version,.slide-count,.metric-label{font-family:'DM Mono',monospace}.topline{height:34px;border-bottom:1px solid #ffffff0d;background:#0c0e12;color:#9ca6b4;font:10px 'DM Mono',monospace;letter-spacing:.09em}.topline .wrap{height:100%;display:flex;align-items:center;justify-content:space-between}.live-dot{display:inline-block;width:6px;height:6px;background:var(--lime);border-radius:50%;box-shadow:0 0 12px #c5f56a80;margin-right:8px}header.site-header{position:sticky;top:0;z-index:50;background:#090a0de8;backdrop-filter:blur(18px);border-bottom:1px solid #ffffff12}.nav{height:76px;display:flex;align-items:center;justify-content:space-between;gap:24px}.brand{display:flex;align-items:center;gap:11px;font-size:17px;font-weight:800;letter-spacing:.11em}.brand-mark{display:grid;place-items:center;width:31px;height:31px;border:1px solid #c5f56a75;border-radius:9px;color:var(--lime);font:15px 'DM Mono',monospace;transform:rotate(-7deg)}.nav-links{display:flex;align-items:center;gap:27px;color:#b2bac7;font-size:12px;font-weight:700}.nav-links a:hover,.nav-links a.active{color:var(--lime)}.nav-right{display:flex;align-items:center;gap:12px}.version{font-size:10px;color:#d3dae4;border:1px solid #343b47;border-radius:5px;padding:7px 9px}.menu-toggle{display:none;background:transparent;border:1px solid var(--line);border-radius:7px;padding:8px}.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;padding:12px 16px;border-radius:7px;border:1px solid #414856;background:#171b22;font-size:12px;font-weight:800;transition:transform .2s,border-color .2s,background .2s;cursor:pointer}.btn:hover{transform:translateY(-2px);border-color:#75829a}.btn.primary{background:var(--lime);border-color:var(--lime);color:#11160a}.btn.primary:hover{background:#d5ff85}.btn.text{background:transparent;border-color:transparent;color:#d7deea}.arrow{font-size:16px;line-height:1}.hero{padding:64px 0 48px;position:relative}.hero-grid{display:grid;grid-template-columns:1fr 1.02fr;gap:44px;align-items:center;min-height:430px}.hero-copy{position:relative;z-index:2}.eyebrow{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--lime);display:flex;align-items:center;gap:10px;margin:0 0 22px}.eyebrow:before{content:"";width:22px;height:1px;background:currentColor}.hero h1{font-size:clamp(42px,5.2vw,68px);letter-spacing:-.065em;line-height:1.04;margin:0;max-width:610px;font-weight:800}.hero h1 .accent{color:var(--lime)}.hero-desc{color:#aeb8c7;font-size:15px;line-height:1.8;max-width:500px;margin:23px 0 25px}.hero-actions{display:flex;gap:10px;flex-wrap:wrap}.micro-proof{display:flex;gap:18px;align-items:center;margin-top:31px;color:#8f9aaa;font:10px 'DM Mono',monospace;flex-wrap:wrap}.micro-proof span{display:flex;align-items:center;gap:7px}.micro-proof b{color:#dce4ef;font-weight:500}.hero-visual{height:420px;position:relative;isolation:isolate;border:1px solid #ffffff12;border-radius:14px;overflow:hidden;background:radial-gradient(ellipse at 53% 48%,#243342a8,transparent 58%),linear-gradient(145deg,#121720,#0b0d12 70%);box-shadow:0 25px 90px #0006}.hero-visual:before{content:"";position:absolute;inset:0;background:linear-gradient(#ffffff08 1px,transparent 1px),linear-gradient(90deg,#ffffff08 1px,transparent 1px);background-size:28px 28px;mask-image:linear-gradient(#000,transparent 95%)}.visual-tag{position:absolute;left:19px;top:18px;color:#a9b4c5;font:9px 'DM Mono',monospace;letter-spacing:.12em;z-index:3}.visual-index{position:absolute;right:18px;top:18px;color:#7f8b9b;font:10px 'DM Mono',monospace;z-index:3}.orb{position:absolute;width:215px;height:215px;left:50%;top:49%;transform:translate(-50%,-50%);border-radius:50%;border:1px solid #c5f56a66;box-shadow:inset 0 0 55px #c5f56a0b,0 0 75px #83a9ff13}.orb:before,.orb:after{content:"";position:absolute;inset:19px;border:1px solid #83a9ff55;border-radius:50%;transform:rotateX(67deg) rotate(35deg)}.orb:after{inset:-24px;transform:rotateX(67deg) rotate(-40deg);border-color:#c5f56a55}.orb-core{position:absolute;left:50%;top:49%;transform:translate(-50%,-50%);width:92px;height:92px;border:1px solid #c5f56a;border-radius:24px;rotate:45deg;background:linear-gradient(135deg,#c5f56a1b,#83a9ff14);display:grid;place-items:center;box-shadow:0 0 48px #c5f56a1b}.orb-core span{rotate:-45deg;font:18px 'DM Mono',monospace;color:var(--lime)}.node{position:absolute;width:9px;height:9px;border:1px solid var(--lime);background:#0e1317;border-radius:2px;box-shadow:0 0 14px #c5f56a5c;animation:float 4s ease-in-out infinite}.n1{top:23%;left:24%}.n2{top:28%;right:19%;animation-delay:-1s}.n3{bottom:23%;left:21%;animation-delay:-2s}.n4{bottom:20%;right:23%;animation-delay:-.5s}.n5{top:50%;left:10%;animation-delay:-1.5s}.n6{top:55%;right:9%;animation-delay:-2.5s}.connector{position:absolute;height:1px;background:linear-gradient(90deg,transparent,#83a9ff99,transparent);transform-origin:left center}.c1{width:155px;top:27%;left:24%;transform:rotate(28deg)}.c2{width:165px;top:31%;left:59%;transform:rotate(140deg)}.c3{width:150px;top:73%;left:24%;transform:rotate(-24deg)}.c4{width:145px;top:70%;left:62%;transform:rotate(-150deg)}.visual-foot{position:absolute;bottom:17px;left:19px;right:19px;display:flex;justify-content:space-between;color:#8b98a8;font:9px 'DM Mono',monospace;border-top:1px solid #ffffff14;padding-top:12px}.visual-foot b{color:var(--lime);font-weight:500}.hero-controls{position:absolute;bottom:18px;right:18px;z-index:5;display:flex;gap:6px}.icon-btn{width:35px;height:35px;display:grid;place-items:center;border:1px solid #414a58;border-radius:7px;background:#10151dd9;cursor:pointer}.icon-btn:hover{border-color:var(--lime);color:var(--lime)}.slide-dots{display:flex;gap:6px;position:absolute;bottom:30px;left:0}.slide-dots button{width:22px;height:3px;padding:0;border:0;background:#414956;cursor:pointer;transition:width .2s,background .2s}.slide-dots button[aria-current=true]{width:42px;background:var(--lime)}.slide-count{position:absolute;right:0;bottom:24px;color:#758193;font-size:10px}.hero-bottom{border-top:1px solid #ffffff14;border-bottom:1px solid #ffffff14;display:grid;grid-template-columns:repeat(4,1fr);margin-top:54px}.proof-cell{padding:19px 22px;border-right:1px solid #ffffff12}.proof-cell:first-child{padding-left:0}.proof-cell:last-child{border:0}.proof-cell strong{display:block;font-size:15px;letter-spacing:-.02em}.proof-cell span{display:block;color:#8792a2;font:9px 'DM Mono',monospace;letter-spacing:.08em;text-transform:uppercase;margin-top:4px}.section{padding:100px 0}.section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:30px;margin-bottom:35px}.section-head h2{font-size:clamp(30px,4vw,45px);letter-spacing:-.055em;line-height:1.1;margin:0;max-width:610px}.section-head p{max-width:360px;color:var(--muted);font-size:13px;margin:0}.section-head .eyebrow{margin-bottom:16px}.features{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.feature{padding:24px 20px 22px;border:1px solid #282e38;border-radius:10px;background:linear-gradient(145deg,#141820,#0e1015);min-height:225px;position:relative;overflow:hidden;transition:transform .25s,border-color .25s}.feature:hover{transform:translateY(-5px);border-color:#58634b}.feature:after{content:"";position:absolute;width:100px;height:100px;right:-48px;top:-50px;border:1px solid #c5f56a18;border-radius:50%;box-shadow:0 0 0 15px #c5f56a05,0 0 0 30px #c5f56a03}.feature-icon{width:39px;height:39px;border:1px solid #454e5b;border-radius:9px;display:grid;place-items:center;color:var(--lime);font-size:18px;margin-bottom:28px}.feature h3{font-size:15px;margin:0 0 9px}.feature p{font-size:12px;line-height:1.7;color:#9da8b8;margin:0}.feature .number{position:absolute;right:18px;bottom:16px;color:#3b424e;font:10px 'DM Mono',monospace}.algorithm-band{background:#101319;border-block:1px solid #ffffff10}.algorithm-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.algo-card{border:1px solid #2b313c;border-radius:12px;padding:27px;background:#0d1015;position:relative;overflow:hidden}.algo-card:before{content:"";position:absolute;right:-60px;top:-70px;width:190px;height:190px;border:1px solid #83a9ff25;border-radius:50%;box-shadow:0 0 0 20px #83a9ff05,0 0 0 40px #83a9ff04}.algo-top{display:flex;align-items:center;justify-content:space-between;gap:15px;position:relative}.algo-top h3{font-size:23px;letter-spacing:-.04em;margin:0}.nist{font:9px 'DM Mono',monospace;color:var(--lime);border:1px solid #c5f56a45;border-radius:4px;padding:5px 7px}.algo-card>p{color:#9ca7b6;font-size:12px;max-width:400px}.tabs{display:flex;gap:6px;margin:23px 0 14px;position:relative}.tab{padding:7px 11px;border:1px solid #303743;border-radius:5px;background:#131720;color:#9ba6b6;font:10px 'DM Mono',monospace;cursor:pointer}.tab[aria-selected=true]{background:#c5f56a;color:#11160a;border-color:#c5f56a}.tab-panel{min-height:100px;position:relative}.tab-panel h4{margin:0 0 7px;font-size:13px}.tab-panel p{color:#9da8b8;font-size:11px;margin:0;line-height:1.7}.spec-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:19px}.spec-item{padding:11px;border:1px solid #292f39;border-radius:6px;background:#11151b}.spec-item b{font:11px 'DM Mono',monospace;display:block}.spec-item span{display:block;color:#818d9e;font-size:9px;margin-top:4px}.tool-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.tool-card{border:1px solid #282e38;border-radius:9px;padding:22px;background:#101319;display:flex;gap:15px;transition:border-color .2s}.tool-card:hover{border-color:#63714d}.tool-icon{color:var(--lime);font-size:20px}.tool-card h3{font-size:13px;margin:0 0 5px}.tool-card p{font-size:11px;color:#9da8b8;margin:0;line-height:1.65}.tool-card a{display:inline-block;color:var(--lime);font:10px 'DM Mono',monospace;margin-top:13px}.bench{display:grid;grid-template-columns:.9fr 1.1fr;gap:40px;align-items:center}.bench-copy h2{font-size:clamp(30px,4vw,43px);letter-spacing:-.055em;line-height:1.12;margin:0 0 17px}.bench-copy p{font-size:13px;color:#9da8b8;max-width:420px}.bench-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}.metric{padding:22px;border:1px solid #2a303a;border-radius:9px;background:linear-gradient(135deg,#151a22,#0e1117)}.metric-label{font-size:9px;color:#a0adbd;letter-spacing:.08em;text-transform:uppercase}.metric strong{display:block;font-size:26px;letter-spacing:-.05em;margin:8px 0 3px}.metric small{color:#8591a1;font-size:10px}.security{border:1px solid #333b47;border-radius:12px;padding:27px;background:linear-gradient(115deg,#151a21,#0e1117);display:grid;grid-template-columns:.8fr 1.2fr;gap:35px}.security h2{font-size:28px;line-height:1.15;letter-spacing:-.05em;margin:0 0 12px}.security p{color:#9da8b8;font-size:12px}.security-list{display:grid;gap:13px}.security-item{display:flex;gap:12px;font-size:12px;color:#c2cad5}.check{color:var(--lime);font:14px 'DM Mono',monospace}.warning{color:#f3c978}.cta{padding:56px 0 90px}.cta-panel{border:1px solid #343d49;border-radius:14px;padding:42px;background:radial-gradient(ellipse at 85% 0%,#83a9ff1b,transparent 45%),linear-gradient(135deg,#171d25,#101319);display:flex;justify-content:space-between;align-items:center;gap:30px}.cta h2{font-size:clamp(27px,4vw,40px);letter-spacing:-.05em;margin:0 0 10px}.cta p{margin:0;color:#a2adbd;font-size:13px}.cta-actions{display:flex;gap:9px;flex-wrap:wrap}.footer{border-top:1px solid #ffffff14;padding:33px 0 25px;background:#0b0d11}.footer-grid{display:grid;grid-template-columns:1.3fr 1fr 1fr 1fr;gap:28px}.footer-brand p{font-size:11px;color:#8e99a8;max-width:250px}.footer h4{font-size:11px;margin:0 0 12px;color:#e3e8f0}.footer a{display:block;color:#8f9aaa;font-size:11px;margin:7px 0}.footer a:hover{color:var(--lime)}.footer-bottom{display:flex;justify-content:space-between;gap:20px;border-top:1px solid #ffffff10;margin-top:27px;padding-top:18px;color:#667181;font:9px 'DM Mono',monospace}.reveal{opacity:0;transform:translateY(18px);transition:opacity .65s ease,transform .65s ease}.reveal.visible{opacity:1;transform:translateY(0)}@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}@keyframes pulse{0%,100%{opacity:.6}50%{opacity:1}}@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation:none!important;transition:none!important}.reveal{opacity:1;transform:none}}@media(max-width:900px){.nav-links{gap:15px}.hero-grid{gap:25px;grid-template-columns:1fr 1fr}.hero-visual{height:370px}.features{grid-template-columns:repeat(2,1fr)}.tool-grid{grid-template-columns:1fr}.bench{gap:25px}.footer-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:650px){.wrap{width:min(100% - 30px,var(--max))}.topline .wrap span:last-child{display:none}.nav{height:65px}.nav-links{display:none;position:absolute;top:65px;left:0;right:0;background:#0c0f14;border-bottom:1px solid var(--line);padding:18px 20px;flex-direction:column;align-items:flex-start;gap:18px}.nav-links.open{display:flex}.menu-toggle{display:grid}.version{display:none}.hero{padding:40px 0 25px}.hero-grid{grid-template-columns:1fr;gap:28px}.hero h1{font-size:clamp(42px,12vw,58px)}.hero-desc{font-size:13px}.hero-visual{height:330px}.hero-bottom{grid-template-columns:1fr 1fr;margin-top:35px}.proof-cell{padding:15px 10px;border-bottom:1px solid #ffffff12}.proof-cell:first-child{padding-left:10px}.proof-cell:nth-child(2){border-right:0}.proof-cell:nth-child(3){padding-left:10px;border-bottom:0}.proof-cell:last-child{border-bottom:0}.section{padding:68px 0}.section-head{display:block}.section-head p{margin-top:15px}.features{grid-template-columns:1fr}.feature{min-height:0;padding:20px}.feature-icon{margin-bottom:18px}.algorithm-grid{grid-template-columns:1fr}.algo-card{padding:20px}.spec-grid{grid-template-columns:1fr 1fr 1fr}.bench{grid-template-columns:1fr}.bench-stats{gap:8px}.metric{padding:15px}.metric strong{font-size:23px}.security{grid-template-columns:1fr;padding:22px;gap:20px}.cta{padding:35px 0 65px}.cta-panel{padding:25px;display:block}.cta-actions{margin-top:22px}.footer-grid{grid-template-columns:1fr 1fr;gap:24px}.footer-bottom{display:block;line-height:2}.slide-dots{bottom:20px}.slide-count{bottom:15px}}@media(max-width:390px){.brand{font-size:14px}.hero-actions .btn{padding:11px 12px}.spec-grid{grid-template-columns:1fr}.visual-foot{font-size:8px}}
-</style></head><body>
-<div class="topline"><div class="wrap"><span><i class="live-dot"></i>OPEN-SOURCE CRYPTOGRAPHIC INFRASTRUCTURE</span><span>BUILT IN RUST · DESIGNED FOR THE POST-QUANTUM ERA</span></div></div>
-<header class="site-header"><nav class="nav wrap"><a class="brand" href="#top"><span class="brand-mark">N</span>NEXUS-Q</a><div class="nav-links" id="navLinks"><a href="#platform">Platform</a><a href="#algorithms">Algorithms</a><a href="#tooling">Tooling</a><a href="#benchmarks">Benchmarks</a><a href="#security">Security</a></div><div class="nav-right"><span class="version">v4.1.1 / Rust 1.88+</span><a class="btn primary" href="https://github.com/lecodev-26/nexus-q">View on GitHub <span class="arrow">↗</span></a><button class="menu-toggle" id="menuToggle" aria-label="Open navigation" aria-expanded="false">☰</button></div></nav></header>
-<main id="top"><section class="hero"><div class="wrap"><div class="hero-grid"><div class="hero-copy"><p class="eyebrow" id="slideEyebrow">CRYPTOGRAPHY, RE-ENGINEERED</p><h1 id="slideTitle">A safer future starts <span class="accent">before quantum.</span></h1><p class="hero-desc" id="slideDesc">Post-quantum building blocks for the systems that need to last. NEXUS-Q brings modern lattice cryptography, key lifecycle tools and PKI into a Rust-first toolkit.</p><div class="hero-actions"><a class="btn primary" href="https://github.com/lecodev-26/nexus-q">Explore the repository <span class="arrow">↗</span></a><a class="btn" href="https://github.com/lecodev-26/nexus-q/tree/main/docs">Read the docs <span class="arrow">→</span></a></div><div class="micro-proof"><span><b>01</b> OPEN SOURCE</span><span><b>02</b> RUST-FIRST</span><span><b>03</b> NIST PQC</span></div></div>
-<div class="hero-visual" aria-label="Animated post-quantum cryptography network illustration"><div class="visual-tag" id="visualTag">SYSTEM / 001 — KEY EXCHANGE</div><div class="visual-index" id="visualIndex">01 / 03</div><div class="orb"></div><div class="orb-core"><span id="orbLabel">KEM</span></div><i class="node n1"></i><i class="node n2"></i><i class="node n3"></i><i class="node n4"></i><i class="node n5"></i><i class="node n6"></i><i class="connector c1"></i><i class="connector c2"></i><i class="connector c3"></i><i class="connector c4"></i><div class="visual-foot"><span>CRYPTOGRAPHIC LAYER</span><b id="visualStatus">ML-KEM · ACTIVE</b></div><div class="hero-controls"><button class="icon-btn" id="prevSlide" aria-label="Previous slide">←</button><button class="icon-btn" id="nextSlide" aria-label="Next slide">→</button></div></div></div><div class="slide-dots" role="group" aria-label="Choose hero slide"><button aria-label="Slide 1" aria-current="true" data-slide="0"></button><button aria-label="Slide 2" aria-current="false" data-slide="1"></button><button aria-label="Slide 3" aria-current="false" data-slide="2"></button></div><span class="slide-count" id="slideCount">01 — 03</span><div class="hero-bottom"><div class="proof-cell"><strong>ML-KEM</strong><span>Key encapsulation · FIPS 203</span></div><div class="proof-cell"><strong>ML-DSA</strong><span>Digital signatures · FIPS 204</span></div><div class="proof-cell"><strong>Rust-first</strong><span>Core library & tooling</span></div><div class="proof-cell"><strong>Open by design</strong><span>Reviewable source code</span></div></div></div></section>
-<section class="section" id="platform"><div class="wrap"><div class="section-head reveal"><div><p class="eyebrow">THE PLATFORM</p><h2>Security primitives.<br>Practical engineering.</h2></div><p>One toolkit across key management, signatures and infrastructure — with clear boundaries between implemented features and future hardware integrations.</p></div><div class="features"><article class="feature reveal"><div class="feature-icon">⌘</div><h3>Key lifecycle</h3><p>Generate, rotate, revoke and manage keys with encrypted vault storage and documented data formats.</p><span class="number">01 / KEYS</span></article><article class="feature reveal"><div class="feature-icon">⬡</div><h3>PQC certificates</h3><p>Explore certificate issuance and validation workflows built around post-quantum signature algorithms.</p><span class="number">02 / PKI</span></article><article class="feature reveal"><div class="feature-icon">⟐</div><h3>Digital signatures</h3><p>ML-DSA signing and verification using standardized algorithms and maintained cryptographic libraries.</p><span class="number">03 / SIGN</span></article><article class="feature reveal"><div class="feature-icon">⌁</div><h3>Developer tooling</h3><p>Rust crates, CLI utilities and C/FFI bindings designed to connect the core to applications.</p><span class="number">04 / SDK</span></article></div></div></section>
-<section class="algorithm-band section" id="algorithms"><div class="wrap"><div class="section-head reveal"><div><p class="eyebrow">STANDARDIZED ALGORITHMS</p><h2>Built on the NIST<br>post-quantum standards.</h2></div><p>Choose a parameter set to explore the purpose and public-key/signature characteristics. Exact timings depend on the machine and build.</p></div><div class="algorithm-grid"><article class="algo-card reveal"><div class="algo-top"><h3>ML-KEM</h3><span class="nist">FIPS 203</span></div><p>Module-Lattice-Based Key-Encapsulation Mechanism for establishing shared secrets.</p><div class="tabs" role="tablist" aria-label="ML-KEM parameter set"><button class="tab" role="tab" aria-selected="true" data-group="kem" data-value="512">512</button><button class="tab" role="tab" aria-selected="false" data-group="kem" data-value="768">768</button><button class="tab" role="tab" aria-selected="false" data-group="kem" data-value="1024">1024</button></div><div class="tab-panel" id="kemPanel" aria-live="polite"><h4>ML-KEM-512 · IND-CCA2</h4><p>Security category 1 · Public key 800 bytes · Ciphertext 768 bytes. Designed for efficient key establishment.</p></div><div class="spec-grid"><div class="spec-item"><b>FIPS 203</b><span>Standard</span></div><div class="spec-item"><b>Lattice</b><span>Construction</span></div><div class="spec-item"><b>KEM</b><span>Purpose</span></div></div></article><article class="algo-card reveal"><div class="algo-top"><h3>ML-DSA</h3><span class="nist">FIPS 204</span></div><p>Module-Lattice-Based Digital Signature Algorithm for signing and authenticity.</p><div class="tabs" role="tablist" aria-label="ML-DSA parameter set"><button class="tab" role="tab" aria-selected="true" data-group="dsa" data-value="44">44</button><button class="tab" role="tab" aria-selected="false" data-group="dsa" data-value="65">65</button><button class="tab" role="tab" aria-selected="false" data-group="dsa" data-value="87">87</button></div><div class="tab-panel" id="dsaPanel" aria-live="polite"><h4>ML-DSA-44 · Signature scheme</h4><p>Security category 2 · Public key 1,312 bytes · Signature 2,420 bytes. For digital signing and verification.</p></div><div class="spec-grid"><div class="spec-item"><b>FIPS 204</b><span>Standard</span></div><div class="spec-item"><b>Lattice</b><span>Construction</span></div><div class="spec-item"><b>Sign</b><span>Purpose</span></div></div></article></div></div></section>
-<section class="section" id="tooling"><div class="wrap"><div class="section-head reveal"><div><p class="eyebrow">THE TOOLCHAIN</p><h2>From low-level crypto<br>to useful workflows.</h2></div><p>Explore the repository modules and documentation to see which capabilities are implemented, experimental or still planned.</p></div><div class="tool-grid"><article class="tool-card reveal"><span class="tool-icon">▤</span><div><h3>pqc-ca</h3><p>Certificate authority workflows, including root and intermediate certificate management.</p><a href="https://github.com/lecodev-26/nexus-q">EXPLORE MODULE ↗</a></div></article><article class="tool-card reveal"><span class="tool-icon">⌁</span><div><h3>nexusq-cli</h3><p>Command-line workflows for key generation, signing, verification and vault operations.</p><a href="https://github.com/lecodev-26/nexus-q">EXPLORE MODULE ↗</a></div></article><article class="tool-card reveal"><span class="tool-icon">⎔</span><div><h3>PKI utilities</h3><p>Inspect certificate and signing-related tooling and the current repository implementation.</p><a href="https://github.com/lecodev-26/nexus-q/tree/main/docs">READ DOCUMENTATION ↗</a></div></article></div></div></section>
-<section class="section" id="benchmarks"><div class="wrap"><div class="bench"><div class="bench-copy reveal"><p class="eyebrow">MEASURE, DON'T GUESS</p><h2>Performance belongs in the open.</h2><p>Benchmarks should be reproducible and interpreted in context. These recorded measurements come from an AMD EPYC 7763 / Ubuntu 24.04 x86_64 environment; your results will vary.</p><a class="btn" href="https://github.com/lecodev-26/nexus-q/tree/main/arena">Explore benchmark methodology <span class="arrow">↗</span></a></div><div class="bench-stats reveal"><div class="metric"><span class="metric-label">ML-KEM 768 / KEYGEN</span><strong>18.4 <small>μs</small></strong><small>Recorded measurement</small></div><div class="metric"><span class="metric-label">ML-KEM 768 / ENCAPS</span><strong>22.1 <small>μs</small></strong><small>Recorded measurement</small></div><div class="metric"><span class="metric-label">ML-DSA 65 / SIGN</span><strong>45.3 <small>μs</small></strong><small>Recorded measurement</small></div><div class="metric"><span class="metric-label">ML-DSA 65 / VERIFY</span><strong>31.7 <small>μs</small></strong><small>Recorded measurement</small></div></div></div></div></section>
-<section class="section" id="security" style="padding-top:0"><div class="wrap"><div class="security reveal"><div><p class="eyebrow">HONEST BY DESIGN</p><h2>Security claims need evidence.</h2><p>NEXUS-Q is an actively developed engineering project. Read the threat model and release evidence before relying on it in production.</p><a class="btn" href="https://github.com/lecodev-26/nexus-q/blob/main/SECURITY.md">Security policy ↗</a></div><div class="security-list"><div class="security-item"><span class="check">✓</span><span>CI includes security checks, fuzzing and property-based tests.</span></div><div class="security-item"><span class="check">✓</span><span>ML-KEM and ML-DSA are standardized in FIPS 203 and FIPS 204.</span></div><div class="security-item"><span class="warning">!</span><span>Independent external cryptographic audit is still pending.</span></div><div class="security-item"><span class="warning">!</span><span>Release v4.1.1 artifact provenance needs reconciliation; existing release assets and checksums refer to an earlier commit.</span></div><div class="security-item"><span class="warning">!</span><span>Native backend support is experimental and opt-in. Default paths use RustCrypto.</span></div></div></div></div></section>
-<section class="cta"><div class="wrap"><div class="cta-panel reveal"><div><p class="eyebrow">BUILD IN THE OPEN</p><h2>Quantum-safe starts with<br>engineering discipline.</h2><p>Review the code, inspect the evidence, and help improve the toolkit.</p></div><div class="cta-actions"><a class="btn primary" href="https://github.com/lecodev-26/nexus-q">Explore GitHub <span class="arrow">↗</span></a><a class="btn" href="https://github.com/lecodev-26/nexus-q/issues">Contribute / Issues</a></div></div></div></section></main>
-<footer class="footer"><div class="wrap"><div class="footer-grid"><div class="footer-brand"><a class="brand" href="#top"><span class="brand-mark">N</span>NEXUS-Q</a><p>Open-source post-quantum cryptographic infrastructure, engineered in Rust.</p></div><div><h4>EXPLORE</h4><a href="#platform">Platform</a><a href="#algorithms">Algorithms</a><a href="#benchmarks">Benchmarks</a></div><div><h4>DEVELOPERS</h4><a href="https://github.com/lecodev-26/nexus-q/tree/main/docs">Documentation</a><a href="https://github.com/lecodev-26/nexus-q/issues">Issues</a><a href="https://github.com/lecodev-26/nexus-q/blob/main/SECURITY.md">Security policy</a></div><div><h4>PROJECT</h4><a href="https://github.com/lecodev-26/nexus-q">GitHub repository</a><a href="https://github.com/lecodev-26/nexus-q/blob/main/LICENSE-MIT">MIT license</a><a href="https://github.com/lecodev-26/nexus-q/blob/main/LICENSE-APACHE">Apache-2.0 license</a></div></div><div class="footer-bottom"><span>© 2026 NEXUS-Q · OPEN SOURCE SOFTWARE</span><span>RUST-FIRST · NIST PQC · V4.1.1</span></div></div></footer>
+:root{--bg:#06080b;--fg:#eaf0f4;--mut:#8a97a3;--line:#1b242d;--card:#0c1117;--acc:#5cf2d6;--acc2:#8b7bff;--ink:#04110e;--warn:#ffb454;--bad:#ff7a7a;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#f4f7f9;--fg:#0b1218;--mut:#52606c;--line:#d5dde3;--card:#e9eef2;--acc:#0a7d6a;--acc2:#5b45e0;--ink:#fff;--warn:#a85d00;--bad:#b3261e}}
+:root[data-theme="light"]{--bg:#f4f7f9;--fg:#0b1218;--mut:#52606c;--line:#d5dde3;--card:#e9eef2;--acc:#0a7d6a;--acc2:#5b45e0;--ink:#fff;--warn:#a85d00;--bad:#b3261e}
+:root[data-theme="dark"]{--bg:#06080b;--fg:#eaf0f4;--mut:#8a97a3;--line:#1b242d;--card:#0c1117;--acc:#5cf2d6;--acc2:#8b7bff;--ink:#04110e;--warn:#ffb454;--bad:#ff7a7a}
+*{box-sizing:border-box;margin:0}
+html{height:auto;scroll-behavior:smooth;scroll-padding-top:calc(76px + env(safe-area-inset-top,0px))}
+body{background:var(--bg);color:var(--fg);font-family:"Instrument Sans",system-ui,sans-serif;line-height:1.6;overflow-x:hidden;transition:background .4s,color .4s}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--acc);outline-offset:3px;border-radius:6px}
+code,pre,.mono{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace}
+.d{font-family:Anton,Impact,"Arial Narrow",sans-serif;text-transform:uppercase;font-weight:400;line-height:.95;letter-spacing:.005em}
+.wrap{max-width:1180px;margin:0 auto;padding:0 clamp(16px,4vw,40px)}
+nav{position:fixed;top:env(safe-area-inset-top,0px);left:0;right:0;z-index:50;background:color-mix(in srgb,var(--bg) 80%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;justify-content:space-between;gap:16px;height:64px}
+.logo{display:flex;align-items:center;gap:10px;font-family:Anton,Impact,sans-serif;font-size:22px;letter-spacing:.04em}
+.logo{white-space:nowrap}.logo img{border-radius:8px;display:block}
+.logo i{width:26px;height:26px;border-radius:7px;background:var(--acc);display:grid;place-items:center;color:var(--ink);font-style:normal;font-size:14px}
+.links{display:flex;gap:22px;font-size:14px;color:var(--mut)}
+.links a:hover{color:var(--fg)}
+.navr{display:flex;gap:10px;align-items:center}
+.btn,.tg{display:inline-flex;align-items:center;gap:8px;border-radius:99px;font:600 14px "Instrument Sans",sans-serif;padding:10px 18px;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--fg);transition:transform .2s,background .2s,border-color .2s}
+.btn:hover,.tg:hover{transform:translateY(-1px);border-color:var(--acc)}
+.btn.p{background:var(--acc);color:var(--ink);border-color:var(--acc)}
+.tg svg{width:16px;height:16px}
+.mb{display:none;width:42px;height:42px;padding:0;justify-content:center;align-items:center;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:99px;cursor:pointer}
+.mb svg{width:20px;height:20px}
+.links .mo{display:none}
+@media (max-width:1080px){
+.mb{display:inline-flex}
+.links{display:none;position:absolute;top:100%;left:0;right:0;flex-direction:column;gap:0;background:var(--bg);border-bottom:1px solid var(--line);padding:4px clamp(16px,4vw,40px) 14px;max-height:calc(100vh - 80px);overflow-y:auto}
+.links.open{display:flex}
+.links a{padding:14px 2px;border-bottom:1px solid var(--line);font-size:16px;color:var(--fg)}
+.links .mo{display:block;border-bottom:0;color:var(--acc);font-weight:600}
+}
+@media (max-width:560px){#tgt{display:none}.navr>.btn.p{display:none}.tg{padding:10px 12px}}
+.aud{max-width:60ch;margin-top:14px;font-size:16px}
+.by{margin-top:10px;font-size:14px;color:var(--mut)}
+.hero{position:relative;padding:150px 0 90px;overflow:hidden}
+#cv{position:absolute;inset:0;width:100%;height:100%;opacity:.9}
+.hero:after{content:"";position:absolute;inset:0;background:radial-gradient(60% 60% at 30% 40%,transparent,var(--bg) 85%);pointer-events:none}
+.hero .wrap{position:relative;z-index:2}
+.chip{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:99px;padding:6px 14px;font-size:13px;color:var(--mut);background:color-mix(in srgb,var(--bg) 70%,transparent)}
+.chip b{width:8px;height:8px;border-radius:50%;background:var(--acc);animation:pl 1.6s infinite}
+@keyframes pl{50%{opacity:.25}}
+h1{font-size:clamp(54px,10.5vw,148px);margin:22px 0 22px;max-width:14ch}
+h1 em{font-style:normal;color:var(--acc)}
+.lead{max-width:60ch;font-size:clamp(17px,2vw,21px);color:var(--mut)}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin:30px 0 40px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);margin-top:20px}
+.stats div{padding:22px 18px 0 0}
+.stats b{display:block;font-family:Anton,Impact,sans-serif;font-weight:400;font-size:clamp(34px,5vw,58px);color:var(--acc);line-height:1}
+.stats span{font-size:13px;color:var(--mut)}
+@media (max-width:700px){.stats{grid-template-columns:1fr 1fr}}
+section{padding:clamp(64px,9vw,120px) 0}
+.eyebrow{font:500 13px "JetBrains Mono",monospace;color:var(--acc);letter-spacing:.08em;text-transform:uppercase;margin-bottom:14px}
+h2{font-size:clamp(40px,6.4vw,84px);margin-bottom:22px;max-width:18ch}
+.sec-lead{max-width:66ch;color:var(--mut);font-size:clamp(16px,1.7vw,19px);margin-bottom:44px}
+.grid{display:grid;gap:18px}
+.g3{grid-template-columns:repeat(3,1fr)}.g2{grid-template-columns:repeat(2,1fr)}.g4{grid-template-columns:repeat(4,1fr)}
+@media (max-width:900px){.g3,.g4{grid-template-columns:1fr 1fr}}
+@media (max-width:620px){.g3,.g2,.g4{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:26px;transition:transform .3s,border-color .3s}
+.card:hover{transform:translateY(-4px);border-color:color-mix(in srgb,var(--acc) 55%,var(--line))}
+.card h3{font-size:22px;margin:0 0 8px;font-weight:600}
+.card p,.card li{color:var(--mut);font-size:15px}
+.card ul{padding-left:18px;margin-top:10px}
+.ico{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:color-mix(in srgb,var(--acc) 14%,transparent);color:var(--acc);margin-bottom:16px}
+.ico svg{width:22px;height:22px}
+.flow{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;position:relative}
+.step{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px 16px;position:relative;overflow:hidden}
+.step:before{content:"";position:absolute;left:0;top:0;height:3px;width:100%;background:linear-gradient(90deg,var(--acc),var(--acc2));transform:scaleX(0);transform-origin:left;animation:fill 7s infinite}
+.step:nth-child(2):before{animation-delay:1.2s}.step:nth-child(3):before{animation-delay:2.4s}.step:nth-child(4):before{animation-delay:3.6s}.step:nth-child(5):before{animation-delay:4.8s}
+@keyframes fill{0%{transform:scaleX(0)}12%,40%{transform:scaleX(1)}60%,100%{transform:scaleX(0);transform-origin:right}}
+.step .n{font:500 12px "JetBrains Mono",monospace;color:var(--acc)}
+.step h4{font-size:17px;margin:6px 0 6px}
+.step p{font-size:13.5px;color:var(--mut);line-height:1.5}
+@media (max-width:900px){.flow{grid-template-columns:1fr 1fr}}
+@media (max-width:560px){.flow{grid-template-columns:1fr}}
+.table{width:100%;border-collapse:collapse;font-size:14.5px}
+.table th,.table td{text-align:left;padding:13px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+.table th{font:500 12px "JetBrains Mono",monospace;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
+.table td:first-child{font-weight:600;white-space:nowrap}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:18px;background:var(--card)}
+.tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:22px}
+.tab{border:1px solid var(--line);background:var(--card);color:var(--mut);border-radius:99px;padding:9px 16px;font:500 14px "Instrument Sans",sans-serif;cursor:pointer;transition:all .2s}
+.tab[aria-selected="true"]{background:var(--acc);color:var(--ink);border-color:var(--acc)}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:clamp(18px,3vw,32px)}
+.panel .cap{color:var(--mut);font-size:14px;margin-bottom:22px;max-width:75ch}
+.row{display:grid;grid-template-columns:170px 1fr 92px;gap:14px;align-items:center;padding:9px 0;border-top:1px solid var(--line);font-size:14px}
+.row .nm{font-weight:600}
+.bars{display:flex;flex-direction:column;gap:5px}
+.bar{height:9px;border-radius:5px;width:0;transition:width 1s cubic-bezier(.2,.8,.1,1)}
+.bar.a{background:var(--acc)}.bar.b{background:var(--acc2);opacity:.85}.bar.w{background:var(--warn)}.bar.g{background:var(--acc)}
+.row .val{text-align:right;font:500 13px "JetBrains Mono",monospace;color:var(--mut)}
+.sub{grid-column:1/-1;font-size:12px;color:var(--mut);margin:-4px 0 4px}
+.legend{display:flex;flex-wrap:wrap;gap:18px;font-size:13px;color:var(--mut);margin-top:18px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px}
+@media (max-width:640px){.row{grid-template-columns:1fr 70px}.row .nm{grid-column:1/-1}}
+.note{border-left:3px solid var(--warn);background:color-mix(in srgb,var(--warn) 9%,transparent);border-radius:0 14px 14px 0;padding:16px 20px;font-size:15px;color:var(--fg);margin-top:26px}
+.note b{color:var(--warn)}
+.tl{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;position:relative}
+.ver{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:22px;position:relative}
+.ver .tag{font:500 12px "JetBrains Mono",monospace;color:var(--acc)}
+.ver h3{font-family:Anton,Impact,sans-serif;font-weight:400;font-size:44px;line-height:1;margin:8px 0 10px}
+.ver p{font-size:14px;color:var(--mut)}
+.ver .st{display:inline-block;margin-top:12px;font-size:12px;border:1px solid var(--line);border-radius:99px;padding:3px 10px;color:var(--mut)}
+.ver.cur{border-color:var(--acc)}
+.ver.plan{border-style:dashed}
+@media (max-width:900px){.tl{grid-template-columns:1fr 1fr}}@media (max-width:560px){.tl{grid-template-columns:1fr}}
+.yn{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media (max-width:760px){.yn{grid-template-columns:1fr}}
+.yn .card li{list-style:none;position:relative;padding-left:26px;margin:9px 0;color:var(--fg)}
+.yn ul{padding-left:0}
+.yn .y li:before{content:"✓";position:absolute;left:0;color:var(--acc);font-weight:700}
+.yn .n li:before{content:"✕";position:absolute;left:0;color:var(--bad);font-weight:700}
+.code{position:relative;background:#04070a;border:1px solid var(--line);border-radius:16px;margin:14px 0}
+:root[data-theme="light"] .code{background:#0e151b}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]) .code{background:#0e151b}}
+.code pre{padding:18px 20px;overflow-x:auto;font-size:13.5px;line-height:1.7;color:#d7e3ea}
+.code .c{color:#6b7c88}
+.copy{position:absolute;top:10px;right:10px;border:1px solid #26333d;background:#0b1319;color:#9fb0bc;border-radius:8px;font:500 12px "Instrument Sans",sans-serif;padding:5px 11px;cursor:pointer}
+.copy:hover{color:#fff;border-color:#5cf2d6}
+.qs{display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:start}
+@media (max-width:900px){.qs{grid-template-columns:1fr}}
+.docs a{display:flex;justify-content:space-between;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:15px 18px;transition:all .2s;font-weight:500}
+.docs a span{color:var(--mut);font-weight:400;font-size:13px;text-align:right}
+.docs a:hover{border-color:var(--acc);transform:translateX(3px)}
+.lk{color:var(--acc)}
+details{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:0 22px;margin-bottom:10px}
+summary{cursor:pointer;padding:18px 0;font-weight:600;list-style:none;display:flex;justify-content:space-between;gap:16px}
+summary::-webkit-details-marker{display:none}
+summary:after{content:"+";color:var(--acc);font-size:22px;line-height:1}
+details[open] summary:after{content:"–"}
+details p{color:var(--mut);padding:0 0 18px;max-width:75ch}
+footer{border-top:1px solid var(--line);padding:40px 0 60px;color:var(--mut);font-size:14px}
+footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px}
+.rv{opacity:0;transform:translateY(28px);transition:opacity .8s,transform .8s}.rv.on{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}.rv{opacity:1;transform:none}.bar{transition:none}}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+img,svg,canvas{max-width:100%}
+.grid>*,.qs>*,.yn>*,.flow>*,.tl>*{min-width:0}
+.chip{max-width:100%;line-height:1.45;align-items:flex-start}
+.chip b{flex:none;margin-top:7px}
+h1,h2,h3{overflow-wrap:anywhere}
+.lead,.sec-lead,.aud,.card p{overflow-wrap:break-word}
+.docs a span{max-width:55%}
+@media (min-width:1400px){.wrap{max-width:1280px}}
+@media (max-width:700px){
+.hero{padding:104px 0 56px}
+h1{font-size:clamp(44px,13vw,80px);max-width:none;margin:18px 0}
+h2{font-size:clamp(36px,10vw,60px);max-width:none}
+.cta .btn{flex:1 1 auto;justify-content:center}
+.stats div{padding-right:10px}
+.card{padding:20px}
+.ver h3{font-size:38px}
+.panel{padding:16px}
+.table{font-size:13.5px}
+.table td:first-child{white-space:normal}
+}
+@media (max-width:380px){.btn{padding:9px 14px;font-size:13px}}
+
+/* Reference-matched visual layer: keep all existing documentation and technical sections. */
+body{background:#090a0c;color:#f1f3f5;background-image:linear-gradient(#ffffff07 1px,transparent 1px),linear-gradient(90deg,#ffffff07 1px,transparent 1px);background-size:40px 40px;background-attachment:fixed}
+:root{--bg:#090a0c;--fg:#f1f3f5;--mut:#a4a9b1;--line:#303238;--card:#151619;--acc:#d7d9dc;--acc2:#888c93;--ink:#101113;--warn:#f1c36b;--bad:#ff8989}
+
+nav{top:14px;left:50%;right:auto;transform:translateX(-50%);width:min(1120px,calc(100% - 36px));border:1px solid #34363b;border-radius:10px;background:#121316f2;box-shadow:0 12px 40px #0004}
+nav .wrap{max-width:none;padding:0 22px;height:62px}.logo{font-family:"Instrument Sans",sans-serif;font-size:19px;font-weight:800;letter-spacing:.1em}.logo img{display:none}.logo:before{content:"N";display:grid;place-items:center;width:27px;height:27px;border:1px solid #858990;border-radius:6px;color:#f3f4f5;font:500 14px "JetBrains Mono",monospace}.links{gap:19px;font-size:12px;font-weight:600}.btn,.tg{border-radius:6px;font-size:12px;padding:9px 13px}.btn.p{background:#e3e4e6;color:#111;border-color:#e3e4e6}.hero{width:min(1120px,calc(100% - 36px));margin:76px auto 0;padding:40px 0 0;border:1px solid #34363b;border-radius:11px 11px 0 0;background:#101113;overflow:hidden}.hero:after{background:linear-gradient(90deg,#101113 0%,#101113f2 42%,#10111330 100%)}.hero .wrap{display:grid;grid-template-columns:1fr 1fr;column-gap:28px;align-items:center;max-width:none;padding:0 30px;min-height:355px}.hero .chip,.hero h1,.hero .lead,.hero .aud,.hero .by,.hero .cta{grid-column:1;position:relative;z-index:2}.hero .chip{font-size:10px;border-radius:4px;padding:5px 9px;max-width:max-content}.chip b{background:#d8dade}.hero h1{font-family:"Instrument Sans",sans-serif;text-transform:none;font-size:clamp(36px,4.2vw,57px);font-weight:800;letter-spacing:-.055em;line-height:1.06;max-width:13ch;margin:18px 0 13px}.hero h1 em{color:#f1f2f3}.hero .lead{font-size:13px;line-height:1.75;max-width:47ch;color:#c2c5cb}.hero .aud{font-size:11px;color:#9fa3aa;max-width:47ch;margin-top:10px}.hero .by{font-size:10px;margin-top:7px}.hero .cta{gap:8px;margin:17px 0 24px}.hero .stats{grid-column:1/-1;display:grid;grid-template-columns:repeat(4,1fr);margin:16px -30px 0;padding:0 30px 18px;border-top:1px solid #303238;background:#141518;position:relative;z-index:2}.stats div{padding:15px 12px 0 0}.stats b{font:700 19px "Instrument Sans",sans-serif;color:#f1f2f3;letter-spacing:-.03em}.stats span{font-size:9px;line-height:1.5;display:block;color:#a3a7af}.hero .wrap:before{content:"";grid-column:2;grid-row:1 / span 6;align-self:stretch;min-height:300px;position:absolute;right:0;top:0;width:55%;height:100%;pointer-events:none;background:radial-gradient(circle at 52% 50%,#9ea8b41a 0 2px,transparent 3px),radial-gradient(circle at 45% 48%,#737b8a12,transparent 48%);background-size:35px 35px,auto;mask-image:linear-gradient(90deg,transparent,#000 20%,#000)}
+.hero .wrap:after{content:"";grid-column:2;grid-row:1 / span 6;width:min(340px,90%);aspect-ratio:1;justify-self:center;align-self:center;position:relative;z-index:1;border:1px solid #737a8560;border-radius:50%;background:repeating-radial-gradient(circle,#9da5b51b 0 1px,transparent 1px 28px);box-shadow:inset 0 0 0 34px #8e96a10a,inset 0 0 0 70px #8e96a10a,0 0 80px #8b95a00d;pointer-events:none}
+#cv{opacity:.35;z-index:0}.hero .wrap>*{min-width:0}.hero .cta .btn{font-size:11px}.hero .cta .btn:not(.p){background:#151619;border-color:#55585e}.hero .stats{border-radius:0}.hero+section{padding-top:56px}.hero~section .wrap{max-width:1120px}.hero~section{padding-top:58px;padding-bottom:62px}.hero~section .eyebrow{font-size:10px;color:#b9bdc4;letter-spacing:.15em}.hero~section h2{font-family:"Instrument Sans",sans-serif;font-size:clamp(27px,3.3vw,40px);font-weight:800;letter-spacing:-.045em;line-height:1.15;text-transform:none;max-width:28ch}.hero~section .sec-lead{font-size:13px;line-height:1.8;color:#aeb2ba}.card,.step,.panel,.ver,.docs a,.tw,details{border-radius:7px;background:#141518;border-color:#303238;box-shadow:none}.card{padding:22px}.card h3{font-size:15px;font-weight:700}.card p,.card li{font-size:12px;line-height:1.7}.ico{background:#222429;color:#e4e5e7;border-radius:5px}.step{padding:17px;border-radius:7px}.step h4{font-size:14px}.step p{font-size:11px}.table{font-size:12px}.table th{font-size:10px}.table th,.table td{padding:11px 12px}.tw{overflow-x:auto}.tab{border-radius:5px;background:#17191d}.tab[aria-selected="true"]{background:#e1e2e4;color:#111;border-color:#e1e2e4}.code{border-radius:7px}details{padding-inline:16px}footer{background:#121316;border-top:1px solid #303238;padding:28px 0 34px}.lk{color:#d7dade}.btn:hover,.tg:hover{border-color:#d2d4d8}.rv{transition:opacity .5s,transform .5s}
+@media(max-width:900px){nav{width:calc(100% - 24px);top:8px}.hero{width:calc(100% - 24px);margin-top:68px}.hero .wrap{padding:0 22px}.hero .stats{margin-inline:-22px;padding-inline:22px}.links{gap:11px}.hero h1{font-size:clamp(34px,5.2vw,48px)}}
+@media(max-width:700px){.hero{padding-top:28px}.hero .wrap{display:block;min-height:0;padding:0 18px}.hero .wrap:after{display:block;position:absolute;right:-90px;top:35px;width:230px;opacity:.35;z-index:0}.hero:after{background:linear-gradient(90deg,#101113f5,#101113a8)}.hero h1{font-size:clamp(36px,10vw,49px);max-width:11ch}.hero .lead,.hero .aud,.hero .by{max-width:100%}.hero .stats{grid-template-columns:1fr 1fr;margin:18px -18px 0;padding:0 18px 18px}.stats div{padding-top:13px}.hero~section{padding-top:48px;padding-bottom:48px}.hero~section h2{font-size:32px}.hero~section .sec-lead{font-size:12px}.links{top:calc(100% + 1px);border:1px solid #303238;border-radius:0 0 8px 8px}.links a{font-size:13px}.nav .wrap{padding:0 12px}.navr{gap:6px}.logo{font-size:16px}}
+@media(max-width:400px){.hero .cta .btn{padding:9px 10px;font-size:10px}.hero .chip{font-size:9px}.hero .stats span{font-size:8px}}
+
+
+.hero-slide-controls{grid-column:1;display:flex;align-items:center;gap:7px;margin:0 0 6px;position:relative;z-index:3}.hero-slide-controls button{border:1px solid #484b51;background:#17191d;color:#bfc2c7;border-radius:4px;padding:5px 8px;font:10px "JetBrains Mono",monospace;cursor:pointer}.hero-slide-controls button[aria-current="true"]{background:#e0e1e3;color:#111;border-color:#e0e1e3}.hero-slide-controls span{font:9px "JetBrains Mono",monospace;color:#9fa3aa;margin-left:4px}
+@media(max-width:700px){.hero-slide-controls{margin-bottom:10px}}
+
+</style>
+</head>
+<body>
+<nav><div class="wrap">
+<a class="logo notranslate" translate="no" href="#top"><img src="/icon-192.png" alt="" width="30" height="30">NEXUS-Q</a>
+<div class="links" id="menu"><a href="#overview">Overview</a><a href="#how">How it works</a><a href="#crypto">Crypto</a><a href="#packages">Packages</a><a href="#benchmarks">Benchmarks</a><a href="#versions">Versions</a><a href="#quickstart">Quick start</a><a href="#contribute">Contribute</a><a href="#faq">FAQ</a><a class="mo" href="https://github.com/lecodev-26/nexus-q" target="_blank" rel="noopener">GitHub</a></div>
+<div class="navr"><button class="tg" id="tg" type="button" aria-label="Switch between light and dark mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><span id="tgt">Light</span></button><a class="btn p" href="https://github.com/lecodev-26/nexus-q" target="_blank" rel="noopener">GitHub</a><button class="mb" id="mb" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button></div>
+</div></nav>
+
+<header class="hero" id="top">
+<canvas id="cv" aria-hidden="true"></canvas>
+<div class="wrap">
+<span class="chip"><b></b>v4.1.1 published · artifact provenance reconciliation pending · external audit pending</span>
+<h1 class="d">Post-quantum security, <em>built in the open.</em></h1>
+<p class="lead">NEXUS-Q is a Rust engine for protecting <strong>data, keys and identities</strong> with ML-KEM, ML-DSA and a tamper-evident audit log, plus an honest account of what it does and does not prove. This page explains the whole project, so you do not have to audit the repository to understand it.</p>
+<p class="aud"><strong>Built for</strong> developers and teams who embed cryptography in applications and servers that must protect secrets for the long term.</p>
+<p class="by">Maintained by <a class="lk" href="https://github.com/lecodev-26" target="_blank" rel="noopener">lecodev-26</a> · <a class="lk" href="https://github.com/lecodev-26/nexus-q/graphs/contributors" target="_blank" rel="noopener">contributors</a></p>
+<div class="cta"><a class="btn p" href="#quickstart">Quick start</a><a class="btn" href="https://github.com/lecodev-26/nexus-q" target="_blank" rel="noopener">View repository</a><a class="btn" href="https://github.com/lecodev-26/nexus-q/releases/latest" target="_blank" rel="noopener">Latest release</a><a class="btn" href="#contribute">Contribute</a></div>
+<div class="hero-slide-controls" aria-label="Hero slides"><button type="button" data-hero-slide="0" aria-current="true">01</button><button type="button" data-hero-slide="1" aria-current="false">02</button><button type="button" data-hero-slide="2" aria-current="false">03</button><span id="heroSlideCaption">01 / 03 · PLATFORM</span></div>
+<div class="stats"><div><b>4.1.1</b><span>published tag · release artifact provenance needs reconciliation</span></div><div><b>241</b><span>official normalized Arena measurements</span></div><div><b>9/9</b><span>native production-path operations passed the 1.5× median and p95 gate</span></div><div><b>Opt-in</b><span>native backend remains experimental; CLI and SDKs default to RustCrypto</span></div></div>
+</div>
+</header>
+
+<section id="overview"><div class="wrap">
+<div class="eyebrow rv">/ overview</div>
+<h2 class="d rv">What is NEXUS-Q?</h2>
+<p class="sec-lead rv">A post-quantum cryptographic security engine. It is a library first: a Rust core that does all the cryptography, with a command line, an HTTP server and language SDKs layered on top. It is meant to be embedded in applications and servers that need to protect secrets for the long term.</p>
+<div class="grid g3">
+<div class="card rv"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div><h3>Data</h3><p>Authenticated encryption of files and streams, with envelope encryption (format F-02) so payloads are protected under a key that is itself protected.</p></div>
+<div class="card rv"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3M14 9l2 2"/></svg></div><h3>Keys</h3><p>The full key lifecycle: generation, rotation, revocation and destruction, stored in an encrypted vault (format F-01) with atomic writes.</p></div>
+<div class="card rv"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div><h3>Identities</h3><p>Digital signatures, signature verification, identity rotation and revocation, and signed verifiable credentials.</p></div>
+</div>
+<div class="grid g2" style="margin-top:18px">
+<div class="card rv"><h3>Why post-quantum?</h3><p>Large quantum computers would break the public-key schemes in wide use today (RSA, elliptic curves), and data recorded now could be decrypted later. NEXUS-Q uses the NIST-standardized lattice algorithms ML-KEM and ML-DSA, and pairs the key exchange with classical X25519 as a hybrid.</p></div>
+<div class="card rv"><h3>The golden rule</h3><p><strong>We do not invent cryptography.</strong> Every primitive is a standardized algorithm implemented by a maintained library. Deviations need a written architecture decision record. The project also states plainly that it does not claim every dependency has been independently audited.</p></div>
+</div>
+</div></section>
+
+<section id="how"><div class="wrap">
+<div class="eyebrow rv">/ how it works</div>
+<h2 class="d rv">From password to protected data</h2>
+<p class="sec-lead rv">Every operation goes through the same building blocks. Policy decides who may act, the vault guards the keys, and security-relevant events are written to an audit log that detects tampering.</p>
+<div class="flow rv">
+<div class="step"><span class="n">01</span><h4>Unlock the vault</h4><p>A password goes through Argon2id to unlock the encrypted vault. The vault holds keys at rest and is written atomically.</p></div>
+<div class="step"><span class="n">02</span><h4>Manage keys</h4><p>Generate, rotate, revoke and destroy keys. Secrets are zeroized in memory when they are no longer needed.</p></div>
+<div class="step"><span class="n">03</span><h4>Encrypt or sign</h4><p>Hybrid ML-KEM + X25519 for key exchange, AES-256-GCM or ChaCha20-Poly1305 for data, Ed25519, ML-DSA-65 or SLH-DSA for signatures.</p></div>
+<div class="step"><span class="n">04</span><h4>Enforce policy</h4><p>A deny-by-default policy engine decides which actions are allowed before they happen.</p></div>
+<div class="step"><span class="n">05</span><h4>Audit everything</h4><p>An HMAC-authenticated audit log with rollback anchoring makes tampering and truncation detectable.</p></div>
+</div>
+<div class="grid g3" style="margin-top:18px">
+<div class="card rv"><h3>Library first</h3><p>The core is a Rust library. The CLI, the server and the SDKs are thin layers on top and contain no cryptography of their own.</p></div>
+<div class="card rv"><h3>Hardware-agnostic boundary</h3><p>Provider traits exist for software, TPM, HSM, Secure Element and RISC-V. Hardware isolation is only claimed when a provider is implemented and tested. The default software backend does not provide it.</p></div>
+<div class="card rv"><h3>Security from the ground up</h3><p>The threat model and the cryptographic rules were written before the code, and they are part of the repository.</p></div>
+</div>
+</div></section>
+
+<section id="architecture"><div class="wrap">
+<div class="eyebrow rv">/ architecture</div>
+<h2 class="d rv">What is in the repository</h2>
+<p class="sec-lead rv">A Rust workspace with the core library, CLI, authenticated server, multi-language SDKs, an opt-in experimental native backend, and a reproducible benchmark arena.</p>
+<div class="tw rv"><table class="table">
+<tr><th>Component</th><th>What it is</th></tr>
+<tr><td>nexusq-core</td><td>The library. All cryptography, vault, key management, identity, policy, storage and hardware abstraction live here.</td></tr>
+<tr><td>nexusq-cli</td><td>The <code>nexusq</code> binary: vault, key, data, sign, identity, credential and audit commands. A thin wrapper over the library.</td></tr>
+<tr><td>nexusq-server</td><td>The <code>nexusq-server</code> binary and authenticated HTTP service, with health, readiness and Prometheus-style metrics endpoints.</td></tr>
+<tr><td>nexusq-c · nexusq-py</td><td>The C SDK and the Python binding, built on the core library.</td></tr>
+<tr><td>bindings/go · php · ruby</td><td>Language bindings covered by a dedicated SDK CI workflow.</td></tr>
+<tr><td>arena/</td><td>The PQC Benchmark Arena: pinned external implementations, a normalized JSONL protocol and retained CI artifacts.</td></tr>
+<tr><td>fuzz/ · artifact-archive/</td><td>Fuzz targets, and the archived V1/V2/V3 evidence with SHA-256 manifests.</td></tr>
+</table></div>
+<div class="grid g4" style="margin-top:18px">
+<div class="card rv"><h3>Targets</h3><p>Linux x86_64 and aarch64, Android/Termux aarch64, and RISC-V (riscv64gc) with a verified build.</p></div>
+<div class="card rv"><h3>Requirements</h3><p>Rust 1.88 or newer for the current main branch (edition 2024) and Git. SDK toolchains are only needed for the binding you build.</p></div>
+<div class="card rv"><h3>Storage</h3><p>Encrypted vault, envelope format, backup bundles and a storage database, all with documented formats.</p></div>
+<div class="card rv"><h3>Observability</h3><p>Request IDs, aggregate metrics, health and readiness probes. Secrets are kept out of logs.</p></div>
+</div>
+</div></section>
+
+<section id="packages"><div class="wrap">
+<div class="eyebrow rv">/ packages & distribution</div>
+<h2 class="d rv">Install NEXUS-Q from package registries</h2>
+<p class="sec-lead rv">The 4.1.x packages are published across Rust, Python, JavaScript, Java, Kotlin, Go, PHP, Ruby and Swift channels. Registry publication is a distribution milestone only; it does not imply an independent security audit, certification, or production readiness. Most FFI SDKs require the NEXUS-Q C library (<code>libnexusq</code>) to be installed on the system first.</p>
+<div class="tw rv"><table class="table">
+<tr><th>Ecosystem</th><th>Published package</th><th>Install / dependency</th><th>Registry</th></tr>
+<tr><td colspan="4"><strong>4.1.1 is a local release candidate only; registry versions below remain the actually published 4.1.0 artifacts until coordinated publication.</strong></td></tr>
+<tr><td>Rust · library</td><td><code>nexusq</code> 4.1.0</td><td><code>cargo add nexusq</code></td><td><a class="lk" href="https://crates.io/crates/nexusq" target="_blank" rel="noopener">crates.io</a></td></tr>
+<tr><td>Rust · core</td><td><code>nexusq-core</code> 4.1.0</td><td><code>cargo add nexusq-core</code></td><td><a class="lk" href="https://crates.io/crates/nexusq-core" target="_blank" rel="noopener">crates.io</a></td></tr>
+<tr><td>Rust · ML-KEM</td><td><code>nexusq-ml-kem</code> 4.1.0</td><td><code>cargo add nexusq-ml-kem</code></td><td><a class="lk" href="https://crates.io/crates/nexusq-ml-kem" target="_blank" rel="noopener">crates.io</a></td></tr>
+<tr><td>Rust · ML-DSA</td><td><code>nexusq-ml-dsa</code> 4.1.0</td><td><code>cargo add nexusq-ml-dsa</code></td><td><a class="lk" href="https://crates.io/crates/nexusq-ml-dsa" target="_blank" rel="noopener">crates.io</a></td></tr>
+<tr><td>Rust · CLI</td><td><code>nexusq-cli</code> 4.1.0</td><td><code>cargo install nexusq-cli</code></td><td><a class="lk" href="https://crates.io/crates/nexusq-cli" target="_blank" rel="noopener">crates.io</a></td></tr>
+<tr><td>Rust · server</td><td><code>nexusq-server</code> 4.1.0</td><td><code>cargo install nexusq-server</code></td><td><a class="lk" href="https://crates.io/crates/nexusq-server" target="_blank" rel="noopener">crates.io</a></td></tr>
+<tr><td>C / C++</td><td><code>nexusq-c</code> 4.1.0</td><td><code>cargo build -p nexusq-c</code> or <code>cargo cinstall -p nexusq-c</code></td><td><a class="lk" href="https://crates.io/crates/nexusq-c" target="_blank" rel="noopener">crates.io</a></td></tr>
+<tr><td>Python</td><td><code>nexusq</code> 4.1.0</td><td><code>pip install nexusq</code></td><td><a class="lk" href="https://pypi.org/project/nexusq/" target="_blank" rel="noopener">PyPI</a></td></tr>
+<tr><td>TypeScript / Node.js</td><td><code>nexusq</code> 4.1.0</td><td><code>npm install nexusq</code></td><td><a class="lk" href="https://www.npmjs.com/package/nexusq" target="_blank" rel="noopener">npm</a></td></tr>
+<tr><td>Java</td><td><code>io.github.lecodev-26:nexusq:4.1.0</code></td><td>Maven / Gradle dependency</td><td><a class="lk" href="https://central.sonatype.com/artifact/io.github.lecodev-26/nexusq" target="_blank" rel="noopener">Maven Central</a></td></tr>
+<tr><td>Kotlin</td><td><code>io.github.lecodev-26:nexusq-kotlin:4.1.0</code></td><td>Maven / Gradle dependency</td><td><a class="lk" href="https://central.sonatype.com/artifact/io.github.lecodev-26/nexusq-kotlin" target="_blank" rel="noopener">Maven Central</a></td></tr>
+<tr><td>Go</td><td><code>bindings/go/nexusq</code> v0.1.0</td><td><code>go get github.com/lecodev-26/nexus-q/bindings/go/nexusq</code></td><td><a class="lk" href="https://pkg.go.dev/github.com/lecodev-26/nexus-q/bindings/go/nexusq" target="_blank" rel="noopener">pkg.go.dev</a></td></tr>
+<tr><td>PHP</td><td><code>lecodev-26/nexusq</code> 4.1.0</td><td><code>composer require lecodev-26/nexusq</code></td><td><a class="lk" href="https://packagist.org/packages/lecodev-26/nexusq" target="_blank" rel="noopener">Packagist</a></td></tr>
+<tr><td>Ruby</td><td><code>nexusq</code> 4.1.0</td><td><code>gem install nexusq</code></td><td><a class="lk" href="https://rubygems.org/gems/nexusq" target="_blank" rel="noopener">RubyGems</a></td></tr>
+<tr><td>Swift</td><td>Swift package tag <code>4.1.0</code></td><td><code>.package(url: "https://github.com/lecodev-26/nexus-q.git", from: "4.1.0")</code></td><td><a class="lk" href="https://github.com/lecodev-26/nexus-q/tree/4.1.0/bindings/swift" target="_blank" rel="noopener">Swift Package Manager / Git tag</a></td></tr>
+</table></div>
+<p class="sec-lead rv" style="margin-top:18px">The NuGet package <code>Nexusq</code> and the Dart package <code>nexusq</code> did not resolve in the public registries at the time this page was checked (October 19, 2026), so they are not listed as published. See the <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/main/README.md#installation" target="_blank" rel="noopener">repository installation matrix</a> for source-build and SDK details.</p>
+</div></section>
+
+<section id="crypto"><div class="wrap">
+<div class="eyebrow rv">/ cryptography</div>
+<h2 class="d rv">Six families, nothing else</h2>
+<p class="sec-lead rv">The core is only allowed to use six families of primitives. Anything outside them, such as raw RSA or custom MACs, is forbidden by the project's own rules.</p>
+<div class="tw rv"><table class="table">
+<tr><th>Family</th><th>Purpose</th><th>Implemented</th></tr>
+<tr><td>Randomness</td><td>Entropy for keys, nonces and salts</td><td>OS CSPRNG, plus TRNG support with health checks and mixing</td></tr>
+<tr><td>Hashing</td><td>Digests and commitments</td><td>SHA-2, SHA-3</td></tr>
+<tr><td>KDF</td><td>Passwords and key material to keys</td><td>Argon2id, HKDF</td></tr>
+<tr><td>AEAD</td><td>Symmetric authenticated encryption</td><td>AES-256-GCM, ChaCha20-Poly1305</td></tr>
+<tr><td>KEM</td><td>Post-quantum key encapsulation</td><td>ML-KEM-768 and ML-KEM-1024, hybrid with X25519</td></tr>
+<tr><td>Signatures</td><td>Authenticity and non-repudiation</td><td>Ed25519, ML-DSA-65, SLH-DSA-SHAKE-128f</td></tr>
+</table></div>
+<p class="sec-lead rv" style="margin-top:22px">Planned algorithms are never described as available until they are implemented and tested. The reference document is <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/CRYPTOGRAPHY.md" target="_blank" rel="noopener">docs/CRYPTOGRAPHY.md</a>.</p>
+</div></section>
+
+<section id="benchmarks"><div class="wrap">
+<div class="eyebrow rv">/ benchmarks</div>
+<h2 class="d rv">v4.1.0 recorded production-path benchmark</h2>
+<p class="sec-lead rv">The official 2026-10-19 run records 241 normalized PQC Benchmark Arena measurements. The opt-in native backend passed the unchanged 1.5× median-and-p95 gate against AWS-LC on all nine ML-KEM and ML-DSA production-path operations. Lower latency is better; these are measurements from one AMD EPYC 7763 hosted CI runner, not universal performance claims.</p>
+<div class="tw rv"><table class="table">
+<tr><th>Operation</th><th>NEXUS-Q median</th><th>NEXUS-Q p95</th><th>AWS-LC median</th><th>Median ratio</th><th>p95 ratio</th><th>Gate</th></tr>
+<tr><td>ML-KEM-768 keygen</td><td>12.90 µs</td><td>13.38 µs</td><td>12.33 µs</td><td>1.046×</td><td>1.041×</td><td>Pass</td></tr>
+<tr><td>ML-KEM-768 encaps</td><td>12.94 µs</td><td>13.00 µs</td><td>12.75 µs</td><td>1.015×</td><td>1.013×</td><td>Pass</td></tr>
+<tr><td>ML-KEM-768 decaps</td><td>15.38 µs</td><td>15.44 µs</td><td>15.43 µs</td><td>0.997×</td><td>0.994×</td><td>Pass</td></tr>
+<tr><td>ML-KEM-1024 keygen</td><td>18.34 µs</td><td>18.86 µs</td><td>17.85 µs</td><td>1.028×</td><td>1.025×</td><td>Pass</td></tr>
+<tr><td>ML-KEM-1024 encaps</td><td>18.66 µs</td><td>18.76 µs</td><td>18.56 µs</td><td>1.005×</td><td>0.985×</td><td>Pass</td></tr>
+<tr><td>ML-KEM-1024 decaps</td><td>22.01 µs</td><td>22.10 µs</td><td>22.19 µs</td><td>0.992×</td><td>0.977×</td><td>Pass</td></tr>
+<tr><td>ML-DSA-65 keygen</td><td>35.79 µs</td><td>36.62 µs</td><td>40.00 µs</td><td>0.895×</td><td>0.885×</td><td>Pass</td></tr>
+<tr><td>ML-DSA-65 sign</td><td>83.22 µs</td><td>235.40 µs</td><td>96.57 µs</td><td>0.862×</td><td>0.846×</td><td>Pass</td></tr>
+<tr><td>ML-DSA-65 verify</td><td>33.54 µs</td><td>34.01 µs</td><td>34.31 µs</td><td>0.978×</td><td>0.976×</td><td>Pass</td></tr>
+</table></div>
+<div class="note rv"><b>Important scope note.</b> The native backend is experimental and opt-in only. The default <code>nexusq-core</code> build, CLI, server and SDK production call paths continue to use RustCrypto. The 1.5× gate is a performance gate, not a security audit or certification. Independent external audit remains pending. <a class="lk" href="https://github.com/lecodev-26/nexus-q/actions/runs/39186079459" target="_blank" rel="noopener">Official Arena run (241 measurements)</a> · <a class="lk" href="https://github.com/lecodev-26/nexus-q/actions/runs/39182674176" target="_blank" rel="noopener">Production-path gate</a> · <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/performance/NATIVE_BACKEND_FEATURE.md" target="_blank" rel="noopener">Feature and scope documentation</a>.</div>
+</div></section>
+
+<section id="versions"><div class="wrap">
+<div class="eyebrow rv">/ versions & roadmap</div>
+<h2 class="d rv">Current stable line and engineering history</h2>
+<p class="sec-lead rv">V1, V2 and V3 remain historical engineering baselines. v4.1.1 is published, but the tag, release assets and provenance manifest need reconciliation before its artifacts can be treated as reproducible. A release or passing performance gate does not imply an independent audit, certification, or production readiness.</p>
+<div class="tl">
+<div class="ver rv"><span class="tag">v1.0.0 · Oct 7, 2026</span><h3>V1</h3><p>The frozen engineering baseline: crypto core, vault, keys, identities, policy, audit log, CLI, server and SDKs. Its Arena result showed NEXUS-Q slower than the fastest implementations, which became the main target.</p><span class="st">Frozen</span></div>
+<div class="ver rv"><span class="tag">v2.0.0 · Oct 8, 2026</span><h3>V2</h3><p>Correctness, interoperability, security fuzzing, backend strategy and release gates. The final record claims no performance improvement over V1, and the performance question stayed open.</p><span class="st">Frozen on nexusqv2</span></div>
+<div class="ver rv"><span class="tag">Oct 9, 2026 · PR #45</span><h3>V3</h3><p>Hardened implementation, reproducible Arena, corrected benchmark sampling and retained evidence archive with SHA-256 manifest.</p><span class="st">Engineering release</span></div>
+<div class="ver cur rv"><span class="tag">Oct 19, 2026 · 4.1.0 · PR #55</span><h3>V4.1</h3><p>Stable line release: the native backend passed the 1.5× median-and-p95 gates and PR #55 wires it into nexusq-core behind an explicitly opt-in feature. Default builds, the CLI and SDKs still use RustCrypto; the native path is opt-in only.</p><span class="st">Stable line · final independent audit pending</span></div>
+</div>
+</div></section>
+
+<section id="security"><div class="wrap">
+<div class="eyebrow rv">/ security posture</div>
+<h2 class="d rv">What we claim, and what we do not</h2>
+<p class="sec-lead rv">Cryptographic software earns trust slowly. This is the project's own statement of its current assurance level.</p>
+<div class="yn">
+<div class="card y rv"><h3>Claimed and evidenced</h3><ul>
+<li>Standardized algorithms only, through maintained libraries</li>
+<li>Secrets zeroized when no longer needed</li>
+<li>Tamper-evident, HMAC-authenticated audit log</li>
+<li>Deny-by-default policy engine</li>
+<li>Security CI gates, SDK CI, benchmark CI and fuzz targets</li>
+<li>Published threat model and security model</li>
+<li>Dual license: MIT or Apache-2.0</li></ul></div>
+<div class="card n rv"><h3>Not claimed</h3><ul>
+<li>Independent external security audit</li>
+<li>FIPS validation or Common Criteria certification</li>
+<li>Formal verification</li>
+<li>Production readiness</li>
+<li>Security endorsement, audit, or production readiness implied by publication to a package registry</li>
+<li>Hardware isolation from the default software backend</li>
+<li>Performance leadership</li></ul></div>
+</div>
+<p class="sec-lead rv" style="margin-top:24px">Found a vulnerability? Report it privately through GitHub Security Advisories, not a public issue. See <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/main/SECURITY.md" target="_blank" rel="noopener">SECURITY.md</a>.</p>
+</div></section>
+
+<section id="quickstart"><div class="wrap">
+<div class="eyebrow rv">/ quick start</div>
+<h2 class="d rv">Build it and use it</h2>
+<p class="sec-lead rv">You need Rust 1.88 or newer for the current main branch. Linux and Android/Termux are the environments exercised most.</p>
+<div class="qs">
+<div class="rv"><h3 style="margin-bottom:8px">1 · Build</h3>
+<div class="code" translate="no"><button class="copy" type="button">Copy</button><pre><span class="c"># clone and build the workspace</span>
+git clone https://github.com/lecodev-26/nexus-q
+cd nexus-q
+cargo build --workspace --release</pre></div>
+<h3 style="margin:22px 0 8px">2 · Create a vault</h3>
+<div class="code" translate="no"><button class="copy" type="button">Copy</button><pre>./target/release/nexusq vault create ./example.nqv
+./target/release/nexusq vault status ./example.nqv
+./target/release/nexusq health</pre></div></div>
+<div class="rv"><h3 style="margin-bottom:8px">3 · Generate a key</h3>
+<div class="code" translate="no"><button class="copy" type="button">Copy</button><pre>./target/release/nexusq key generate ./example.nqv \
+  --algorithm ed25519 --purpose sign \
+  --password-file ./password.txt
+./target/release/nexusq key list ./example.nqv</pre></div>
+<h3 style="margin:22px 0 8px">4 · Encrypt and decrypt data</h3>
+<div class="code" translate="no"><button class="copy" type="button">Copy</button><pre>./target/release/nexusq data encrypt ./example.nqv \
+  --key-id &lt;key-id&gt; ./secret.txt
+./target/release/nexusq data decrypt ./example.nqv \
+  ./secret.txt.nqx ./secret.out</pre></div></div>
+</div>
+<p class="sec-lead rv" style="margin-top:14px">Prefer <code>--password-file</code> over typing a password on the command line, and never commit that file. The full command list is in the <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/user/CLI.md" target="_blank" rel="noopener">CLI guide</a>. Server setup is in <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/SERVER.md" target="_blank" rel="noopener">docs/SERVER.md</a>.</p>
+</div></section>
+
+<section id="contribute"><div class="wrap">
+<div class="eyebrow rv">/ contribute</div>
+<h2 class="d rv">How you can help</h2>
+<p class="sec-lead rv">NEXUS-Q is built in the open and is still young. The most useful help right now is scrutiny: more eyes, more hardware and more honest measurements. Some of these need no cryptography background.</p>
+<div class="grid g2">
+<div class="card rv"><h3>Run the Arena on your hardware</h3><p>Reproduce the benchmark numbers on your own CPU and share what you find in an issue. Differences between machines affect reproducibility; treat local results as observations, not official gate evidence. Start with <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/main/arena/README.md" target="_blank" rel="noopener">arena/README.md</a>.</p></div>
+<div class="card rv"><h3>Review the threat model</h3><p>Read the <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/THREAT_MODEL.md" target="_blank" rel="noopener">threat model</a> and the <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/SECURITY_MODEL.md" target="_blank" rel="noopener">security model</a>, and tell us what is missing or wrong. A gap in the reasoning is worth more than praise.</p></div>
+<div class="card rv"><h3>Test on your platform</h3><p>Build the workspace and run the tests on Linux, Android/Termux or RISC-V, and report anything that fails or behaves differently.</p></div>
+<div class="card rv"><h3>V4 engineering status</h3><p>The native backend is experimental and opt-in: PR #55 wires it into nexusq-core behind an explicit feature flag, but the default build, the CLI and the SDKs still use RustCrypto, and the feature is not enabled by default anywhere. Independent external audit is still open.</p></div>
+</div>
+<div class="cta rv" style="margin:26px 0 0"><a class="btn p" href="https://github.com/lecodev-26/nexus-q/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Read CONTRIBUTING.md</a><a class="btn" href="https://github.com/lecodev-26/nexus-q/tree/v4-engineering-2026-10-16" target="_blank" rel="noopener">V4 engineering snapshot</a><a class="btn" href="https://github.com/lecodev-26/nexus-q/issues" target="_blank" rel="noopener">Open issues</a></div>
+<p class="sec-lead rv" style="margin:22px 0 0">Found a vulnerability? Please report it privately through GitHub Security Advisories, not in a public issue. See <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/main/SECURITY.md" target="_blank" rel="noopener">SECURITY.md</a>.</p>
+</div></section>
+
+<section id="docs"><div class="wrap">
+<div class="eyebrow rv">/ documentation</div>
+<h2 class="d rv">Where to read next</h2>
+<p class="sec-lead rv">Everything below lives in the repository. Start with the user guide, then go as deep as you need.</p>
+<div class="grid g3 docs">
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/user/README.md" target="_blank" rel="noopener">User guide<span>start here</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/ARCHITECTURE.md" target="_blank" rel="noopener">Architecture<span>system design</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/THREAT_MODEL.md" target="_blank" rel="noopener">Threat model<span>what we defend against</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/CRYPTOGRAPHY.md" target="_blank" rel="noopener">Cryptography<span>algorithms and rules</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/KEY_MANAGEMENT.md" target="_blank" rel="noopener">Key management<span>lifecycle</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/SECURITY_MODEL.md" target="_blank" rel="noopener">Security model<span>guarantees</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/STORAGE.md" target="_blank" rel="noopener">Storage<span>persistent formats</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/POLICY.md" target="_blank" rel="noopener">Policy<span>access control</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/user/SDK.md" target="_blank" rel="noopener">SDK guide<span>C, Python, Go, PHP, Ruby</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/DEPLOYMENT.md" target="_blank" rel="noopener">Deployment<span>running the server</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/BENCHMARKS.md" target="_blank" rel="noopener">Benchmarks<span>raw numbers</span></a>
+<a class="rv" href="https://github.com/lecodev-26/nexus-q/blob/main/docs/V3_V4_ROADMAP.md" target="_blank" rel="noopener">V3 and V4 status<span>version history and current boundaries</span></a>
+</div>
+</div></section>
+
+<section id="faq"><div class="wrap">
+<div class="eyebrow rv">/ faq</div>
+<h2 class="d rv">Questions people ask</h2>
+<div class="rv">
+<details><summary>Is NEXUS-Q ready for production?</summary><p>The project does not claim production readiness. It is an engineering project with strong CI gates, but there has been no independent audit or certification. Evaluate it, review it, and treat it accordingly.</p></details>
+<details><summary>Has it been audited?</summary><p>No independent external audit has been completed, and none is implied by a GitHub release. The project states it will link a public evidence package from the repository if one exists.</p></details>
+<details><summary>Why is it slower than AWS-LC and others?</summary><p>V1 was built to be correct and secure first. Its Arena run measured it roughly 2 to 4.5 times slower than the fastest implementations. V3 keeps zeroization and hardening and accepts the cost. V4 includes an experimental native backend. It has passed the measured-backend and production-path 1.5× median-and-p95 gates in the reviewed CI, but the native path is opt-in only and this result is not an end-to-end application benchmark.</p></details>
+<details><summary>Why combine ML-KEM with X25519?</summary><p>A hybrid keeps the key exchange protected as long as at least one of the two schemes holds up. That is the usual reasoning for hybrids while post-quantum algorithms are still young in deployment.</p></details>
+<details><summary>Can I use it from Python, Go, C, PHP or Ruby?</summary><p>Yes. Python is published on PyPI; Go is available via pkg.go.dev; PHP on Packagist; and Ruby on RubyGems. The C SDK is published on crates.io. The FFI wrappers require the C library (libnexusq) to be installed locally first. See the package table and SDK guide.</p></details>
+<details><summary>What license is it under?</summary><p>You can choose either the MIT license or the Apache License 2.0, the same dual license used by much of the Rust ecosystem.</p></details>
+<details><summary>How can I help?</summary><p>Read the threat model, run the Arena yourself, review the code, and open an issue or a pull request. The v4.1.1 Git tag is published, but its release assets and provenance manifest still reference an earlier commit; artifact regeneration and independent external audit remain open. Security reports go through GitHub Security Advisories.</p></details>
+</div>
+</div></section>
+
+<footer><div class="wrap"><div>NEXUS-Q · MIT OR Apache-2.0 · an engineering project by <a class="lk" href="https://github.com/lecodev-26" target="_blank" rel="noopener">lecodev-26</a></div><div><a href="https://github.com/lecodev-26/nexus-q" target="_blank" rel="noopener">Repository</a> · <a href="https://github.com/lecodev-26/nexus-q/issues" target="_blank" rel="noopener">Issues</a> · <a href="https://github.com/lecodev-26/nexus-q/blob/main/SECURITY.md" target="_blank" rel="noopener">Security</a></div></div></footer>
+
 <script>
-(()=>{'use strict';
-const slides=[{eyebrow:'CRYPTOGRAPHY, RE-ENGINEERED',title:'A safer future starts <span class="accent">before quantum.</span>',desc:'Post-quantum building blocks for the systems that need to last. NEXUS-Q brings modern lattice cryptography, key lifecycle tools and PKI into a Rust-first toolkit.',tag:'SYSTEM / 001 — KEY EXCHANGE',label:'KEM',status:'ML-KEM · ACTIVE'},{eyebrow:'STANDARDIZED. COMPOSABLE. REVIEWABLE.',title:'Modern algorithms. <span class="accent">Real-world tooling.</span>',desc:'Work with ML-KEM for key establishment and ML-DSA for digital signatures, backed by a developer-oriented Rust codebase and practical utilities.',tag:'SYSTEM / 002 — DIGITAL SIGNATURES',label:'DSA',status:'ML-DSA · STANDARDIZED'},{eyebrow:'OPEN SOURCE, NO MAGIC CLAIMS',title:'Security is a process. <span class="accent">Evidence matters.</span>',desc:'Explore the implementation, benchmark methodology and explicit security limitations. Clear engineering boundaries are part of the product.',tag:'SYSTEM / 003 — TRANSPARENCY',label:'AUDIT',status:'REVIEW · IN PROGRESS'}];let current=0,timer;const $=id=>document.getElementById(id);function showSlide(n){current=(n+slides.length)%slides.length;const s=slides[current];$('slideEyebrow').textContent=s.eyebrow;$('slideTitle').innerHTML=s.title;$('slideDesc').textContent=s.desc;$('visualTag').textContent=s.tag;$('orbLabel').textContent=s.label;$('visualStatus').textContent=s.status;$('visualIndex').textContent=String(current+1).padStart(2,'0')+' / 03';$('slideCount').textContent=String(current+1).padStart(2,'0')+' — 03';document.querySelectorAll('[data-slide]').forEach((b,i)=>b.setAttribute('aria-current',String(i===current)));const visual=document.querySelector('.hero-visual');visual.animate([{opacity:.65,transform:'translateY(5px)'},{opacity:1,transform:'translateY(0)'}],{duration:300,easing:'ease-out'});resetTimer()}function resetTimer(){clearInterval(timer);if(!window.matchMedia('(prefers-reduced-motion: reduce)').matches)timer=setInterval(()=>showSlide(current+1),7000)}$('prevSlide').addEventListener('click',()=>showSlide(current-1));$('nextSlide').addEventListener('click',()=>showSlide(current+1));document.querySelectorAll('[data-slide]').forEach(b=>b.addEventListener('click',()=>showSlide(Number(b.dataset.slide))));const visual=$('.hero-visual');visual.addEventListener('mouseenter',()=>clearInterval(timer));visual.addEventListener('mouseleave',resetTimer);visual.addEventListener('focusin',()=>clearInterval(timer));visual.addEventListener('focusout',resetTimer);
-const kem={'512':['ML-KEM-512 · IND-CCA2','Security category 1 · Public key 800 bytes · Ciphertext 768 bytes. Designed for efficient key establishment.'],'768':['ML-KEM-768 · IND-CCA2','Security category 3 · Public key 1,184 bytes · Ciphertext 1,088 bytes. A balanced parameter set.'],'1024':['ML-KEM-1024 · IND-CCA2','Security category 5 · Public key 1,568 bytes · Ciphertext 1,568 bytes. Higher security category.']};const dsa={'44':['ML-DSA-44 · Signature scheme','Security category 2 · Public key 1,312 bytes · Signature 2,420 bytes.'],'65':['ML-DSA-65 · Signature scheme','Security category 3 · Public key 1,952 bytes · Signature 3,309 bytes.'],'87':['ML-DSA-87 · Signature scheme','Security category 5 · Public key 2,592 bytes · Signature 4,627 bytes.']};document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{const group=b.dataset.group,vals=group==='kem'?kem:dsa,entry=vals[b.dataset.value];document.querySelectorAll('[data-group="'+group+'"]').forEach(t=>t.setAttribute('aria-selected',String(t===b)));const panel=$(group==='kem'?'kemPanel':'dsaPanel');panel.innerHTML='<h4>'+entry[0]+'</h4><p>'+entry[1]+'</p>';panel.animate([{opacity:.4,transform:'translateY(4px)'},{opacity:1,transform:'translateY(0)'}],{duration:220})}));
-const menu=$('menuToggle'),nav=$('navLinks');menu.addEventListener('click',()=>{const open=nav.classList.toggle('open');menu.setAttribute('aria-expanded',String(open));menu.textContent=open?'×':'☰'});nav.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{nav.classList.remove('open');menu.setAttribute('aria-expanded','false');menu.textContent='☰'}));const observer=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('visible');observer.unobserve(e.target)}}),{threshold:.12});document.querySelectorAll('.reveal').forEach(el=>observer.observe(el));if(!('IntersectionObserver'in window))document.querySelectorAll('.reveal').forEach(el=>el.classList.add('visible'));const sections=[...document.querySelectorAll('main section[id]')];const navObserver=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting){document.querySelectorAll('.nav-links a').forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+e.target.id))}}),{rootMargin:'-30% 0px -60% 0px'});sections.forEach(s=>navObserver.observe(s));
+(function(){
+var root=document.documentElement,tg=document.getElementById('tg'),tt=document.getElementById('tgt');
+function cur(){var t=root.getAttribute('data-theme');return t||(matchMedia('(prefers-color-scheme:light)').matches?'light':'dark')}
+function lab(){tt.textContent=cur()==='dark'?'Light':'Dark'}
+try{var s=localStorage.getItem('nq-theme');if(s==='light'||s==='dark')root.setAttribute('data-theme',s)}catch(e){}
+lab();tg.addEventListener('click',function(){var n=cur()==='dark'?'light':'dark';root.setAttribute('data-theme',n);try{localStorage.setItem('nq-theme',n)}catch(e){}lab()});
+
+var heroSlides=[{title:'Post-quantum security, <em>built in the open.</em>',lead:'NEXUS-Q is a Rust engine for protecting data, keys and identities with ML-KEM, ML-DSA and a tamper-evident audit log, plus an honest account of what it does and does not prove.',caption:'01 / 03 · PLATFORM'},{title:'Cryptography, <em>engineered in Rust.</em>',lead:'Explore key lifecycle management, post-quantum signatures, hybrid key exchange and practical developer tooling in one open-source project.',caption:'02 / 03 · ALGORITHMS'},{title:'Security claims need <em>real evidence.</em>',lead:'Inspect the benchmark methodology, implementation boundaries and release caveats. External cryptographic audit remains pending, and artifact provenance still needs reconciliation.',caption:'03 / 03 · TRANSPARENCY'}];var hs=0,ht=null,hh=document.querySelector('.hero h1'),hl=document.querySelector('.hero .lead'),hc=document.getElementById('heroSlideCaption'),hbs=document.querySelectorAll('[data-hero-slide]');function setHeroSlide(n){hs=(n+heroSlides.length)%heroSlides.length;hh.innerHTML=heroSlides[hs].title;hl.textContent=heroSlides[hs].lead;hc.textContent=heroSlides[hs].caption;hbs.forEach(function(b,i){b.setAttribute('aria-current',i===hs?'true':'false')});if(ht)clearInterval(ht);if(!matchMedia('(prefers-reduced-motion: reduce)').matches)ht=setInterval(function(){setHeroSlide(hs+1)},8000)}hbs.forEach(function(b){b.addEventListener('click',function(){setHeroSlide(Number(b.getAttribute('data-hero-slide')))} )});setHeroSlide(0);
+
+var mb=document.getElementById('mb'),menu=document.getElementById('menu');
+function closeMenu(){menu.classList.remove('open');mb.setAttribute('aria-expanded','false')}
+mb.addEventListener('click',function(){var o=menu.classList.toggle('open');mb.setAttribute('aria-expanded',o?'true':'false')});
+menu.addEventListener('click',function(e){if(e.target.tagName==='A')closeMenu()});
+document.addEventListener('keydown',function(e){if(e.key==='Escape')closeMenu()});
+addEventListener('resize',function(){if(innerWidth>1080)closeMenu()});
+var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('on');io.unobserve(e.target)}})},{threshold:.1});
+document.querySelectorAll('.rv').forEach(function(el){io.observe(el)});
+document.querySelectorAll('.copy').forEach(function(b){b.addEventListener('click',function(){var t=b.parentNode.querySelector('pre').innerText;(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){b.textContent='Copied'},function(){b.textContent='Select + copy'});setTimeout(function(){b.textContent='Copy'},1600)})});
+
+
+
+var c=document.getElementById('cv'),x=c.getContext('2d'),W,H,P=[],m={x:-999,y:-999},dpr=Math.min(devicePixelRatio||1,2),still=matchMedia('(prefers-reduced-motion:reduce)').matches;
+function init(){var r=c.getBoundingClientRect();W=r.width;H=r.height;c.width=W*dpr;c.height=H*dpr;x.setTransform(dpr,0,0,dpr,0,0);P=[];var g=Math.max(54,Math.round(W/20));for(var i=0;i<W+g;i+=g)for(var j=0;j<H+g;j+=g){P.push({ox:i+(Math.random()-.5)*g*.5,oy:j+(Math.random()-.5)*g*.5,x:0,y:0,s:Math.random()*6.28,f:0})}P.forEach(function(p){p.x=p.ox;p.y=p.oy})}
+function draw(t){var col=getComputedStyle(root).getPropertyValue('--acc').trim()||'#5cf2d6';x.clearRect(0,0,W,H);x.fillStyle=col;x.strokeStyle=col;
+for(var k=0;k<P.length;k++){var p=P[k],dx=p.x-m.x,dy=p.y-m.y,d=Math.sqrt(dx*dx+dy*dy),f=d<170?(170-d)/170*30:0;var tx=p.ox+Math.sin(t/1700+p.s)*7+(d?dx/d*f:0),ty=p.oy+Math.cos(t/1900+p.s)*7+(d?dy/d*f:0);p.x+=(tx-p.x)*.1;p.y+=(ty-p.y)*.1;p.f=f}
+x.lineWidth=1;for(var a=0;a<P.length;a++){for(var b=a+1;b<P.length;b++){var q=P[a],r=P[b],ddx=q.x-r.x,ddy=q.y-r.y,dd=ddx*ddx+ddy*ddy;if(dd<8500){x.globalAlpha=(1-dd/8500)*.22;x.beginPath();x.moveTo(q.x,q.y);x.lineTo(r.x,r.y);x.stroke()}}}
+for(var k2=0;k2<P.length;k2++){var pp=P[k2];x.globalAlpha=.35+Math.min(.65,pp.f/30);x.beginPath();x.arc(pp.x,pp.y,1.6+pp.f/14,0,6.283);x.fill()}
+x.globalAlpha=1;if(!still)requestAnimationFrame(draw)}
+addEventListener('resize',init);var hero=document.getElementById('top');hero.addEventListener('pointermove',function(e){var r=c.getBoundingClientRect();m.x=e.clientX-r.left;m.y=e.clientY-r.top});hero.addEventListener('pointerleave',function(){m.x=m.y=-999});
+init();requestAnimationFrame(draw);
 })();
-</script></body></html>
+</script>
+</body>
+</html>
