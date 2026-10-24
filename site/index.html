@@ -398,18 +398,29 @@ section{padding:clamp(48px,6vw,76px) 0}.eyebrow{font:700 12px "Instrument Sans",
 <div class="eyebrow rv">/ benchmarks</div>
 <h2 class="d rv">v4.1.0 official production-path benchmark</h2>
 <p class="sec-lead rv">The official 2026-10-19 run records 241 normalized PQC Benchmark Arena measurements. The opt-in native backend passed the unchanged 1.5× median-and-p95 gate against AWS-LC on all nine ML-KEM and ML-DSA production-path operations. Lower latency is better; these are measurements from one AMD EPYC 7763 hosted CI runner, not universal performance claims.</p>
-<div class="tw rv"><table class="table">
-<tr><th>Operation</th><th>NEXUS-Q median</th><th>NEXUS-Q p95</th><th>AWS-LC median</th><th>Median ratio</th><th>p95 ratio</th><th>Gate</th></tr>
-<tr><td>ML-KEM-768 keygen</td><td>12.90 µs</td><td>13.38 µs</td><td>12.33 µs</td><td>1.046×</td><td>1.041×</td><td>Pass</td></tr>
-<tr><td>ML-KEM-768 encaps</td><td>12.94 µs</td><td>13.00 µs</td><td>12.75 µs</td><td>1.015×</td><td>1.013×</td><td>Pass</td></tr>
-<tr><td>ML-KEM-768 decaps</td><td>15.38 µs</td><td>15.44 µs</td><td>15.43 µs</td><td>0.997×</td><td>0.994×</td><td>Pass</td></tr>
-<tr><td>ML-KEM-1024 keygen</td><td>18.34 µs</td><td>18.86 µs</td><td>17.85 µs</td><td>1.028×</td><td>1.025×</td><td>Pass</td></tr>
-<tr><td>ML-KEM-1024 encaps</td><td>18.66 µs</td><td>18.76 µs</td><td>18.56 µs</td><td>1.005×</td><td>0.985×</td><td>Pass</td></tr>
-<tr><td>ML-KEM-1024 decaps</td><td>22.01 µs</td><td>22.10 µs</td><td>22.19 µs</td><td>0.992×</td><td>0.977×</td><td>Pass</td></tr>
-<tr><td>ML-DSA-65 keygen</td><td>35.79 µs</td><td>36.62 µs</td><td>40.00 µs</td><td>0.895×</td><td>0.885×</td><td>Pass</td></tr>
-<tr><td>ML-DSA-65 sign</td><td>83.22 µs</td><td>235.40 µs</td><td>96.57 µs</td><td>0.862×</td><td>0.846×</td><td>Pass</td></tr>
-<tr><td>ML-DSA-65 verify</td><td>33.54 µs</td><td>34.01 µs</td><td>34.31 µs</td><td>0.978×</td><td>0.976×</td><td>Pass</td></tr>
-</table></div>
+<style>
+.bench-chart{display:grid;gap:14px;margin:28px 0 22px;padding:22px;background:var(--card);border:1px solid var(--line);border-radius:20px}
+.bench-legend{display:flex;flex-wrap:wrap;gap:18px;color:var(--mut);font-size:13px}
+.bench-key{display:inline-flex;align-items:center;gap:8px}.bench-swatch{width:11px;height:11px;border-radius:3px;background:var(--acc)}.bench-swatch.aws{background:#8b9bb0}
+.bench-row{display:grid;grid-template-columns:minmax(130px,180px) minmax(0,1fr);gap:16px;align-items:center;padding:11px 0;border-top:1px solid var(--line)}
+.bench-op{font-size:13px;font-weight:600}.bench-bars{display:grid;gap:7px;min-width:0}.bench-track{height:12px;background:color-mix(in srgb,var(--fg) 7%,var(--bg));border-radius:99px;overflow:hidden}.bench-bar{height:100%;border-radius:99px;background:var(--acc);min-width:2px}.bench-bar.aws{background:#8b9bb0}
+.bench-axis{display:flex;justify-content:space-between;margin-left:calc(180px + 16px);color:var(--mut);font-size:11px}.bench-caption{color:var(--mut);font-size:12px;margin:0}
+@media(max-width:560px){.bench-chart{padding:15px;gap:10px}.bench-row{grid-template-columns:1fr;gap:8px}.bench-axis{margin-left:0}}
+</style>
+<div class="bench-chart rv" role="img" aria-label="Horizontal bar chart comparing median latency of NEXUS-Q native backend and AWS-LC across nine ML-KEM and ML-DSA operations. Shorter bars indicate lower latency.">
+<div class="bench-legend"><span class="bench-key"><i class="bench-swatch"></i>NEXUS-Q native</span><span class="bench-key"><i class="bench-swatch aws"></i>AWS-LC</span><span>Median latency · shorter is faster</span></div>
+<div class="bench-row"><div class="bench-op">ML-KEM-768 · Keygen</div><div class="bench-bars"><div class="bench-track"><div class="bench-bar" style="width:12.90%"></div></div><div class="bench-track"><div class="bench-bar aws" style="width:12.33%"></div></div></div></div>
+<div class="bench-row"><div class="bench-op">ML-KEM-768 · Encaps</div><div class="bench-bars"><div class="bench-track"><div class="bench-bar" style="width:12.94%"></div></div><div class="bench-track"><div class="bench-bar aws" style="width:12.75%"></div></div></div></div>
+<div class="bench-row"><div class="bench-op">ML-KEM-768 · Decaps</div><div class="bench-bars"><div class="bench-track"><div class="bench-bar" style="width:15.38%"></div></div><div class="bench-track"><div class="bench-bar aws" style="width:15.43%"></div></div></div></div>
+<div class="bench-row"><div class="bench-op">ML-KEM-1024 · Keygen</div><div class="bench-bars"><div class="bench-track"><div class="bench-bar" style="width:18.34%"></div></div><div class="bench-track"><div class="bench-bar aws" style="width:17.85%"></div></div></div></div>
+<div class="bench-row"><div class="bench-op">ML-KEM-1024 · Encaps</div><div class="bench-bars"><div class="bench-track"><div class="bench-bar" style="width:18.66%"></div></div><div class="bench-track"><div class="bench-bar aws" style="width:18.56%"></div></div></div></div>
+<div class="bench-row"><div class="bench-op">ML-KEM-1024 · Decaps</div><div class="bench-bars"><div class="bench-track"><div class="bench-bar" style="width:22.01%"></div></div><div class="bench-track"><div class="bench-bar aws" style="width:22.19%"></div></div></div></div>
+<div class="bench-row"><div class="bench-op">ML-DSA-65 · Keygen</div><div class="bench-bars"><div class="bench-track"><div class="bench-bar" style="width:35.79%"></div></div><div class="bench-track"><div class="bench-bar aws" style="width:40%"></div></div></div></div>
+<div class="bench-row"><div class="bench-op">ML-DSA-65 · Sign</div><div class="bench-bars"><div class="bench-track"><div class="bench-bar" style="width:83.22%"></div></div><div class="bench-track"><div class="bench-bar aws" style="width:96.57%"></div></div></div></div>
+<div class="bench-row"><div class="bench-op">ML-DSA-65 · Verify</div><div class="bench-bars"><div class="bench-track"><div class="bench-bar" style="width:33.54%"></div></div><div class="bench-track"><div class="bench-bar aws" style="width:34.31%"></div></div></div></div>
+<div class="bench-axis"><span>0</span><span>25</span><span>50</span><span>75</span><span>100 µs</span></div>
+<p class="bench-caption">Visual comparison of the recorded median latency. Exact median/p95 values and methodology remain available in <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/BENCHMARKS.md" target="_blank" rel="noopener">BENCHMARKS.md</a>.</p>
+</div>
 <div class="panel rv" style="margin-top:22px"><h3 style="margin-bottom:8px">Issue #23 — local final-gate diagnostic (Oct 21, 2026)</h3><p class="cap">Separate from the official v4.1.0 hosted AMD EPYC benchmark above. On an Intel Core i3-N305 Linux host in powersave mode, the owner-accepted local matched-RNG comparison beat or matched the best eligible comparator on median and p95 for 6 of 9 operations. Three residual gaps remain accepted: ML-DSA-65 signing (1.063× median / 1.115× p95), ML-KEM-1024 keygen (1.021× / 1.020×) and ML-KEM-768 keygen (1.015× / 1.013×). These local results are not hosted CI evidence and do not replace the official 1.5× gate.</p><p><a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/performance/ISSUE_23_FINAL_GATE_AUDIT_2026-10-21.md" target="_blank" rel="noopener">Read full report, methodology and historical decisions</a></p></div>
 <div class="note rv"><b>Important scope note.</b> The native backend is experimental and opt-in only. The default <code>nexusq-core</code> build, CLI, server and SDK production call paths continue to use RustCrypto. The 1.5× gate is a performance gate, not a security audit or certification. Independent external audit remains pending. <a class="lk" href="https://github.com/lecodev-26/nexus-q/actions/runs/39186079459" target="_blank" rel="noopener">Official Arena run (241 measurements)</a> · <a class="lk" href="https://github.com/lecodev-26/nexus-q/actions/runs/39182674176" target="_blank" rel="noopener">Production-path gate</a> · <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/docs/performance/NATIVE_BACKEND_FEATURE.md" target="_blank" rel="noopener">Feature and scope documentation</a>.</div>
 </div></section>
