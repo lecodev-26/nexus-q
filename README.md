@@ -40,6 +40,20 @@
 | License | MIT OR Apache-2.0 |
 | Assurance boundary | Security CI, fuzz targets and documented threat model; no independent external audit or certification claimed |
 
+## Modules and SDKs
+
+The repository separates the cryptographic core from interfaces, optional services, and language bindings. These names describe repository components, not a claim that every package has identical maturity, platform support, or release provenance. Use the installation table and each binding's own documentation to confirm the package and target you need.
+
+| Area | Main components | Purpose / boundary |
+|---|---|---|
+| Core and primitives | `nexusq-core`, `nexusq-kernels`, `nexusq-ml-kem`, `nexusq-ml-dsa` | Core security logic and algorithm-focused crates |
+| Application interfaces | `nexusq`, `nexusq-cli`, `nexusq-server` | Aggregate Rust API, command-line interface, authenticated HTTP service |
+| Native integration | `nexusq-c`, `nexusq-cpp`, `nexusq-py` | C/C++ integration and Python extension/binding |
+| Optional services | `nexusq-admin`, `nexusq-enrollment`, `nexusq-ha`, `nexusq-hsm`, `nexusq-ocsp`, `nexusq-pki-cluster`, `nexusq-tsa`, `nexusq-x509` | Administration, enrollment, high availability, hardware integration and PKI-related modules; consult individual docs for operational scope |
+| Language bindings | `bindings/` | Dart, .NET, Go, Java, Kotlin, PHP, Ruby, Swift and TypeScript/Node.js |
+| Performance evidence | `arena/`, `BENCHMARKS.md`, `docs/performance/` | Benchmark adapters, methodology, measured reports and historical engineering decisions |
+
+The repository already includes visual assets for the architecture flow, project overview and benchmark comparisons. Benchmark visuals are based on the documented measurements; consult the accompanying tables and run-specific notes rather than treating a graphic as a standalone performance guarantee.
 
 <div align="center">
 
@@ -404,7 +418,7 @@ implementation("io.github.lecodev-26:nexusq-kotlin:4.1.1")
 
 ## Documentation
 
-User-facing documentation starts at [`docs/user/README.md`](docs/user/README.md). Technical and reference documentation lives in `docs/`:
+User-facing documentation starts at [`docs/user/README.md`](docs/user/README.md), with a task-oriented [getting started guide](docs/user/GETTING_STARTED.md), [installation instructions](docs/user/INSTALLATION.md), [CLI guide](docs/user/CLI.md), [SDK guide](docs/user/SDK.md), and [troubleshooting guide](docs/user/TROUBLESHOOTING.md). Technical and reference documentation lives in `docs/`:
 
 | Document | Covers |
 |---|---|
@@ -420,6 +434,9 @@ User-facing documentation starts at [`docs/user/README.md`](docs/user/README.md)
 | [CROSS_COMPILE](docs/CROSS_COMPILE.md) | Cross-compilation guide |
 | [ROADMAP](docs/ROADMAP.md) | The phased plan |
 | [adr/](docs/adr) | Architecture decision records |
+| [ci-pipeline.md](docs/ci-pipeline.md) | CI phases, validation and workflow intent |
+| [performance/](docs/performance/) | Benchmark methodology, native-backend notes and historical decisions |
+| [security/](docs/security/) | Security design assessments and follow-up decisions |
 
 <div align="center">
 
