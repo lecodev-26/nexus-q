@@ -168,8 +168,8 @@ summary::-webkit-details-marker{display:none}
 summary:after{content:"+";color:var(--acc);font-size:22px;line-height:1}
 details[open] summary:after{content:"–"}
 details p{color:var(--mut);padding:0 0 18px;max-width:75ch}
-.sdk-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:28px 0 22px}
-.sdk-card{background:var(--card);border:1px solid var(--line);border-radius:20px;overflow:hidden;transition:border-color .2s,transform .2s}
+.sdk-grid{display:flex;align-items:flex-start;gap:16px;margin:28px 0 22px;padding:8px 2px 18px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scrollbar-width:thin;scrollbar-color:var(--acc) var(--line)}
+.sdk-card{flex:0 0 clamp(280px,31vw,360px);min-width:0;align-self:flex-start;scroll-snap-align:start;background:var(--card);border:1px solid var(--line);border-radius:20px;overflow:hidden;transition:border-color .2s,transform .2s}
 .sdk-card:hover{border-color:color-mix(in srgb,var(--acc) 65%,var(--line));transform:translateY(-3px)}
 .sdk-card[open]{border-color:var(--acc)}
 .sdk-card summary{padding:20px;align-items:center;justify-content:flex-start;gap:14px}
@@ -188,8 +188,8 @@ details p{color:var(--mut);padding:0 0 18px;max-width:75ch}
 .sdk-link.primary{background:var(--acc);border-color:var(--acc);color:var(--ink)}
 .sdk-link:hover{border-color:var(--acc)}
 .sdk-note{border-top:1px solid var(--line);padding-top:14px;margin-top:14px!important}
-@media(max-width:900px){.sdk-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:560px){.sdk-grid{grid-template-columns:1fr;gap:12px}.sdk-card summary{padding:17px}.sdk-body{padding:0 17px 17px}.sdk-logo{width:44px;height:44px}}
+@media(max-width:900px){.sdk-card{flex-basis: min(78vw,340px)}}
+@media(max-width:560px){.sdk-grid{gap:12px;margin-right:-20px;padding-right:20px}.sdk-card{flex-basis: min(84vw,340px)}.sdk-card summary{padding:17px}.sdk-body{padding:0 17px 17px}.sdk-logo{width:44px;height:44px}}
 footer{border-top:1px solid var(--line);padding:40px 0 60px;color:var(--mut);font-size:14px}
 footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px}
 .rv{opacity:0;transform:translateY(28px);transition:opacity .8s,transform .8s}.rv.on{opacity:1;transform:none}
@@ -569,8 +569,7 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')closeMenu()}
 addEventListener('resize',function(){if(innerWidth>1080)closeMenu()});
 var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('on');io.unobserve(e.target)}})},{threshold:.1});
 document.querySelectorAll('.rv').forEach(function(el){io.observe(el)});
-/* Keep SDK disclosure cards independent: opening one closes any other open SDK card. */
-var sdkCards=document.querySelectorAll('.sdk-card');sdkCards.forEach(function(card){card.addEventListener('toggle',function(){if(!card.open)return;sdkCards.forEach(function(other){if(other!==card&&other.open)other.open=false})})});
+/* SDK cards live in a horizontal snap carousel; each disclosure opens independently. */
 document.querySelectorAll('.copy').forEach(function(b){b.addEventListener('click',function(){var t=b.parentNode.querySelector('pre').innerText;(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){b.textContent='Copied'},function(){b.textContent='Select + copy'});setTimeout(function(){b.textContent='Copy'},1600)})});
 
 
