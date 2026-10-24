@@ -191,7 +191,7 @@ details p{color:var(--mut);padding:0 0 18px;max-width:75ch}
 @media(max-width:900px){.sdk-card{flex-basis: min(78vw,340px)}}
 @media(max-width:560px){.sdk-grid{gap:12px;margin-right:-20px;padding-right:20px}.sdk-card{flex-basis: min(84vw,340px)}.sdk-card summary{padding:17px}.sdk-body{padding:0 17px 17px}.sdk-logo{width:44px;height:44px}}
 footer{border-top:1px solid var(--line);padding:40px 0 60px;color:var(--mut);font-size:14px}
-footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px}
+footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px;align-items:center}.footer-links{display:flex;flex-wrap:wrap;gap:10px 16px;justify-content:flex-end}.footer-links a:hover{color:var(--acc)}@media(max-width:700px){footer .wrap{align-items:flex-start;flex-direction:column}.footer-links{justify-content:flex-start}}
 .rv{opacity:0;transform:translateY(28px);transition:opacity .8s,transform .8s}.rv.on{opacity:1;transform:none}
 @media (prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}.rv{opacity:1;transform:none}.bar{transition:none}}
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
@@ -243,6 +243,7 @@ section{padding:clamp(48px,6vw,76px) 0}.eyebrow{font:700 12px "Instrument Sans",
 }
 @media(max-width:380px){.links.open{padding:10px;gap:6px}.links a,.links .mo{padding:9px;font-size:13px}}
 
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}#cv{display:none}}
 </style>
 </head>
 <body>
@@ -563,7 +564,7 @@ cargo build --workspace --release</pre></div>
 </div>
 </div></section>
 
-<footer><div class="wrap"><div>NEXUS-Q · MIT OR Apache-2.0 · an engineering project by <a class="lk" href="https://github.com/lecodev-26" target="_blank" rel="noopener">lecodev-26</a></div><div><a href="https://github.com/lecodev-26/nexus-q" target="_blank" rel="noopener">Repository</a> · <a href="https://github.com/lecodev-26/nexus-q/issues" target="_blank" rel="noopener">Issues</a> · <a href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/SECURITY.md" target="_blank" rel="noopener">Security</a></div></div></footer>
+<footer><div class="wrap"><div>NEXUS-Q · MIT OR Apache-2.0 · an engineering project by <a class="lk" href="https://github.com/lecodev-26" target="_blank" rel="noopener">lecodev-26</a></div><div class="footer-links"><a href="https://github.com/lecodev-26/nexus-q" target="_blank" rel="noopener">Repository</a><a href="https://github.com/lecodev-26/nexus-q/issues" target="_blank" rel="noopener">Issues</a><a href="https://github.com/lecodev-26/nexus-q/blob/docs/readme-refresh-full-ci/SECURITY.md" target="_blank" rel="noopener">Security</a><a href="/legal">Legal notice</a><a href="/privacy">Privacy</a><a href="/cookies">Cookies</a><a href="/accessibility">Accessibility</a></div></div></footer>
 
 <script>
 (function(){
