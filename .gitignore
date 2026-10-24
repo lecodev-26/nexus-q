@@ -72,3 +72,5 @@ bindings/dotnet/**/obj/
 
 # Local registry publishing logs and distributions
 .publish-dist/
+.vercel
+.env*
