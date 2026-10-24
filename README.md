@@ -1,6 +1,11 @@
 <div align="center">
 
-<img src="assets/logo.png" alt="NEXUS-Q logo" width="132">
+<table align="center" border="0">
+<tr>
+<td><img src="assets/logo.png" alt="NEXUS-Q logo" width="132"></td>
+<td><strong>NEXUS-Q is an open-source post-quantum cryptographic engine written in Rust</strong></td>
+</tr>
+</table>
 
 <img src="assets/banner.jpg" alt="NEXUS-Q: post-quantum cryptographic security engine" width="100%">
 
@@ -8,7 +13,7 @@
 
 <a href="https://nexus-q.link"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/dark/b-site.svg"><img src="assets/light/b-site.svg" alt="Project website" width="96"></picture></a>&nbsp;<a href="https://github.com/lecodev-26/nexus-q/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/dark/b-rel.svg"><img src="assets/light/b-rel.svg" alt="Releases" width="104"></picture></a>&nbsp;<a href="docs/user/README.md"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/dark/b-docs.svg"><img src="assets/light/b-docs.svg" alt="Documentation" width="151"></picture></a>&nbsp;<a href="SECURITY.md"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/dark/b-sec.svg"><img src="assets/light/b-sec.svg" alt="Security policy" width="154"></picture></a>
 
-**Post-quantum cryptographic security engine for protecting data, keys, and identities.**<br>A plain-language tour of the project lives on the website: [nexus-q.link](https://nexus-q.link).
+**Protecting data, keys, and identities with standardized cryptography and an auditable security workflow.**<br>A plain-language tour of the project lives on the website: [nexus-q.link](https://nexus-q.link).
 
 </div>
 

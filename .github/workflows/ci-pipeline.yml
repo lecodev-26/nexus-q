@@ -65,7 +65,6 @@ jobs:
           echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
   phase-1-security-core:
     needs: detect-changes
-    if: needs.detect-changes.outputs.docs_only != 'true'
     name: 'Phase 1 — Core, security, secrets and fuzz build'
     uses: ./.github/workflows/security-ci.yml
     permissions:
