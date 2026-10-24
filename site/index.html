@@ -206,13 +206,13 @@ h2{font-size:clamp(36px,10vw,60px);max-width:none}
 <header class="hero" id="top">
 <canvas id="cv" aria-hidden="true"></canvas>
 <div class="wrap">
-<span class="chip"><b></b>v4.1.1 release candidate · Oct 22, 2026 · CI and independent audit pending</span>
+<span class="chip"><b></b>v4.1.1 published · release-artifact provenance needs reconciliation · external audit pending</span>
 <h1 class="d">Post-quantum security, <em>built in the open.</em></h1>
 <p class="lead">NEXUS-Q is a Rust engine for protecting <strong>data, keys and identities</strong> with ML-KEM, ML-DSA and a tamper-evident audit log, plus an honest account of what it does and does not prove. This page explains the whole project, so you do not have to audit the repository to understand it.</p>
 <p class="aud"><strong>Built for</strong> developers and teams who embed cryptography in applications and servers that must protect secrets for the long term.</p>
 <p class="by">Maintained by <a class="lk" href="https://github.com/lecodev-26" target="_blank" rel="noopener">lecodev-26</a> · <a class="lk" href="https://github.com/lecodev-26/nexus-q/graphs/contributors" target="_blank" rel="noopener">contributors</a></p>
 <div class="cta"><a class="btn p" href="#quickstart">Quick start</a><a class="btn" href="https://github.com/lecodev-26/nexus-q" target="_blank" rel="noopener">View repository</a><a class="btn" href="https://github.com/lecodev-26/nexus-q/releases/latest" target="_blank" rel="noopener">Latest release</a><a class="btn" href="#contribute">Contribute</a></div>
-<div class="stats"><div><b>4.1.1</b><span>local release candidate · not published</span></div><div><b>241</b><span>official normalized Arena measurements</span></div><div><b>9/9</b><span>native production-path operations passed the 1.5× median and p95 gate</span></div><div><b>Opt-in</b><span>native backend remains experimental; CLI and SDKs default to RustCrypto</span></div></div>
+<div class="stats"><div><b>4.1.1</b><span>GitHub release published · artifact provenance needs reconciliation</span></div><div><b>241</b><span>official normalized Arena measurements</span></div><div><b>9/9</b><span>native production-path operations passed the 1.5× median and p95 gate</span></div><div><b>Opt-in</b><span>native backend remains experimental; CLI and SDKs default to RustCrypto</span></div></div>
 </div>
 </header>
 
@@ -265,7 +265,7 @@ h2{font-size:clamp(36px,10vw,60px);max-width:none}
 </table></div>
 <div class="grid g4" style="margin-top:18px">
 <div class="card rv"><h3>Targets</h3><p>Linux x86_64 and aarch64, Android/Termux aarch64, and RISC-V (riscv64gc) with a verified build.</p></div>
-<div class="card rv"><h3>Requirements</h3><p>Rust 1.85 or newer (edition 2024) and Git. SDK toolchains are only needed for the binding you build.</p></div>
+<div class="card rv"><h3>Requirements</h3><p>Rust 1.88 or newer (edition 2024) to build current <code>main</code>, plus Git. This is not a universal MSRV claim for every published package; verify the exact artifact and toolchain requirements.</p></div>
 <div class="card rv"><h3>Storage</h3><p>Encrypted vault, envelope format, backup bundles and a storage database, all with documented formats.</p></div>
 <div class="card rv"><h3>Observability</h3><p>Request IDs, aggregate metrics, health and readiness probes. Secrets are kept out of logs.</p></div>
 </div>
@@ -277,7 +277,7 @@ h2{font-size:clamp(36px,10vw,60px);max-width:none}
 <p class="sec-lead rv">The 4.1.x packages are published across Rust, Python, JavaScript, Java, Kotlin, Go, PHP, Ruby and Swift channels. Registry publication is a distribution milestone only; it does not imply an independent security audit, certification, or production readiness. Most FFI SDKs require the NEXUS-Q C library (<code>libnexusq</code>) to be installed on the system first.</p>
 <div class="tw rv"><table class="table">
 <tr><th>Ecosystem</th><th>Published package</th><th>Install / dependency</th><th>Registry</th></tr>
-<tr><td colspan="4"><strong>4.1.1 is a local release candidate only; registry versions below remain the actually published 4.1.0 artifacts until coordinated publication.</strong></td></tr>
+<tr><td colspan="4"><strong>Release provenance warning: Git tag <code>v4.1.1</code> points to current <code>main</code>, but existing release assets and <code>nexusq-v4.1.1-provenance.json</code> still reference commit <code>5dd564d</code>. Binaries, checksums and SBOM were not regenerated for the retargeted commit. Do not assume these assets match current <code>main</code> until a coordinated rebuild and release.</strong></td></tr>
 <tr><td>Rust · library</td><td><code>nexusq</code> 4.1.0</td><td><code>cargo add nexusq</code></td><td><a class="lk" href="https://crates.io/crates/nexusq" target="_blank" rel="noopener">crates.io</a></td></tr>
 <tr><td>Rust · core</td><td><code>nexusq-core</code> 4.1.0</td><td><code>cargo add nexusq-core</code></td><td><a class="lk" href="https://crates.io/crates/nexusq-core" target="_blank" rel="noopener">crates.io</a></td></tr>
 <tr><td>Rust · ML-KEM</td><td><code>nexusq-ml-kem</code> 4.1.0</td><td><code>cargo add nexusq-ml-kem</code></td><td><a class="lk" href="https://crates.io/crates/nexusq-ml-kem" target="_blank" rel="noopener">crates.io</a></td></tr>
@@ -294,7 +294,7 @@ h2{font-size:clamp(36px,10vw,60px);max-width:none}
 <tr><td>Ruby</td><td><code>nexusq</code> 4.1.0</td><td><code>gem install nexusq</code></td><td><a class="lk" href="https://rubygems.org/gems/nexusq" target="_blank" rel="noopener">RubyGems</a></td></tr>
 <tr><td>Swift</td><td>Swift package tag <code>4.1.0</code></td><td><code>.package(url: "https://github.com/lecodev-26/nexus-q.git", from: "4.1.0")</code></td><td><a class="lk" href="https://github.com/lecodev-26/nexus-q/tree/4.1.0/bindings/swift" target="_blank" rel="noopener">Swift Package Manager / Git tag</a></td></tr>
 </table></div>
-<p class="sec-lead rv" style="margin-top:18px">The NuGet package <code>Nexusq</code> and the Dart package <code>nexusq</code> did not resolve in the public registries at the time this page was checked (October 19, 2026), so they are not listed as published. See the <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/main/README.md#installation" target="_blank" rel="noopener">repository installation matrix</a> for source-build and SDK details.</p>
+<p class="sec-lead rv" style="margin-top:18px">Additional 4.1.1 registry entries: <a class="lk" href="https://www.nuget.org/packages/Nexusq/4.1.1" target="_blank" rel="noopener">NuGet <code>Nexusq</code></a> and <a class="lk" href="https://pub.dev/packages/nexusq/versions/4.1.1" target="_blank" rel="noopener">Dart / Flutter <code>nexusq</code></a>. The Rust <code>nexusq-pki-cluster</code> crate was uploaded on 2026-10-23; registry propagation can vary. The Go module has its own <code>v0.1.0</code> version. Check the <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/main/README.md#installation" target="_blank" rel="noopener">repository installation matrix</a> for package-specific status and provenance caveats.</p>
 </div></section>
 
 <section id="crypto"><div class="wrap">
@@ -335,12 +335,13 @@ h2{font-size:clamp(36px,10vw,60px);max-width:none}
 <section id="versions"><div class="wrap">
 <div class="eyebrow rv">/ versions & roadmap</div>
 <h2 class="d rv">Current stable line and engineering history</h2>
-<p class="sec-lead rv">V1, V2 and V3 remain historical engineering baselines. v4.1.0 is the previous published stable line; 4.1.1 is still a local candidate. A release or passing performance gate does not imply an independent audit, certification, or production readiness.</p>
+<p class="sec-lead rv">V1, V2 and V3 remain historical engineering baselines. GitHub release <code>v4.1.1</code> is published and <code>v4.1.0</code> is the prior stable line. However, the <code>v4.1.1</code> tag was retargeted to current <code>main</code> without regenerating the existing release assets and provenance manifest. Treat source-to-artifact provenance as unresolved until the assets are rebuilt. A release or passing performance gate does not imply an independent audit, certification, or production readiness.</p>
 <div class="tl">
 <div class="ver rv"><span class="tag">v1.0.0 · Oct 7, 2026</span><h3>V1</h3><p>The frozen engineering baseline: crypto core, vault, keys, identities, policy, audit log, CLI, server and SDKs. Its Arena result showed NEXUS-Q slower than the fastest implementations, which became the main target.</p><span class="st">Frozen</span></div>
 <div class="ver rv"><span class="tag">v2.0.0 · Oct 8, 2026</span><h3>V2</h3><p>Correctness, interoperability, security fuzzing, backend strategy and release gates. The final record claims no performance improvement over V1, and the performance question stayed open.</p><span class="st">Frozen on nexusqv2</span></div>
 <div class="ver rv"><span class="tag">Oct 9, 2026 · PR #45</span><h3>V3</h3><p>Hardened implementation, reproducible Arena, corrected benchmark sampling and retained evidence archive with SHA-256 manifest.</p><span class="st">Engineering release</span></div>
-<div class="ver cur rv"><span class="tag">Oct 19, 2026 · 4.1.0 · PR #55</span><h3>V4.1</h3><p>Stable line release: the native backend passed the 1.5× median-and-p95 gates and PR #55 wires it into nexusq-core behind an explicitly opt-in feature. Default builds, the CLI and SDKs still use RustCrypto; the native path is opt-in only.</p><span class="st">Stable line · final independent audit pending</span></div>
+<div class="ver rv"><span class="tag">Oct 19, 2026 · v4.1.0 · PR #55</span><h3>V4.1</h3><p>Prior stable line: the native backend passed the recorded 1.5× median-and-p95 gate and was wired into <code>nexusq-core</code> behind an explicit opt-in feature. Default builds, CLI and SDKs still use RustCrypto.</p><span class="st">Previous stable line · external audit pending</span></div>
+<div class="ver cur rv"><span class="tag">Oct 23, 2026 · v4.1.1</span><h3>V4.1.1</h3><p>GitHub release and multiple registry packages are published. The Git tag now points to current <code>main</code>, but the existing release assets, checksums, SBOM and provenance manifest still reference commit <code>5dd564d</code>; they have not been regenerated for the retargeted commit. SwiftPM's bare <code>4.1.1</code> tag also remains distinct from Git tag <code>v4.1.1</code>.</p><span class="st">Published · release-artifact provenance reconciliation required</span></div>
 </div>
 </div></section>
 
@@ -355,6 +356,7 @@ h2{font-size:clamp(36px,10vw,60px);max-width:none}
 <li>Tamper-evident, HMAC-authenticated audit log</li>
 <li>Deny-by-default policy engine</li>
 <li>Security CI gates, SDK CI, benchmark CI and fuzz targets</li>
+<li>Dependency scanning is active; <code>RUSTSEC-2023-0071</code> for <code>rsa</code> remains a documented exception in the audit/deny configuration and should be reviewed against current advisories</li>
 <li>Published threat model and security model</li>
 <li>Dual license: MIT or Apache-2.0</li></ul></div>
 <div class="card n rv"><h3>Not claimed</h3><ul>
@@ -372,7 +374,7 @@ h2{font-size:clamp(36px,10vw,60px);max-width:none}
 <section id="quickstart"><div class="wrap">
 <div class="eyebrow rv">/ quick start</div>
 <h2 class="d rv">Build it and use it</h2>
-<p class="sec-lead rv">You need Rust 1.85 or newer. Linux and Android/Termux are the environments exercised most.</p>
+<p class="sec-lead rv">To build current <code>main</code>, use Rust 1.88 or newer (edition 2024) and Git. This differs from the Rust 1.85 declared by the existing release tag manifest, whose source-to-artifact provenance needs reconciliation. Linux and Android/Termux are the environments exercised most.</p>
 <div class="qs">
 <div class="rv"><h3 style="margin-bottom:8px">1 · Build</h3>
 <div class="code" translate="no"><button class="copy" type="button">Copy</button><pre><span class="c"># clone and build the workspace</span>
@@ -441,7 +443,7 @@ cargo build --workspace --release</pre></div>
 <details><summary>Why combine ML-KEM with X25519?</summary><p>A hybrid keeps the key exchange protected as long as at least one of the two schemes holds up. That is the usual reasoning for hybrids while post-quantum algorithms are still young in deployment.</p></details>
 <details><summary>Can I use it from Python, Go, C, PHP or Ruby?</summary><p>Yes. Python is published on PyPI; Go is available via pkg.go.dev; PHP on Packagist; and Ruby on RubyGems. The C SDK is published on crates.io. The FFI wrappers require the C library (libnexusq) to be installed locally first. See the package table and SDK guide.</p></details>
 <details><summary>What license is it under?</summary><p>You can choose either the MIT license or the Apache License 2.0, the same dual license used by much of the Rust ecosystem.</p></details>
-<details><summary>How can I help?</summary><p>Read the threat model, run the Arena yourself, review the code, and open an issue or a pull request. The 4.1.0 line is the previous published release; the 4.1.1 candidate awaits CI/release gates, and the independent external audit (Phase 21) remains open. Security reports go through GitHub Security Advisories.</p></details>
+<details><summary>How can I help?</summary><p>Read the threat model, run the Arena yourself, review the code, and open an issue or a pull request. GitHub release <code>v4.1.1</code> is published, but its release assets and provenance manifest need reconciliation with the retargeted tag; see the <a class="lk" href="https://github.com/lecodev-26/nexus-q/blob/main/README.md" target="_blank" rel="noopener">release-status note in README</a>. The independent external audit (Phase 21) remains open. Security reports go through GitHub Security Advisories.</p></details>
 </div>
 </div></section>
 
