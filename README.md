@@ -40,6 +40,29 @@
 | License | MIT OR Apache-2.0 |
 | Assurance boundary | Security CI, fuzz targets and documented threat model; no independent external audit or certification claimed |
 
+## Capability and maturity matrix
+
+This is a quick orientation, not a substitute for the per-module documentation or release provenance. “Available” means the repository has an implemented path; it does not imply independent audit or certification.
+
+| Status | Capability | Qualification |
+|---|---|---|
+| Available | Rust core, CLI, server, vault/storage workflows, policy checks, audit logging and documented SDK bindings | Verify the specific package, target and release status in [Installation](#installation) and its binding guide. |
+| Available | Standardized cryptographic algorithms via the default RustCrypto path, including ML-KEM/ML-DSA capability in the project | Algorithm support at the library level does not mean every CLI command or SDK exposes every operation. |
+| Experimental / opt-in | Native ML-KEM/ML-DSA backend behind `native-backend` | Not enabled by default in core, CLI, server or SDKs; not independently audited. See [native backend notes](docs/performance/NATIVE_BACKEND_FEATURE.md). |
+| Integration-specific | HSM module and hardware-provider abstractions | Do not infer that a particular HSM, TPM, Secure Element or enclave is supported or provides hardware isolation without checking the relevant adapter and deployment docs. |
+| Planned / target-dependent | Hardware-backed isolation and platform-specific integrations | Treat roadmap entries as plans until an implementation, supported device matrix and CI evidence are linked. |
+
+## Security model at a glance
+
+| Question | Current documented position | Important limit |
+|---|---|---|
+| Which adversaries are considered? | Network attackers and local unprivileged attackers, with trust boundaries detailed in the [threat model](docs/THREAT_MODEL.md). | A compromised endpoint, privileged attacker or malicious build/release infrastructure can defeat assumptions; consult the full threat model. |
+| What happens if vault files are stolen? | Vault data is encrypted at rest and key material is managed through the vault/key lifecycle. | Protection depends on password strength, correct deployment and the attacker not obtaining unlock secrets or process memory. |
+| What if the device is already compromised? | Zeroization, policy checks and audit controls provide defense-in-depth. | They do not guarantee protection from an attacker controlling the running process, OS or privileged account. |
+| What if a password is lost? | Follow the documented backup and recovery procedures for the configured vault. | Do not assume a password reset or recovery path can recover cryptographic secrets; keep verified backups and test recovery before production use. |
+| Has an external audit or certification been completed? | No independent external audit or FIPS 140-3 / Common Criteria certification is claimed. | Automated tests, fuzzing, CI, benchmarks and package publication are not substitutes for independent review. |
+| Are all dependency advisories resolved? | Dependency scanning is part of the security workflow. | `RUSTSEC-2023-0071` for `rsa` remains a documented exception in [audit configuration](.cargo/audit.toml) and [`deny.toml`](deny.toml); review current CI and advisory status. |
+
 ## Modules and SDKs
 
 The repository separates the cryptographic core from interfaces, optional services, and language bindings. These names describe repository components, not a claim that every package has identical maturity, platform support, or release provenance. Use the installation table and each binding's own documentation to confirm the package and target you need.
@@ -343,7 +366,7 @@ cargo build --workspace --release
 ./target/release/nexusq data decrypt ./example.nqv ./secret.txt.nqx ./secret.out
 ```
 
-Treat `password.txt` as a secret: restrict its permissions and never commit it. For development, `cargo build` and `cargo test` work as usual, and the CLI binary is at `target/debug/nexusq`. To build for RISC-V see [`docs/CROSS_COMPILE.md`](docs/CROSS_COMPILE.md).
+Treat `password.txt` as a secret: restrict its permissions and never commit it. For development, `cargo build` and `cargo test` work as usual, and the CLI binary is at `target/debug/nexusq`. To build for RISC-V see [`docs/CROSS_COMPILE.md`](docs/CROSS_COMPILE.md). The signing-key example above explicitly uses Ed25519 (classical, not post-quantum); see [`docs/user/CLI.md`](docs/user/CLI.md) for the CLI-supported algorithms and do not infer that every library-level ML-KEM/ML-DSA operation is exposed through the same CLI workflow. The commands are an orientation: create the password file and input file first, and substitute the actual key ID printed by key generation for `<key-id>`.
 
 **Release deployment:**
 
