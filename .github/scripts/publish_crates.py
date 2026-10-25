@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Publish the NEXUS-Q workspace crates to crates.io in dependency order.
+"""Publish NEXUS-Q crates to crates.io in dependency order.
 
 Skips any crate whose exact (manifest) version is already on crates.io, so
-re-running the workflow only publishes new crates or versions. Expects the
+re-running the helper only publishes new crates or versions. Expects the
 CARGO_REGISTRY_TOKEN environment variable (crates.io API token) and to run
 from the repository root.
 """
@@ -16,20 +16,30 @@ import urllib.request
 
 from verify_release_identity import verify as verify_release_identity
 
+# Topological order across all published workspace crates, plus the separate
+# experimental native-backend crate. Keep this list aligned with Cargo metadata.
 CRATES = [
     "nexusq-kernels",
     "nexusq-ml-kem",
     "nexusq-ml-dsa",
     "nexusq-native-backend",
+    "nexusq-ha",
     "nexusq-core",
     "nexusq-c",
     "nexusq-py",
     "nexusq-cli",
     "nexusq-server",
+    "nexusq-x509",
+    "nexusq-ocsp",
+    "nexusq-enrollment",
+    "nexusq-hsm",
+    "nexusq-tsa",
+    "nexusq-admin",
+    "nexusq-pki-cluster",
     "nexusq",
 ]
 
-USER_AGENT = "nexus-q-publish-workflow (github.com/lecodev-26/nexus-q)"
+USER_AGENT = "nexus-q-manual-publisher (github.com/lecodev-26/nexus-q)"
 
 
 def manifest_version(crate: str) -> str:
@@ -48,10 +58,18 @@ def published(crate: str, version: str) -> bool:
         headers={"User-Agent": USER_AGENT},
     )
     try:
-        urllib.request.urlopen(req)
-        return True
-    except urllib.error.HTTPError:
-        return False
+        with urllib.request.urlopen(req, timeout=10):
+            return True
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return False
+        raise RuntimeError(
+            f"could not confirm {crate} {version} publication state: crates.io returned HTTP {exc.code}"
+        ) from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(
+            f"could not confirm {crate} {version} publication state: {exc.reason}"
+        ) from exc
 
 
 def main() -> int:

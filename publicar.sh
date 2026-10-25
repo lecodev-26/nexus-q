@@ -21,12 +21,19 @@ for cmd in git curl python cargo gh; do need "$cmd"; done
 VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n1)"
 [[ -n "$VERSION" ]] || die "No se pudo detectar la versión."
 # Fail closed before any registry mutation unless the exact release commit was explicitly approved.
-need python
 run python .github/scripts/verify_release_identity.py "$VERSION"
 say "NEXUS-Q v$VERSION — publicación manual"
 say "Log: $LOG"
 curl -fsSL "https://api.github.com/repos/lecodev-26/nexus-q/releases/tags/v$VERSION" >/dev/null || die "No existe el release GitHub v$VERSION."
 gh auth status >/dev/null 2>&1 || die "gh no está autenticado; se necesita para NuGet y Packagist."
+REPO_RELEASE_APPROVAL="$(gh api repos/lecodev-26/nexus-q/actions/variables/NEXUSQ_RELEASE_IDENTITY_APPROVED --jq .value 2>/dev/null || true)"
+[[ "$REPO_RELEASE_APPROVAL" == "true" || "$REPO_RELEASE_APPROVAL" == '"true"' ]] || die "La variable de repositorio NEXUSQ_RELEASE_IDENTITY_APPROVED debe ser true tras una decisión explícita de identidad. No se ha publicado nada."
+
+http_status() {
+  local status
+  status="$(curl -sS --connect-timeout 10 --max-time 20 -o /dev/null -w '%{http_code}' "$1")" || die "No se pudo consultar el registro: $1. No arriesgo una publicación duplicada."
+  printf '%s' "$status"
+}
 
 # Validate every local prerequisite before the first irreversible registry push.
 for cmd in maturin twine npm gem dart mvn gpg; do need "$cmd"; done
@@ -59,31 +66,34 @@ has_token NPM_TOKEN
 export NODE_AUTH_TOKEN="$NPM_TOKEN"
 run npm --prefix bindings/typescript ci --ignore-scripts
 run npm --prefix bindings/typescript run build
-if npm view "nexusq@$VERSION" version >/dev/null 2>&1; then
-  say "npm: nexusq@$VERSION ya existe; se omite."
-else
-  run npm --prefix bindings/typescript publish --access public --ignore-scripts
-fi
+status="$(http_status "https://registry.npmjs.org/nexusq/$VERSION")"
+case "$status" in
+  200) say "npm: nexusq@$VERSION ya existe; se omite." ;;
+  404) run npm --prefix bindings/typescript publish --access public --ignore-scripts ;;
+  *) die "npm registry devolvió HTTP $status para nexusq@$VERSION. No se publica." ;;
+esac
 
 # RubyGems.
 need gem
 has_token RUBYGEMS_API_KEY
 mkdir -p "$DIST/ruby"
 ( cd bindings/ruby && gem build nexusq.gemspec --output "$DIST/ruby/nexusq-$VERSION.gem" )
-if curl -fsSL "https://rubygems.org/api/v2/rubygems/nexusq/versions/$VERSION.json" >/dev/null 2>&1; then
-  say "RubyGems: nexusq $VERSION ya existe; se omite."
-else
-  GEM_HOST_API_KEY="$RUBYGEMS_API_KEY" gem push "$DIST/ruby/nexusq-$VERSION.gem" --host https://rubygems.org
-fi
+status="$(http_status "https://rubygems.org/api/v2/rubygems/nexusq/versions/$VERSION.json")"
+case "$status" in
+  200) say "RubyGems: nexusq $VERSION ya existe; se omite." ;;
+  404) GEM_HOST_API_KEY="$RUBYGEMS_API_KEY" gem push "$DIST/ruby/nexusq-$VERSION.gem" --host https://rubygems.org ;;
+  *) die "RubyGems devolvió HTTP $status para nexusq $VERSION. No se publica." ;;
+esac
 
 # Dart uses the existing pub.dev login in Termux.
 need dart
 run dart pub token list
-if curl -fsSL "https://pub.dev/api/packages/nexusq/versions/$VERSION" >/dev/null 2>&1; then
-  say "pub.dev: nexusq $VERSION ya existe; se omite."
-else
-  run dart pub publish --force --directory bindings/dart
-fi
+status="$(http_status "https://pub.dev/api/packages/nexusq/versions/$VERSION")"
+case "$status" in
+  200) say "pub.dev: nexusq $VERSION ya existe; se omite." ;;
+  404) run dart pub publish --force --directory bindings/dart ;;
+  *) die "pub.dev devolvió HTTP $status para nexusq $VERSION. No se publica." ;;
+esac
 
 # PHP / Packagist: validate manifest and request repository refresh.
 has_token PACKAGIST_USERNAME
@@ -123,8 +133,10 @@ else
 fi
 
 # NuGet must stay in GitHub Actions with OIDC; never use a local API key.
-say "Lanzando workflow OIDC de NuGet"
-run gh workflow run publish-nuget.yml --ref main
+say "Lanzando workflow OIDC de NuGet desde el tag aprobado"
+run gh workflow run publish-nuget.yml --ref "v$VERSION" \
+  -f confirm_release_identity=true \
+  -f approved_release_commit="$NEXUSQ_APPROVED_RELEASE_COMMIT"
 
 # Go and Swift are distributed from the repository's versioned tags.
 git rev-parse "refs/tags/v$VERSION" >/dev/null 2>&1 || say "AVISO: no existe tag local v$VERSION; Go/Swift dependen de tags GitHub."

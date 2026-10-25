@@ -7,55 +7,61 @@ name: Publish NuGet
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows: ["NEXUS-Q Sequential CI Pipeline"]
-    types: [completed]
-    branches: [main]
+    inputs:
+      confirm_release_identity:
+        description: "Confirm the release identity decision has been reviewed"
+        required: true
+        type: boolean
+        default: false
+      approved_release_commit:
+        description: "Full 40-character commit SHA approved for this version"
+        required: true
+        type: string
 permissions:
   contents: read
-  actions: read
 
 jobs:
-  ci-publication-gate:
-    name: Confirm full CI passed before publishing
+  release-identity-gate:
+    name: Verify explicit release identity approval
     runs-on: ubuntu-latest
     outputs:
-      publish: ${{ steps.gate.outputs.publish }}
+      approved: ${{ steps.gate.outputs.approved }}
     steps:
-      - name: Require the full sequential CI pipeline to pass
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Require approved tag, commit, and clean source tree
         id: gate
         env:
-          GH_TOKEN: ${{ github.token }}
-          EVENT_NAME: ${{ github.event_name }}
-          CI_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
-          CI_RUN_ID: ${{ github.event.workflow_run.id }}
+          CONFIRM: ${{ inputs.confirm_release_identity }}
+          REPO_APPROVAL: ${{ vars.NEXUSQ_RELEASE_IDENTITY_APPROVED }}
+          APPROVED_COMMIT: ${{ inputs.approved_release_commit }}
         shell: bash
         run: |
           set -euo pipefail
-          echo "publish=false" >> "$GITHUB_OUTPUT"
-          if [[ "$EVENT_NAME" != workflow_run ]]; then
-            echo "publish=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          [[ "$CI_CONCLUSION" == success && -n "$CI_RUN_ID" ]] || exit 0
-          conclusion=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CI_RUN_ID/jobs?per_page=100" \
-            --jq '[.jobs[] | select(.name | startswith("Phase 11 — Final sequential four-hour fuzz campaigns /")) | .conclusion] | if length == 3 and all(.[]; . == "success") then "success" else "not-success" end')
-          # All three four-hour campaigns must have run and passed. If the full
-          # pipeline was skipped (docs-only), do not build or publish a package.
-          [[ "$conclusion" == success ]] || exit 0
-          echo "publish=true" >> "$GITHUB_OUTPUT"
+          echo "approved=false" >> "$GITHUB_OUTPUT"
+          [[ "$CONFIRM" == "true" ]] || { echo "::error::Explicit release identity confirmation is required."; exit 1; }
+          [[ "$REPO_APPROVAL" == "true" ]] || { echo "::error::Repository approval variable is not enabled by a maintainer."; exit 1; }
+          [[ "$GITHUB_REF_TYPE" == "tag" ]] || { echo "::error::NuGet publication must run from a version tag, not a branch."; exit 1; }
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')
+          [[ "$GITHUB_REF_NAME" == "v$version" ]] || { echo "::error::Tag $GITHUB_REF_NAME does not match Cargo workspace version $version."; exit 1; }
+          export NEXUSQ_RELEASE_IDENTITY_APPROVED=true
+          export NEXUSQ_APPROVED_RELEASE_COMMIT="$APPROVED_COMMIT"
+          python3 .github/scripts/verify_release_identity.py "$version"
+          echo "approved=true" >> "$GITHUB_OUTPUT"
 
   sdk-runtime:
-    needs: ci-publication-gate
-    if: needs.ci-publication-gate.outputs.publish == 'true'
+    needs: release-identity-gate
+    if: needs.release-identity-gate.outputs.approved == 'true'
     name: Build RID-specific RustCrypto SDK runtime assets
     uses: ./.github/workflows/sdk-runtime.yml
     permissions:
       contents: read
 
   publish:
-    needs: [ci-publication-gate, sdk-runtime]
-    if: needs.ci-publication-gate.outputs.publish == 'true'
+    needs: [release-identity-gate, sdk-runtime]
+    if: needs.release-identity-gate.outputs.approved == 'true'
     permissions:
       contents: read
       id-token: write
@@ -63,7 +69,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.sha }}
+          fetch-depth: 0
 
       - uses: actions/setup-dotnet@v4
         with:

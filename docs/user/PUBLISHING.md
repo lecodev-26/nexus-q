@@ -1,6 +1,19 @@
 # Manual SDK publication from Termux
 
-Run `./publicar.sh` from the repository root. The script is deliberately fail-fast: it validates credentials and Maven signing prerequisites before publishing anything, logs to `.publish-dist/`, skips known existing npm/RubyGems/pub.dev versions, and leaves NuGet to its OIDC workflow.
+Run `./publicar.sh` from the repository root only after a maintainer has explicitly approved the exact release identity. The script validates credentials and Maven signing prerequisites before publishing, logs to `.publish-dist/`, and fails closed if a registry lookup is unavailable or the version's source identity does not match the approved tag.
+
+## Release identity approval gate
+
+Do **not** set these values while the `4.1.1` identity decision is pending. After the maintainer records the chosen full commit SHA and reconciles it with the release tag and artifacts, export the following in the shell used to run the publisher:
+
+```bash
+export NEXUSQ_RELEASE_IDENTITY_APPROVED=true
+export NEXUSQ_APPROVED_RELEASE_COMMIT="FULL_40_CHARACTER_APPROVED_COMMIT_SHA"
+```
+
+The GitHub repository variable `NEXUSQ_RELEASE_IDENTITY_APPROVED` must also be explicitly set to `true` by a maintainer. The local gate requires the official repository remote, a clean working tree, and equality between `HEAD`, `vVERSION`, and the approved SHA. Direct invocation of the crates.io helper applies the same local gate. These checks do not publish anything themselves.
+
+NuGet is now manual-dispatch-only: it must be started from `vVERSION` with the explicit `confirm_release_identity=true` input and the same full approved commit SHA. It no longer publishes automatically from a `main` CI run.
 
 ## Local credentials
 
