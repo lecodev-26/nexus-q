@@ -41,11 +41,18 @@ This gives at least four recorded source snapshots for crates.io version `4.1.1`
 
 The registry reports `rust_version = 1.85` for 16 of these crates and `1.88` for `nexusq-pki-cluster`. The repository's current workspace declares Rust 1.88, while the release-attested source commit `5dd564d…` declares 1.85. This is a release-history distinction, not necessarily a defect in every crate; confirm actual MSRV per package and align docs/workflows before making one workspace-wide compatibility claim.
 
+## Archive-to-source spot comparison
+
+The downloaded archives were also compared byte-for-byte against the Git tree named by each archive's `.cargo_vcs_info.json`. For all 17 crates, every mapped non-lock package file compared successfully: **194 exact file matches across the set**. The comparison excluded Cargo's normalized `Cargo.toml`, generated `.cargo_vcs_info.json` and `.cargo-ok`; it mapped and compared `Cargo.toml.orig` against the original manifest. Each archive's packaged `Cargo.lock` differed from the repository lockfile at the recorded commit; this is not silently treated as a pass and needs separate explanation. No other package files were unmapped in this check.
+
+This means the published Rust package contents are consistent with their recorded source snapshots for the files compared, while the snapshots themselves differ across the 17 crate names. It does not establish that those four source snapshots should have shared one version, and `.cargo_vcs_info.json` remains self-reported metadata rather than a signed source attestation.
+
 The `dependencies` count above is the number of direct dependency entries in each sparse-index version record, not a count of unique transitive dependencies or a substitute for an SBOM.
 
 ## Audit follow-up
 
-- [ ] Compare package contents (including normalized manifests, source files, build scripts, and included files) against each recorded commit; investigate any difference.
+- [x] Compare mapped source/package files against each recorded commit: 194 non-lock files matched byte-for-byte across all 17 crates.
+- [ ] Explain the `Cargo.lock` difference in each archive and complete a reproducible, normalized manifest comparison.
 - [ ] Reconcile the release-attested commit with the four `.cargo_vcs_info` revisions and the separate npm/NuGet/Packagist metadata.
 - [ ] Decide the intended Rust MSRV contract per crate and update package metadata, workspace declarations, CI, and documentation consistently in a separately reviewed change.
 - [ ] Generate a complete dependency SBOM from the resolved lockfile/build inputs and include dependency relationships; the published CycloneDX file currently lists only 17 internal workspace crates and zero dependency relationships.
