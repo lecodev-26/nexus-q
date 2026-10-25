@@ -78,25 +78,37 @@ Read-only metadata checks were performed on 2026-10-25. These results identify w
 
 | Ecosystem / package | Published version | Registry metadata evidence | Identity conclusion |
 |---|---|---|---|
-| npm `nexusq` | `4.1.1` | npm metadata `gitHead=5dd564daab9da1c071b8b134894ea7c4eba95d09`; package integrity is published by npm | Source reference agrees with the release provenance and bare `4.1.1` tag, but disagrees with current `v4.1.1` / `main`. |
-| NuGet `Nexusq` | `4.1.1` | Published `.nuspec` repository metadata records commit `5b8a663b72d0d048d9f564d5650b13acdd0b8c0d` | Different source commit from both the release provenance and current `v4.1.1` tag. Requires investigation before claiming a unified release baseline. |
+| npm `nexusq` | `4.1.1` | npm metadata `gitHead=5dd564daab9da1c071b8b134894ea7c4eba95d09`; downloaded tarball SHA-256 `059cd1f65cea1c80fcbb045feca4b441c49d6e39ea6ea2210170724c83df74ff` | Registry source reference agrees with the release provenance and bare `4.1.1` tag, but disagrees with current `v4.1.1` / `main`. Package `package.json` and README bytes are identical at all three candidate commits checked, so the tarball contents do not independently prove `gitHead`. |
+| NuGet `Nexusq` | `4.1.1` | Downloaded `.nupkg` SHA-256 `3254fa2488a61e31f0d177f45b42e02e01700374e924c2e3d25de98d56853b63`; `.nuspec` repository metadata records commit `5b8a663b72d0d048d9f564d5650b13acdd0b8c0d` | Different source commit from both the release provenance and current `v4.1.1` tag. The package digest is recorded locally; requires investigation before claiming a unified release baseline. |
 | Packagist `lecodev-26/nexusq` | `4.1.1` | Composer metadata source/dist reference `b243950cfbbd3e462e3b387d3ed65255b81ca64e`; metadata timestamp `2026-10-19T11:31:37Z` | Older, distinct source snapshot; not aligned to the two release commits listed above. |
 | PyPI `nexusq` | `4.1.1` | Published sdist `nexusq-4.1.1.tar.gz`; SHA-256 `03b8f0d43555aaccc8d10b1d7182bf268a007ad5b235f8e4836c33f818fc800d`; upload time `2026-10-22T01:34:32` | Metadata checked does not expose a source commit. The sdist digest is recorded, but source identity remains unverified. |
 | pub.dev `nexusq` | `4.1.1` | Archive SHA-256 `8f66fc7c168f0f4403ac12781eb3a00fb4eb0932f4f55b8111dc1cf77e022af0`; published `2026-10-22T02:00:12Z` | Metadata checked does not expose a source commit. Archive digest recorded; source identity remains unverified. |
-| RubyGems `nexusq` | `4.1.1` | Registry reports gem SHA `f95d9b0efd863ffec18bc49256e39fd32b7dfa92ad0ebe9ed98b953735ed0be3`; created `2026-10-22T01:35:21Z` | Metadata checked does not expose a source commit or source-code URL. Source identity remains unverified. |
+| RubyGems `nexusq` | `4.1.1` | Registry reports gem SHA `f95d9b0efd863ffec18bc49256e39fd32b7dfa92ad0ebe9ed98b953735ed0be3`; created `2026-10-22T01:35:21Z` | Metadata checked does not expose a source commit or source-code URL. The downloaded gem contains three files; inspected `lib/nexusq.rb` and README bytes are identical at three candidate commits, so source identity remains unverified. |
 | crates.io `nexusq` and workspace crates | `4.1.1` declared in repository manifests | Direct crates.io API request was denied with HTTP 403 in this inventory environment | Registry-side version, checksum and publication metadata could not be independently confirmed by this request. Do not treat repository manifests as proof of registry contents. |
 | Maven Central `io.github.lecodev-26:nexusq` and `io.github.lecodev-26:nexusq-kotlin` | `4.1.1` declared in repository POMs and installation docs | Maven Central search API returned zero results for group `io.github.lecodev-26` during this check | Publication and artifact digests were not independently confirmed by this query; verify exact coordinates/indexing before treating the docs as registry evidence. |
 
-The npm, NuGet, and Packagist metadata therefore point to **three distinct source snapshots** across published 4.1.1 channels (`5dd564d…`, `5b8a663…`, and `b243950…`). The registry package publication state must be reconciled package-by-package; the version string alone is not a release identity.
+The npm, NuGet, and Packagist **registry metadata references** therefore point to three distinct source commits across published 4.1.1 channels (`5dd564d…`, `5b8a663…`, and `b243950…`). This is not proof that each package payload was faithfully built from its declared commit. The version string alone is not a release identity.
 
 ## Downloaded asset checksum verification
 
-All 13 assets attached to the GitHub `v4.1.1` release were downloaded to a separate review directory without uploading or modifying anything. Both published checksum manifests verified successfully:
+All 12 assets attached to the GitHub `v4.1.1` release were downloaded to a separate review directory without uploading or modifying anything. Both published checksum manifests verified successfully:
 
 - `SHA256SUMS`: main Linux release archive — **PASS**.
 - `NATIVE-RUNTIME-SHA256SUMS`: all eight platform runtime archives/libraries — **PASS**.
 
 This confirms the downloaded binary/runtime files match the published checksum manifests. It does **not** establish which commit built those files, validate the truth of the provenance JSON, or authenticate the checksum files independently. The provenance JSON itself is not covered by either checksum manifest, and the release's current `v4.1.1` ref still disagrees with its declared commit.
+
+## Package archive spot checks
+
+Read-only package downloads and content checks were performed on 2026-10-25. Hashes below identify the exact downloaded archives in this review; they are not independently signed attestations.
+
+- **npm:** tarball SHA-256 `059cd1f65cea1c80fcbb045feca4b441c49d6e39ea6ea2210170724c83df74ff`; registry `gitHead` is `5dd564d…`. The inspected `package.json` and README are byte-identical at `5dd564d`, `5b8a663`, and `84992f9`; those files cannot independently corroborate the claimed source commit.
+- **NuGet:** `.nupkg` SHA-256 `3254fa2488a61e31f0d177f45b42e02e01700374e924c2e3d25de98d56853b63`; embedded `.nuspec` declares commit `5b8a663…`. Treat this as package-supplied metadata until reproducible source-to-package comparison is completed.
+- **PyPI:** downloaded sdist SHA-256 matches the registry's reported digest (`03b8f0d43555aaccc8d10b1d7182bf268a007ad5b235f8e4836c33f818fc800d`). The inspected Rust source files match multiple candidate commits byte-for-byte and therefore do not distinguish them; no embedded source commit was found in the checked metadata.
+- **pub.dev:** downloaded archive SHA-256 matches registry metadata (`8f66fc7c168f0f4403ac12781eb3a00fb4eb0932f4f55b8111dc1cf77e022af0`). `pubspec.yaml`, the library entry point, and README are byte-identical at `5dd564d`, `5b8a663`, and `84992f9`; these files do not identify the source commit.
+- **RubyGems:** downloaded gem SHA-256 matches the registry-reported SHA (`f95d9b0efd863ffec18bc49256e39fd32b7dfa92ad0ebe9ed98b953735ed0be3`). The inspected Ruby library and README are byte-identical at `5dd564d`, `5b8a663`, and `84992f9`; no source commit is established by this comparison.
+
+These spot checks show why matching checksums and a package version are necessary but insufficient for provenance. Next, compare package-specific build inputs/outputs and workflow run evidence, keeping registry metadata claims separate from independently verified source identity.
 
 ### Next evidence required
 
