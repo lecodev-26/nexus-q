@@ -2,6 +2,12 @@ name: NEXUS-Q v4.1.1 Stable Line Release
 
 on:
   workflow_dispatch:
+    inputs:
+      confirm_release_identity:
+        description: "Confirm that the exact tag, commit, and release evidence have been reviewed before public publication."
+        required: true
+        type: boolean
+        default: false
 permissions:
   contents: read
 
@@ -18,6 +24,18 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
+
+      - name: Validate tag identity when building a tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            test "$GITHUB_REF" = "refs/tags/v4.1.1"
+            tag_commit="$(git rev-parse "${GITHUB_REF}^{commit}")"
+            test "$tag_commit" = "$GITHUB_SHA"
+            cargo_version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n1)"
+            test "$cargo_version" = "4.1.1"
+          fi
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -180,7 +198,7 @@ jobs:
 
   sdk-runtime:
     name: Build version-matched default-provider SDK runtimes
-    if: github.ref == 'refs/tags/v4.1.1' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    if: inputs.confirm_release_identity == true && vars.NEXUSQ_RELEASE_IDENTITY_APPROVED == 'true' && github.ref == 'refs/tags/v4.1.1'
     needs: [release-gate]
     uses: ./.github/workflows/sdk-runtime.yml
     permissions:
@@ -188,7 +206,7 @@ jobs:
 
   public-release:
     name: Publish GitHub v4.1.1 release
-    if: github.ref == 'refs/tags/v4.1.1' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    if: inputs.confirm_release_identity == true && vars.NEXUSQ_RELEASE_IDENTITY_APPROVED == 'true' && github.ref == 'refs/tags/v4.1.1'
     needs: [release-gate, platform-gate, sdk-runtime]
     runs-on: ubuntu-latest
     permissions:
@@ -262,13 +280,13 @@ jobs:
           set -euo pipefail
           assets=(release/*.tar.gz release/nexusq-sdk-runtime-linux-x64.so release/nexusq-sdk-runtime-linux-arm64.so release/nexusq-sdk-runtime-macos-arm64.dylib release/nexusq-sdk-runtime-windows-x64.dll release/SHA256SUMS release/NATIVE-RUNTIME-SHA256SUMS release/*.cdx.json release/*-provenance.json)
           if gh release view v4.1.1 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload v4.1.1 --repo "$GITHUB_REPOSITORY" --clobber "${assets[@]}"
-          else
-            gh release create v4.1.1 \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "NEXUS-Q v4.1.1" \
-              --notes-file docs/V4_RELEASE.md \
-              "${assets[@]}"
+            echo "::error::Release v4.1.1 already exists. This workflow will not mutate an existing release or mix artifacts from different source snapshots. Resolve release identity and use a separately reviewed recovery procedure."
+            exit 1
           fi
+          gh release create v4.1.1 \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "NEXUS-Q v4.1.1" \
+            --notes-file docs/V4_RELEASE.md \
+            "${assets[@]}"
           gh release view v4.1.1 --repo "$GITHUB_REPOSITORY" --json assets \
             | python3 -c 'import json,sys; names={x["name"] for x in json.load(sys.stdin)["assets"]}; required={"nexusq-sdk-runtime-linux-x64.so","nexusq-sdk-runtime-linux-arm64.so","nexusq-sdk-runtime-macos-arm64.dylib","nexusq-sdk-runtime-windows-x64.dll","NATIVE-RUNTIME-SHA256SUMS"}; missing=required-names; print("Release runtime assets:", ", ".join(sorted(required & names))); sys.exit(1 if missing else 0)'
