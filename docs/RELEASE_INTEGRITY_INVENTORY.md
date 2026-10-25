@@ -98,6 +98,21 @@ All 12 assets attached to the GitHub `v4.1.1` release were downloaded to a separ
 
 This confirms the downloaded binary/runtime files match the published checksum manifests. It does **not** establish which commit built those files, validate the truth of the provenance JSON, or authenticate the checksum files independently. The provenance JSON itself is not covered by either checksum manifest, and the release's current `v4.1.1` ref still disagrees with its declared commit.
 
+## GitHub SLSA build attestation verification
+
+The GitHub CLI `gh attestation verify` succeeded for the downloaded main release archive, scoped to repository `lecodev-26/nexus-q`. The verified in-toto/SLSA provenance records:
+
+- Workflow identity: `.github/workflows/v4-release.yml` at `refs/tags/v4.1.1`.
+- Source commit and workflow SHA: `5dd564daab9da1c071b8b134894ea7c4eba95d09`.
+- Trigger: `workflow_dispatch`.
+- Invocation: [GitHub Actions run 39704262006](https://github.com/lecodev-26/nexus-q/actions/runs/39704262006).
+- Transparency-log verification timestamp: `2026-10-22T01:26:48Z`.
+- The attestation's subject list contains nine release/runtime artifacts. Every one of those nine downloaded files matched the SHA-256 digest in the verified attestation.
+
+**What this establishes:** the nine named files are cryptographically linked by a verified GitHub build attestation to the release workflow running against source commit `5dd564d…`. This is stronger evidence than the unsigned project-specific provenance JSON or the checksum manifests alone.
+
+**What remains unresolved:** the current remote lightweight tag `v4.1.1` resolves to `84992f91589ae56957fdd5b2a727fcaef7f108a1`, not `5dd564d…`. The attestation establishes the historical build identity, not why or when the present tag diverged, nor whether all ecosystem packages were built from that same commit. Do not silently move the tag to make it agree. Preserve this attestation and tag evidence for the release-identity decision.
+
 ## Package archive spot checks
 
 Read-only package downloads and content checks were performed on 2026-10-25. Hashes below identify the exact downloaded archives in this review; they are not independently signed attestations.
