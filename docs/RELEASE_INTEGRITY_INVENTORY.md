@@ -24,6 +24,8 @@ These two version tags are not interchangeable. The bare tag `4.1.1` and `v4.1.1
 
 Public release: <https://github.com/lecodev-26/nexus-q/releases/tag/v4.1.1>
 
+The read-only GitHub Releases API check on 2026-10-25 reports release ID `420215670`, `draft=false`, `prerelease=false`, `immutable=false`, and 13 assets. `immutable=false` means GitHub does not mark this release as immutable; it is not evidence that an asset was actually changed. The release workflow in this PR refuses to overwrite an existing release, but that workflow guard does not retroactively make the existing GitHub release immutable. Asset digests and upload timestamps were also retrieved from the API; no release settings or assets were changed.
+
 The release is published (not a draft or prerelease), with assets uploaded on 2026-10-22. The inventory retrieved these assets from the release:
 
 - `nexusq-v4.1.1-provenance.json`

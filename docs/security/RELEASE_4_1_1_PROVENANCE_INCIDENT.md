@@ -9,6 +9,8 @@
 
 There is no evidence-supported single source commit that can honestly be assigned to every artifact published under version `4.1.1`. This is a historical integrity incident, not a missing checksum that can be repaired by regenerating a JSON file.
 
+The GitHub Releases API was rechecked read-only on 2026-10-25: release `v4.1.1` is published with 13 assets and reports `immutable=false`. This means the release is not marked immutable by GitHub; it does not show that any asset was changed. The PR workflow now fails when the release already exists, but maintainers still need to review release/tag protection settings separately.
+
 The strongest evidence for the GitHub release binaries is the verified GitHub SLSA build attestation: the main archive and eight runtime artifacts match its subject digests, and the attestation records source commit `5dd564daab9da1c071b8b134894ea7c4eba95d09` and workflow ref `refs/tags/v4.1.1`. But the current remote `v4.1.1` tag and `main` resolve to `84992f91589ae56957fdd5b2a727fcaef7f108a1`, while the annotated bare tag `4.1.1` resolves to `5dd564daab9da1c071b8b134894ea7c4eba95d09`.
 
 SDK/package impact is being triaged separately in [`SDK_4_1_1_TRIAGE.md`](SDK_4_1_1_TRIAGE.md). The current evidence establishes source-identity gaps, not a confirmed malicious artifact. A byte-level comparison now shows the NuGet Windows DLL has the same `.text` bytes as the attested GitHub DLL; the whole-file hash difference is limited to 77 metadata/import-hint byte positions. Package-level NuGet provenance and the Rust source-revision split remain open follow-ups.
