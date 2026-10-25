@@ -26,6 +26,8 @@ jobs:
         run: python3 .github/scripts/test_generate_cargo_sbom.py
       - name: Test crates.io publication safeguards
         run: python3 .github/scripts/test_publish_crates.py
+      - name: Test Maven Central publication safeguards
+        run: python3 .github/scripts/test_maven_version_state.py
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy

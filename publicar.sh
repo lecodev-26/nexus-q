@@ -115,22 +115,25 @@ need mvn
 need gpg
 [[ -f "$HOME/.m2/settings.xml" ]] || die "Falta ~/.m2/settings.xml con servidor central y credenciales."
 gpg --list-secret-keys --with-colons 2>/dev/null | grep -q '^sec:' || die "Maven Central exige clave GPG privada importada."
-maven_version_exists() {
+maven_version_state() {
   local artifact="$1"
-  local response
+  local response state
   response="$(curl -fsSL "https://search.maven.org/solrsearch/select?q=g:%22io.github.lecodev-26%22%20AND%20a:%22$artifact%22%20AND%20v:%22$VERSION%22&rows=1&wt=json")" || die "No se pudo consultar Maven Central; no arriesgo un duplicado."
-  printf '%s' "$response" | python -c 'import json,sys; data=json.load(sys.stdin); sys.exit(0 if data["response"]["numFound"] else 1)'
+  state="$(printf '%s' "$response" | python .github/scripts/maven_version_state.py)" || die "Respuesta de Maven Central inválida para $artifact:$VERSION; no se publica."
+  printf '%s' "$state"
 }
-if maven_version_exists nexusq; then
-  say "Maven Central: io.github.lecodev-26:nexusq:$VERSION ya existe; se omite."
-else
-  run mvn -B -f bindings/java/pom.xml clean deploy
-fi
-if maven_version_exists nexusq-kotlin; then
-  say "Maven Central: io.github.lecodev-26:nexusq-kotlin:$VERSION ya existe; se omite."
-else
-  run mvn -B -f bindings/kotlin/pom.xml clean deploy
-fi
+state="$(maven_version_state nexusq)"
+case "$state" in
+  present) say "Maven Central: io.github.lecodev-26:nexusq:$VERSION ya existe; se omite." ;;
+  absent) run mvn -B -f bindings/java/pom.xml clean deploy ;;
+  *) die "Estado inesperado de Maven Central para nexusq:$VERSION: $state" ;;
+esac
+state="$(maven_version_state nexusq-kotlin)"
+case "$state" in
+  present) say "Maven Central: io.github.lecodev-26:nexusq-kotlin:$VERSION ya existe; se omite." ;;
+  absent) run mvn -B -f bindings/kotlin/pom.xml clean deploy ;;
+  *) die "Estado inesperado de Maven Central para nexusq-kotlin:$VERSION: $state" ;;
+esac
 
 # NuGet must stay in GitHub Actions with OIDC; never use a local API key.
 say "Lanzando workflow OIDC de NuGet desde el tag aprobado"

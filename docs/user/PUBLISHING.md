@@ -17,6 +17,12 @@ NuGet is now manual-dispatch-only: it must be started from `vVERSION` with the e
 
 The GitHub stable-release workflow uses the same explicit identity decision: on `v4.1.1`, supply `confirm_release_identity=true`, set the repository approval variable only after the decision, and enter `approved_release_commit` as the full SHA selected by the maintainer. The workflow rejects a SHA that differs from the tag target and checked-out commit. This guard does not resolve the existing published-release mismatch by itself.
 
+## Registry behavior and partial publication
+
+The publisher checks the exact version before pushing to crates.io, npm, RubyGems, pub.dev, and Maven Central; lookup failures and unexpected HTTP responses stop publication rather than being treated as a missing version. Maven Central search responses are schema-validated as well, so malformed JSON cannot be interpreted as permission to publish. PyPI uses Twine's `--skip-existing`; NuGet uses `--skip-duplicate` in its separately gated OIDC workflow. Packagist receives a repository refresh request rather than a direct package upload.
+
+Publication across registries is **not atomic**. If a later registry fails, earlier registries may already contain the version. Stop at the first error, record which registries completed, verify the published artifacts and provenance, and resume only after an explicit review; do not blindly rerun the entire script. The script does not roll back immutable registry releases. Go and Swift consumers resolve Git tags, so their source identity must be reconciled separately from registry packages.
+
 ## Local credentials
 
 Create `~/.config/nexusq/publish.env` with mode 600. Copy the variable names from `.github/scripts/publish.env.example`; fill in values locally, never commit the populated file.
