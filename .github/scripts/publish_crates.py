@@ -14,6 +14,8 @@ import tomllib
 import urllib.error
 import urllib.request
 
+from verify_release_identity import verify as verify_release_identity
+
 CRATES = [
     "nexusq-kernels",
     "nexusq-ml-kem",
@@ -53,6 +55,10 @@ def published(crate: str, version: str) -> bool:
 
 
 def main() -> int:
+    # Guard direct invocations too; callers must not bypass publicar.sh.
+    with open("Cargo.toml", "rb") as f:
+        root_version = tomllib.load(f)["workspace"]["package"]["version"]
+    verify_release_identity(root_version)
     if not os.environ.get("CARGO_REGISTRY_TOKEN"):
         print("error: CARGO_REGISTRY_TOKEN is not set", file=sys.stderr)
         return 1

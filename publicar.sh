@@ -20,6 +20,9 @@ source "$CONFIG"
 for cmd in git curl python cargo gh; do need "$cmd"; done
 VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n1)"
 [[ -n "$VERSION" ]] || die "No se pudo detectar la versión."
+# Fail closed before any registry mutation unless the exact release commit was explicitly approved.
+need python
+run python .github/scripts/verify_release_identity.py "$VERSION"
 say "NEXUS-Q v$VERSION — publicación manual"
 say "Log: $LOG"
 curl -fsSL "https://api.github.com/repos/lecodev-26/nexus-q/releases/tags/v$VERSION" >/dev/null || die "No existe el release GitHub v$VERSION."
