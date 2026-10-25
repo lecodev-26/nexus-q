@@ -15,6 +15,8 @@ The GitHub repository variable `NEXUSQ_RELEASE_IDENTITY_APPROVED` must also be e
 
 NuGet is now manual-dispatch-only: it must be started from `vVERSION` with the explicit `confirm_release_identity=true` input and the same full approved commit SHA. It no longer publishes automatically from a `main` CI run.
 
+The GitHub stable-release workflow uses the same explicit identity decision: on `v4.1.1`, supply `confirm_release_identity=true`, set the repository approval variable only after the decision, and enter `approved_release_commit` as the full SHA selected by the maintainer. The workflow rejects a SHA that differs from the tag target and checked-out commit. This guard does not resolve the existing published-release mismatch by itself.
+
 ## Local credentials
 
 Create `~/.config/nexusq/publish.env` with mode 600. Copy the variable names from `.github/scripts/publish.env.example`; fill in values locally, never commit the populated file.
