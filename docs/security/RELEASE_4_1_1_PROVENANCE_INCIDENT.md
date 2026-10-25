@@ -10,6 +10,8 @@ There is no evidence-supported single source commit that can honestly be assigne
 
 The strongest evidence for the GitHub release binaries is the verified GitHub SLSA build attestation: the main archive and eight runtime artifacts match its subject digests, and the attestation records source commit `5dd564daab9da1c071b8b134894ea7c4eba95d09` and workflow ref `refs/tags/v4.1.1`. But the current remote `v4.1.1` tag and `main` resolve to `84992f91589ae56957fdd5b2a727fcaef7f108a1`, while the annotated bare tag `4.1.1` resolves to `5dd564daab9da1c071b8b134894ea7c4eba95d09`.
 
+SDK/package impact is being triaged separately in [`SDK_4_1_1_TRIAGE.md`](SDK_4_1_1_TRIAGE.md). The current evidence establishes source-identity gaps, not a confirmed malicious artifact; the NuGet Windows native library and the Rust source-revision split are the highest-priority technical follow-ups.
+
 Independent package checks also find divergent source references: crates.io records four source commits across 17 packages; NuGet declares `5b8a663…` and its Windows native library differs from the attested GitHub asset; Packagist's downloaded dist exactly matches `b243950…`; and several other registries do not expose enough signed source evidence to identify a unique commit. See [`../RELEASE_INTEGRITY_INVENTORY.md`](../RELEASE_INTEGRITY_INVENTORY.md) and [`CRATES_IO_4_1_1_INVENTORY.md`](CRATES_IO_4_1_1_INVENTORY.md) for the detailed evidence and hashes.
 
 ## Resolution decision

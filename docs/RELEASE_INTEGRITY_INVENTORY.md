@@ -76,6 +76,8 @@ This PR makes publication opt-in, requires the explicit `confirm_release_identit
 
 This inventory does not change cryptographic implementation, resolve `RUSTSEC-2023-0071`, change SDK/package versions, publish packages, move tags, delete release assets, or claim an external audit, FIPS validation, certification, or production readiness. The incident is resolved operationally as a **mixed-provenance release**, not by pretending the old version can be retroactively made uniform: existing `4.1.1` artifacts and evidence are preserved, all `4.1.1` publication paths remain blocked while the two Git tags diverge, and any replacement must use a new version and independently verifiable provenance.
 
+SDK/package impact triage and remediation order are tracked in [`docs/security/SDK_4_1_1_TRIAGE.md`](security/SDK_4_1_1_TRIAGE.md). It distinguishes confirmed provenance gaps from unproven code compromise and prioritizes the NuGet Windows runtime mismatch.
+
 ## Cross-ecosystem package identity evidence
 
 Read-only metadata checks were performed on 2026-10-25. These results identify what each registry exposes; a registry's source reference or archive digest is not, by itself, a verified build attestation.
