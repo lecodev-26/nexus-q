@@ -60,15 +60,24 @@ def get_status(url: str, *, method: str = "HEAD") -> tuple[int, str]:
 
 def maven_artifact_result(name: str, artifact: str, version: str) -> Result:
     # Search Maven can lag or omit artifacts despite their immutable repository
-    # paths being live. Check the exact canonical POM path instead of treating
-    # a search-index miss as proof the version was never published.
-    path = f"io/github/lecodev-26/{artifact}/{version}/{artifact}-{version}.pom"
-    status, error = get_status(f"https://repo.maven.apache.org/maven2/{path}")
-    if status == 200:
-        return Result(name, "present", "exact-version POM exists in Maven Central repository")
-    if status == 404:
-        return Result(name, "absent", "exact-version POM not found in Maven Central repository")
-    return Result(name, "unknown", error or f"unexpected HTTP {status}")
+    # paths being live. Check canonical paths for the POM and the binary/source
+    # JARs; a POM alone is not evidence that the complete publication exists.
+    base = f"https://repo.maven.apache.org/maven2/io/github/lecodev-26/{artifact}/{version}/{artifact}-{version}"
+    files = (".pom", ".jar", "-sources.jar")
+    statuses: dict[str, tuple[int, str]] = {
+        suffix: get_status(base + suffix) for suffix in files
+    }
+    unexpected = [(suffix, status, error) for suffix, (status, error) in statuses.items() if status not in (200, 404)]
+    if unexpected:
+        suffix, status, error = unexpected[0]
+        return Result(name, "unknown", f"could not verify {suffix}: {error or f'HTTP {status}'}")
+    present = [suffix for suffix, (status, _) in statuses.items() if status == 200]
+    missing = [suffix for suffix, (status, _) in statuses.items() if status == 404]
+    if not missing:
+        return Result(name, "present", "exact-version POM, binary JAR, and sources JAR all exist")
+    if not present:
+        return Result(name, "absent", "exact-version POM, binary JAR, and sources JAR not found")
+    return Result(name, "mismatch", f"partial Maven publication; present={present}, missing={missing}")
 
 
 def version_result(name: str, url: str, version: str, *, check: str = "exists") -> Result:

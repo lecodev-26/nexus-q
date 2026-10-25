@@ -12,7 +12,7 @@ python3 .github/scripts/release_preflight.py
 python3 .github/scripts/release_preflight.py --json
 ```
 
-It queries public registry/version endpoints and both Git tag spellings, reports `present`, `absent`, `mismatch`, or `unknown`, and returns a non-zero exit code if any query is unknown or a mismatch is detected. It does not load publishing credentials, build artifacts, change tags/releases, approve a release, or publish anything. A registry reporting a version as present is not proof its bytes match the approved source; use the release-integrity inventory and recovery runbook for artifact-level reconciliation. In particular, do not treat the preflight as authorization to publish while the `4.1.1` identity discrepancy remains unresolved.
+It queries public registry/version endpoints and both Git tag spellings, checks Maven Central POM, binary JAR, and sources JAR paths individually, reports `present`, `absent`, `mismatch`, or `unknown`, and returns a non-zero exit code if any query is unknown or a mismatch is detected. A partial Maven publication is reported as a mismatch rather than as a complete release. It does not load publishing credentials, build artifacts, change tags/releases, approve a release, or publish anything. A registry reporting a version as present is not proof its bytes match the approved source; use the release-integrity inventory and recovery runbook for artifact-level reconciliation. In particular, do not treat the preflight as authorization to publish while the `4.1.1` identity discrepancy remains unresolved.
 
 ## Release identity approval gate
 

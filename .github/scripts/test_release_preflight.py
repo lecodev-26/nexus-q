@@ -22,20 +22,29 @@ class PreflightTests(unittest.TestCase):
             result = preflight.version_result("Maven", "https://example.invalid", "4.1.1", check="maven")
         self.assertEqual(result.state, "unknown")
 
-    def test_maven_exact_pom_http_200_is_present(self):
+    def test_maven_all_expected_files_http_200_is_present(self):
         with patch.object(preflight, "get_status", return_value=(200, "")) as mocked:
             result = preflight.maven_artifact_result("Maven", "nexusq", "4.1.1")
         self.assertEqual(result.state, "present")
-        self.assertIn("POM exists", result.detail)
-        self.assertIn("nexusq/4.1.1/nexusq-4.1.1.pom", mocked.call_args.args[0])
+        self.assertIn("POM, binary JAR, and sources JAR", result.detail)
+        self.assertEqual(mocked.call_count, 3)
+        self.assertTrue(any("nexusq-4.1.1.pom" in call.args[0] for call in mocked.call_args_list))
+        self.assertTrue(any("nexusq-4.1.1.jar" in call.args[0] for call in mocked.call_args_list))
+        self.assertTrue(any("nexusq-4.1.1-sources.jar" in call.args[0] for call in mocked.call_args_list))
 
-    def test_maven_exact_pom_404_is_absent(self):
+    def test_maven_all_expected_files_404_is_absent(self):
         with patch.object(preflight, "get_status", return_value=(404, "not found")):
             result = preflight.maven_artifact_result("Maven", "nexusq", "4.1.1")
         self.assertEqual(result.state, "absent")
 
-    def test_maven_exact_pom_server_error_is_unknown(self):
-        with patch.object(preflight, "get_status", return_value=(503, "HTTP 503")):
+    def test_maven_partial_publication_is_mismatch(self):
+        with patch.object(preflight, "get_status", side_effect=[(200, ""), (404, "not found"), (200, "")]):
+            result = preflight.maven_artifact_result("Maven", "nexusq", "4.1.1")
+        self.assertEqual(result.state, "mismatch")
+        self.assertIn("partial Maven publication", result.detail)
+
+    def test_maven_server_error_is_unknown(self):
+        with patch.object(preflight, "get_status", side_effect=[(200, ""), (503, "HTTP 503"), (200, "")]):
             result = preflight.maven_artifact_result("Maven", "nexusq", "4.1.1")
         self.assertEqual(result.state, "unknown")
 
