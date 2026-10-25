@@ -38,7 +38,7 @@
 | Default implementation path | RustCrypto; the native backend is experimental and opt-in |
 | Interfaces | Rust library, CLI, server, C ABI and language SDKs; availability and packaging vary by ecosystem |
 | License | MIT OR Apache-2.0 |
-| Assurance boundary | Security CI, fuzz targets and documented threat model; no independent external audit or certification claimed |
+| Assurance boundary | Security CI, fuzz targets and documented threat model; no independent external audit or certification claimed; [proposed audit scope](docs/security/AUDIT_SCOPE.md) is a draft, not an audit report |
 
 ## Capability and maturity matrix
 
