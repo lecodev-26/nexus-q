@@ -1,6 +1,6 @@
 # Installation
 
-NEXUS-Q 4.1.1 is available through several package registries and can also be built from source. Registry availability is not proof that every package was built from the same Git commit: the GitHub v4.1.1 tag points to current `main`, while the existing release provenance manifest and binary/checksum/SBOM assets were not regenerated after the tag moved. Review the status note in the root README before relying on release-archive provenance.
+NEXUS-Q 4.1.1 is available through several package registries and can also be built from source. Registry availability is not proof that every package was built from the same Git commit. The bare `4.1.1` tag and verified GitHub release attestation identify commit `5dd564d`, while `v4.1.1` and current `main` resolve to `84992f9`; registry package metadata also records other source snapshots. The public SBOM is still incomplete. Review the [release-integrity inventory](../RELEASE_INTEGRITY_INVENTORY.md) and root README status note before relying on release-archive provenance.
 
 ## From package registries
 
