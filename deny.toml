@@ -7,7 +7,7 @@ version = 2
 # decryption timing; Nexus-Q uses cms only for ContentInfo parsing and ML-DSA
 # SignedData construction, not RSA private-key decryption. Revisit on CMS/RSA updates.
 ignore = [
-    { id = "RUSTSEC-2023-0071", reason = "Transitive cms builder dependency; no RSA private-key decryption is used by Nexus-Q; no upstream fix available." },
+    { id = "RUSTSEC-2023-0071", reason = "See docs/adr/0005-rustsec-2023-0071-rsa-advisory.md: transitive CMS builder dependency; current documented paths do not perform RSA private-key decryption; reassess on dependency or code-path changes." },
 ]
 
 [licenses]

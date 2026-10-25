@@ -1,3 +1,3 @@
-# Documented exception: see deny.toml for the threat-model rationale.
+# Documented exception: see docs/adr/0005-rustsec-2023-0071-rsa-advisory.md.
 [advisories]
 ignore = ["RUSTSEC-2023-0071"]
