@@ -94,46 +94,17 @@ jobs:
           set -euo pipefail
           (cd release && sha256sum *.tar.gz > SHA256SUMS)
 
-      - name: Generate CycloneDX SBOM
-        shell: python3 {0}
-        run: |
-          import json, subprocess
-          from pathlib import Path
-          m = json.loads(subprocess.check_output(["cargo","metadata","--format-version","1","--locked"]))
-          components = []
-          seen = set()
-          for p in m["packages"]:
-              if not p["name"].startswith("nexusq"):
-                  continue
-              key = (p["name"], p["version"])
-              if key in seen:
-                  continue
-              seen.add(key)
-              licenses = []
-              for lic in p.get("license", "").split(" OR "):
-                  if lic:
-                      licenses.append({"license":{"id":lic}})
-              c = {
-                  "type":"library",
-                  "bom-ref":f"pkg:cargo/{p['name']}@{p['version']}",
-                  "name":p["name"],
-                  "version":p["version"],
-                  "purl":f"pkg:cargo/{p['name']}@{p['version']}",
-              }
-              if licenses:
-                  c["licenses"] = licenses
-              components.append(c)
-          bom = {
-              "bomFormat":"CycloneDX",
-              "specVersion":"1.5",
-              "serialNumber":"urn:nexusq:release:4.1.1",
-              "version":1,
-              "metadata":{
-                  "component":{"type":"application","name":"nexusq","version":"4.1.1"}
-              },
-              "components":components,
-          }
-          Path("release/nexusq-v4.1.1-sbom.cdx.json").write_text(json.dumps(bom,indent=2)+"\n")
+      - name: Generate dependency-complete CycloneDX SBOM from Cargo.lock
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+          RELEASE_REF: ${{ github.ref }}
+        run: >-
+          python3 .github/scripts/generate_cargo_sbom.py
+          --lockfile Cargo.lock
+          --manifest Cargo.toml
+          --output release/nexusq-v4.1.1-sbom.cdx.json
+          --commit "$RELEASE_SHA"
+          --ref "$RELEASE_REF"
 
       - name: Generate release provenance
         shell: python3 {0}
