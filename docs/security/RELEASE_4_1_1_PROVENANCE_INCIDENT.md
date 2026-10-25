@@ -3,6 +3,7 @@
 **Status: contained; historical release classified as mixed-provenance.**  
 **Evidence snapshot:** 2026-10-25.  
 **Scope:** GitHub release assets and ecosystem packages published as `4.1.1`.
+**Independent audit:** not completed. The audit scope is a draft in [`AUDIT_SCOPE.md`](AUDIT_SCOPE.md); this incident review and local tests are not a substitute for an external audit.
 
 ## Finding
 

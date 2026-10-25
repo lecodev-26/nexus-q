@@ -3,6 +3,8 @@
 - **Status:** Accepted as a temporary, scoped exception; reassessment required on dependency or CMS changes
 - **Date:** 2026-10-25
 - **Scope:** Dependency policy only. This ADR does not change cryptographic behavior or enable RSA operations.
+- **Accountable role:** Maintainer responsible for Rust dependency/security policy; a named individual must be assigned before the next scheduled review.
+- **Review status:** Accepted temporarily; no automatic expiry is claimed. Reassess on the triggers below and whenever dependency policy is reviewed.
 
 ## Context
 
