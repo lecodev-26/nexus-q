@@ -3,11 +3,10 @@
 
 [advisories]
 version = 2
-# No upstream fix exists yet. RUSTSEC-2023-0071 concerns RSA private-key
-# decryption timing; Nexus-Q uses cms only for ContentInfo parsing and ML-DSA
-# SignedData construction, not RSA private-key decryption. Revisit on CMS/RSA updates.
+# Temporary scoped exception; see docs/adr/0005-rsa-cms-rustsec-2023-0071.md.
+# The ADR records the current call-site review and required reassessment triggers.
 ignore = [
-    { id = "RUSTSEC-2023-0071", reason = "Transitive cms builder dependency; no RSA private-key decryption is used by Nexus-Q; no upstream fix available." },
+    { id = "RUSTSEC-2023-0071", reason = "Temporary scoped exception documented in docs/adr/0005-rsa-cms-rustsec-2023-0071.md; reviewed paths use CMS parsing and ML-DSA SignedData construction, not RSA private-key decryption; reassess on dependency or call-site changes." },
 ]
 
 [licenses]

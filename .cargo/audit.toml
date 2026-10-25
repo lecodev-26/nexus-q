@@ -1,3 +1,4 @@
-# Documented exception: see deny.toml for the threat-model rationale.
+# Temporary scoped exception: see docs/adr/0005-rsa-cms-rustsec-2023-0071.md.
+# This does not mean the advisory is fixed; reassess on CMS/RSA dependency changes.
 [advisories]
 ignore = ["RUSTSEC-2023-0071"]

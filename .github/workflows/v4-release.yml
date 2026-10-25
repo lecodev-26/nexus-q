@@ -40,7 +40,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.85.1
+          toolchain: 1.88
           components: rustfmt, clippy
 
       - name: Verify final version and clean package graph
@@ -178,7 +178,7 @@ jobs:
           submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.85.1
+          toolchain: 1.88
       - name: Install OpenSSL for Windows release build
         if: matrix.os == 'windows-latest'
         shell: pwsh

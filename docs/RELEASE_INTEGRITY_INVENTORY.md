@@ -49,7 +49,7 @@ File: [`.github/workflows/v4-release.yml`](../.github/workflows/v4-release.yml)
 
 1. The workflow is manually dispatched and its public-release job previously allowed a run from `main` to update the public release.
 2. Existing assets were uploaded with `gh release upload --clobber`, allowing the workflow to overwrite assets without resolving the historical source identity first.
-3. The workflow builds with Rust `1.85.1`, while the current workspace manifest declares `rust-version = "1.88"`. Toolchain policy requires a separate compatibility decision and validation.
+3. At inventory time, the workflow used Rust `1.85.1` while the workspace declared `rust-version = "1.88"`. This PR aligns both release-workflow toolchain pins with Rust `1.88`; CI must verify the toolchain change before merge.
 4. The generated SBOM filters to workspace packages with names beginning `nexusq`; third-party dependencies are not included by that filter.
 5. The provenance file's checksum list is based on `SHA256SUMS`, which only lists the main release archive; native runtime checksums are generated separately.
 6. The repository ruleset query returned no rulesets, and the tag-protection API did not expose a configured protection rule. This API result is not a complete audit of all organization-level controls; tag immutability/protection still needs maintainer verification.
