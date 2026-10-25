@@ -4,6 +4,8 @@
 
 This is a read-only inventory of the public `4.1.1` release identity, recorded to prevent a future workflow run from silently replacing evidence or combining assets from different source snapshots. It does **not** select the final source commit for `4.1.1`, declare the existing binaries invalid, or authorize republication. The release identity decision remains pending maintainer review.
 
+**Incident disposition:** [`docs/security/RELEASE_4_1_1_PROVENANCE_INCIDENT.md`](security/RELEASE_4_1_1_PROVENANCE_INCIDENT.md) records the historical release as mixed-provenance, identifies the attested GitHub artifact subset, and defines containment. This is not a claim that all registry artifacts can be retroactively unified.
+
 No Git tag, published release asset, or registry package was changed while preparing this inventory.
 
 ## Observed Git refs
@@ -54,13 +56,15 @@ File: [`.github/workflows/v4-release.yml`](../.github/workflows/v4-release.yml)
 5. The provenance file's checksum list is based on `SHA256SUMS`, which only lists the main release archive; native runtime checksums are generated separately.
 6. The repository ruleset query returned no rulesets, and the tag-protection API did not expose a configured protection rule. This API result is not a complete audit of all organization-level controls; tag immutability/protection still needs maintainer verification.
 
-This PR makes publication opt-in, requires the explicit `confirm_release_identity` workflow input, the repository variable `NEXUSQ_RELEASE_IDENTITY_APPROVED=true`, and a full `approved_release_commit` SHA that matches both the selected `v4.1.1` tag and checked-out commit. It also refuses to mutate an already existing `v4.1.1` release. The repository variable is intentionally not configured by this PR. It must remain unset until a maintainer has resolved the identity decision and reviewed the evidence. This PR does not retarget refs or decide which source snapshot should ultimately represent the version. The manual publisher now also fails closed through `.github/scripts/verify_release_identity.py`: it requires an explicit `NEXUSQ_RELEASE_IDENTITY_APPROVED=true`, a full `NEXUSQ_APPROVED_RELEASE_COMMIT` SHA, a clean worktree, the official repository remote, and exact equality between `HEAD`, the approved SHA, and `vVERSION`. The crate-publishing helper runs the same gate directly, so invoking it without the wrapper cannot bypass the check. No registry publishing was performed.
+This PR makes publication opt-in, requires the explicit `confirm_release_identity` workflow input, the repository variable `NEXUSQ_RELEASE_IDENTITY_APPROVED=true`, and a full `approved_release_commit` SHA that matches both the selected `v4.1.1` tag and checked-out commit. It also refuses to mutate an already existing `v4.1.1` release. The repository variable is intentionally not configured by this PR. It must remain unset until a maintainer has resolved the identity decision and reviewed the evidence. This PR does not retarget refs or decide which source snapshot should ultimately represent the version. The manual publisher now also fails closed through `.github/scripts/verify_release_identity.py`: it requires an explicit `NEXUSQ_RELEASE_IDENTITY_APPROVED=true`, a full `NEXUSQ_APPROVED_RELEASE_COMMIT` SHA, a clean worktree, the official repository remote, and exact equality between `HEAD`, the approved SHA, `VERSION`, and `vVERSION`. The two version tags must resolve to the same commit; this prevents an approval for one spelling from concealing the other tag's divergent history. The crate-publishing helper runs the same gate directly, so invoking it without the wrapper cannot bypass the check. No registry publishing was performed.
 
 ## Required decision before any release recovery
 
-- [ ] Maintainer explicitly selects the source commit that `4.1.1` is intended to represent.
+- [x] Classify the historical incident: there is no defensible single source commit for every artifact published as `4.1.1`; the GitHub-attested release assets are tied to `5dd564daab9da1c071b8b134894ea7c4eba95d09`, while other package channels expose multiple other source revisions.
+- [ ] Maintainer explicitly selects the source commit for any future, newly versioned release. Do not reinterpret that choice as proof that all existing `4.1.1` packages share the same source.
 - [ ] Record the historical `5dd564d…` artifacts and their evidence without overwriting them.
-- [ ] Reconcile the chosen commit with both tags and the release's immutable provenance/attestations.
+- [x] Preserve the original tag and attestation observations; the current `4.1.1` and `v4.1.1` refs are divergent and are not silently rewritten by this remediation.
+- [ ] For any future release, create a new version with fresh immutable tags and verify every package channel independently against that release identity.
 - [ ] Determine which registry packages were built from which source snapshot; registry availability is not provenance.
 - [ ] Rebuild only after the selected source identity and toolchain policy are approved.
 - [ ] Generate checksums for every published artifact, and verify each checksum against the downloaded asset set.
@@ -70,7 +74,7 @@ This PR makes publication opt-in, requires the explicit `confirm_release_identit
 
 ## Out of scope for this PR
 
-This inventory does not change cryptographic implementation, resolve `RUSTSEC-2023-0071`, change SDK/package versions, publish packages, move tags, delete release assets, or claim an external audit, FIPS validation, certification, or production readiness.
+This inventory does not change cryptographic implementation, resolve `RUSTSEC-2023-0071`, change SDK/package versions, publish packages, move tags, delete release assets, or claim an external audit, FIPS validation, certification, or production readiness. The incident is resolved operationally as a **mixed-provenance release**, not by pretending the old version can be retroactively made uniform: existing `4.1.1` artifacts and evidence are preserved, all `4.1.1` publication paths remain blocked while the two Git tags diverge, and any replacement must use a new version and independently verifiable provenance.
 
 ## Cross-ecosystem package identity evidence
 

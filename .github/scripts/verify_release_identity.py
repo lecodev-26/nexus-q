@@ -33,7 +33,8 @@ def verify(version: str) -> None:
     try:
         remote = git("remote", "get-url", "origin")
         head = git("rev-parse", "HEAD^{commit}")
-        tag = git("rev-parse", f"refs/tags/v{version}^{{commit}}")
+        bare_tag = git("rev-parse", f"refs/tags/{version}^{{commit}}")
+        v_tag = git("rev-parse", f"refs/tags/v{version}^{{commit}}")
     except subprocess.CalledProcessError as exc:
         detail = exc.stderr.strip() if exc.stderr else str(exc)
         raise SystemExit(f"release blocked: cannot verify repository/tag identity: {detail}") from exc
@@ -47,10 +48,14 @@ def verify(version: str) -> None:
 
     if head != expected:
         raise SystemExit(f"release blocked: HEAD {head} does not equal approved commit {expected}")
-    if tag != expected:
-        raise SystemExit(f"release blocked: v{version} resolves to {tag}, not approved commit {expected}")
+    if bare_tag != expected:
+        raise SystemExit(f"release blocked: {version} resolves to {bare_tag}, not approved commit {expected}")
+    if v_tag != expected:
+        raise SystemExit(f"release blocked: v{version} resolves to {v_tag}, not approved commit {expected}")
+    if bare_tag != v_tag:
+        raise SystemExit(f"release blocked: {version} and v{version} resolve to different commits ({bare_tag} != {v_tag})")
 
-    print(f"Release identity gate passed: v{version} at approved commit {expected}")
+    print(f"Release identity gate passed: {version} and v{version} both resolve to approved commit {expected}")
 
 
 if __name__ == "__main__":

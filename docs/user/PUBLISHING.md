@@ -1,5 +1,7 @@
 # Manual SDK publication from Termux
 
+> **Historical 4.1.1 provenance incident:** this version is classified as mixed-provenance. Do not republish or attempt to repair it in place. See [the incident decision](../security/RELEASE_4_1_1_PROVENANCE_INCIDENT.md) and [the evidence inventory](../RELEASE_INTEGRITY_INVENTORY.md). A replacement must use a new version and independently verified provenance.
+
 Run `./publicar.sh` from the repository root only after a maintainer has explicitly approved the exact release identity. The script validates credentials and Maven signing prerequisites before publishing, logs to `.publish-dist/`, and fails closed if a registry lookup is unavailable or the version's source identity does not match the approved tag.
 
 ## Read-only registry preflight

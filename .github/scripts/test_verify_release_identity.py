@@ -24,6 +24,7 @@ class ReleaseIdentityGateTests(unittest.TestCase):
         self.git("commit", "-qm", "test release identity gate")
         self.git("remote", "add", "origin", OFFICIAL_REMOTE)
         self.commit = self.git("rev-parse", "HEAD")
+        self.git("tag", "0.0.1", self.commit)
         self.git("tag", "v0.0.1", self.commit)
         self.env = os.environ.copy()
         self.env.pop("NEXUSQ_RELEASE_IDENTITY_APPROVED", None)
@@ -72,7 +73,15 @@ class ReleaseIdentityGateTests(unittest.TestCase):
         self.approve()
         result = self.run_gate()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(f"v0.0.1 at approved commit {self.commit}", result.stdout)
+        self.assertIn(f"0.0.1 and v0.0.1 both resolve to approved commit {self.commit}", result.stdout)
+
+    def test_blocks_if_bare_and_v_tags_diverge(self) -> None:
+        self.approve()
+        other = self.git("commit-tree", self.git("rev-parse", "HEAD^{tree}"), "-m", "different tag target")
+        self.git("tag", "-f", "0.0.1", other)
+        result = self.run_gate()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("0.0.1 resolves to", result.stderr)
 
 
 if __name__ == "__main__":
