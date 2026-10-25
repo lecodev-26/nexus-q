@@ -32,6 +32,31 @@ class PreflightTests(unittest.TestCase):
             result = preflight.version_result("PyPI", "https://example.invalid", "4.1.1", check="pypi")
         self.assertEqual(result.state, "mismatch")
 
+
+    def test_annotated_tag_chain_resolves_to_commit(self):
+        responses = [
+            (200, {"object": {"sha": "a" * 40, "type": "tag"}}, ""),
+            (200, {"object": {"sha": "b" * 40, "type": "tag"}}, ""),
+            (200, {"object": {"sha": "c" * 40, "type": "commit"}}, ""),
+        ]
+        with patch.object(preflight, "get_json", side_effect=responses):
+            result = preflight.github_ref("v4.1.1")
+        self.assertEqual(result.state, "present")
+        self.assertEqual(result.detail, f"resolves to {'c' * 40}")
+
+    def test_tag_pointing_to_tree_is_not_accepted_as_commit(self):
+        with patch.object(preflight, "get_json", return_value=(200, {"object": {"sha": "a" * 40, "type": "tree"}}, "")):
+            result = preflight.github_ref("v4.1.1")
+        self.assertEqual(result.state, "unknown")
+        self.assertIn("unexpected Git object type", result.detail)
+
+    def test_tag_chain_depth_is_bounded(self):
+        response = (200, {"object": {"sha": "a" * 40, "type": "tag"}}, "")
+        with patch.object(preflight, "get_json", return_value=response):
+            result = preflight.github_ref("v4.1.1")
+        self.assertEqual(result.state, "unknown")
+        self.assertIn("maximum depth", result.detail)
+
     def test_packagist_schema_error_is_unknown(self):
         with patch.object(preflight, "get_json", return_value=(200, {"unexpected": {}}, "")):
             result = preflight.version_result("Packagist", "https://example.invalid", "4.1.1", check="packagist")

@@ -80,23 +80,34 @@ def version_result(name: str, url: str, version: str, *, check: str = "exists") 
 
 
 def github_ref(ref: str) -> Result:
+    name = f"Git tag {ref}"
     status, data, error = get_json(f"https://api.github.com/repos/{REPO}/git/ref/tags/{ref}")
     if status == 404:
-        return Result(f"Git tag {ref}", "absent", "tag ref not found")
+        return Result(name, "absent", "tag ref not found")
     if status != 200 or not isinstance(data, dict):
-        return Result(f"Git tag {ref}", "unknown", error or "unexpected GitHub ref response")
+        return Result(name, "unknown", error or "unexpected GitHub ref response")
     obj = data.get("object")
     if not isinstance(obj, dict) or not isinstance(obj.get("sha"), str):
-        return Result(f"Git tag {ref}", "unknown", "missing object SHA")
+        return Result(name, "unknown", "missing object SHA")
+
+    # Annotated tags can point to another tag object. Follow the chain, but
+    # bound it and require the final object to be a commit (not a tree/blob).
     sha, kind = obj["sha"], obj.get("type")
-    if kind == "tag":
+    for _ in range(8):
+        if not isinstance(sha, str) or len(sha) != 40 or any(c not in "0123456789abcdef" for c in sha.lower()):
+            return Result(name, "unknown", "tag chain contains an invalid object SHA")
+        if kind == "commit":
+            return Result(name, "present", f"resolves to {sha}")
+        if kind != "tag":
+            return Result(name, "unknown", f"tag resolves to unexpected Git object type {kind!r}")
         tag_status, tag_data, tag_error = get_json(f"https://api.github.com/repos/{REPO}/git/tags/{sha}")
-        if tag_status != 200 or not isinstance(tag_data, dict) or not isinstance(tag_data.get("object"), dict):
-            return Result(f"Git tag {ref}", "unknown", tag_error or "could not dereference annotated tag")
-        sha = tag_data["object"].get("sha", "")
-    if not isinstance(sha, str) or len(sha) != 40:
-        return Result(f"Git tag {ref}", "unknown", "could not resolve tag to a commit SHA")
-    return Result(f"Git tag {ref}", "present", f"resolves to {sha}")
+        if tag_status != 200 or not isinstance(tag_data, dict):
+            return Result(name, "unknown", tag_error or "could not dereference annotated tag")
+        target = tag_data.get("object")
+        if not isinstance(target, dict) or not isinstance(target.get("sha"), str):
+            return Result(name, "unknown", "annotated tag has no valid target object")
+        sha, kind = target["sha"], target.get("type")
+    return Result(name, "unknown", "annotated tag chain exceeded maximum depth")
 
 
 def inspect(version: str) -> list[Result]:
@@ -108,7 +119,17 @@ def inspect(version: str) -> list[Result]:
     elif status != 200 or not isinstance(data, dict):
         out.append(Result(f"GitHub Release v{version}", "unknown", error or "unexpected release response"))
     else:
-        out.append(Result(f"GitHub Release v{version}", "present", f"published={not data.get('draft', True)}, prerelease={bool(data.get('prerelease'))}; assets={len(data.get('assets', [])) if isinstance(data.get('assets'), list) else 'unknown'}"))
+        draft = data.get("draft")
+        prerelease = data.get("prerelease")
+        assets = data.get("assets")
+        if not isinstance(draft, bool) or not isinstance(prerelease, bool) or not isinstance(assets, list):
+            out.append(Result(f"GitHub Release v{version}", "unknown", "unexpected release response schema"))
+        elif draft:
+            out.append(Result(f"GitHub Release v{version}", "absent", f"release exists as draft; assets={len(assets)}"))
+        elif prerelease:
+            out.append(Result(f"GitHub Release v{version}", "mismatch", f"release is marked prerelease; assets={len(assets)}"))
+        else:
+            out.append(Result(f"GitHub Release v{version}", "present", f"published stable release; assets={len(assets)}"))
     tag_results = [github_ref(version), github_ref(f"v{version}")]
     out.extend(tag_results)
     if all(item.state == "present" for item in tag_results):
