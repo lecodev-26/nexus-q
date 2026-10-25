@@ -20,6 +20,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: Test release identity publication gate
+        run: python3 .github/scripts/test_verify_release_identity.py
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
