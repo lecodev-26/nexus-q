@@ -17,7 +17,9 @@
 
 </div>
 
-> **Current project status (checked 2026-10-23):** GitHub release [v4.1.1](https://github.com/lecodev-26/nexus-q/releases/tag/v4.1.1) is published and its Git tag points to the current [`main` branch](https://github.com/lecodev-26/nexus-q/tree/main). Important: the existing `nexusq-v4.1.1-provenance.json` still records commit [`5dd564d`](https://github.com/lecodev-26/nexus-q/commit/5dd564daab9da1c071b8b134894ea7c4eba95d09), and the previously published release binaries, checksums and SBOM were not regenerated when the tag moved. The tag therefore points to `main`, but the existing release assets do not yet have matching provenance for that commit. The release-tag manifest declares Rust 1.85, while current `main` declares Rust 1.88; the 1.88 requirement below applies to building current `main`, not automatically to every published package. Public endpoint checks confirm 4.1.1 availability for published crates.io packages, PyPI (`nexusq`, source distribution only), npm, RubyGems, Packagist, pub.dev, NuGet (`Nexusq`), and Maven Central Java (`io.github.lecodev-26:nexusq`) and Kotlin (`io.github.lecodev-26:nexusq-kotlin`) artifacts. These checks establish registry availability, not source-commit provenance for every registry package. `nexusq-pki-cluster 4.1.1` was successfully published to crates.io on 2026-10-23 after updating the Cargo API token. The successful upload was confirmed by Cargo; public registry propagation may take a short time. `nexusq-hsm` is published. The NuGet 4.1.1 archive contains the .NET 9 assembly and native runtime assets for Linux x64/ARM64, macOS ARM64 and Windows x64; its publish workflow completed successfully for `main` commit `5b8a663` on 2026-10-23 ([run details](https://github.com/lecodev-26/nexus-q/actions/runs/39909889694)). Maven POM, JAR, sources JAR and Javadoc JAR endpoints returned HTTP 200 for both 4.1.1 artifacts. The Go module uses its own `v0.1.0` version. SwiftPM's bare `4.1.1` tag still resolves to the original release commit `5dd564d`; Git tag `v4.1.1` points to current `main`. These tags are not equivalent. SwiftPM users must not assume these two tags identify the same source snapshot. The native ML-KEM/ML-DSA backend remains experimental and opt-in; RustCrypto remains the default production path. CI run [`39820696137`](https://github.com/lecodev-26/nexus-q/actions/runs/39820696137) for `main` commit `5b8a663` completed successfully: 62 jobs passed, two optional/manual jobs were skipped, and none failed. Its Cargo audit and Cargo deny jobs passed. The previously reported `time` advisory was addressed by updating the lockfile to `time 0.3.47`. On 2026-10-23, the newly published `RUSTSEC-2026-0385` advisory for `ctutils 0.4.2` was addressed by updating the workspace and native-backend lockfiles to `ctutils 0.4.4` (the advisory fix requires Rust 1.87; current `main` requires Rust 1.88). Both lockfiles are covered by the native-backend security workflow. The Swift SDK workflow now retries its C runtime build up to three times to tolerate transient crates.io DNS/registry failures observed on hosted macOS runners; persistent failures still fail the job. `RUSTSEC-2023-0071` for `rsa` remains an explicitly documented exception in [`.cargo/audit.toml`](.cargo/audit.toml) and [`deny.toml`](deny.toml); this is not a claim that every advisory is fixed. No independent external audit, FIPS 140-3 validation, certification, or production-readiness claim is made. See [`docs/V4_RELEASE.md`](docs/V4_RELEASE.md) and [`docs/NATIVE_RUNTIME_PACKAGING.md`](docs/NATIVE_RUNTIME_PACKAGING.md).
+> **Current project status (checked 2026-10-25):** NEXUS-Q v4.1.2 is the current release. Audit-Ready Release. No production-readiness claim, no FIPS validation, external audit pending. Registry availability and release provenance are documented separately; the Go module retains independent v0.x versioning. The native ML-KEM/ML-DSA backend remains experimental and opt-in; RustCrypto remains the default path.
+
+> **v4.1.2 release status (2026-10-25):** **Audit-Ready Release. No production-readiness claim, no FIPS validation, external audit pending.** The release evidence and limitations are documented in `docs/V4_RELEASE.md`; registry availability is not proof of build provenance for every ecosystem package.
 
 ## Quick navigation
 
@@ -318,7 +320,8 @@ These are single-runner CI measurements on an AMD EPYC 7763 hosted runner, not u
 | V2 | [`v2.0.0`](https://github.com/lecodev-26/nexus-q/releases/tag/v2.0.0) · `nexusqv2` | Security/correctness engineering line | Frozen |
 | V3 | [`v3-engineering-2026-10-09`](https://github.com/lecodev-26/nexus-q/releases/tag/v3-engineering-2026-10-09) · `nexusqv3` | Hardened implementation and benchmark evidence | Engineering release |
 | V4 | [`v4-engineering-2026-10-16`](https://github.com/lecodev-26/nexus-q/tree/v4-engineering-2026-10-16) · `nexusqv4` | Experimental native backend and performance work | Engineering snapshot (pre-release) |
-| V4.1.1 | [`v4.1.1`](https://github.com/lecodev-26/nexus-q/releases/tag/v4.1.1) · `main` | Published release; registry availability is tracked in the installation table | **Released; independent external audit remains open** |
+| V4.1.2 | Current release | Audit-Ready Release. No production-readiness claim, no FIPS validation, external audit pending. | **Audit-Ready Release** |
+| V4.1.1 (historical) | [`v4.1.1`](https://github.com/lecodev-26/nexus-q/releases/tag/v4.1.1) | Historical release; registry availability and provenance have known limitations | **Historical; independent external audit remains open** |
 | V4.1 | [`v4.1.0`](https://github.com/lecodev-26/nexus-q/releases/tag/v4.1.0) · `main` | Previous stable line release: opt-in native-backend production-path wiring | Historical release; independent external audit remains pending (Phase 21) |
 
 <details>
@@ -379,38 +382,38 @@ The generated archive contains the CLI, server, non-secret configuration example
 
 ## Installation
 
-The GitHub release `v4.1.1` is available. The tag was retargeted to current `main`, but existing release assets and provenance were not rebuilt; see the status note above. The table below records public installation endpoints checked on 2026-10-23. Maven Central's Solr search index did not yet return the coordinates during this check, but the canonical repository served the 4.1.1 POMs, binaries, sources and Javadocs for both artifacts with HTTP 200; direct artifact URLs are the stronger availability check. Registry availability is not proof that every ecosystem package was built from the same Git commit. `nexusq-pki-cluster 4.1.1` has now been uploaded successfully to crates.io; public registry propagation can take a short time.
+NEXUS-Q v4.1.2 is the current Audit-Ready Release. The table below describes v4.1.2 installation coordinates; registry-specific build provenance must be assessed from the evidence published for each ecosystem. The earlier v4.1.1 release and its provenance limitations are retained in the historical release record, not as the current installation target.
 
-| Channel / package | Install | Status |
-|---|---|---|
-| Rust library (all-in-one) | `cargo add nexusq@4.1.1` | Published — [crates.io](https://crates.io/crates/nexusq) |
-| Rust core library | `cargo add nexusq-core@4.1.1` | Published — [crates.io](https://crates.io/crates/nexusq-core) |
-| Rust kernels | `cargo add nexusq-kernels@4.1.1` | Published — [crates.io](https://crates.io/crates/nexusq-kernels) |
-| Rust ML-KEM | `cargo add nexusq-ml-kem@4.1.1` | Published — [crates.io](https://crates.io/crates/nexusq-ml-kem) |
-| Rust ML-DSA | `cargo add nexusq-ml-dsa@4.1.1` | Published — [crates.io](https://crates.io/crates/nexusq-ml-dsa) |
-| Rust native backend (experimental, opt-in) | `cargo add nexusq-native-backend@0.1.0` | Published — [crates.io](https://crates.io/crates/nexusq-native-backend); not enabled by default |
-| Rust C SDK | `cargo add nexusq-c@4.1.1` | Published — [crates.io](https://crates.io/crates/nexusq-c) |
-| Rust Python binding crate | `cargo add nexusq-py@4.1.1` | Published — [crates.io](https://crates.io/crates/nexusq-py) |
-| Rust CLI | `cargo install nexusq-cli --version 4.1.1` | Published — [crates.io](https://crates.io/crates/nexusq-cli) |
-| Rust server | `cargo install nexusq-server --version 4.1.1` | Published — [crates.io](https://crates.io/crates/nexusq-server) |
-| Rust admin module | `cargo add nexusq-admin@4.1.1` | Published — [crates.io](https://crates.io/crates/nexusq-admin) |
-| Rust PKI cluster module | `cargo add nexusq-pki-cluster@4.1.1` | Published — [crates.io](https://crates.io/crates/nexusq-pki-cluster) — upload confirmed by Cargo on 2026-10-23 |
-| Rust HSM integration | `cargo add nexusq-hsm@4.1.1` | Published — [crates.io](https://crates.io/crates/nexusq-hsm) |
-| Rust enrollment module | `cargo add nexusq-enrollment@4.1.1` | Published — [crates.io](https://crates.io/crates/nexusq-enrollment) |
-| Rust HA module | `cargo add nexusq-ha@4.1.1` | Published — [crates.io](https://crates.io/crates/nexusq-ha) |
-| Rust OCSP module | `cargo add nexusq-ocsp@4.1.1` | Published — [crates.io](https://crates.io/crates/nexusq-ocsp) |
-| Rust TSA module | `cargo add nexusq-tsa@4.1.1` | Published — [crates.io](https://crates.io/crates/nexusq-tsa) |
-| Rust X.509 module | `cargo add nexusq-x509@4.1.1` | Published — [crates.io](https://crates.io/crates/nexusq-x509) |
-| Python | `pip install nexusq==4.1.1` | Published — [PyPI](https://pypi.org/project/nexusq/4.1.1/); source distribution only, no platform wheel |
-| TypeScript / Node.js | `npm install nexusq@4.1.1` | Published — [npm](https://www.npmjs.com/package/nexusq/v/4.1.1) |
-| Java | Maven `io.github.lecodev-26:nexusq:4.1.1` | Published; POM, JAR, sources and Javadocs verified on Maven Central — [artifact](https://repo.maven.apache.org/maven2/io/github/lecodev-26/nexusq/4.1.1/) · [Sonatype page](https://central.sonatype.com/artifact/io.github.lecodev-26/nexusq) |
-| Kotlin | Maven `io.github.lecodev-26:nexusq-kotlin:4.1.1` | Published; POM, JAR, sources and Javadocs verified on Maven Central — [artifact](https://repo.maven.apache.org/maven2/io/github/lecodev-26/nexusq-kotlin/4.1.1/) · [Sonatype page](https://central.sonatype.com/artifact/io.github.lecodev-26/nexusq-kotlin) |
-| C# / .NET | `dotnet add package Nexusq --version 4.1.1` | Published; NuGet version index and downloadable `.nupkg` verified, including native runtime assets — [NuGet](https://www.nuget.org/packages/Nexusq/4.1.1) |
-| Swift | `.package(url: "https://github.com/lecodev-26/nexus-q.git", from: "4.1.1")`, product `Nexusq` | The bare `4.1.1` tag resolves to `5dd564d`; `v4.1.1` resolves to current `main`; do not treat these tags as equivalent — [release](https://github.com/lecodev-26/nexus-q/releases/tag/v4.1.1) |
-| Dart / Flutter | `dart pub add nexusq:^4.1.1` | Published — [pub.dev](https://pub.dev/packages/nexusq/versions/4.1.1) |
-| Go | `go get github.com/lecodev-26/nexus-q/bindings/go/nexusq` | Module uses its own tag/versioning; see [pkg.go.dev](https://pkg.go.dev/github.com/lecodev-26/nexus-q/bindings/go/nexusq) |
-| PHP | `composer require lecodev-26/nexusq:4.1.1` | Published — [Packagist](https://packagist.org/packages/lecodev-26/nexusq) |
-| Ruby | `gem install nexusq -v 4.1.1` | Published — [RubyGems](https://rubygems.org/gems/nexusq/versions/4.1.1) |
+| Channel / package | Install |
+|---|---|
+| Rust library (all-in-one) | `cargo add nexusq@4.1.2` — [crates.io](https://crates.io/crates/nexusq) |
+| Rust core library | `cargo add nexusq-core@4.1.2` — [crates.io](https://crates.io/crates/nexusq-core) |
+| Rust kernels | `cargo add nexusq-kernels@4.1.2` — [crates.io](https://crates.io/crates/nexusq-kernels) |
+| Rust ML-KEM | `cargo add nexusq-ml-kem@4.1.2` — [crates.io](https://crates.io/crates/nexusq-ml-kem) |
+| Rust ML-DSA | `cargo add nexusq-ml-dsa@4.1.2` — [crates.io](https://crates.io/crates/nexusq-ml-dsa) |
+| Rust native backend (experimental, opt-in) | `cargo add nexusq-native-backend@0.1.0` — [crates.io](https://crates.io/crates/nexusq-native-backend); not enabled by default |
+| Rust C SDK | `cargo add nexusq-c@4.1.2` — [crates.io](https://crates.io/crates/nexusq-c) |
+| Rust Python binding crate | `cargo add nexusq-py@4.1.2` — [crates.io](https://crates.io/crates/nexusq-py) |
+| Rust CLI | `cargo install nexusq-cli --version 4.1.2` — [crates.io](https://crates.io/crates/nexusq-cli) |
+| Rust server | `cargo install nexusq-server --version 4.1.2` — [crates.io](https://crates.io/crates/nexusq-server) |
+| Rust admin module | `cargo add nexusq-admin@4.1.2` — [crates.io](https://crates.io/crates/nexusq-admin) |
+| Rust PKI cluster module | `cargo add nexusq-pki-cluster@4.1.1` — Historical registry record — [crates.io](https://crates.io/crates/nexusq-pki-cluster/4.1.1) — historical Cargo upload record dated 2026-10-23 |
+| Rust HSM integration | `cargo add nexusq-hsm@4.1.2` — [crates.io](https://crates.io/crates/nexusq-hsm) |
+| Rust enrollment module | `cargo add nexusq-enrollment@4.1.2` — [crates.io](https://crates.io/crates/nexusq-enrollment) |
+| Rust HA module | `cargo add nexusq-ha@4.1.2` — [crates.io](https://crates.io/crates/nexusq-ha) |
+| Rust OCSP module | `cargo add nexusq-ocsp@4.1.2` — [crates.io](https://crates.io/crates/nexusq-ocsp) |
+| Rust TSA module | `cargo add nexusq-tsa@4.1.2` — [crates.io](https://crates.io/crates/nexusq-tsa) |
+| Rust X.509 module | `cargo add nexusq-x509@4.1.2` — [crates.io](https://crates.io/crates/nexusq-x509) |
+| Python | `pip install nexusq==4.1.2` — [PyPI](https://pypi.org/project/nexusq/4.1.2/); source distribution only, no platform wheel |
+| TypeScript / Node.js | `npm install nexusq@4.1.2` — [npm](https://www.npmjs.com/package/nexusq/v/4.1.2) |
+| Java | Maven `io.github.lecodev-26:nexusq:4.1.2` — POM, JAR, sources and Javadocs verified on Maven Central — [artifact](https://repo.maven.apache.org/maven2/io/github/lecodev-26/nexusq/4.1.2/) · [Sonatype page](https://central.sonatype.com/artifact/io.github.lecodev-26/nexusq) |
+| Kotlin | Maven `io.github.lecodev-26:nexusq-kotlin:4.1.2` — POM, JAR, sources and Javadocs verified on Maven Central — [artifact](https://repo.maven.apache.org/maven2/io/github/lecodev-26/nexusq-kotlin/4.1.2/) · [Sonatype page](https://central.sonatype.com/artifact/io.github.lecodev-26/nexusq-kotlin) |
+| C# / .NET | `dotnet add package Nexusq --version 4.1.2` — NuGet version index and downloadable `.nupkg` verified, including native runtime assets — [NuGet](https://www.nuget.org/packages/Nexusq/4.1.2) |
+| Swift (historical tag caveat) | `.package(url: "https://github.com/lecodev-26/nexus-q.git", from: "4.1.1")`, product `Nexusq` — Historical tag note: bare `4.1.1` remains on `5dd564d`, while mutable `v4.1.1` follows `main`; do not treat these tags as equivalent — [release](https://github.com/lecodev-26/nexus-q/releases/tag/v4.1.1) |
+| Dart / Flutter | `dart pub add nexusq:^4.1.2` — [pub.dev](https://pub.dev/packages/nexusq/versions/4.1.2) |
+| Go | `go get github.com/lecodev-26/nexus-q/bindings/go/nexusq` — module keeps independent v0.x versioning; runtime pin 4.1.2: **NO VERIFICADO**; [pkg.go.dev](https://pkg.go.dev/github.com/lecodev-26/nexus-q/bindings/go/nexusq) |
+| PHP | `composer require lecodev-26/nexusq:4.1.2` — [Packagist](https://packagist.org/packages/lecodev-26/nexusq) |
+| Ruby | `gem install nexusq -v 4.1.2` — [RubyGems](https://rubygems.org/gems/nexusq/versions/4.1.2) |
 
 ### Maven coordinates
 
@@ -420,20 +423,20 @@ The following coordinates are published and can be used directly:
 <dependency>
   <groupId>io.github.lecodev-26</groupId>
   <artifactId>nexusq</artifactId>
-  <version>4.1.1</version>
+  <version>4.1.2</version>
 </dependency>
 ```
 
 ```kotlin
 // Gradle Kotlin DSL
-implementation("io.github.lecodev-26:nexusq:4.1.1")
-implementation("io.github.lecodev-26:nexusq-kotlin:4.1.1")
+implementation("io.github.lecodev-26:nexusq:4.1.2")
+implementation("io.github.lecodev-26:nexusq-kotlin:4.1.2")
 ```
 
 ### Native runtime notes
 
 - The Go, PHP, Ruby, TypeScript, Java (JNA), Kotlin (JNA) and Dart bindings are thin FFI wrappers over the C SDK (`libnexusq`). Follow the language-specific setup instructions in `bindings/` and [`docs/NATIVE_RUNTIME_PACKAGING.md`](docs/NATIVE_RUNTIME_PACKAGING.md); platform support and automatic runtime download behavior differ by SDK.
-- The Python package is a native extension module built from `crates/nexusq-py` (PyO3). The PyPI 4.1.1 upload currently contains an sdist, not a platform wheel.
+- The Python package is a native extension module built from `crates/nexusq-py` (PyO3). The PyPI 4.1.2 upload currently contains an sdist, not a platform wheel.
 - The C#/.NET binding uses P/Invoke and the Swift binding links the C SDK through a Swift Package Manager system-library target. Ensure the native library is available as described in the relevant binding docs.
 - The C SDK is consumable directly from C and C++; build it from source with `cargo build -p nexusq-c --release` or use the C SDK package.
 - The GitHub release archive ships the CLI/server and native runtime assets; it is not a replacement for installing the C SDK development headers.

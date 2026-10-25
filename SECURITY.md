@@ -2,17 +2,9 @@
 
 ## Supported security line
 
-The GitHub release `v4.1.1` is published. The mutable `v4.1.1` tag currently
-points to the `main` commit recorded in the repository; however, the existing
-release provenance and previously published assets identify the older commit
-`5dd564daab9da1c071b8b134894ea7c4eba95d09`. The bare `4.1.1` tag and existing
-release assets must not be assumed to match the current `v4.1.1` tag. Security
-fixes are developed against the active engineering baseline and backported only
-when maintainers judge the change safe and applicable.
+NEXUS-Q v4.1.2 is the current release. Public status: “Audit-Ready Release. No production-readiness claim, no FIPS validation, external audit pending.” Release evidence is provided separately and must be checked against the exact tagged commit and artifact digests. Registry availability alone is not proof that every ecosystem package was built from the same Git commit.
 
-NEXUS-Q does **not** claim FIPS validation, Common Criteria certification,
-formal verification, or completion of an independent external security audit
-unless a corresponding public evidence package is linked from this repository.
+Security fixes are developed against the active engineering baseline and backported only when maintainers judge the change safe and applicable. NEXUS-Q does **not** claim FIPS validation, Common Criteria certification, formal verification, or completion of an independent external security audit unless corresponding public evidence is linked from this repository.
 
 ## Reporting a vulnerability
 

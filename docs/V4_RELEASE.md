@@ -1,6 +1,22 @@
-# NEXUS-Q v4.1.1 Stable Line Release
+# NEXUS-Q Release Documentation — v4.1.2 Release and v4.1.1 History
 
-> **Status update (2026-10-23):** This document began as a pre-publication release plan. The GitHub release is published at [`v4.1.1`](https://github.com/lecodev-26/nexus-q/releases/tag/v4.1.1). The mutable `v4.1.1` tag now points to the current `main` commit, while the existing release provenance and previously published assets still identify commit `5dd564daab9da1c071b8b134894ea7c4eba95d09`; the bare `4.1.1` tag remains on the older commit. The checklist below is historical planning context, not a statement that publication is still pending. Registry package publication is tracked separately; see the root README for the checked per-ecosystem status. The independent external audit remains open.
+> **v4.1.2 release status (2026-10-25):** **Audit-Ready Release. No production-readiness claim, no FIPS validation, external audit pending.** This release record describes the v4.1.2 source and artifact evidence; ecosystem registry availability and provenance are tracked separately.
+
+## v4.1.2 release evidence
+
+- MSRV evidence is the independent Rust 1.88.0 job running `cargo check --workspace --locked`; the result must be recorded from CI for the exact commit.
+- Release workflows remain on the default toolchain until the independent MSRV job passes. If Rust 1.88.0 passes, pin that exact version in release workflows; if it fails, determine and pin the actual minimum compatible Rust version instead.
+- The reviewed 13-file Rust change set is covered by KAT/CI evidence on the exact release commit.
+- The release workflow enforces the annotated `v4.1.2` tag and exact tag commit before publication.
+- Release assets include complete `SHA256SUMS`, a CycloneDX SBOM, build attestation, provenance, and `release-manifest.json` for the final asset set.
+- Keep Go on independent versioning; do not assign it the global 4.1.2 version.
+- Public status remains: “Audit-Ready Release. No production-readiness claim, no FIPS validation, external audit pending.”
+
+## Historical record: v4.1.1
+
+The sections below document the already-published v4.1.1 release and its known evidence limitations; they are not the v4.1.2 acceptance record.
+
+The GitHub release is published at [`v4.1.1`](https://github.com/lecodev-26/nexus-q/releases/tag/v4.1.1). The mutable `v4.1.1` tag now points to the current `main` commit, while the existing release provenance and previously published assets still identify commit `5dd564daab9da1c071b8b134894ea7c4eba95d09`; the bare `4.1.1` tag remains on the older commit. Treat the existing v4.1.1 provenance and assets as evidence incomplete for the current tag. Registry publication is ecosystem-specific; see the root README. The independent external audit remains open.
 
 ## Release identity
 
