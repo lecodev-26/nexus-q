@@ -44,6 +44,33 @@ def get_json(url: str) -> tuple[int, Any | None, str]:
         return 0, None, str(exc)
 
 
+def get_status(url: str, *, method: str = "HEAD") -> tuple[int, str]:
+    """Return an HTTP status without interpreting network failures as absence."""
+    req = urllib.request.Request(url, method=method, headers={"User-Agent": USER_AGENT})
+    try:
+        with urllib.request.urlopen(req, timeout=12) as response:
+            return response.status, ""
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return 404, "not found"
+        return exc.code, f"HTTP {exc.code}"
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        return 0, str(exc)
+
+
+def maven_artifact_result(name: str, artifact: str, version: str) -> Result:
+    # Search Maven can lag or omit artifacts despite their immutable repository
+    # paths being live. Check the exact canonical POM path instead of treating
+    # a search-index miss as proof the version was never published.
+    path = f"io/github/lecodev-26/{artifact}/{version}/{artifact}-{version}.pom"
+    status, error = get_status(f"https://repo.maven.apache.org/maven2/{path}")
+    if status == 200:
+        return Result(name, "present", "exact-version POM exists in Maven Central repository")
+    if status == 404:
+        return Result(name, "absent", "exact-version POM not found in Maven Central repository")
+    return Result(name, "unknown", error or f"unexpected HTTP {status}")
+
+
 def version_result(name: str, url: str, version: str, *, check: str = "exists") -> Result:
     status, data, error = get_json(url)
     if status == 404:
@@ -169,9 +196,7 @@ def inspect(version: str) -> list[Result]:
     out.append(version_result("NuGet nexusq", "https://api.nuget.org/v3-flatcontainer/nexusq/index.json", version, check="nuget"))
     out.append(version_result("Packagist lecodev-26/nexusq", "https://repo.packagist.org/p2/lecodev-26/nexusq.json", version, check="packagist"))
     for artifact in ("nexusq", "nexusq-kotlin"):
-        url = ("https://search.maven.org/solrsearch/select?q=g:%22io.github.lecodev-26%22%20AND%20a:%22"
-               + artifact + "%22%20AND%20v:%22" + version + "%22&rows=20&wt=json")
-        out.append(version_result(f"Maven Central {artifact}", url, version, check="maven"))
+        out.append(maven_artifact_result(f"Maven Central {artifact}", artifact, version))
     return out
 
 

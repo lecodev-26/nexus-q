@@ -22,6 +22,23 @@ class PreflightTests(unittest.TestCase):
             result = preflight.version_result("Maven", "https://example.invalid", "4.1.1", check="maven")
         self.assertEqual(result.state, "unknown")
 
+    def test_maven_exact_pom_http_200_is_present(self):
+        with patch.object(preflight, "get_status", return_value=(200, "")) as mocked:
+            result = preflight.maven_artifact_result("Maven", "nexusq", "4.1.1")
+        self.assertEqual(result.state, "present")
+        self.assertIn("POM exists", result.detail)
+        self.assertIn("nexusq/4.1.1/nexusq-4.1.1.pom", mocked.call_args.args[0])
+
+    def test_maven_exact_pom_404_is_absent(self):
+        with patch.object(preflight, "get_status", return_value=(404, "not found")):
+            result = preflight.maven_artifact_result("Maven", "nexusq", "4.1.1")
+        self.assertEqual(result.state, "absent")
+
+    def test_maven_exact_pom_server_error_is_unknown(self):
+        with patch.object(preflight, "get_status", return_value=(503, "HTTP 503")):
+            result = preflight.maven_artifact_result("Maven", "nexusq", "4.1.1")
+        self.assertEqual(result.state, "unknown")
+
     def test_nuget_version_index_checks_exact_version(self):
         with patch.object(preflight, "get_json", return_value=(200, {"versions": ["4.1.0", "4.1.1"]}, "")):
             result = preflight.version_result("NuGet", "https://example.invalid", "4.1.1", check="nuget")
