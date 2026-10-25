@@ -1,0 +1,63 @@
+name: NEXUS-Q Pull Request Fast CI
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nexusq-pr-fast-ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  quick-validation:
+    name: PR fast validation (format, build, tests, audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Check workspace
+        run: cargo check --workspace --locked
+      - name: Test workspace
+        run: cargo test --workspace --locked
+      - name: Install Rust security tools
+        run: |
+          cargo install cargo-audit --locked
+          cargo install cargo-deny --locked
+      - name: Dependency vulnerability audit
+        run: cargo audit
+      - name: Dependency policy checks
+        run: cargo deny check
+
+  secret-scan:
+    name: PR secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan repository
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  fuzz-harness-build:
+    name: PR fuzz harness compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Compile fuzz targets (no long-running campaign)
+        run: cargo fuzz build
+        working-directory: fuzz
