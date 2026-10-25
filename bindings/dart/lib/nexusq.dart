@@ -30,7 +30,7 @@ typedef _VaultCreateDart = int Function(
 typedef _VaultFormatVersionC = Int32 Function(Pointer<Utf8> path);
 typedef _VaultFormatVersionDart = int Function(Pointer<Utf8> path);
 
-const String _runtimeVersion = '4.1.1';
+const String _runtimeVersion = '4.1.2';
 
 final DynamicLibrary _lib = _openLibrary(_resolveLibrary());
 

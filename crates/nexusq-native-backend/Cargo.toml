@@ -28,8 +28,8 @@ aws-lc-rs = { version = "1", default-features = false, features = ["aws-lc-sys"]
 zeroize = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
-nexusq-ml-kem = { path = "../nexusq-ml-kem", version = "4.1.1", features = ["zeroize"] }
-nexusq-ml-dsa = { path = "../nexusq-ml-dsa", version = "4.1.1", features = ["zeroize"] }
+nexusq-ml-kem = { path = "../nexusq-ml-kem", version = "4.1.2", features = ["zeroize"] }
+nexusq-ml-dsa = { path = "../nexusq-ml-dsa", version = "4.1.2", features = ["zeroize"] }
 
 [build-dependencies]
 cc = "1"

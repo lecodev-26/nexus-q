@@ -14,7 +14,7 @@ require "rbconfig"
 module Nexusq
   extend FFI::Library
 
-  RUNTIME_VERSION = "4.1.1"
+  RUNTIME_VERSION = "4.1.2"
 
   def self.resolve_library
     override = ENV["NEXUSQ_LIBRARY"]

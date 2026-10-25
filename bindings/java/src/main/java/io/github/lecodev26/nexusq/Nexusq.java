@@ -43,7 +43,7 @@ public final class Nexusq {
         int nexusq_vault_format_version(String path);
     }
 
-    private static final String RUNTIME_VERSION = "4.1.1";
+    private static final String RUNTIME_VERSION = "4.1.2";
 
     static final CApi C = Native.load(resolveLibrary(), CApi.class);
 

@@ -50,7 +50,7 @@ NEXUSQ_LIBRARY=target/debug/libnexusq.so dotnet run --project bindings/dotnet/ex
 Expected output:
 
 ```
-nexusq version: 4.1.1
+nexusq version: 4.1.2
 vault created at /tmp/nexusq_dotnet_smoke_XXXXXX/vault.nqv
 vault format version: 1
 error propagation: ok

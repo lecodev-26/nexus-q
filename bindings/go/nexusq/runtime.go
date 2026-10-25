@@ -14,7 +14,8 @@ import (
 	"time"
 )
 
-const runtimeVersion = "4.1.1"
+// NOT VERIFIED: confirm v4.1.2 runtime assets and checksums against the final release manifest.
+const runtimeVersion = "4.1.2"
 
 func runtimeBaseURL() string {
 	if testBase := os.Getenv("NEXUSQ_TEST_RUNTIME_BASE_URL"); testBase != "" {

@@ -1,6 +1,6 @@
-## 4.1.1 — local candidate, not yet published
+## 4.1.2 — Audit-Ready Release
 
-- Align the Dart package/runtime helper with the NexusQ 4.1.1 candidate.
+- Align the Dart package/runtime helper with the NexusQ 4.1.2 release.
 - Published package release remains pending the coordinated release gate.
 
 ## 4.1.0

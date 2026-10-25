@@ -10,7 +10,7 @@ declare(strict_types=1);
  */
 final class Nexusq
 {
-    private const RUNTIME_VERSION = '4.1.1';
+    private const RUNTIME_VERSION = '4.1.2';
     private static ?FFI $ffi = null;
 
     private static function resolveLibrary(): string

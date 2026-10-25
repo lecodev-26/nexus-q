@@ -4,7 +4,7 @@ import XCTest
 
 final class NexusqTests: XCTestCase {
     func testVersionIsReported() {
-        XCTAssertTrue(Nexusq.version().hasPrefix("4.1.1"))
+        XCTAssertTrue(Nexusq.version().hasPrefix("4.1.2"))
     }
 
     func testBackendMetadataIsConsistent() {

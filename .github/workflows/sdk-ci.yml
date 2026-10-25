@@ -125,9 +125,9 @@ jobs:
           mkdir -p /tmp/nexusq-clean-consumer
           dotnet new console --framework net9.0 --output /tmp/nexusq-clean-consumer --no-restore
           printf 'Console.WriteLine(Nexusq.Version());\n' > /tmp/nexusq-clean-consumer/Program.cs
-          dotnet add /tmp/nexusq-clean-consumer/nexusq-clean-consumer.csproj package Nexusq --version 4.1.1 --source "$package_dir"
+          dotnet add /tmp/nexusq-clean-consumer/nexusq-clean-consumer.csproj package Nexusq --version 4.1.2 --source "$package_dir"
           actual=$(dotnet run --project /tmp/nexusq-clean-consumer/nexusq-clean-consumer.csproj)
-          test "$actual" = "4.1.1"
+          test "$actual" = "4.1.2"
 
   swift:
     name: Swift Package bindings (macOS ARM64)
@@ -188,8 +188,8 @@ jobs:
             NEXUSQ_RUNTIME_BASE_URL=http://127.0.0.1:8765/ \
             NEXUSQ_CACHE_DIR="$clean_cache" \
             .build/debug/Smoke
-          test -f "$clean_cache/4.1.1/nexusq-sdk-runtime-macos-arm64.dylib/libnexusq.dylib"
-          test -f "$clean_cache/4.1.1/nexusq-sdk-runtime-macos-arm64.dylib/libnexusq.dylib.sha256"
+          test -f "$clean_cache/4.1.2/nexusq-sdk-runtime-macos-arm64.dylib/libnexusq.dylib"
+          test -f "$clean_cache/4.1.2/nexusq-sdk-runtime-macos-arm64.dylib/libnexusq.dylib.sha256"
 
   dart:
     name: Dart FFI bindings
@@ -323,14 +323,14 @@ jobs:
         run: |
           set -euo pipefail
           gem build nexusq.gemspec
-          gem specification nexusq-4.1.1.gem --yaml > /tmp/nexusq-gem-spec.yml
-          grep -Fq 'version: 4.1.1' /tmp/nexusq-gem-spec.yml
+          gem specification nexusq-4.1.2.gem --yaml > /tmp/nexusq-gem-spec.yml
+          grep -Fq 'version: 4.1.2' /tmp/nexusq-gem-spec.yml
           grep -Fq -- '- MIT' /tmp/nexusq-gem-spec.yml
           grep -Fq -- '- Apache-2.0' /tmp/nexusq-gem-spec.yml
           grep -Fq -- '- lib/nexusq.rb' /tmp/nexusq-gem-spec.yml
           grep -Fq -- '- examples/smoke/smoke.rb' /tmp/nexusq-gem-spec.yml
           grep -Fq -- '- README.md' /tmp/nexusq-gem-spec.yml
-          rm -f nexusq-4.1.1.gem
+          rm -f nexusq-4.1.2.gem
 
   php:
     name: PHP FFI SDK
