@@ -39,6 +39,6 @@ where the final version, signing, release artifacts and package registry gates
 are evaluated again from the frozen candidate.
 
 
-## Final release transition
+## Release transition
 
-The RC is superseded by the V2-12 final release gate. The final release uses version `2.0.0` and repeats the acceptance contract from the final frozen commit.
+The RC is superseded by the V2-12 release gate. The published release uses version `2.0.0` and repeats the acceptance contract from the final frozen commit.

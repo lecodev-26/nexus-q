@@ -1,8 +1,8 @@
-# Proposed independent security audit scope
+# Independent security audit scope — draft for engagement
 
-- **Status:** Draft for agreement with an independent auditor; no audit is implied or claimed
+- **Status:** Draft; not yet approved by an independent auditor. No audit is implied or claimed
 - **Prepared:** 2026-10-25
-- **Candidate baseline:** Current repository `main` after the maintainer resolves the `4.1.1` source-identity discrepancy
+- **Candidate baseline:** A future maintainer-approved immutable commit; neither current `main` nor published v4.1.1 artifacts should be assumed to be the final audit baseline until the source-identity discrepancy is resolved
 - **Primary references:** [`THREAT_MODEL.md`](../THREAT_MODEL.md), [`SECURITY_MODEL.md`](../SECURITY_MODEL.md), [`CRYPTOGRAPHY.md`](../CRYPTOGRAPHY.md), [`ARCHITECTURE.md`](../ARCHITECTURE.md), and [`RELEASE_INTEGRITY_INVENTORY.md`](../RELEASE_INTEGRITY_INVENTORY.md)
 
 ## Purpose
@@ -15,6 +15,18 @@ Define a reviewable starting point for an independent security assessment of NEX
 2. Resolve the discrepancy between the bare `4.1.1` tag, `v4.1.1`, current `main`, and already-published release provenance before treating any one of them as the audited release. See the [release integrity inventory](../RELEASE_INTEGRITY_INVENTORY.md).
 3. Record any build that cannot be reproduced, unavailable evidence, unsupported targets, and excluded code explicitly in the engagement report.
 4. The independent auditor must have freedom to expand scope based on findings and dependency review.
+
+## Production paths and assurance boundary
+
+The auditor and maintainer must pin exact commit IDs and feature sets before assessing these paths. Candidate production-relevant Rust paths include:
+
+- `crates/nexusq-core/` — core public operations, key lifecycle, envelope/vault and algorithm selection.
+- `crates/nexusq-kernels/`, `crates/nexusq-ml-kem/`, `crates/nexusq-ml-dsa/` — production RustCrypto-backed implementations and low-level operations used by the default feature set.
+- `crates/nexusq-enrollment/`, `crates/nexusq-x509/`, `crates/nexusq-ocsp/`, `crates/nexusq-tsa/` — enrollment, certificate, revocation and timestamp/CMS paths.
+- `crates/nexusq-server/`, `crates/nexusq-cli/`, `crates/nexusq-ha/`, `crates/nexusq-pki-cluster/`, `crates/nexusq-admin/` — request handling, policy and operational surfaces, subject to the agreed deployment profile.
+- `Cargo.toml`, `Cargo.lock`, workspace crate manifests, `.cargo/`, `deny.toml`, `.github/workflows/`, `.github/scripts/`, `publicar.sh`, provenance/SBOM/checksum generation, and release assets — supply-chain and build/release controls.
+
+**Explicitly out of the primary assurance claim:** `crates/nexusq-native-backend/` and its experimental native ML-KEM/ML-DSA kernels, including the opt-in `native-backend` feature. Do not enable this feature or change its implementation as part of the audit-readiness remediation unless separately authorized. SDK wrappers and language-specific glue under `bindings/` are non-critical to the primary Rust core assurance claim unless a binding is explicitly listed in the engagement; package provenance still must be inventoried for every distributed SDK. Exclusion is not a safety claim. Paths above are candidates, not a substitute for confirming the actual compiled dependency graph and feature flags for the selected baseline.
 
 ## Proposed in-scope areas
 

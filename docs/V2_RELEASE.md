@@ -1,4 +1,4 @@
-# NEXUS-Q v2.0.0 Final Release
+# NEXUS-Q v2.0.0 Historical Release Notes
 
 ## Release identity
 
@@ -9,7 +9,7 @@
 - Public GitHub release: published by the protected `v2.0.0` tag path after final gates pass
 
 The v2.0.0 release is produced from the merged nexusqv2 line after the V2-10
-performance gate and V2-11 release-candidate gate. The final release gate
+performance gate and V2-11 release-candidate gate. The release gate
 re-runs correctness, security-sensitive regression, build and packaging checks
 from the final version. V2 is intentionally frozen without claiming a performance
 win over V1; the retained Arena comparison is the baseline for V3.

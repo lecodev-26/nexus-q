@@ -12,6 +12,30 @@ The locked dependency graph contains `rsa 0.10.0-rc.19` through `cms 0.3.0-rc.0`
 
 Repository source review at this decision date found the application uses CMS `ContentInfo` parsing in enrollment and CMS `SignedDataBuilder` for ML-DSA-65 timestamp tokens in the TSA. The reviewed application paths do not use the CMS/RSA dependency to decrypt RSA private-key ciphertexts. The dependency is nevertheless present in the production dependency graph, and future use or a transitive behavior change could alter this assessment.
 
+## Reachability analysis (static review; not a formal proof)
+
+### Dependency path
+
+`cargo tree -i rsa --locked` on the reviewed workspace resolves `rsa 0.10.0-rc.19` through `cms 0.3.0-rc.0` into `nexusq-enrollment` and `nexusq-tsa`. The dependency is therefore present in the production dependency graph for those crates; the advisory cannot be dismissed merely because no direct `rsa` import was found in the application.
+
+### Application call sites reviewed
+
+- `crates/nexusq-enrollment/src/lib.rs`: imports `cms::content_info::ContentInfo`; reviewed call sites parse/construct CMS content around lines 864, 924, 977 and 1206. The inspected operations handle certificate/CMS `ContentInfo`; no application call to RSA private-key decryption was found in these call sites.
+- `crates/nexusq-tsa/src/lib.rs`: imports `SignedDataBuilder`, `SignerInfoBuilder`, `EncapsulatedContentInfo` and `SignerIdentifier`; builds CMS `SignedData` for RFC 3161 timestamp tokens signed with ML-DSA-65 (around line 334), and parses the resulting `ContentInfo` in tests (around line 536). No RSA private-key decryption operation was found in the reviewed TSA path.
+- The application-level paths reviewed are CMS parsing and ML-DSA signature construction/validation, not RSA private-key decryption. The vulnerable Marvin path concerns RSA private-key decryption. This is evidence that the specific application operations reviewed do not intentionally invoke that operation; it is **not** proof that every transitive API is unreachable under all feature sets or malformed inputs.
+
+### Residual uncertainty
+
+The vulnerable dependency is still linked. Static source search does not prove absence of indirect calls inside dependencies, establish timing behavior, or rule out future changes. No dynamic taint/call-graph analysis or independent audit has been performed. Keep the issue disclosed as an accepted dependency risk until the dependency is removed/replaced or an upstream version is independently verified to remediate it.
+
+### Mitigation and migration plan
+
+1. **Immediate:** retain the visible narrow exception; prohibit new RSA private-key decryption/key-transport use; review changes to `cms`, `rsa`, enrollment and TSA; retain negative/positive CMS tests.
+2. **Next dependency review:** evaluate whether enrollment can use a parser/representation that does not pull in `cms`/`rsa`, and whether TSA can use a CMS builder with ML-DSA support and no RSA dependency. Prototype behind tests only; do not change production crypto behavior as part of this ADR without separate review.
+3. **Upstream path:** track an upstream fixed `rsa` release or a `cms` dependency release that removes the vulnerable path. Verify release notes, source diff, dependency graph and advisory status; a version bump alone is insufficient.
+4. **Acceptance test:** run `cargo tree -i rsa --locked`, `cargo tree -e features -i rsa --locked`, `cargo audit`, `cargo deny check`, and enrollment/TSA tests under the selected MSRV. Remove the exception only when the vulnerable dependency is removed or a specific upstream fix is verified and documented.
+5. **Owner:** assign a named individual to own the next review and record the date/decision in this ADR before the next release candidate.
+
 ## Decision
 
 Keep the existing `RUSTSEC-2023-0071` exception in both `cargo audit` and `cargo deny` for now, because removing it without replacing or restructuring the CMS dependency would make the configured security gate fail, while the reviewed application paths do not invoke the vulnerable RSA private-key decryption operation. Treat this as a narrow, temporary risk acceptance—not as a claim that the advisory is fixed, that every transitive path is unreachable, or that the software has passed an independent security audit.

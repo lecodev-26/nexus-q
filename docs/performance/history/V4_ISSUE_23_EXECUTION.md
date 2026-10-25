@@ -70,7 +70,7 @@ This checklist mirrors the phases and acceptance criteria in Issue #23. Keep it 
 - [ ] NIST ACVP KATs for ML-KEM keygen/encaps/decaps and ML-DSA keygen/sign/verify for every used parameter set.
 - [ ] Differential testing against RustCrypto and AWS-LC (Arena adapter), including invalid inputs and malformed encodings; retain reproducible corpus/results.
 - [ ] Constant-time review and dudect-style timing tests; secret-poisoning/memcheck where supported; document permitted variable-time behavior (public rejection sampling and signing rejection loop only as justified).
-- [ ] Long `cargo-fuzz` campaigns for each kernel and top-level operation; link run evidence and regression corpus. These are intentionally deferred during iterative V4 branch commits and must be completed as a release/security gate before final release/merge to `main`.
+- [ ] Long `cargo-fuzz` campaigns for each kernel and top-level operation; link run evidence and regression corpus. These are intentionally deferred during iterative V4 branch commits and must be completed as a release/security gate before a release/merge to `main`.
 - [ ] Miri/sanitizers for scalar/safe code; ASan/UBSan for kernel tests where supported.
 - [ ] Review every unsafe block and assembly routine; record findings and rationale in `docs/PQC_KERNELS.md` and an ADR.
 
@@ -104,7 +104,7 @@ This checklist mirrors the phases and acceptance criteria in Issue #23. Keep it 
 1. Phase 0 blocks optimization claims and subsequent phase completion until measurement plumbing is proven.
 2. Preserve V2/V3 branches and tags; do not modify `main` as part of V4 implementation.
 3. Keep this PR targeted at `nexusqv4`. Once complete and green, merge into `nexusqv4`; only then open a separate review PR from `nexusqv4` to `main`.
-4. Do not weaken zeroization, constant-time requirements, KATs, fuzzing, or release gates to improve speed. During iterative V4 development, `.github/workflows/ci.yml` skips all fuzz jobs on `v4/**`; the full fuzz soaks remain enabled on pushes to `main` and are required before final release. Existing fuzz-build behavior on PRs targeting `main` is preserved.
+4. Do not weaken zeroization, constant-time requirements, KATs, fuzzing, or release gates to improve speed. During iterative V4 development, `.github/workflows/ci.yml` skips all fuzz jobs on `v4/**`; the full fuzz soaks remain enabled on pushes to `main` and are required before a release. Existing fuzz-build behavior on PRs targeting `main` is preserved.
 5. Every checked box must point to evidence in the PR, CI, or linked issue.
 6. Persist all generated CI evidence for V4 under `artifact-archive/v4-issue23-measurement/<run-id>-<attempt>/` or `artifact-archive/v4-issue23-phase0/<run-id>-<attempt>/`; each run directory must include its provenance README and a run-local SHA-256 manifest. Evidence is archived once per commit by the `archive` job of `ci.yml`, only after Rust validation, security, secret scan, Phase 0 and measurement all pass; the bot commit carries `[skip ci]` and must not trigger another CI run.
 

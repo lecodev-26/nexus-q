@@ -2,17 +2,9 @@
 
 ## Supported security line
 
-The GitHub release `v4.1.1` is published. The mutable `v4.1.1` tag currently
-points to the `main` commit recorded in the repository; however, the existing
-release provenance and previously published assets identify the older commit
-`5dd564daab9da1c071b8b134894ea7c4eba95d09`. The bare `4.1.1` tag and existing
-release assets must not be assumed to match the current `v4.1.1` tag. Security
-fixes are developed against the active engineering baseline and backported only
-when maintainers judge the change safe and applicable.
+NEXUS-Q v4.1.1 is published, but its source identity is **not yet reconciled**. The bare `4.1.1` tag resolves to `5dd564daab9da1c071b8b134894ea7c4eba95d09`; `v4.1.1` and `main` resolve to `84992f91589ae56957fdd5b2a727fcaef7f108a1`. Existing release provenance and attested release binaries identify `5dd564d`, not the current `v4.1.1` target. A GitHub repository ruleset now prevents updates and deletion of the `v4.1.1` tag, but this does not make the existing GitHub Release assets immutable; GitHub's release metadata reports `immutable=false`. Treat the published version as a known provenance discrepancy until a maintainer-approved reconciliation plan is completed. Do not assume that packages carrying version `4.1.1` were built from one common commit.
 
-NEXUS-Q does **not** claim FIPS validation, Common Criteria certification,
-formal verification, or completion of an independent external security audit
-unless a corresponding public evidence package is linked from this repository.
+The current workspace declares Rust 1.88; the source snapshot associated with the existing release attestation declares Rust 1.85. Exact builds with those minimum toolchains have not been verified as part of this work. No independent external audit has been completed. NEXUS-Q does **not** claim production readiness, FIPS validation, Common Criteria certification, or formal verification. The native ML-KEM/ML-DSA backend remains experimental and outside the primary assurance claim; RustCrypto remains the default production path.
 
 ## Reporting a vulnerability
 

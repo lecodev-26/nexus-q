@@ -2,7 +2,7 @@
 
 Updated: 2026-10-19
 
-This document describes the repository as it exists on `main`. It is a status record, not a declaration that NEXUS-Q is production-ready or that all planned integration work is complete. The current local development branch is preparing the 4.1.1 release candidate. The published 4.1.0 line and its historical tag remain immutable. The 4.1.1 release must wait for branch CI, the required fuzz soaks, post-merge validation, resolution of the existing remote `4.1.1` SwiftPM tag collision, and explicit publication authorization; see `docs/V4_RELEASE.md`.
+This document describes the repository as it exists on `main`. It is a status record, not a declaration that NEXUS-Q is production-ready or that all planned integration work is complete. The published 4.1.1 line is now classified as mixed-provenance; its source identity must not be treated as resolved. The `v4.1.1` tag is protected against updates/deletion, but release assets are not marked immutable and the bare `4.1.1` tag differs. Any replacement must use a newly versioned release with one canonical commit and complete provenance; see `docs/V4_RELEASE.md` and `docs/security/RELEASE_4_1_1_PROVENANCE_INCIDENT.md`.
 
 ## Version lines
 
