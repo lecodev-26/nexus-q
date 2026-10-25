@@ -39,7 +39,15 @@ The crate packages do **not** all record one source commit. The embedded metadat
 
 This gives at least four recorded source snapshots for crates.io version `4.1.1`, even though all 17 published archive hashes match the public registry index. That is direct evidence that version equality does not mean source-commit equality.
 
-The registry reports `rust_version = 1.85` for 16 of these crates and `1.88` for `nexusq-pki-cluster`. The repository's current workspace declares Rust 1.88, while the release-attested source commit `5dd564d…` declares 1.85. This is a release-history distinction, not necessarily a defect in every crate; confirm actual MSRV per package and align docs/workflows before making one workspace-wide compatibility claim.
+A read-only diff review narrows the code impact of those four recorded revisions:
+
+- `3f8dfb7…` differs from `5dd564d…` only in workflow naming/configuration; no Rust crate source diff was found.
+- `c0899e4…` differs from `3f8dfb7…` in two Rust files: enrollment and TSA serial allocation replace `AtomicU64::fetch_update` with a `SeqCst` load, checked increment and `compare_exchange_weak` retry loop. Static inspection indicates the same checked monotonic increment semantics (including overflow failure); this change is not itself evidence of altered cryptographic behavior.
+- `38701d5…` has no `crates/` source diff from its parent `5b8a663…`; it is a docs-only descendant for the files checked.
+
+Thus the four source identifiers remain a real provenance/versioning discrepancy, but the source diffs inspected here are narrow and appear behavior-preserving rather than four independent implementations. This review does not replace a package-by-package reproducible build or signed provenance.
+
+The registry reports `rust_version = 1.85` for 16 of these crates and `1.88` for `nexusq-pki-cluster`. The repository's current workspace declares Rust 1.88, while the release-attested source commit `5dd564d…` declares 1.85. This is a release-history distinction, not necessarily a defect in every crate; confirm actual MSRV per package and align docs/workflows before making one workspace-wide compatibility claim. The release workflow in the current PR branch is pinned to Rust 1.88 and the PR fast workflow uses floating `stable`; neither is a per-crate minimum-version matrix. Local tests for kernels/TSA/enrollment passed under Rust 1.99.1, but exact 1.85/1.88 MSRV runs were not available in this environment.
 
 ## Archive-to-source spot comparison
 
@@ -53,6 +61,7 @@ The `dependencies` count above is the number of direct dependency entries in eac
 
 - [x] Compare mapped source/package files against each recorded commit: 194 non-lock files matched byte-for-byte across all 17 crates.
 - [ ] Reproduce package-scoped `Cargo.lock` generation and complete a reproducible, normalized manifest comparison from each recorded commit.
+- [x] Diff the four `.cargo_vcs_info` source revisions against each other: `3f8dfb7…` has no Rust crate source changes from `5dd564d…`; `c0899e4…` changes only the two checked atomic serial loops; `38701d5…` has no `crates/` diff from `5b8a663…`. This narrows code impact but does not resolve source-identity/provenance mismatch.
 - [ ] Reconcile the release-attested commit with the four `.cargo_vcs_info` revisions and the separate npm/NuGet/Packagist metadata.
 - [ ] Decide the intended Rust MSRV contract per crate and update package metadata, workspace declarations, CI, and documentation consistently in a separately reviewed change.
 - [ ] Generate a complete dependency SBOM from the resolved lockfile/build inputs and include dependency relationships; the published CycloneDX file currently lists only 17 internal workspace crates and zero dependency relationships.
