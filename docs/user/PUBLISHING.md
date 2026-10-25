@@ -2,6 +2,18 @@
 
 Run `./publicar.sh` from the repository root only after a maintainer has explicitly approved the exact release identity. The script validates credentials and Maven signing prerequisites before publishing, logs to `.publish-dist/`, and fails closed if a registry lookup is unavailable or the version's source identity does not match the approved tag.
 
+## Read-only registry preflight
+
+Before attempting any publication or recovery, run this read-only inventory from a clean checkout:
+
+```bash
+python3 .github/scripts/release_preflight.py
+# Optional machine-readable output:
+python3 .github/scripts/release_preflight.py --json
+```
+
+It queries public registry/version endpoints and both Git tag spellings, reports `present`, `absent`, `mismatch`, or `unknown`, and returns a non-zero exit code if any query is unknown or a mismatch is detected. It does not load publishing credentials, build artifacts, change tags/releases, approve a release, or publish anything. A registry reporting a version as present is not proof its bytes match the approved source; use the release-integrity inventory and recovery runbook for artifact-level reconciliation. In particular, do not treat the preflight as authorization to publish while the `4.1.1` identity discrepancy remains unresolved.
+
 ## Release identity approval gate
 
 Do **not** set these values while the `4.1.1` identity decision is pending. After the maintainer records the chosen full commit SHA and reconciles it with the release tag and artifacts, export the following in the shell used to run the publisher:

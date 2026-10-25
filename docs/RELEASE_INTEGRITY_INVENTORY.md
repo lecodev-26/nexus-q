@@ -96,7 +96,7 @@ The npm, NuGet, and Packagist **registry metadata references** therefore point t
 
 ## Downloaded asset checksum verification
 
-All 12 assets attached to the GitHub `v4.1.1` release were downloaded to a separate review directory without uploading or modifying anything. Both published checksum manifests verified successfully:
+All 13 assets attached to the GitHub `v4.1.1` release were downloaded to a separate review directory without uploading or modifying anything. Both published checksum manifests verified successfully:
 
 - `SHA256SUMS`: main Linux release archive — **PASS**.
 - `NATIVE-RUNTIME-SHA256SUMS`: all eight platform runtime archives/libraries — **PASS**.
