@@ -22,8 +22,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.88.0
-      - name: Check workspace at declared MSRV
-        run: cargo check --workspace --locked
+      - name: Check all workspace targets at declared MSRV
+        run: cargo check --workspace --all-targets --locked
+      - name: Check isolated native backend workspace at declared MSRV
+        run: cargo check --manifest-path crates/nexusq-native-backend/Cargo.toml --workspace --all-targets --locked
 
   detect-changes:
     name: Detect documentation-only changes
