@@ -4,7 +4,7 @@ description = """
 NEXUS-Q fork of the pure Rust ML-DSA (FIPS 204, formerly CRYSTALS-Dilithium)
 implementation from RustCrypto, with optional NEXUS-Q kernel integration
 """
-version = "4.1.1"
+version = "4.1.2"
 edition = "2024"
 rust-version = "1.85"
 license = "Apache-2.0 OR MIT"
@@ -44,7 +44,7 @@ hybrid-array = { version = "0.4", features = ["extra-sizes"] }
 module-lattice = { version = "0.2.3", features = ["ctutils"] }
 shake = { version = "0.1", default-features = false }
 signature = { version = "3", default-features = false, features = ["digest"] }
-nexusq-kernels = { version = "4.1.1", optional = true }
+nexusq-kernels = { version = "4.1.2", optional = true }
 
 # optional dependencies
 const-oid = { version = "0.10", features = ["db"], optional = true }

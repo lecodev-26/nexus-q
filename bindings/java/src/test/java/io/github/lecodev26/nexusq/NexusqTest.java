@@ -14,7 +14,7 @@ class NexusqTest {
 
     @Test
     void versionIsReported() {
-        assertTrue(Nexusq.version().startsWith("4.1.1"));
+        assertTrue(Nexusq.version().startsWith("4.1.2"));
     }
 
     @Test

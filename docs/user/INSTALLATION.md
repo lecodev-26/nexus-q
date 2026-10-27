@@ -1,26 +1,26 @@
 # Installation
 
-NEXUS-Q 4.1.1 is available through several package registries and can also be built from source. Registry availability is not proof that every package was built from the same Git commit: the GitHub v4.1.1 tag points to current `main`, while the existing release provenance manifest and binary/checksum/SBOM assets were not regenerated after the tag moved. Review the status note in the root README before relying on release-archive provenance.
+NEXUS-Q 4.1.2 is distributed through several package registries and can also be built from source. Registry availability is not proof that every package was built from the same Git commit. The historical v4.1.1 tag/provenance caveat is documented in `docs/V4_RELEASE.md`; v4.1.2 installation coordinates are listed below, with provenance tracked separately.
 
 ## From package registries
 
-| Channel | Install | Status |
-|---|---|---|
-| Rust library (all-in-one metacrate) | `cargo add nexusq` | Available — crates.io |
-| Rust library (core only) | `cargo add nexusq-core` | Available — crates.io |
-| Rust CLI | `cargo install nexusq-cli` | Available — crates.io |
-| Rust server | `cargo install nexusq-server` | Available — crates.io |
-| C / C++ SDK | `cargo cinstall -p nexusq-c` (requires [cargo-c](https://github.com/lu-zero/cargo-c)), or build the C library from source | Available — crates.io |
-| Python | `pip install nexusq` | Available — PyPI |
-| TypeScript / Node.js | `npm install nexusq` | Published 4.1.1 on npm |
-| Java | `io.github.lecodev-26:nexusq:4.1.1` | Published 4.1.1 on Maven Central |
-| Kotlin | `io.github.lecodev-26:nexusq-kotlin:4.1.1` | Published 4.1.1 on Maven Central |
-| C# / .NET | `dotnet add package Nexusq` | Published 4.1.1; see runtime assets and workflow evidence in root README |
-| Swift | Swift Package Manager package at this repository (`bindings/swift`) | Bare tag `4.1.1` resolves to commit `5dd564d`, while `v4.1.1` resolves to current `main`; verify the exact tag before consuming |
-| Dart / Flutter | `dart pub add nexusq` | Published 4.1.1 on pub.dev |
-| Go | `go get github.com/lecodev-26/nexus-q/bindings/go/nexusq` | Available — pkg.go.dev |
-| PHP | `composer require lecodev-26/nexusq` | Available — Packagist |
-| Ruby | `gem install nexusq` | Available — RubyGems.org |
+| Channel | Install |
+|---|---|
+| Rust library (all-in-one metacrate) | `cargo add nexusq` — crates.io |
+| Rust library (core only) | `cargo add nexusq-core` — crates.io |
+| Rust CLI | `cargo install nexusq-cli` — crates.io |
+| Rust server | `cargo install nexusq-server` — crates.io |
+| C / C++ SDK | `cargo cinstall -p nexusq-c` (requires [cargo-c](https://github.com/lu-zero/cargo-c)), or build the C library from source — crates.io |
+| Python | `pip install nexusq` — PyPI |
+| TypeScript / Node.js | `npm install nexusq` — 4.1.2 on npm |
+| Java | `io.github.lecodev-26:nexusq:4.1.2` — 4.1.2 on Maven Central |
+| Kotlin | `io.github.lecodev-26:nexusq-kotlin:4.1.2` — 4.1.2 on Maven Central |
+| C# / .NET | `dotnet add package Nexusq` — 4.1.2; see runtime assets and workflow evidence in root README |
+| Swift (historical tag caveat) | Swift Package Manager package at this repository (`bindings/swift`) — Historical v4.1.1 note: bare tag `4.1.1` resolves to `5dd564d`, while mutable `v4.1.1` follows `main`; verify exact tag |
+| Dart / Flutter | `dart pub add nexusq` — 4.1.2 on pub.dev |
+| Go | `go get github.com/lecodev-26/nexus-q/bindings/go/nexusq` — pkg.go.dev; runtime pin 4.1.2: **NO VERIFICADO** |
+| PHP | `composer require lecodev-26/nexusq` — Packagist |
+| Ruby | `gem install nexusq` — RubyGems.org |
 
 The Go, PHP, Ruby, TypeScript, Java, Kotlin and Dart SDKs resolve or download a version-matched runtime on supported targets; downloads verify SHA-256. Registry presence does not prove provenance alignment with a specific Git commit. Go uses a pure-Go loader and does not require cgo. Dart uses `curl` for its synchronous first-use download. `NEXUSQ_LIBRARY` remains an advanced override for development and offline tests. The `nexusq` metacrate groups the published Rust library crates (`nexusq-core`, `nexusq-kernels`, `nexusq-ml-kem`, `nexusq-ml-dsa`) so a single `cargo add nexusq` pulls them all in; prefer individual crates for a minimal dependency tree. The Python package is a self-contained PyO3 native extension. The GitHub release includes the CLI/server package and separate versioned C ABI runtime archives/assets.
 

@@ -559,7 +559,7 @@ dependencies = [
 
 [[package]]
 name = "nexusq-core"
-version = "4.1.1"
+version = "4.1.2"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -592,11 +592,11 @@ dependencies = [
 
 [[package]]
 name = "nexusq-kernels"
-version = "4.1.1"
+version = "4.1.2"
 
 [[package]]
 name = "nexusq-ml-dsa"
-version = "4.1.1"
+version = "4.1.2"
 dependencies = [
  "const-oid",
  "crypto-common",
@@ -612,7 +612,7 @@ dependencies = [
 
 [[package]]
 name = "nexusq-ml-kem"
-version = "4.1.1"
+version = "4.1.2"
 dependencies = [
  "hybrid-array",
  "kem",

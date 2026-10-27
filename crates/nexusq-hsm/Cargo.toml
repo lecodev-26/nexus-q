@@ -12,7 +12,7 @@ readme = "README.md"
 [dependencies]
 cryptoki = "0.12.1"
 nexusq-ml-dsa = { workspace = true }
-nexusq-x509 = { path = "../nexusq-x509", version = "4.1.1" }
+nexusq-x509 = { path = "../nexusq-x509", version = "4.1.2" }
 ed25519-dalek = { workspace = true }
 getrandom = { workspace = true }
 zeroize = { workspace = true }
@@ -24,7 +24,7 @@ signature = "3"
 [dev-dependencies]
 rand_core = { workspace = true }
 tokio = { workspace = true }
-nexusq-enrollment = { path = "../nexusq-enrollment", version = "4.1.1" }
+nexusq-enrollment = { path = "../nexusq-enrollment", version = "4.1.2" }
 x509-cert = "0.3.0"
 der = "0.8.2"
 

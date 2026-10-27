@@ -2,7 +2,7 @@
 
 Gem::Specification.new do |s|
   s.name = "nexusq"
-  s.version = "4.1.1"
+  s.version = "4.1.2"
   s.summary = "Ruby bindings for NEXUS-Q"
   s.description = "Thin FFI wrapper over the NEXUS-Q C SDK (libnexusq). " \
                   "No cryptography or business logic lives here."

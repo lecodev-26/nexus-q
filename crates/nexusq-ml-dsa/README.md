@@ -16,7 +16,7 @@ tracked in the `vendor/ml-dsa` snapshot of the NEXUS-Q repository and merged her
 
 ```toml
 [dependencies]
-nexusq-ml-dsa = "4.1.1"
+nexusq-ml-dsa = "4.1.2"
 ```
 
 Enable the NEXUS-Q kernels with the `nexusq-kernels` feature (requires

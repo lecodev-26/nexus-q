@@ -6,7 +6,7 @@ Dart bindings for NEXUS-Q. A thin `dart:ffi` wrapper over the stable C ABI (`lib
 
 - Dart 3 or newer.
 - Dart 3 or newer and `curl` on supported targets.
-- Network access on first use; the SDK downloads the 4.1.1 runtime, verifies its SHA-256 checksum, and caches it per user/version. No C compiler or manually configured library path is required.
+- Network access on first use; the SDK downloads the 4.1.2 runtime, verifies its SHA-256 checksum, and caches it per user/version. No C compiler or manually configured library path is required.
 - Prebuilt targets: Linux x64/ARM64 with glibc, macOS ARM64, and Windows x64. Linux musl/Alpine and other unsupported targets require a compatible custom runtime.
 
 ## Usage

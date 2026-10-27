@@ -16,7 +16,7 @@ NEXUS-Q repository and merged here.
 
 ```toml
 [dependencies]
-nexusq-ml-kem = "4.1.1"
+nexusq-ml-kem = "4.1.2"
 ```
 
 Enable the NEXUS-Q kernels with the `nexusq-kernels` feature (requires

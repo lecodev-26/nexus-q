@@ -1,7 +1,7 @@
 [package]
 name = "nexusq"
 description = "Metacrate for NEXUS-Q: pulls in the full Rust library stack (core, kernels, ML-KEM, ML-DSA) with one dependency"
-version = "4.1.1"
+version = "4.1.2"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
@@ -15,7 +15,7 @@ native-backend = ["nexusq-core/native-backend"]
 native-backend-portable = ["nexusq-core/native-backend-portable"]
 
 [dependencies]
-nexusq-core = { path = "../nexusq-core", version = "4.1.1" }
-nexusq-kernels = { version = "4.1.1" }
-nexusq_ml_kem = { package = "nexusq-ml-kem", path = "../nexusq-ml-kem", version = "4.1.1" }
-nexusq_ml_dsa = { package = "nexusq-ml-dsa", path = "../nexusq-ml-dsa", version = "4.1.1" }
+nexusq-core = { path = "../nexusq-core", version = "4.1.2" }
+nexusq-kernels = { version = "4.1.2" }
+nexusq_ml_kem = { package = "nexusq-ml-kem", path = "../nexusq-ml-kem", version = "4.1.2" }
+nexusq_ml_dsa = { package = "nexusq-ml-dsa", path = "../nexusq-ml-dsa", version = "4.1.2" }

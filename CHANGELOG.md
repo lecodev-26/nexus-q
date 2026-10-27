@@ -1,6 +1,12 @@
 # Changelog
 
-## v4.1.1 — published release (2026-10-22; provenance caveat)
+## v4.1.2 — Audit-Ready Release
+
+- Align SDK manifests, runtime pins and package installation guidance with v4.1.2.
+- Release evidence includes provenance, a release manifest, SBOM and complete SHA-256 checksums.
+- No production-readiness claim, no FIPS validation, external audit pending.
+
+## v4.1.1 — historical published release (2026-10-22; provenance caveat)
 
 - Integrates the local implementations for issues #64–#71: PQC X.509 issuer, OCSP/CRL, ACME/EST/CMPv2 enrollment, PKCS#11 and M-of-N ceremonies, RFC 3161 timestamping, tenant-scoped HA/recovery, RBAC/encrypted backups/audit logging, and the opt-in native ML-KEM/ML-DSA production path.
 - Bumps the Rust workspace, Python extension, and versioned SDK manifests/runtime pins to 4.1.1. The Rust workspace resolves offline with the updated lockfile.
@@ -16,7 +22,7 @@
 - Added the tag-gated `v4.1.0` release workflow (full release gate: fmt/check/clippy/tests debug+release, SDK smoke, reproducible packaging, checksums, CycloneDX SBOM, provenance, cross-platform builds) and the release notes in `docs/V4_RELEASE.md`.
 - **Honest caveats, unchanged:** the native backend remains experimental and opt-in; no FIPS 140-3 validation or PCT; the Phase 21 independent external audit remains open — this release is ready for that final audit; the two four-hour fuzz soaks must be executed and confirmed green on the exact merged SHA before the release tag is cut.
 - Post-release additions to the 4.1.0 registry line: the `nexusq` metacrate on crates.io (one `cargo add nexusq` pulls in `nexusq-core`, `nexusq-kernels`, `nexusq-ml-kem`, `nexusq-ml-dsa`) and the multiplatform PyPI wheels for the existing 4.1.0 Python package (macOS x86_64/ARM64, Linux ARM64, Windows x86_64, built from the same 4.1.0 source via the matrix workflow restored from `19ff0da`). The sdist and the Linux x86_64 wheel are unchanged.
-- Post-release SDK additions (4.1.0 line): new thin bindings over the C SDK for TypeScript/Node.js (koffi), Java (JNA), Kotlin (JNA), C#/.NET (P/Invoke), Swift (Swift Package Manager system-library target) and Dart (dart:ffi), each with a vault/version surface and a smoke test (Java, Dart and Swift additionally ship unit test suites), all verified locally against `libnexusq` and wired into the SDK CI matrix (`bindings/typescript`, `bindings/java`, `bindings/kotlin`, `bindings/dotnet`, `bindings/swift`, `bindings/dart`). At the initial release cut, registry publication was pending; the 4.1.0 TypeScript, Java, Kotlin, Swift and Dart packages were subsequently published. NuGet remains pending successful end-to-end OIDC verification. These historical 4.1.0 artifacts are not the unpublished 4.1.1 candidate.
+- Post-release SDK additions (4.1.0 line): new thin bindings over the C SDK for TypeScript/Node.js (koffi), Java (JNA), Kotlin (JNA), C#/.NET (P/Invoke), Swift (Swift Package Manager system-library target) and Dart (dart:ffi), each with a vault/version surface and a smoke test (Java, Dart and Swift additionally ship unit test suites), all verified locally against `libnexusq` and wired into the SDK CI matrix (`bindings/typescript`, `bindings/java`, `bindings/kotlin`, `bindings/dotnet`, `bindings/swift`, `bindings/dart`). At the initial release cut, registry publication was pending; the 4.1.0 TypeScript, Java, Kotlin, Swift and Dart packages were subsequently published. NuGet remains pending successful end-to-end OIDC verification. These 4.1.0 artifacts are a historical record separate from the later v4.1.1 release.
 
 
 All notable changes are recorded here. The project remains under active engineering. Publication does not imply independent audit, certification, or a blanket production-readiness claim; see the release caveats above.
