@@ -46,7 +46,7 @@ escape hatch, not the standard installation flow.
   the library without `NEXUSQ_LIBRARY`.
 - **Swift:** macOS ARM64 uses runtime `dlopen` and downloads/verifies the matching
   runtime on first use, without a compile-time system-library dependency.
-- **Go:** the 4.1.1 candidate uses a pure-Go dynamic loader. First use downloads
+- **Go:** the 4.1.2 release uses a pure-Go dynamic loader. First use downloads
   the matching direct runtime asset, verifies SHA-256, checks the loaded provider
   is the default RustCrypto provider, and caches it per user/version. This avoids
   cgo and a C compiler. The legacy `with-runtime.sh` remains an advanced source-
@@ -54,7 +54,7 @@ escape hatch, not the standard installation flow.
   must pass in CI before release.
 - **C/C++:** versioned release archives contain the library and public header;
   consumers still need the ecosystem's normal linker/runtime configuration.
-- **Dart:** the 4.1.1 candidate resolves the runtime on first use for Linux
+- **Dart:** the 4.1.2 release resolves the runtime on first use for Linux
   x64/ARM64 glibc, macOS ARM64, and Windows x64. It downloads the version-matched
   direct asset via `curl`, verifies SHA-256, and caches it per user/version.
   `NEXUSQ_LIBRARY` remains an advanced override. Clean-consumer tests still need

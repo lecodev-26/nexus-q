@@ -2,7 +2,7 @@
 
 Updated: 2026-10-19
 
-This document describes the repository as it exists on `main`. It is a status record, not a declaration that NEXUS-Q is production-ready or that all planned integration work is complete. The current local development branch is preparing the 4.1.1 release candidate. The published 4.1.0 line and its historical tag remain immutable. The 4.1.1 release must wait for branch CI, the required fuzz soaks, post-merge validation, resolution of the existing remote `4.1.1` SwiftPM tag collision, and explicit publication authorization; see `docs/V4_RELEASE.md`.
+This document records the V4 engineering history and current release status. NEXUS-Q v4.1.2 is the current Audit-Ready Release. No production-readiness claim, no FIPS validation, external audit pending. The native backend remains experimental and opt-in; RustCrypto remains the default production path. The 4.1.1 line below is retained as historical context only; see `docs/V4_RELEASE.md` for the current release record.
 
 ## Version lines
 
@@ -12,8 +12,9 @@ This document describes the repository as it exists on `main`. It is a status re
 | V2 | branch `nexusqv2`, tag [`v2.0.0`](https://github.com/lecodev-26/nexus-q/releases/tag/v2.0.0) | Security, correctness/interoperability and release-gate work | Frozen engineering line |
 | V3 | branch `nexusqv3`, tag [`v3-engineering-2026-10-09`](https://github.com/lecodev-26/nexus-q/releases/tag/v3-engineering-2026-10-09) | Hardened implementation, reproducible Arena and retained evidence | Engineering release |
 | V4 | branch `nexusqv4`, tag [`v4-engineering-2026-10-16`](https://github.com/lecodev-26/nexus-q/tree/v4-engineering-2026-10-16) | Experimental native backend and performance work | Integrated into `main`; production-path wiring completed by PR #55 |
-| V4.1.1 | workspace/package candidate `4.1.1`; branch `work/4.1.1-development` | Release candidate with issues #64–#71 integrated locally | Awaiting hosted branch CI, required fuzz soaks, post-merge CI, and explicit publication approval; independent external audit remains open |
-| V4.1 | workspace version `4.1.0`, tag `v4.1.0` | Previous stable line release of the V4 work | Historical release record; not overwritten by the 4.1.1 candidate |
+| V4.1.2 | annotated release tag `v4.1.2` | Current Audit-Ready Release | No production-readiness claim, no FIPS validation, external audit pending |
+| V4.1.1 (historical) | previous workspace/package line `4.1.1` | Historical engineering and registry record | Provenance limitations documented in the historical release record |
+| V4.1 | workspace version `4.1.0`, tag `v4.1.0` | Previous stable line release of the V4 work | Historical release record; separate from the later 4.1.1 line |
 
 ## Current `main` snapshot
 

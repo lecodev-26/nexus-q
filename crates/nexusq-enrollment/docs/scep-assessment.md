@@ -1,6 +1,6 @@
 # Issue #66 — SCEP assessment
 
-**Decision: do not enable SCEP in the 4.1.1 enrollment profile.** Keep ACME, EST and the CMPv2 P10CR/PBM profile as the supported enrollment paths in this iteration.
+**Historical decision for the 4.1.1 enrollment profile: do not enable SCEP.** Keep ACME, EST and the CMPv2 P10CR/PBM profile as the supported enrollment paths in this iteration.
 
 ## Why
 

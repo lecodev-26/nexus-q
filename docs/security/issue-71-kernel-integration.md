@@ -6,7 +6,7 @@ The opt-in native backend is already wired into the real `nexusq-core` ML-KEM-76
 
 This issue pass revalidated that integration locally without enabling it by default. The implementation is described as *experimental native code with constant-time validation evidence*, not as independently audited or proven constant-time.
 
-## Local verification on the 4.1.1 work branch
+## Historical local verification on the 4.1.1 work branch
 
 The following commands completed successfully on the local worktree:
 

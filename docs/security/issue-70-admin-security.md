@@ -1,6 +1,6 @@
 # NexusQ administrative security (issue #70)
 
-This document describes the local administrative primitives introduced for 4.1.1 work. It is not a claim that the release is production-certified or published.
+Historical note: this document describes local administrative primitives introduced during 4.1.1 work. It is not a claim that the release is production-certified or published.
 
 ## RBAC
 
