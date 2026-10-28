@@ -53,4 +53,4 @@ The public status is **Audit-Ready Release. No production-readiness claim, no FI
 
 ## Go runtime pin status
 
-The Go runtime version pin is **NO VERIFICADO** until the published v4.1.2 native runtime assets and their checksums are confirmed against the final GitHub `release-manifest.json`. Do not treat the source-level `4.1.2` pin alone as release evidence. The Go module itself retains independent `v0.x` versioning.
+Verified on 2026-10-28: the Go module is available as `v0.1.0`; its `4.1.2` runtime pin matches the public `release-manifest.json`, `NATIVE-RUNTIME-SHA256SUMS`, and the release `SHA256SUMS`. All 12 manifest assets were downloaded and their byte sizes and SHA-256 digests matched. The Go module retains independent `v0.x` versioning; do not change its module version to `4.1.2`.

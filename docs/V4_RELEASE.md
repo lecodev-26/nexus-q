@@ -1,16 +1,19 @@
 # NEXUS-Q Release Documentation — v4.1.2 Release and v4.1.1 History
 
-> **v4.1.2 release status (2026-10-25):** **Audit-Ready Release. No production-readiness claim, no FIPS validation, external audit pending.** This release record describes the v4.1.2 source and artifact evidence; ecosystem registry availability and provenance are tracked separately.
+> **Verified 2026-10-28:** NEXUS-Q v4.1.2 is the current published GitHub release. Public status: **“Audit-Ready Release. No production-readiness claim, no FIPS validation, external audit pending.”** Registry publication is tracked package by package; a source manifest at version 4.1.2 is not proof that every workspace crate has been published.
 
-## v4.1.2 release evidence
+## v4.1.2 release evidence and closeout
 
-- MSRV evidence is the independent Rust 1.88.0 job running `cargo check --workspace --locked`; the result must be recorded from CI for the exact commit.
-- Release workflows remain on the default toolchain until the independent MSRV job passes. If Rust 1.88.0 passes, pin that exact version in release workflows; if it fails, determine and pin the actual minimum compatible Rust version instead.
-- The reviewed 13-file Rust change set is covered by KAT/CI evidence on the exact release commit.
-- The release workflow enforces the annotated `v4.1.2` tag and exact tag commit before publication.
-- Release assets include complete `SHA256SUMS`, a CycloneDX SBOM, build attestation, provenance, and `release-manifest.json` for the final asset set.
-- Keep Go on independent versioning; do not assign it the global 4.1.2 version.
-- Public status remains: “Audit-Ready Release. No production-readiness claim, no FIPS validation, external audit pending.”
+- **GitHub Release:** [v4.1.2 — Audit-Ready Release](https://github.com/lecodev-26/nexus-q/releases/tag/v4.1.2), published 2026-10-27; public, not draft, not prerelease.
+- **Source identity:** annotated tag `v4.1.2` peels to commit `8735e5537bc687ee906ed68bdf119fc8956d9439`; this matches `HEAD`, the release manifest, and the provenance JSON in the published assets.
+- **Release CI:** [workflow run 40598965703](https://github.com/lecodev-26/nexus-q/actions/runs/40598965703) completed successfully on the exact release commit. The stable-line gate, cross-platform release builds, SDK smoke, reproducible packaging, evidence upload, runtime builds, provenance/manifest generation, artifact attestation, and GitHub release publication jobs report success.
+- **Declared MSRV:** root `Cargo.toml` declares Rust 1.88. The [MSRV CI pipeline run 40458251043](https://github.com/lecodev-26/nexus-q/actions/runs/40458251043) also completed successfully on the exact release commit.
+- **Artifact integrity:** all 14 public GitHub Release assets matched GitHub's published SHA-256 digest and byte size. The 12 files listed in `release-manifest.json` also matched the manifest and `SHA256SUMS`; all 8 entries in `NATIVE-RUNTIME-SHA256SUMS` matched the manifest and release checksum file. `SHA256SUMS` covers 13 files, including the manifest; it does not checksum itself. The published CycloneDX SBOM contains 17 components.
+- **Maven Central:** Java `io.github.lecodev-26:nexusq:4.1.2` and Kotlin `io.github.lecodev-26:nexusq-kotlin:4.1.2` have public POMs, JARs, sources JARs, Javadocs JARs and signature files returning HTTP 200. The Kotlin Maven command later timed out while polling Sonatype status after the bundle upload; the public artifacts are now present, so do not redeploy the same version.
+- **Other verified registry versions:** crates.io `nexusq`, `nexusq-core`, `nexusq-kernels`, `nexusq-ml-kem`, `nexusq-ml-dsa`, `nexusq-c`, `nexusq-py`, `nexusq-cli`, and `nexusq-server` at `4.1.2`; `nexusq-native-backend` remains independently versioned at `0.1.0`. PyPI `nexusq==4.1.2` (sdist only), npm `nexusq@4.1.2`, NuGet `Nexusq/4.1.2`, pub.dev `nexusq 4.1.2`, RubyGems `nexusq 4.1.2`, and Packagist `lecodev-26/nexusq v4.1.2` were verified through their public version endpoints. The Go module is `v0.1.0`; its runtime pin `4.1.2` and every published runtime checksum were verified. The SwiftPM `v4.1.2` tag exists.
+- **Explicit registry exceptions:** `nexusq-admin`, `nexusq-enrollment`, `nexusq-ha`, `nexusq-hsm`, `nexusq-ocsp`, `nexusq-tsa`, `nexusq-x509`, and `nexusq-pki-cluster` do not have a `4.1.2` version on crates.io (their exact version endpoints return HTTP 404). Treat these as source-only for v4.1.2; `nexusq-pki-cluster` has a historical `4.1.1` registry record. The installation matrix must not present these as installable `cargo add ...@4.1.2` packages.
+- **Local Termux limitation:** the manual Java SDK test run in Termux failed because the Android environment could not load JNA's glibc-linked native dispatcher (`libc.so.6` missing). This is not a passing local test; it is also not evidence that the supported glibc Linux release CI failed—the tag-gated release workflow's SDK smoke job passed. The failure and environment limitation are retained in `STATE.md`.
+- **Claims boundary:** this is an Audit-Ready Release only. No production-readiness claim, no FIPS 140-3 validation, no Common Criteria certification, and no completed independent external audit are claimed. Registry availability and checksums do not prove every package was built from the same Git commit.
 
 ## Historical record: v4.1.1
 

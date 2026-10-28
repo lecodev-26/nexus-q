@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Rust 1.85 or newer.
+- Rust 1.88 or newer (the v4.1.2 workspace declares `rust-version = "1.88"`; the exact-commit MSRV CI passed).
 - Git.
 - Linux/Android Termux is the currently exercised development environment.
 - A supported target toolchain for other platforms.

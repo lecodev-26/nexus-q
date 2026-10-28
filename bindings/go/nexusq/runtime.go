@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// NOT VERIFIED: confirm v4.1.2 runtime assets and checksums against the final release manifest.
+// Verified against the public v4.1.2 release manifest and SHA-256 checksum files on 2026-10-28.
 const runtimeVersion = "4.1.2"
 
 func runtimeBaseURL() string {

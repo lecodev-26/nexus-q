@@ -3,7 +3,8 @@
 ## v4.1.2 — Audit-Ready Release
 
 - Align SDK manifests, runtime pins and package installation guidance with v4.1.2.
-- Release evidence includes provenance, a release manifest, SBOM and complete SHA-256 checksums.
+- Published GitHub release: [v4.1.2](https://github.com/lecodev-26/nexus-q/releases/tag/v4.1.2); tag-gated release workflow and the Rust 1.88 MSRV pipeline passed on the exact release commit.
+- Release evidence includes provenance, a release manifest, SBOM and complete SHA-256 checksums; registry status and source-only Rust modules are tracked in [README installation](README.md#installation) and [release closeout](docs/V4_RELEASE.md).
 - No production-readiness claim, no FIPS validation, external audit pending.
 
 ## v4.1.1 — historical published release (2026-10-22; provenance caveat)
