@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NEXUS-Q v4.1.2: Stable Release and Independent Audit Invitation</title>
+<meta name="description" content="NEXUS-Q v4.1.2 is the current stable release. Explore the open-source post-quantum cryptography project and review the code ahead of an independent security audit.">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<link rel="canonical" href="https://nexus-q.link/news">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="NEXUS-Q">
+<meta property="og:title" content="NEXUS-Q v4.1.2: Stable Release and Independent Audit Invitation">
+<meta property="og:description" content="The current stable release is ready to be submitted for independent security review. Explore the code, release notes, and stated security limitations.">
+<meta property="og:url" content="https://nexus-q.link/news">
+<meta property="og:image" content="https://nexus-q.link/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="NEXUS-Q v4.1.2: Stable Release and Independent Audit Invitation">
+<meta name="twitter:description" content="Explore the current stable release of NEXUS-Q and help review the code ahead of an independent security audit.">
+<meta name="twitter:image" content="https://nexus-q.link/og.jpg">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "NEXUS-Q v4.1.2: Stable Release and Independent Audit Invitation",
+  "description": "NEXUS-Q v4.1.2 is the current stable release of the open-source Rust cryptographic engine. The project invites independent security review.",
+  "datePublished": "2026-10-28",
+  "dateModified": "2026-10-28",
+  "mainEntityOfPage": "https://nexus-q.link/news",
+  "image": "https://nexus-q.link/og.jpg",
+  "author": {"@type": "Person", "name": "lecodev-26", "url": "https://github.com/lecodev-26"},
+  "publisher": {"@type": "Organization", "name": "NEXUS-Q", "url": "https://nexus-q.link/"}
+}
+</script>
+<style>
+:root{color-scheme:dark;--bg:#06080b;--panel:#0d1219;--text:#e8edf4;--muted:#a8b4c4;--line:#263241;--accent:#8ecbff;--green:#8ee0b0}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.7 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}a{color:var(--accent);text-underline-offset:3px}.wrap{width:min(880px,calc(100% - 32px));margin:auto}.top{padding:22px 0;border-bottom:1px solid var(--line)}.brand{font-weight:800;letter-spacing:.08em;color:var(--text);text-decoration:none}.top nav{display:flex;flex-wrap:wrap;gap:18px;margin-top:10px}.top nav a{font-size:.94rem}.article{padding:48px 0 64px}.eyebrow{color:var(--green);font-size:.82rem;text-transform:uppercase;letter-spacing:.14em}.date{color:var(--muted);font-size:.92rem}h1{font-size:clamp(2rem,5vw,3.25rem);line-height:1.12;letter-spacing:-.035em;margin:.55em 0}h2{font-size:1.45rem;line-height:1.25;margin-top:2em}p,li{color:#d2dbe7}.lede{font-size:1.2rem;color:#e2eaf4}.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;margin:24px 0}.panel strong{color:var(--green)}.links{display:flex;flex-wrap:wrap;gap:12px;margin:24px 0}.links a{display:inline-block;border:1px solid #405269;border-radius:10px;padding:10px 14px;text-decoration:none}.foot{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);font-size:.9rem}
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap"><a class="brand" href="/">NEXUS-Q</a><nav aria-label="Main navigation"><a href="/">Home</a><a href="/news" aria-current="page">News</a><a href="https://github.com/lecodev-26/nexus-q">GitHub repository</a></nav></div></header>
+<main class="wrap article">
+<div class="eyebrow">Project announcement · v4.1.2</div>
+<h1>NEXUS-Q v4.1.2: Stable Release and Independent Audit Invitation</h1>
+<p class="date"><time datetime="2026-10-28">October 28, 2026</time></p>
+<p class="lede">NEXUS-Q v4.1.2 is the project's current stable release. We are inviting security researchers, experienced developers, and prospective auditors to examine the code and documentation as the project prepares for an independent security audit.</p>
+<div class="panel"><strong>Important security status:</strong> the project has not been independently audited or certified. This announcement describes readiness to seek an independent review, not a completed audit, formal verification, FIPS validation, or a blanket claim of production readiness.</div>
+<h2>What is NEXUS-Q?</h2>
+<p>NEXUS-Q is an open-source cryptographic engine written in Rust for protecting data, keys, and identities. Its documented scope includes post-quantum cryptography such as ML-KEM and ML-DSA, vault and key-management functionality, identity and PKI components, SDKs, and a tamper-evident audit log.</p>
+<h2>What is available in v4.1.2?</h2>
+<p>The v4.1.2 release is published on GitHub with its release notes and artifacts. The project documents its tested configurations and security boundaries, including the fact that the native ML-KEM/ML-DSA backend remains experimental and opt-in; normal production call paths default to RustCrypto.</p>
+<p>The auxiliary Rust service crates <code>nexusq-admin</code>, <code>nexusq-pki-cluster</code>, <code>nexusq-hsm</code>, <code>nexusq-enrollment</code>, <code>nexusq-ha</code>, <code>nexusq-ocsp</code>, <code>nexusq-tsa</code>, and <code>nexusq-x509</code> remain available at their published v4.1.1 versions. The v4.1.2 documentation closeout did not republish these crates.</p>
+<h2>What we are asking from the community</h2>
+<ul>
+<li>Review the implementation and documented security assumptions.</li>
+<li>Check the release artifacts and build/reproducibility information.</li>
+<li>Report reproducible bugs or security concerns through the repository's appropriate reporting channels.</li>
+<li>Get in touch if you are qualified to conduct or sponsor an independent security audit.</li>
+</ul>
+<h2>Explore the project</h2>
+<div class="links"><a href="https://github.com/lecodev-26/nexus-q/releases/tag/v4.1.2">v4.1.2 release</a><a href="https://github.com/lecodev-26/nexus-q/blob/v4.1.2/README.md">README and documentation</a><a href="https://github.com/lecodev-26/nexus-q/blob/v4.1.2/docs/V4_RELEASE.md">Release notes</a><a href="https://github.com/lecodev-26/nexus-q">Source repository</a></div>
+<p>Our goal is to make the project easier to inspect and improve through transparent, independent technical feedback. If you review NEXUS-Q, please distinguish verified findings from assumptions and help us make the project's security posture clearer.</p>
+</main>
+<footer class="foot"><div class="wrap">NEXUS-Q · Open source cryptographic software · <a href="/">Project home</a> · <a href="https://github.com/lecodev-26/nexus-q">GitHub</a></div></footer>
+</body>
+</html>
