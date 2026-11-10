@@ -17,6 +17,7 @@ window.nqLoadGTM=function(){if(window.__nqGtmLoaded)return;window.__nqGtmLoaded=
 try{if(localStorage.getItem('nq-analytics-consent')==='granted')window.nqLoadGTM();}catch(e){}
 </script>
 <link rel="stylesheet" href="/nq-analytics-consent.css">
+  <link rel="stylesheet" href="/nq-bot-widget.css">
 </head><body class="insight-page"><header class="top"><div class="wrap nav"><a class="brand" href="/">NEXUS-Q</a><nav class="links" aria-label="Main navigation"><a href="/architecture">Architecture</a><a href="/benchmarks">Benchmarks</a><a href="/contributors" aria-current="page">Contributors</a></nav></div></header><main>
 <section class="hero"><div class="wrap"><div class="eyebrow">/ open source / people</div><h1>Built in the open. <em>Contributions matter.</em></h1><p class="lead">People listed here are loaded from GitHub's public contributors endpoint for the NEXUS-Q repository. Counts reflect GitHub's contribution aggregation and can change over time.</p><div class="actions"><a class="btn primary" href="https://github.com/lecodev-26/nexus-q/graphs/contributors" target="_blank" rel="noopener">Open GitHub contribution graph ↗</a><a class="btn" href="https://github.com/lecodev-26/nexus-q/blob/v4.1.2/CONTRIBUTING.md" target="_blank" rel="noopener">Contribution guide ↗</a></div></div></section>
 <section class="section"><div class="wrap"><div class="eyebrow">/ contributors</div><h2>People behind the repository</h2><p>Profiles and contribution counts are fetched live from GitHub. This page does not infer employment, ownership, endorsement or individual responsibilities from commit counts.</p><p id="contributors-status" class="status" aria-live="polite">Loading public contributor data…</p><div class="grid three" id="contributors-list"><article class="card skeleton">Loading GitHub contributors…</article></div><div class="notice"><strong>Want to contribute?</strong> Start with a focused issue or pull request. Security-sensitive changes should follow the repository's disclosure and review process; do not publish exploit details in a public issue before coordinating with maintainers.</div><div class="actions"><a class="btn primary" href="https://github.com/lecodev-26/nexus-q/issues" target="_blank" rel="noopener">Browse issues ↗</a><a class="btn" href="https://github.com/lecodev-26/nexus-q/discussions" target="_blank" rel="noopener">Join discussions ↗</a></div></div></section>
@@ -46,4 +47,5 @@ async function loadContributors(){
 loadContributors();
 </script>
 <script src="/nq-analytics-consent.js" defer></script>
+  <script src="/nq-bot-widget.js" defer></script>
 </body></html>
