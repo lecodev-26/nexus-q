@@ -45,6 +45,10 @@ jobs:
         run: cargo doc --workspace --no-deps --locked
       - name: Validate locked Cargo workspace metadata
         run: cargo metadata --format-version 1 --locked --no-deps > /dev/null
+      - name: Enforce Rust unsafe-code boundaries
+        run: |
+          python3 .github/scripts/check-kernel-unsafe.py
+          python3 .github/scripts/check-native-backend-unsafe.py
 
   rust-security-audit:
     name: Rust dependency audits

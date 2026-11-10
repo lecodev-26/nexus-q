@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   repository-contracts:
-    name: Repository contracts and safety boundaries
+    name: Repository data contracts
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -36,10 +36,6 @@ jobs:
               raise SystemExit(f"Missing Arena contracts: {missing}")
           print(f"Validated {len(files)} Arena JSON files and all required contracts")
           PY
-      - name: Enforce unsafe-code boundaries
-        run: |
-          python3 .github/scripts/check-kernel-unsafe.py
-          python3 .github/scripts/check-native-backend-unsafe.py
 
   secret-scan:
     name: Secret scanning
