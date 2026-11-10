@@ -1,0 +1,92 @@
+import importlib.util
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+MODULE = Path(__file__).resolve().parents[1] / "bot" / "coordinator.py"
+spec = importlib.util.spec_from_file_location("nexusq_audit_coordinator", MODULE)
+coordinator = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(coordinator)
+
+class CoordinatorTests(unittest.TestCase):
+    def test_atomic_save_writes_valid_json_and_replaces_previous_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "state.json"
+            coordinator.save(target, {"phase": "hunt", "count": 1})
+            coordinator.save(target, {"phase": "verify", "count": 2})
+            self.assertEqual(json.loads(target.read_text()), {"phase": "verify", "count": 2})
+            self.assertFalse(target.with_suffix(".json.tmp").exists())
+
+    def test_checkpoint_persists_candidates_and_phase(self):
+        with tempfile.TemporaryDirectory() as directory:
+            old_out = coordinator.OUT
+            try:
+                coordinator.OUT = Path(directory)
+                meta, candidates, coverage = {}, [{"id": "candidate-1"}], []
+                coordinator.checkpoint(meta, candidates, coverage, "hunting", completed_hunt_batches=1)
+                self.assertEqual(json.loads((Path(directory) / "candidates.json").read_text()), candidates)
+                saved = json.loads((Path(directory) / "run-metadata.json").read_text())
+                self.assertEqual(saved["phase"], "hunting")
+                self.assertEqual(saved["completed_hunt_batches"], 1)
+            finally:
+                coordinator.OUT = old_out
+
+    def test_secret_redaction_covers_private_keys_tokens_and_api_key(self):
+        raw = "OPENROUTER_API_KEY=or-secret sk-abcdefghijklmnopqrstuvwxyz123456 -----BEGIN PRIVATE KEY-----abc-----END PRIVATE KEY-----"
+        cleaned = coordinator.redact(raw)
+        self.assertNotIn("or-secret", cleaned)
+        self.assertNotIn("sk-abcdefghijklmnopqrstuvwxyz123456", cleaned)
+        self.assertNotIn("BEGIN PRIVATE KEY", cleaned)
+
+    def test_source_refs_must_exist_and_have_valid_line_numbers(self):
+        sources = {"src/lib.rs": "first\nsecond\n"}
+        item = {"source_refs": ["src/lib.rs:2", "src/lib.rs:0", "missing.rs:1", "src/lib.rs:nope"]}
+        self.assertEqual(coordinator.refs_for(item, sources), [("src/lib.rs", 2)])
+
+    def test_coverage_does_not_claim_fallback_paths_as_subsystem_review(self):
+        units = coordinator.ledger()
+        units.sort(key=lambda item: item["coverage_id"])
+        sources = {"Cargo.toml": "[workspace]\n"}
+        for unit in units:
+            unit["starting_paths"] = ["Cargo.toml"]
+            unit["status"] = "in_progress"
+            unit["agent_id"] = "static-coordinator"
+        # Cargo.toml is a schema-safe scope anchor, not proof that each subsystem was reviewed.
+        coordinator.finalize_coverage(units, {"Cargo.toml"}, [], sources, {unit["coverage_id"]: [] for unit in units})
+        self.assertTrue(all(unit["status"] == "deferred" for unit in units))
+        self.assertTrue(all(not unit["reviewed_paths"] for unit in units))
+
+    def test_coverage_records_only_paths_actually_reviewed_for_each_unit(self):
+        units = coordinator.ledger()
+        units.sort(key=lambda item: item["coverage_id"])
+        for unit in units:
+            unit["starting_paths"] = ["crates/nexusq-core/src/lib.rs"]
+            unit["status"] = "in_progress"
+            unit["agent_id"] = "static-coordinator"
+        source = {"crates/nexusq-core/src/lib.rs": "pub fn safe() {}\n"}
+        coordinator.finalize_coverage(units, set(source), [], source,
+            {unit["coverage_id"]: (["crates/nexusq-core/src/lib.rs"] if unit["subsystem"] == "Core crates" else []) for unit in units})
+        core = next(unit for unit in units if unit["subsystem"] == "Core crates")
+        other = [unit for unit in units if unit is not core]
+        self.assertEqual(core["status"], "covered")
+        self.assertTrue(all(unit["status"] == "deferred" for unit in other))
+
+    def test_partial_subsystem_review_is_blocked_not_covered(self):
+        units = coordinator.ledger()
+        units.sort(key=lambda item: item["coverage_id"])
+        core = next(unit for unit in units if unit["subsystem"] == "Core crates")
+        core["starting_paths"] = ["crates/nexusq-core/src/lib.rs", "crates/nexusq-core/src/keys.rs"]
+        for unit in units:
+            if unit is not core:
+                unit["starting_paths"] = ["unreviewed/placeholder.txt"]
+            unit["status"] = "in_progress"
+            unit["agent_id"] = "static-coordinator"
+        sources = {"crates/nexusq-core/src/lib.rs": "pub fn safe() {}\n"}
+        paths = {unit["coverage_id"]: (unit["starting_paths"] if unit is core else []) for unit in units}
+        coordinator.finalize_coverage(units, set(sources), [], sources, paths)
+        self.assertEqual(core["status"], "blocked")
+        self.assertEqual(core["unresolved"], ["1 assigned source path(s) were not included in completed hunt batches."])
+
+if __name__ == "__main__":
+    unittest.main()

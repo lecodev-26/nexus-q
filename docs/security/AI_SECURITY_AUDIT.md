@@ -24,8 +24,10 @@ Free model availability and provider limits are controlled by OpenRouter and can
 - Reads tracked source and selected security/architecture documentation as text.
 - Excludes binary files, lockfiles, vendored dependencies, build output, obvious secret/key paths, and symlinks; redacts common private-key and token patterns.
 - Runs sequential logical phases: reconnaissance, coverage-led static hunting, adversarial candidate review, structured findings, and a separate source-claim verification pass.
-- Produces `REPORT.md`, `FINDINGS-DETAIL.md`, `NEEDS-VALIDATION.md`, `findings.json`, `coverage-ledger.json`, and `architecture.md`.
+- Produces `REPORT.md`, `FINDINGS-DETAIL.md`, `NEEDS-VALIDATION.md`, `findings.json`, `candidates.json`, `coverage-ledger.json`, `run-metadata.json`, and `architecture.md`.
+- Atomically checkpoints candidates, request counts, the last completed phase, and coverage after each completed model batch. If a later request fails, the artifact retains earlier candidates and marks incomplete coverage as blocked or deferred rather than claiming it was reviewed.
 - Keeps findings at `needs_validation` unless independently demonstrated evidence exists. This static-only implementation does not mark a vulnerability confirmed and does not assign severity to unverified candidates.
+- A separate **AI Security Audit — lightweight validation** workflow runs Python helper tests and the vendored Node.js validator suites on relevant PRs/pushes. It requires no API key and performs no Rust build.
 
 ## Explicit limitations
 
