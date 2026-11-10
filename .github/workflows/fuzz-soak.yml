@@ -9,7 +9,22 @@ permissions:
 # Each campaign is deliberately a single libFuzzer invocation. Do not wrap it
 # in retry/restart loops: libFuzzer owns the four-hour limit and exits normally.
 jobs:
+  fuzz-build:
+    name: Build all Rust fuzz harnesses
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Build fuzz targets
+        run: cargo fuzz build
+        working-directory: fuzz
+
   fuzz-soak-vault:
+    needs: fuzz-build
     name: four-hour fuzz campaign — vault parser
     runs-on: ubuntu-latest
     timeout-minutes: 255
