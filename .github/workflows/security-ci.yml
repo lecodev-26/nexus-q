@@ -2,6 +2,7 @@ name: NEXUS-Q Phase 1 — Core and Security Gates
 
 on:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -14,21 +15,33 @@ jobs:
   rust-security:
     name: Rust security gates
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - name: Install security tooling
         run: |
           cargo install cargo-audit --locked
           cargo install cargo-deny --locked
       - name: Format
         run: cargo fmt --all -- --check
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Check every workspace target
+        run: cargo check --workspace --all-targets --locked
+      - name: Clippy (all workspace targets, warnings denied)
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Workspace tests (portable default)
         run: cargo test --workspace --locked
+      - name: Build complete workspace in release mode
+        run: cargo build --workspace --release --locked
+      - name: Run complete workspace tests in release mode
+        run: cargo test --workspace --release --locked
+      - name: Build Rust API documentation (warnings denied)
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --workspace --no-deps --locked
       - name: Clippy opt-in native backend integration
         run: cargo clippy -p nexusq-core --features native-backend --all-targets --locked -- -D warnings
       - name: Check opt-in native backend integration
@@ -73,8 +86,12 @@ jobs:
           NQ_CROSS_CONFIG_ENVELOPE_PATHS: ${{ runner.temp }}/nq-envelope-rustcrypto.cbor;${{ runner.temp }}/nq-envelope-native.cbor
           NQ_CROSS_CONFIG_VAULT_PATHS: ${{ runner.temp }}/nq-vault-rustcrypto.nqv;${{ runner.temp }}/nq-vault-native.nqv
         run: cargo test -p nexusq-core --test cross_config_envelope --features native-backend-portable --locked -- --ignored --exact cross_configuration_artifacts
-      - name: Cargo audit
-        run: cargo audit
+      - name: Audit workspace dependencies
+        run: cargo audit --file Cargo.lock
+      - name: Audit native backend dependency lockfile
+        run: cargo audit --file crates/nexusq-native-backend/Cargo.lock
+      - name: Audit native runner dependency lockfile
+        run: cargo audit --file arena/runners/nexusq-native/Cargo.lock
       - name: Cargo deny
         run: cargo deny check
       - name: Metadata / SBOM input
