@@ -35,6 +35,102 @@ class CoordinatorTests(unittest.TestCase):
     def test_model_selection_uses_openrouter_free_router_not_a_pinned_model(self):
         self.assertEqual(coordinator.choose_model(), "openrouter/free")
 
+    def test_json_parser_accepts_plain_fenced_and_surrounded_objects(self):
+        self.assertEqual(coordinator.parse_json_object('{"ok": true}'), {"ok": True})
+        self.assertEqual(coordinator.parse_json_object('```json\n{"ok": true}\n```'), {"ok": True})
+        self.assertEqual(coordinator.parse_json_object('Result: {"text": "brace } inside", "ok": true} done'),
+                         {"text": "brace } inside", "ok": True})
+
+    def test_json_parser_rejects_invalid_or_non_object_json(self):
+        for raw in ("", "not json", "[1, 2]", '{"broken": }'):
+            with self.subTest(raw=raw), self.assertRaises(ValueError):
+                coordinator.parse_json_object(raw)
+
+    def test_safe_model_preview_redacts_tokens_and_bounds_output(self):
+        secret = "sk-or-v1-abcdefghijklmnopqrstuvwxyz123456"
+        preview = coordinator.safe_model_preview("bad " + secret + " " + ("x" * 600))
+        self.assertNotIn(secret, preview)
+        self.assertLessEqual(len(preview), 500)
+
+    def test_chat_request_enables_json_mode_and_requires_supported_parameters(self):
+        from unittest.mock import patch
+        class FakeResponse:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self):
+                return json.dumps({"model": "provider/available-model:free", "choices": [
+                    {"message": {"content": "{\"ok\": true}"}}
+                ]}).encode()
+
+        old = (coordinator.KEY, coordinator.MODEL, coordinator.MAX_REQUESTS,
+               coordinator.REQUESTS, coordinator.MODELS_USED, coordinator.MODEL_SELECTIONS)
+        try:
+            coordinator.KEY, coordinator.MODEL, coordinator.MAX_REQUESTS = "test-key", "openrouter/free", 1
+            coordinator.REQUESTS, coordinator.MODELS_USED, coordinator.MODEL_SELECTIONS = 0, [], []
+            with patch.object(coordinator.urllib.request, "urlopen", return_value=FakeResponse()) as mocked:
+                self.assertEqual(coordinator.ask("system", "prompt"), {"ok": True})
+            request_body = json.loads(mocked.call_args.args[0].data)
+            self.assertEqual(request_body["response_format"], {"type": "json_object"})
+            self.assertTrue(request_body["provider"]["require_parameters"])
+        finally:
+            (coordinator.KEY, coordinator.MODEL, coordinator.MAX_REQUESTS,
+             coordinator.REQUESTS, coordinator.MODELS_USED, coordinator.MODEL_SELECTIONS) = old
+
+    def test_malformed_json_gets_one_free_router_retry_and_recovers(self):
+        from unittest.mock import patch
+        class FakeResponse:
+            def __init__(self, content): self.content = content
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self):
+                return json.dumps({"model": "provider/free-model:free", "choices": [
+                    {"message": {"content": self.content}}
+                ]}).encode()
+
+        old = (coordinator.KEY, coordinator.MODEL, coordinator.MAX_REQUESTS,
+               coordinator.REQUESTS, coordinator.MODELS_USED, coordinator.MODEL_SELECTIONS)
+        try:
+            coordinator.KEY, coordinator.MODEL, coordinator.MAX_REQUESTS = "test-key", "openrouter/free", 2
+            coordinator.REQUESTS, coordinator.MODELS_USED, coordinator.MODEL_SELECTIONS = 0, [], []
+            responses = [FakeResponse('{"broken": }'), FakeResponse('```json\n{"ok": true}\n```')]
+            with patch.object(coordinator.urllib.request, "urlopen", side_effect=responses) as mocked, \
+                 patch.object(coordinator.time, "sleep"):
+                self.assertEqual(coordinator.ask("system", "prompt"), {"ok": True})
+            self.assertEqual(mocked.call_count, 2)
+            self.assertEqual(coordinator.REQUESTS, 2)
+            self.assertEqual([x["request"] for x in coordinator.MODEL_SELECTIONS], [1, 2])
+            retry_body = json.loads(mocked.call_args.args[0].data)
+            self.assertIn("FORMAT RECOVERY", retry_body["messages"][1]["content"])
+            self.assertEqual(retry_body["model"], "openrouter/free")
+        finally:
+            (coordinator.KEY, coordinator.MODEL, coordinator.MAX_REQUESTS,
+             coordinator.REQUESTS, coordinator.MODELS_USED, coordinator.MODEL_SELECTIONS) = old
+
+    def test_malformed_json_stops_after_one_retry_without_exceeding_budget(self):
+        from unittest.mock import patch
+        class FakeResponse:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self):
+                return json.dumps({"model": "provider/free-model:free", "choices": [
+                    {"message": {"content": "not-json"}}
+                ]}).encode()
+
+        old = (coordinator.KEY, coordinator.MODEL, coordinator.MAX_REQUESTS,
+               coordinator.REQUESTS, coordinator.MODELS_USED, coordinator.MODEL_SELECTIONS)
+        try:
+            coordinator.KEY, coordinator.MODEL, coordinator.MAX_REQUESTS = "test-key", "openrouter/free", 2
+            coordinator.REQUESTS, coordinator.MODELS_USED, coordinator.MODEL_SELECTIONS = 0, [], []
+            with patch.object(coordinator.urllib.request, "urlopen", return_value=FakeResponse()) as mocked, \
+                 patch.object(coordinator.time, "sleep"):
+                with self.assertRaisesRegex(coordinator.Stop, "one bounded recovery attempt"):
+                    coordinator.ask("system", "prompt")
+            self.assertEqual(mocked.call_count, 2)
+            self.assertEqual(coordinator.REQUESTS, 2)
+        finally:
+            (coordinator.KEY, coordinator.MODEL, coordinator.MAX_REQUESTS,
+             coordinator.REQUESTS, coordinator.MODELS_USED, coordinator.MODEL_SELECTIONS) = old
+
     def test_openrouter_http_error_reports_status_and_redacts_provider_message(self):
         import io
         from urllib.error import HTTPError

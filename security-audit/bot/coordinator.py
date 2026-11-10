@@ -83,55 +83,125 @@ def normalized_api_key(value):
     return key
 
 
+def parse_json_object(raw):
+    """Parse a JSON object from plain output, a fenced block, or surrounding prose."""
+    text = str(raw or "").strip()
+    if not text:
+        raise ValueError("empty response")
+    # Prefer complete fenced JSON blocks; tolerate a model adding a short preamble.
+    fenced = re.findall(r"```(?:json)?\s*(.*?)\s*```", text, re.I | re.S)
+    candidates = fenced + [text]
+    for candidate in candidates:
+        candidate = candidate.strip()
+        try:
+            value = json.loads(candidate)
+            if isinstance(value, dict):
+                return value
+        except json.JSONDecodeError:
+            pass
+    # Find balanced top-level objects without being confused by braces in strings.
+    for candidate in candidates:
+        in_string = escaped = False
+        depth = begin = 0
+        for index, char in enumerate(candidate):
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == '"':
+                    in_string = False
+                continue
+            if char == '"':
+                in_string = True
+            elif char == "{":
+                if depth == 0:
+                    begin = index
+                depth += 1
+            elif char == "}" and depth:
+                depth -= 1
+                if depth == 0:
+                    try:
+                        value = json.loads(candidate[begin:index + 1])
+                    except json.JSONDecodeError:
+                        continue
+                    if isinstance(value, dict):
+                        return value
+    raise ValueError("no valid JSON object")
+
+
+def safe_model_preview(raw, limit=500):
+    """Return a bounded diagnostic preview with common credentials redacted."""
+    preview = redact(str(raw or ""))
+    preview = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", " ", preview)
+    return preview[:limit]
+
+
 def ask(system, prompt, max_tokens=2200):
     global REQUESTS
-    if REQUESTS >= MAX_REQUESTS:
-        raise Stop("Configured free-model request budget exhausted; stopping without fallback.")
     try:
         api_key = normalized_api_key(KEY)
     except ValueError:
         raise Stop("OPENROUTER_API_KEY has invalid formatting; store it as a single-line secret.")
     if not api_key:
         raise Stop("Missing OPENROUTER_API_KEY repository secret.")
-    if REQUESTS:
-        time.sleep(6.1)
-    body = json.dumps({"model": MODEL, "temperature": 0.1, "max_tokens": max_tokens,
-        "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}]}).encode()
-    req = urllib.request.Request(BASE + "/chat/completions", data=body, method="POST", headers={
-        "Authorization": "Bearer " + api_key, "Content-Type": "application/json",
-        "HTTP-Referer": "https://github.com/lecodev-26/nexus-q", "X-Title": "NEXUS-Q Static Security Audit"})
-    REQUESTS += 1
-    try:
-        with urllib.request.urlopen(req, timeout=120) as res:
-            payload = json.loads(res.read().decode())
-    except urllib.error.HTTPError as exc:
-        raise Stop(openrouter_http_error(exc))
-    except ValueError:
-        # Never include exception text here: urllib may embed the Authorization header.
-        raise Stop("OpenRouter rejected the HTTP request/header format (ValueError); verify the secret is a single-line API key. No retry.")
-    except Exception as exc:
-        raise Stop("OpenRouter request failed: " + type(exc).__name__ + "; no retry.")
-    actual_model = payload.get("model")
-    if isinstance(actual_model, str) and actual_model:
-        MODEL_SELECTIONS.append({"request": REQUESTS, "model": actual_model})
-        if actual_model not in MODELS_USED:
-            MODELS_USED.append(actual_model)
-    choices = payload.get("choices") or []
-    if not choices:
-        raise Stop("OpenRouter returned no completion.")
-    raw = choices[0].get("message", {}).get("content", "")
-    if isinstance(raw, list):
-        raw = "".join(x.get("text", "") for x in raw if isinstance(x, dict))
-    match = re.search(r"\{.*\}", str(raw), re.S)
-    if not match:
-        raise Stop("Model did not return a JSON object.")
-    try:
-        result = json.loads(match.group(0))
-    except json.JSONDecodeError:
-        raise Stop("Model returned malformed JSON.")
-    if not isinstance(result, dict):
-        raise Stop("Model JSON must be an object.")
-    return result
+
+    recovery_prompt = prompt
+    for attempt in range(2):
+        if REQUESTS >= MAX_REQUESTS:
+            raise Stop("Configured free-model request budget exhausted; stopping without fallback.")
+        if REQUESTS:
+            time.sleep(6.1)
+        body = json.dumps({
+            "model": MODEL,
+            "temperature": 0.1,
+            "max_tokens": max_tokens,
+            "response_format": {"type": "json_object"},
+            "provider": {"require_parameters": True},
+            "messages": [
+                {"role": "system", "content": system + " Return exactly one valid JSON object. Do not use Markdown fences or prose."},
+                {"role": "user", "content": recovery_prompt},
+            ],
+        }).encode()
+        req = urllib.request.Request(BASE + "/chat/completions", data=body, method="POST", headers={
+            "Authorization": "Bearer " + api_key, "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/lecodev-26/nexus-q", "X-Title": "NEXUS-Q Static Security Audit"})
+        REQUESTS += 1
+        try:
+            with urllib.request.urlopen(req, timeout=120) as res:
+                payload = json.loads(res.read().decode())
+        except urllib.error.HTTPError as exc:
+            raise Stop(openrouter_http_error(exc))
+        except ValueError:
+            # Never include exception text here: urllib may embed the Authorization header.
+            raise Stop("OpenRouter rejected the HTTP request/header format (ValueError); verify the secret is a single-line API key. No retry.")
+        except Exception as exc:
+            raise Stop("OpenRouter request failed: " + type(exc).__name__ + "; no retry.")
+
+        actual_model = payload.get("model")
+        if isinstance(actual_model, str) and actual_model:
+            MODEL_SELECTIONS.append({"request": REQUESTS, "model": actual_model})
+            if actual_model not in MODELS_USED:
+                MODELS_USED.append(actual_model)
+        choices = payload.get("choices") or []
+        if not choices:
+            raise Stop("OpenRouter returned no completion.")
+        message = choices[0].get("message", {})
+        raw = message.get("content", "")
+        if isinstance(raw, list):
+            raw = "".join(x.get("text", "") for x in raw if isinstance(x, dict))
+        try:
+            return parse_json_object(raw)
+        except ValueError:
+            if attempt == 0 and REQUESTS < MAX_REQUESTS:
+                recovery_prompt = (
+                    prompt + "\n\nFORMAT RECOVERY: Your previous response was not parseable as a JSON object. "
+                    "Return the same requested information again as exactly one syntactically valid JSON object. "
+                    "Use double-quoted keys and strings, escape control characters, and include no Markdown or prose."
+                )
+                continue
+            raise Stop("Model returned invalid JSON after one bounded recovery attempt; response_preview=" + safe_model_preview(raw))
+    raise Stop("Model JSON recovery exhausted; no paid fallback.")
 
 def source_category(name):
     if name in DOCS or name in {"Cargo.toml", "deny.toml"} or name.startswith(".cargo/"):
