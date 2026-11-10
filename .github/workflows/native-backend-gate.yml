@@ -1,0 +1,549 @@
+name: NEXUS-Q Native Backend Gate (experimental)
+
+# Isolated workflow for the experimental Rust + C + assembly backend
+# (crates/nexusq-native-backend). The official verdict uses the unmodified
+# arena/scripts/evaluate_native_assembly_gate.py (1.5x, median AND p95, nine
+# operations, three alternating rounds) on every replica.
+
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+
+concurrency:
+  group: native-backend-gate-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  MLKEM_NATIVE_COMMIT: d1b2fe782888bdb761a50336012923180be7f502
+  MLDSA_NATIVE_COMMIT: 834a90d5e846ffa1e1611bd24e160bb2e9b86d35
+  S2N_BIGNUM_COMMIT: 4b5f8214e85b6b239077c278825b7fa9c2ab9cf5
+  AWSLC_COMMIT: ec05f25ef5bcb1bf03d2e2f44ba57973a878e0ba
+
+jobs:
+  evaluator-tests:
+    name: Performance gate evaluator regression tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test intermediate and final Issue #23 thresholds
+        run: python3 -m unittest arena/scripts/test_evaluate_native_assembly_gate.py arena/scripts/test_evaluate_core_production_benchmark.py -v
+
+  vendor-integrity:
+    name: Vendored sources match upstream + upstream func/KAT/ACVP
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned upstreams
+        run: |
+          set -euo pipefail
+          fetch() { git init -q "$1"; git -C "$1" remote add origin "$2"; git -C "$1" fetch -q --depth 1 origin "$3"; git -C "$1" checkout -q --detach FETCH_HEAD; test "$(git -C "$1" rev-parse HEAD)" = "$3"; }
+          fetch .up-mlkem https://github.com/pq-code-package/mlkem-native.git "$MLKEM_NATIVE_COMMIT"
+          fetch .up-mldsa https://github.com/pq-code-package/mldsa-native.git "$MLDSA_NATIVE_COMMIT"
+          fetch .up-s2n https://github.com/awslabs/s2n-bignum.git "$S2N_BIGNUM_COMMIT"
+          fetch .up-awslc https://github.com/aws/aws-lc.git "$AWSLC_COMMIT"
+      - name: Byte-for-byte comparison with upstream
+        run: |
+          set -euo pipefail
+          diff -r .up-mlkem/mlkem vendor/mlkem-native/mlkem
+          cmp .up-mlkem/LICENSE vendor/mlkem-native/LICENSE
+          diff -r .up-mldsa/mldsa vendor/mldsa-native/mldsa
+          cmp .up-mldsa/LICENSE vendor/mldsa-native/LICENSE
+          cmp .up-s2n/x86_att/sha3/sha3_keccak_f1600.S vendor/s2n-bignum/x86_att/sha3/sha3_keccak_f1600.S
+          cmp .up-s2n/include/_internal_s2n_bignum_x86_att.h vendor/s2n-bignum/include/_internal_s2n_bignum_x86_att.h
+          cmp .up-s2n/LICENSE vendor/s2n-bignum/LICENSE
+          cmp .up-s2n/NOTICE vendor/s2n-bignum/NOTICE
+          echo "vendored sources are identical to upstream"
+      - name: Same commits as the AWS-LC comparator
+        run: |
+          set -euo pipefail
+          grep -q "commit: $MLKEM_NATIVE_COMMIT" .up-awslc/crypto/fipsmodule/ml_kem/META.yml
+          grep -q "commit: $MLDSA_NATIVE_COMMIT" .up-awslc/crypto/fipsmodule/ml_dsa/META.yml
+          grep -q "commit: $S2N_BIGNUM_COMMIT" .up-awslc/third_party/s2n-bignum/META.yml
+          cmp .up-s2n/x86_att/sha3/sha3_keccak_f1600.S .up-awslc/third_party/s2n-bignum/s2n-bignum-imported/x86_att/sha3/sha3_keccak_f1600.S
+          echo "AWS-LC $AWSLC_COMMIT imports exactly these commits; its Keccak-x1 routine is identical"
+      - name: Upstream functional, KAT and NIST ACVP tests (pinned commits, this runner)
+        env:
+          # The upstream ACVP client fetches NIST vectors through api.github.com;
+          # unauthenticated requests from shared runners hit the rate limit
+          # (run 38798844655). Read-only job token, used only for that download.
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          lscpu | sed -n 's/^Model name:[[:space:]]*//p'
+          make -C .up-mlkem -j4 run_func run_kat run_acvp 2>&1 | tee mlkem-upstream-tests.log | grep -E "kat-sha256|ALL GOOD|FAIL|Error" || true
+          grep -q "ALL GOOD" mlkem-upstream-tests.log
+          make -C .up-mldsa -j4 run_func run_kat run_acvp 2>&1 | tee mldsa-upstream-tests.log | grep -E "kat-sha256|ALL GOOD|FAIL|Error" || true
+          grep -q "ALL GOOD" mldsa-upstream-tests.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-backend-upstream-tests-${{ github.sha }}
+          path: "*-upstream-tests.log"
+          retention-days: 30
+
+  build-test:
+    name: Build, lint and differential tests (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            crates/nexusq-native-backend
+            arena/runners/nexusq-native
+      - name: Host
+        run: lscpu | sed -n 's/^Model name:[[:space:]]*//p;s/^Architecture:[[:space:]]*//p'; cc --version | head -1; rustc -V
+      - name: Format
+        run: cargo fmt --manifest-path crates/nexusq-native-backend/Cargo.toml -- --check && cargo fmt --manifest-path arena/runners/nexusq-native/Cargo.toml -- --check
+      - name: Unsafe-code policy (SAFETY comments, same rule as the kernel boundary)
+        run: python3 .github/scripts/check-native-backend-unsafe.py
+      - name: Clippy (deny warnings)
+        run: cargo clippy --manifest-path crates/nexusq-native-backend/Cargo.toml --locked --all-targets --release -- -D warnings
+      - name: Differential tests vs RustCrypto, default build (10000 iterations per algorithm)
+        env:
+          NQ_DIFF_ITERS: "10000"
+        run: cargo test --manifest-path crates/nexusq-native-backend/Cargo.toml --locked --release -- --nocapture
+      - name: Differential tests, portable C only (2000 iterations)
+        env:
+          NQ_DIFF_ITERS: "2000"
+        run: cargo test --manifest-path crates/nexusq-native-backend/Cargo.toml --locked --release --features portable-only
+      - name: Differential tests, AVX2 + upstream C Keccak-x1 (2000 iterations)
+        if: runner.arch == 'X64'
+        env:
+          NQ_DIFF_ITERS: "2000"
+        run: cargo test --manifest-path crates/nexusq-native-backend/Cargo.toml --locked --release --features upstream-c-keccak
+      - name: Build Arena runner (x86-64 and AArch64)
+        run: |
+          cargo clippy --manifest-path arena/runners/nexusq-native/Cargo.toml --locked --release --all-targets -- -D warnings
+          cargo build --manifest-path arena/runners/nexusq-native/Cargo.toml --locked --release
+      - name: AArch64 runner smoke test
+        if: runner.arch == 'ARM64'
+        run: |
+          set -euo pipefail
+          NEXUSQ_ITERATIONS=10 NEXUSQ_WARMUPS=2 NEXUSQ_RUN_ID=arm-runner-smoke \
+            cargo run --manifest-path arena/runners/nexusq-native/Cargo.toml --locked --release > arm-runner-smoke.jsonl
+          python3 - <<'PY'
+          import json
+          rows = [json.loads(line) for line in open('arm-runner-smoke.jsonl') if line.strip()]
+          assert len(rows) == 9, f'expected nine operation rows, got {len(rows)}'
+          assert all(len(row['measurement']['samples_ns']) == 10 for row in rows)
+          assert all(row['measurement']['cycle_counter_source'] == 'unavailable_on_target' for row in rows)
+          assert all(row['measurement']['samples_cycles'] == [] for row in rows)
+          print('AArch64 runner smoke: nine operations, nanosecond samples, no fabricated cycle counts')
+          PY
+
+  supply-chain:
+    name: cargo-audit on the new lockfiles
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo install cargo-audit --locked
+      - run: |
+          cargo audit --file crates/nexusq-native-backend/Cargo.lock
+          cargo audit --file arena/runners/nexusq-native/Cargo.lock
+
+  constant-time:
+    name: Constant-time check (valgrind, secrets undefined) + negative control
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y valgrind
+      - run: crates/nexusq-native-backend/ct/run.sh "$RUNNER_TEMP/ct"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-backend-ct-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/ct/*.log
+            ${{ runner.temp }}/ct/ct.callgrind.txt
+          retention-days: 30
+
+  benchmark-gate:
+    name: Gate replica ${{ matrix.replica }} (3 official rounds + 9 extended)
+    strategy:
+      fail-fast: false
+      matrix:
+        replica: [1, 2, 3, 4, 5, 6]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: arena/runners/nexusq-native
+      - name: Install AWS-LC build tools
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build build-essential
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.x"
+      - name: Record host and toolchain metadata
+        run: |
+          mkdir -p arena/results/ci/native-backend
+          out=arena/results/ci/native-backend
+          lscpu | tee $out/lscpu.txt
+          grep -m1 microcode /proc/cpuinfo | tee $out/microcode.txt || true
+          rustc -Vv | tee $out/rustc.txt
+          cc --version | tee $out/cc.txt
+          git rev-parse HEAD | tee $out/revision.txt
+          sha256sum arena/runners/nexusq-native/Cargo.lock crates/nexusq-native-backend/Cargo.lock | tee $out/locks.sha256
+      - name: Fetch and build pinned AWS-LC comparator
+        run: |
+          git init .arena-aws-lc
+          git -C .arena-aws-lc remote add origin https://github.com/aws/aws-lc.git
+          git -C .arena-aws-lc fetch --depth 1 origin "$AWSLC_COMMIT"
+          git -C .arena-aws-lc checkout --detach "$AWSLC_COMMIT"
+          test "$(git -C .arena-aws-lc rev-parse HEAD)" = "$AWSLC_COMMIT"
+          cmake -S .arena-aws-lc -B .arena-aws-lc-build -GNinja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+          cmake --build .arena-aws-lc-build --parallel 2
+          cc -D_POSIX_C_SOURCE=200809L -std=c11 -O3 -Wall -Wextra -Werror -I"$GITHUB_WORKSPACE/.arena-aws-lc/include" arena/adapters/aws-lc/runner.c -L"$GITHUB_WORKSPACE/.arena-aws-lc-build/crypto" -Wl,-rpath,"$GITHUB_WORKSPACE/.arena-aws-lc-build/crypto" -lcrypto -lm -o arena-aws-lc-runner
+      - name: Build NEXUS-Q native-backend runner
+        run: |
+          # Match the AWS-LC C reference runner's RAND_bytes DRBG for kernel-only timing.
+          # The core-production gate separately measures the production getrandom path.
+          cargo build --manifest-path arena/runners/nexusq-native/Cargo.toml --release --locked --features aws-lc-rng
+          cp arena/runners/nexusq-native/target/release/nexusq-native-arena-runner ./nexusq-native-runner
+          sha256sum nexusq-native-runner arena-aws-lc-runner | tee arena/results/ci/native-backend/binaries.sha256
+      - name: Verify kernel benchmark uses the matched AWS-LC RNG
+        run: |
+          set -euo pipefail
+          NEXUSQ_ITERATIONS=10 NEXUSQ_WARMUPS=2 NEXUSQ_RUN_ID=common-rng-smoke \
+            ./nexusq-native-runner > native-rng-smoke.jsonl
+          python3 - <<'PY'
+          import json
+          rows = [json.loads(line) for line in open('native-rng-smoke.jsonl') if line.strip()]
+          assert len(rows) == 9, f'expected nine operation rows, got {len(rows)}'
+          assert all(row['environment']['rng_source'] == 'aws-lc-rand-bytes' for row in rows)
+          print('Kernel gate uses the AWS-LC RAND_bytes DRBG for all nine operations')
+          PY
+      - name: Run 12 alternating rounds (rounds 1-3 are the official gate input)
+        env:
+          NEXUSQ_ITERATIONS: "1000"
+          NEXUSQ_WARMUPS: "100"
+          AWSLC_ITERATIONS: "1000"
+          AWSLC_WARMUPS: "100"
+          NEXUSQ_OPT: release
+          ARENA_OPT: release
+          AWSLC_VERSION: ${{ env.AWSLC_COMMIT }}
+        run: |
+          set -euo pipefail
+          out=arena/results/ci/native-backend
+          export NEXUSQ_RUN_ID="${GITHUB_SHA}-r${{ matrix.replica }}" NEXUSQ_GIT_COMMIT="$GITHUB_SHA"
+          export NEXUSQ_CPU="$(lscpu | sed -n 's/^Model name:[[:space:]]*//p' | head -1)"; export ARENA_CPU="$NEXUSQ_CPU"
+          export NEXUSQ_CPU_FEATURES="$(grep -m1 '^flags' /proc/cpuinfo | cut -d: -f2 | xargs | tr ' ' ',')"; export ARENA_CPU_FEATURES="$NEXUSQ_CPU_FEATURES"
+          export NEXUSQ_RUSTC_VERBOSE="$(rustc -Vv | tr '\n' ';')" RUSTC_VERSION="$(rustc --version)" NEXUSQ_CC_VERSION="$(cc --version | head -1)"
+          export NEXUSQ_CARGO_LOCK_SHA256="$(sha256sum arena/runners/nexusq-native/Cargo.lock | cut -d' ' -f1)"
+          export ARENA_CPU_FREQUENCY_KHZ="$(awk -F: '/cpu MHz/ {gsub(/ /,"",$2); printf "%d", $2*1000; exit}' /proc/cpuinfo)"; export NEXUSQ_CPU_FREQUENCY_KHZ="$ARENA_CPU_FREQUENCY_KHZ"
+          export ARENA_CPU_GOVERNOR="unknown-hosted-runner" NEXUSQ_CPU_GOVERNOR="unknown-hosted-runner"
+          export ARENA_TARGET="x86_64-linux-gnu" ARENA_OS="linux"
+          steal() { awk '/^cpu /{print $9}' /proc/stat; }
+          # Run and discard one complete pass for each implementation before
+          # collecting gate samples. This primes lazy initialization, code/data
+          # pages, and hosted-runner CPU state without changing the 3-round gate
+          # inputs, sample count, evaluator, or 1.5x median/p95 threshold.
+          export NEXUSQ_RUN_ORDER="preflight" ARENA_RUN_ORDER="preflight"
+          ./nexusq-native-runner > /dev/null
+          ./arena-aws-lc-runner > /dev/null
+          echo -e "round\timpl\tsteal_ticks" > $out/steal.tsv
+          for round in $(seq 1 12); do
+            if [ $((round % 2)) = 0 ]; then order="aws nexusq"; else order="nexusq aws"; fi
+            for impl in $order; do
+              s0=$(steal)
+              if [ "$impl" = nexusq ]; then
+                export NEXUSQ_RUN_ORDER="round-${round}-$([ "$order" = "nexusq aws" ] && echo first || echo second)"
+                ./nexusq-native-runner > "$out/nexusq-round-${round}.jsonl"
+              else
+                export ARENA_RUN_ORDER="round-${round}-$([ "$order" = "aws nexusq" ] && echo first || echo second)"
+                ./arena-aws-lc-runner > "$out/aws-lc-round-${round}.jsonl"
+              fi
+              echo -e "${round}\t${impl}\t$(( $(steal) - s0 ))" >> $out/steal.tsv
+            done
+          done
+      - name: Official gate (intermediate 1.5x median AND p95)
+        run: |
+          out=arena/results/ci/native-backend
+          python3 arena/scripts/evaluate_native_assembly_gate.py $out/gate-report.json \
+            $out/nexusq-round-1.jsonl $out/nexusq-round-2.jsonl $out/nexusq-round-3.jsonl -- \
+            $out/aws-lc-round-1.jsonl $out/aws-lc-round-2.jsonl $out/aws-lc-round-3.jsonl
+      - name: Build pinned liboqs and CIRCL reference runners
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch 0.16.0 https://github.com/open-quantum-safe/liboqs.git .arena-liboqs
+          test "$(git -C .arena-liboqs rev-parse --short=7 HEAD)" = "5a1a854"
+          cmake -S .arena-liboqs -B .arena-liboqs-build -GNinja -DOQS_BUILD_ONLY_LIB=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release '-DOQS_MINIMAL_BUILD=KEM_ml_kem_768;KEM_ml_kem_1024;SIG_ml_dsa_65'
+          cmake --build .arena-liboqs-build --parallel 2
+          cc -D_POSIX_C_SOURCE=200809L -std=c11 -O3 -Wall -Wextra -Werror -DLIBOQS_COMMIT='"5a1a854"' \
+            -I"$GITHUB_WORKSPACE/.arena-liboqs-build/include" -I"$GITHUB_WORKSPACE/.arena-liboqs/src" \
+            arena/adapters/liboqs/runner.c .arena-liboqs-build/lib/liboqs.a -lcrypto -ldl -lpthread -lm -o arena-liboqs-runner
+          git clone --depth 1 --branch v1.6.4 https://github.com/cloudflare/circl.git .arena-circl
+          test "$(git -C .arena-circl rev-parse --short=7 HEAD)" = "901199c"
+          mkdir -p .arena-circl/arena-runner
+          cp arena/adapters/circl/runner.go .arena-circl/arena-runner/main.go
+          cat > .arena-circl/arena-runner/go.mod <<'EOF'
+          module nexusq-circl-arena
+
+          go 1.25
+
+          require github.com/cloudflare/circl v1.6.4
+          EOF
+          (cd .arena-circl/arena-runner && go mod edit -replace github.com/cloudflare/circl=.. && go mod tidy && go build -trimpath -o runner .)
+          sha256sum arena-liboqs-runner .arena-circl/arena-runner/runner | tee arena/results/ci/native-backend/reference-binaries.sha256
+      - name: Collect three alternating matched-host rounds for best-comparator diagnostic
+        continue-on-error: true
+        env:
+          NEXUSQ_ITERATIONS: "1000"
+          NEXUSQ_WARMUPS: "100"
+          AWSLC_ITERATIONS: "1000"
+          AWSLC_WARMUPS: "100"
+          ARENA_ITERATIONS: "1000"
+          ARENA_WARMUPS: "100"
+          ARENA_OPT: release
+          AWSLC_VERSION: ${{ env.AWSLC_COMMIT }}
+          CIRCL_COMMIT: "901199c"
+          CIRCL_VERSION: "1.6.4"
+        run: |
+          set -euo pipefail
+          out=arena/results/ci/native-backend
+          export NEXUSQ_CPU="$(lscpu | sed -n 's/^Model name:[[:space:]]*//p' | head -1)"
+          export ARENA_CPU="$NEXUSQ_CPU"
+          export NEXUSQ_CPU_FEATURES="$(grep -m1 '^flags' /proc/cpuinfo | cut -d: -f2 | xargs | tr ' ' ',')"
+          export ARENA_CPU_FEATURES="$NEXUSQ_CPU_FEATURES"
+          export ARENA_TARGET="x86_64-linux" ARENA_OS="linux" ARENA_RUN_ORDER="best-comparator"
+          export NEXUSQ_GIT_COMMIT="$GITHUB_SHA" NEXUSQ_RUSTC_VERBOSE="$(rustc -Vv | tr '\n' ';')" RUSTC_VERSION="$(rustc --version)"
+          BENCH_CPU="$(sed -n 's/^Cpus_allowed_list:[[:space:]]*\([0-9]*\).*/\1/p' /proc/self/status)"
+          test -n "$BENCH_CPU"
+          echo "Pinned benchmark CPU: $BENCH_CPU" | tee "$out/best-comparator-cpu-affinity.txt"
+          for round in 1 2 3; do
+            case "$round" in
+              1) order="nexusq aws-lc liboqs circl" ;;
+              2) order="circl liboqs aws-lc nexusq" ;;
+              3) order="aws-lc nexusq circl liboqs" ;;
+            esac
+            for impl in $order; do
+              case "$impl" in
+                nexusq)
+                  export NEXUSQ_RUN_ID="${GITHUB_SHA}-best-r${round}" NEXUSQ_RUN_ORDER="best-round-${round}"
+                  taskset -c "$BENCH_CPU" ./nexusq-native-runner > "$out/nexusq-best-round-${round}.jsonl" ;;
+                aws-lc)
+                  export ARENA_RUN_ORDER="best-round-${round}"
+                  taskset -c "$BENCH_CPU" ./arena-aws-lc-runner > "$out/aws-lc-best-round-${round}.jsonl" ;;
+                liboqs)
+                  export ARENA_RUN_ID="best-round-${round}"
+                  taskset -c "$BENCH_CPU" ./arena-liboqs-runner > "$out/liboqs-best-round-${round}.jsonl" ;;
+                circl)
+                  export ARENA_RUN_ID="best-round-${round}"
+                  taskset -c "$BENCH_CPU" .arena-circl/arena-runner/runner > "$out/circl-best-round-${round}.jsonl" ;;
+              esac
+            done
+          done
+      - name: Issue #23 final target diagnostic (1.00x median AND p95; non-blocking)
+        if: always()
+        continue-on-error: true
+        run: |
+          out=arena/results/ci/native-backend
+          python3 arena/scripts/evaluate_native_assembly_gate.py $out/issue-23-final-gate-report.json --limit 1.0 --best-of \
+            $out/nexusq-best-round-1.jsonl $out/nexusq-best-round-2.jsonl $out/nexusq-best-round-3.jsonl \
+            --comparator aws-lc $out/aws-lc-best-round-1.jsonl $out/aws-lc-best-round-2.jsonl $out/aws-lc-best-round-3.jsonl \
+            --comparator liboqs $out/liboqs-best-round-1.jsonl $out/liboqs-best-round-2.jsonl $out/liboqs-best-round-3.jsonl \
+            --comparator circl $out/circl-best-round-1.jsonl $out/circl-best-round-2.jsonl $out/circl-best-round-3.jsonl
+      - name: Extended statistics over all 12 rounds (informational)
+        if: always()
+        run: |
+          out=arena/results/ci/native-backend
+          {
+            echo "### Replica ${{ matrix.replica }}: $(cat $out/lscpu.txt | sed -n 's/^Model name:[[:space:]]*//p')"
+            echo
+            python3 - "$out/gate-report.json" <<'PY'
+          import json, sys
+          r = json.load(open(sys.argv[1]))
+          print(f"Official gate: **{r['status']}**")
+          print()
+          print("| Operation | NEXUS-Q median (us) | AWS-LC median (us) | median ratio | p95 ratio |")
+          print("|---|---|---|---|---|")
+          for x in r["results"]:
+              print(f"| {x['algorithm']}-{x['parameter_set']} {x['operation']} | {x['nexusq_median_ns']/1e3:.1f} | {x['aws_lc_median_ns']/1e3:.1f} | {x['median_ratio_nexusq_over_aws_lc']:.3f} | {x['p95_ratio_nexusq_over_aws_lc']:.3f} |")
+          PY
+            echo
+            python3 arena/scripts/native_backend_stats.py $out/extended-stats.json $out/extended-stats.md $out 12
+            echo
+            echo "Hypervisor steal ticks during the runs: $(awk 'NR>1{s+=$3} END{print s}' $out/steal.tsv)"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-backend-gate-${{ github.sha }}-replica-${{ matrix.replica }}
+          path: arena/results/ci/native-backend/
+          if-no-files-found: warn
+          retention-days: 30
+
+
+  production-path-benchmark:
+    name: nexusq-core production-path benchmark (RustCrypto vs native vs AWS-LC)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: arena/runners/nexusq
+      - name: Install AWS-LC build tools
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build build-essential python3
+      - name: Record host metadata
+        run: |
+          set -euo pipefail
+          out=arena/results/ci/core-production
+          mkdir -p "$out"
+          lscpu | tee "$out/lscpu.txt"
+          rustc -Vv | tee "$out/rustc.txt"
+          cc --version | tee "$out/cc.txt"
+          git rev-parse HEAD | tee "$out/revision.txt"
+          echo "$(awk -F': ' '/model name|Hardware|Processor/{print $2; exit}' /proc/cpuinfo)" > "$out/cpu-model.txt"
+      - name: Build public nexusq-core benchmark with RustCrypto default
+        run: |
+          set -euo pipefail
+          cargo build --manifest-path arena/runners/nexusq/Cargo.toml --locked --release --bin core_production_benchmark
+          cp arena/runners/nexusq/target/release/core_production_benchmark ./core-production-rustcrypto
+      - name: Build public nexusq-core benchmark with native backend opt-in
+        run: |
+          set -euo pipefail
+          cargo build --manifest-path arena/runners/nexusq/Cargo.toml --locked --release --bin core_production_benchmark --features native-backend
+          cp arena/runners/nexusq/target/release/core_production_benchmark ./core-production-native
+      - name: Build pinned AWS-LC comparator
+        run: |
+          set -euo pipefail
+          git init .core-awslc
+          git -C .core-awslc remote add origin https://github.com/aws/aws-lc.git
+          git -C .core-awslc fetch --depth 1 origin "$AWSLC_COMMIT"
+          git -C .core-awslc checkout --detach "$AWSLC_COMMIT"
+          test "$(git -C .core-awslc rev-parse HEAD)" = "$AWSLC_COMMIT"
+          cmake -S .core-awslc -B .core-awslc-build -GNinja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+          cmake --build .core-awslc-build --parallel 2
+          cc -D_POSIX_C_SOURCE=200809L -std=c11 -O3 -Wall -Wextra -Werror \
+            -I"$GITHUB_WORKSPACE/.core-awslc/include" arena/adapters/aws-lc/runner.c \
+            -L"$GITHUB_WORKSPACE/.core-awslc-build/crypto" \
+            -Wl,-rpath,"$GITHUB_WORKSPACE/.core-awslc-build/crypto" -lcrypto -lm \
+            -o ./core-production-aws-lc
+          sha256sum core-production-rustcrypto core-production-native core-production-aws-lc | tee arena/results/ci/core-production/binaries.sha256
+      - name: Run three matched-host replicas with alternating implementation order
+        env:
+          CORE_ITERATIONS: "1000"
+          CORE_WARMUPS: "100"
+          AWSLC_ITERATIONS: "1000"
+          AWSLC_WARMUPS: "100"
+          AWSLC_VERSION: ${{ env.AWSLC_COMMIT }}
+        run: |
+          set -euo pipefail
+          out=arena/results/ci/core-production
+          cpu="$(awk -F': ' '/model name|Hardware|Processor/{print $2; exit}' /proc/cpuinfo)"
+          features="$(grep -m1 '^flags' /proc/cpuinfo | cut -d: -f2 | xargs | tr ' ' ',')"
+          export CORE_CPU="$cpu" CORE_CPU_FEATURES="$features" ARENA_CPU="$cpu" ARENA_CPU_FEATURES="$features"
+          export CORE_COMMIT="${{ github.event.pull_request.head.sha || github.sha }}"
+          export RUSTC_VERSION="$(rustc --version)"
+          export ARENA_TARGET="x86_64-linux-gnu" ARENA_OS="linux" ARENA_OPT=release
+          export ARENA_CPU_FREQUENCY_KHZ="$(awk -F: '/cpu MHz/ {gsub(/ /,"",$2); printf "%d", $2*1000; exit}' /proc/cpuinfo)"
+          export ARENA_CPU_GOVERNOR="unknown-hosted-runner"
+          # Shared 2-vCPU hosted runners suffer periodic scheduling interference that
+          # inflates p95 tails for BOTH implementations (observed: native and AWS-LC
+          # p95 spikes of 1.5-3.6x own median with medians at 1.0-1.2x, across
+          # different ops/runs/CPUs, on code identical to a fully green run). Pin every
+          # benchmark process to one CPU core with raised priority so the measurement
+          # reflects the code, not the host noise. The gate itself is unchanged:
+          # same threshold (1.5x median and p95), same evaluation, same replicas.
+          run_pinned() {
+            local -a env_args=()
+            local v
+            for v in CORE_ITERATIONS CORE_WARMUPS AWSLC_ITERATIONS AWSLC_WARMUPS \
+                     CORE_IMPL CORE_RUN_ORDER ARENA_RUN_ORDER CORE_CPU CORE_CPU_FEATURES \
+                     ARENA_CPU ARENA_CPU_FEATURES ARENA_CPU_FREQUENCY_KHZ ARENA_CPU_GOVERNOR \
+                     ARENA_TARGET ARENA_OS ARENA_OPT CORE_COMMIT RUSTC_VERSION \
+                     AWSLC_VERSION NEXUSQ_HYBRID_1024 GITHUB_SHA; do
+              if [ -n "${!v:-}" ]; then env_args+=("$v=${!v}"); fi
+            done
+            sudo -n env "${env_args[@]}" taskset -c 1 nice -n -15 "$@"
+          }
+          for replica in 1 2 3; do
+            case "$replica" in
+              1) order="rustcrypto native aws" ;;
+              2) order="native aws rustcrypto" ;;
+              3) order="aws rustcrypto native" ;;
+            esac
+            for impl in $order; do
+              case "$impl" in
+                rustcrypto)
+                  export CORE_IMPL=nexusq-core-rustcrypto CORE_RUN_ORDER="replica-${replica}-${impl}"
+                  run_pinned ./core-production-rustcrypto > "$out/rustcrypto-replica-${replica}.jsonl" ;;
+                native)
+                  export CORE_IMPL=nexusq-core-native-backend CORE_RUN_ORDER="replica-${replica}-${impl}"
+                  run_pinned ./core-production-native > "$out/native-replica-${replica}.jsonl" ;;
+                aws)
+                  export AWSLC_VERSION="$AWSLC_COMMIT" ARENA_RUN_ORDER="replica-${replica}-${impl}"
+                  export NEXUSQ_HYBRID_1024=1
+                  run_pinned ./core-production-aws-lc > "$out/aws-lc-replica-${replica}.jsonl" ;;
+              esac
+            done
+          done
+      - name: Evaluate all replicas against the unchanged 1.5x median/p95 gate
+        if: always()
+        run: |
+          set -uo pipefail
+          out=arena/results/ci/core-production
+          status=0
+          for replica in 1 2 3; do
+            if [ ! -s "$out/rustcrypto-replica-${replica}.jsonl" ] || [ ! -s "$out/native-replica-${replica}.jsonl" ] || [ ! -s "$out/aws-lc-replica-${replica}.jsonl" ]; then
+              echo "replica $replica is missing one or more raw result files" | tee "$out/report-replica-${replica}.md"
+              status=1
+              continue
+            fi
+            if python3 arena/scripts/evaluate_core_production_benchmark.py \
+              "$out/rustcrypto-replica-${replica}.jsonl" \
+              "$out/native-replica-${replica}.jsonl" \
+              "$out/aws-lc-replica-${replica}.jsonl" \
+              | tee "$out/report-replica-${replica}.md"; then
+              :
+            else
+              status=1
+            fi
+          done
+          exit "$status"
+      - name: Upload production-path benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-production-benchmark-${{ github.event.pull_request.head.sha || github.sha }}
+          path: arena/results/ci/core-production/
+          if-no-files-found: warn
+          retention-days: 90
+
+  vendor-sync:
+    name: Crate-local vendor snapshot in sync with repository vendor/
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Diff crate-local vendored C sources against repository vendor/
+        run: |
+          set -e
+          diff -r vendor/mlkem-native/mlkem crates/nexusq-native-backend/vendor/mlkem-native/mlkem
+          diff -r vendor/mldsa-native/mldsa crates/nexusq-native-backend/vendor/mldsa-native/mldsa
+          diff -r vendor/s2n-bignum crates/nexusq-native-backend/vendor/s2n-bignum

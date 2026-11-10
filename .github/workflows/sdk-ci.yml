@@ -1,0 +1,377 @@
+name: SDK CI
+
+on:
+  workflow_call:
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  c-sdk:
+    name: Build C SDK prerequisite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build C SDK
+        run: cargo build -p nexusq-c --locked --release
+      - name: Run C SDK tests
+        run: cargo test -p nexusq-c --locked
+      - name: Build and run C++ wrapper smoke test
+        run: |
+          c++ -std=c++17 -I crates/nexusq-c/include -I crates/nexusq-cpp/include \
+            crates/nexusq-cpp/examples/smoke.cpp -L target/release -lnexusq -o /tmp/nexusq-cpp-smoke
+          LD_LIBRARY_PATH=target/release /tmp/nexusq-cpp-smoke
+
+  typescript:
+    name: TypeScript / Node.js bindings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build C SDK
+        run: cargo build -p nexusq-c --locked --release
+      - name: Build TypeScript SDK
+        env:
+          NEXUSQ_SKIP_NATIVE_DOWNLOAD: '1'
+        run: |
+          cd bindings/typescript
+          npm ci
+          npm run build
+      - name: Smoke test
+        run: |
+          cd bindings/typescript
+          NEXUSQ_LIBRARY=$GITHUB_WORKSPACE/target/release/libnexusq.so npm run smoke
+
+  java:
+    name: Java JNA bindings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install Maven
+        run: sudo apt-get update && sudo apt-get install -y maven
+      - name: Build C SDK
+        run: cargo build -p nexusq-c --locked --release
+      - name: Build and test Java SDK
+        env:
+          NEXUSQ_LIBRARY: ${{ github.workspace }}/target/release/libnexusq.so
+        run: mvn -f bindings/java package
+      - name: Smoke test
+        run: |
+          JNA=$(find ~/.m2/repository/net/java/dev/jna -name 'jna-*.jar' | head -1)
+          NEXUSQ_LIBRARY=$GITHUB_WORKSPACE/target/release/libnexusq.so \
+            java -cp "bindings/java/target/classes:$JNA" \
+            io.github.lecodev26.nexusq.examples.Smoke
+
+  kotlin:
+    name: Kotlin JNA bindings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install Kotlin compiler (pinned)
+        run: |
+          curl -sSL https://github.com/JetBrains/kotlin/releases/download/v2.1.10/kotlin-compiler-2.1.10.zip -o /tmp/kotlin.zip
+          unzip -q /tmp/kotlin.zip -d "$HOME/.local"
+          echo "$HOME/.local/kotlinc/bin" >> "$GITHUB_PATH"
+      - name: Build C SDK
+        run: cargo build -p nexusq-c --locked --release
+      - name: Compile and run Kotlin smoke test
+        env:
+          NEXUSQ_LIBRARY: ${{ github.workspace }}/target/release/libnexusq.so
+        run: |
+          curl -sSLo /tmp/jna.jar https://repo1.maven.org/maven2/net/java/dev/jna/jna/5.16.0/jna-5.16.0.jar
+          kotlinc bindings/kotlin/src bindings/kotlin/examples -cp /tmp/jna.jar -include-runtime -d /tmp/nexusq-kotlin.jar
+          java -cp "/tmp/nexusq-kotlin.jar:/tmp/jna.jar" \
+            io.github.lecodev26.nexusq.kotlin.examples.SmokeKt
+
+  dotnet:
+    name: C# / .NET P/Invoke bindings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.x'
+      - name: Build C SDK
+        run: cargo build -p nexusq-c --locked --release
+      - name: Smoke test
+        run: |
+          NEXUSQ_LIBRARY=$GITHUB_WORKSPACE/target/release/libnexusq.so \
+            dotnet run --project bindings/dotnet/examples/smoke
+      - name: Pack NuGet package with current-platform native asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p bindings/dotnet/src/Nexusq/runtimes/linux-x64/native
+          cp target/release/libnexusq.so bindings/dotnet/src/Nexusq/runtimes/linux-x64/native/
+          dotnet pack bindings/dotnet/src/Nexusq -c Release
+          package_dir="$GITHUB_WORKSPACE/bindings/dotnet/src/Nexusq/bin/Release"
+          package=$(find "$package_dir" -maxdepth 1 -name '*.nupkg' -print -quit)
+          unzip -l "$package" | grep -F 'runtimes/linux-x64/native/libnexusq.so'
+          mkdir -p /tmp/nexusq-clean-consumer
+          dotnet new console --framework net9.0 --output /tmp/nexusq-clean-consumer --no-restore
+          printf 'Console.WriteLine(Nexusq.Version());\n' > /tmp/nexusq-clean-consumer/Program.cs
+          dotnet add /tmp/nexusq-clean-consumer/nexusq-clean-consumer.csproj package Nexusq --version 4.1.2 --source "$package_dir"
+          actual=$(dotnet run --project /tmp/nexusq-clean-consumer/nexusq-clean-consumer.csproj)
+          test "$actual" = "4.1.2"
+
+  swift:
+    name: Swift Package bindings (macOS ARM64)
+    # macOS 14 runners were retired by GitHub on 2026-11-02.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build C SDK runtime (retry transient registry failures)
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if cargo build -p nexusq-c --locked --release; then
+              exit 0
+            fi
+            if [[ "$attempt" -lt 3 ]]; then
+              echo "Cargo build failed (attempt $attempt/3); retrying after a short delay for transient registry/network errors."
+              sleep 10
+            fi
+          done
+          echo "Cargo build failed after 3 attempts."
+          exit 1
+      - name: Validate repository-root Swift package manifest and tests
+        env:
+          NEXUSQ_LIBRARY: ${{ github.workspace }}/target/release/libnexusq.dylib
+        run: |
+          set -euo pipefail
+          swift package dump-package >/dev/null
+          swift test
+      - name: Build, test and smoke-test the Swift binding against local runtime
+        env:
+          NEXUSQ_LIBRARY: ${{ github.workspace }}/target/release/libnexusq.dylib
+        run: |
+          set -euo pipefail
+          cd bindings/swift
+          swift package resolve
+          swift build
+          swift test
+          swift run Smoke
+      - name: Verify automatic runtime download in a clean consumer environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture="$RUNNER_TEMP/nexusq-swift-runtime-fixture"
+          clean_cache="$RUNNER_TEMP/nexusq-swift-clean-cache"
+          mkdir -p "$fixture" "$clean_cache"
+          cp target/release/libnexusq.dylib "$fixture/nexusq-sdk-runtime-macos-arm64.dylib"
+          (cd "$fixture" && shasum -a 256 nexusq-sdk-runtime-macos-arm64.dylib > NATIVE-RUNTIME-SHA256SUMS)
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory "$fixture" > "$RUNNER_TEMP/nexusq-swift-http.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8765/NATIVE-RUNTIME-SHA256SUMS >/dev/null; then break; fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:8765/NATIVE-RUNTIME-SHA256SUMS >/dev/null
+          cd bindings/swift
+          env -u NEXUSQ_LIBRARY \
+            NEXUSQ_RUNTIME_BASE_URL=http://127.0.0.1:8765/ \
+            NEXUSQ_CACHE_DIR="$clean_cache" \
+            .build/debug/Smoke
+          test -f "$clean_cache/4.1.2/nexusq-sdk-runtime-macos-arm64.dylib/libnexusq.dylib"
+          test -f "$clean_cache/4.1.2/nexusq-sdk-runtime-macos-arm64.dylib/libnexusq.dylib.sha256"
+
+  dart:
+    name: Dart FFI bindings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: Build C SDK
+        run: cargo build -p nexusq-c --locked --release
+      - name: Resolve dependencies
+        run: cd bindings/dart && dart pub get
+      - name: Analyze
+        run: cd bindings/dart && dart analyze --fatal-infos
+      - name: Unit tests
+        env:
+          NEXUSQ_LIBRARY: ${{ github.workspace }}/target/release/libnexusq.so
+        run: cd bindings/dart && dart test
+      - name: Smoke test
+        env:
+          NEXUSQ_LIBRARY: ${{ github.workspace }}/target/release/libnexusq.so
+        run: cd bindings/dart && dart run example/smoke.dart
+
+  sdk-runtime-artifacts:
+    name: Default-provider SDK runtime matrix (manual fast validation only)
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/sdk-runtime.yml
+    permissions:
+      contents: read
+
+  backend-feature-contract:
+    name: Backend feature propagation and capability contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Verify default provider and CLI metadata
+        run: |
+          cargo test -p nexusq-core --locked backend_info_tests
+          cargo test -p nexusq-c --locked backend_metadata_tests
+          cargo test -p nexusq-cli --locked --test cli_e2e backend_command_reports_build_time_provider_as_json
+          test "$(cargo run -q -p nexusq-cli --locked -- backend --output json | python3 -c 'import json,sys; print(json.load(sys.stdin)["name"])')" = rustcrypto
+      - name: Check native feature is forwarded by all entry points
+        run: |
+          cargo check -p nexusq-core -p nexusq-cli -p nexusq-server -p nexusq-c -p nexusq-py --locked --features native-backend
+          cargo test -p nexusq-core --locked --features native-backend backend_info_tests
+          cargo test -p nexusq-c --locked --features native-backend backend_metadata_tests
+          cargo test -p nexusq-cli --locked --features native-backend --test cli_e2e backend_command_reports_build_time_provider_as_json
+      - name: Check portable native feature propagation
+        run: |
+          cargo check -p nexusq-core -p nexusq-cli -p nexusq-server -p nexusq-c -p nexusq-py --locked --features native-backend-portable
+      - name: Verify RustCrypto remains default and API docs build
+        run: |
+          cargo doc -p nexusq-core -p nexusq-cli -p nexusq-server -p nexusq-c -p nexusq-py --locked --no-deps
+
+  python:
+    name: Python PyO3 SDK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Build distributable Python wheel
+        run: |
+          python -m venv .venv-build
+          .venv-build/bin/python -m pip install --upgrade pip 'maturin>=1.8,<2'
+          .venv-build/bin/maturin build --manifest-path crates/nexusq-py/Cargo.toml \
+            --interpreter .venv-build/bin/python --release --out dist
+      - name: Install wheel without a build toolchain
+        run: |
+          python -m venv .venv-clean
+          .venv-clean/bin/python -m pip install --no-deps dist/*.whl
+          .venv-clean/bin/python - <<'PY'
+          import nexusq
+          info = nexusq.backend_info()
+          assert info['name'] == 'rustcrypto', info
+          assert info['experimental'] is False, info
+          assert info['native_available'] is False, info
+          print(info)
+          PY
+      - name: Test Python binding crate
+        run: cargo test -p nexusq-py --locked
+
+  go:
+    name: Go cgo SDK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.x'
+      - name: Build C SDK
+        run: cargo build -p nexusq-c --locked --release
+      - name: Validate Go runtime bootstrap helper
+        run: bash -n bindings/go/scripts/with-runtime.sh
+      - name: Test Go SDK against local C ABI override
+        env:
+          NEXUSQ_LIBRARY: ${{ github.workspace }}/target/release/libnexusq.so
+        run: |
+          cd bindings/go/nexusq
+          CGO_ENABLED=0 go test ./...
+          cd ..
+          CGO_ENABLED=0 go run ./examples/smoke
+
+  ruby:
+    name: Ruby FFI SDK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+      - name: Install FFI dependency
+        run: gem install ffi
+      - name: Build C SDK
+        run: cargo build -p nexusq-c --locked --release
+      - name: Run Ruby smoke test
+        env:
+          NEXUSQ_LIBRARY: ${{ github.workspace }}/target/release/libnexusq.so
+        run: ruby bindings/ruby/examples/smoke/smoke.rb
+      - name: Build and inspect RubyGems package
+        working-directory: bindings/ruby
+        run: |
+          set -euo pipefail
+          gem build nexusq.gemspec
+          gem specification nexusq-4.1.2.gem --yaml > /tmp/nexusq-gem-spec.yml
+          grep -Fq 'version: 4.1.2' /tmp/nexusq-gem-spec.yml
+          grep -Fq -- '- MIT' /tmp/nexusq-gem-spec.yml
+          grep -Fq -- '- Apache-2.0' /tmp/nexusq-gem-spec.yml
+          grep -Fq -- '- lib/nexusq.rb' /tmp/nexusq-gem-spec.yml
+          grep -Fq -- '- examples/smoke/smoke.rb' /tmp/nexusq-gem-spec.yml
+          grep -Fq -- '- README.md' /tmp/nexusq-gem-spec.yml
+          rm -f nexusq-4.1.2.gem
+
+  php:
+    name: PHP FFI SDK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: ffi
+          ini-values: ffi.enable=1
+      - name: Build C SDK
+        run: cargo build -p nexusq-c --locked --release
+      - name: Run PHP smoke test
+        env:
+          NEXUSQ_LIBRARY: ${{ github.workspace }}/target/release/libnexusq.so
+        run: php bindings/php/smoke.php
+
+  runtime-download-smoke:
+    name: Clean first-use native runtime downloads (Go, Dart, TypeScript)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.x'
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: '3.13.6'
+      - name: Build default-provider C ABI runtime
+        run: cargo build -p nexusq-c --locked --release
+      - name: Install SDK development dependencies without release downloads
+        run: |
+          npm ci --prefix bindings/typescript --ignore-scripts
+          npm run build --prefix bindings/typescript
+          cd bindings/dart && dart pub get
+      - name: Test first-use download, checksum validation, cache, and crypto smoke
+        run: scripts/test-sdk-runtime-downloads.sh

@@ -1,0 +1,360 @@
+name: NEXUS-Q v4.1.2 Audit-Ready Release Evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build and verify release evidence only; never attest or create a GitHub Release"
+        required: true
+        type: boolean
+        default: true
+      publish_release:
+        description: "Explicitly authorize GitHub Release publication (requires the exact annotated version tag)"
+        required: true
+        type: boolean
+        default: false
+permissions:
+  contents: read
+
+env:
+  RELEASE_VERSION: "4.1.2"
+
+jobs:
+  release-gate:
+    name: Stable line release gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Verify release inputs, version, tag identity, and package graph
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          PUBLISH_RELEASE: ${{ inputs.publish_release }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')"
+          test "$version" = "${RELEASE_VERSION}"
+          if [[ "$DRY_RUN" == "true" && "$PUBLISH_RELEASE" == "true" ]] || [[ "$DRY_RUN" != "true" && "$PUBLISH_RELEASE" != "true" ]]; then
+            echo "Choose exactly one: dry_run=true or publish_release=true." >&2
+            exit 1
+          fi
+          if [[ "$PUBLISH_RELEASE" == "true" ]]; then
+            test "$GITHUB_REF" = "refs/tags/v${RELEASE_VERSION}"
+            test "$(git cat-file -t "refs/tags/v${RELEASE_VERSION}")" = tag
+            test "$(git rev-parse "refs/tags/v${RELEASE_VERSION}^{}")" = "$GITHUB_SHA"
+            if gh release view "v${RELEASE_VERSION}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              echo "Release v${RELEASE_VERSION} already exists; refusing to overwrite it." >&2
+              exit 1
+            fi
+          fi
+          cargo metadata --format-version 1 --locked >/dev/null
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Check
+        run: cargo check --workspace --locked
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Test debug profile
+        run: cargo test --workspace --locked
+
+      - name: Test release profile
+        run: cargo test --workspace --locked --release
+
+      - name: Build release
+        run: cargo build --workspace --locked --release
+
+      - name: SDK smoke
+        run: |
+          cargo build -p nexusq-c --locked --release
+          cargo test -p nexusq-c --locked
+          cargo test -p nexusq-py --locked
+          cargo test -p nexusq-cli --locked
+          cargo test -p nexusq-server --locked
+
+      - name: Package release twice for reproducibility
+        run: |
+          rm -rf dist-a dist-b
+          ./deploy/package-release.sh dist-a
+          ./deploy/package-release.sh dist-b
+          A="$(find dist-a -maxdepth 1 -name '*.tar.gz' -type f -print -quit)"
+          B="$(find dist-b -maxdepth 1 -name '*.tar.gz' -type f -print -quit)"
+          test -n "$A" && test -n "$B"
+          test "$(sha256sum "$A" | cut -d' ' -f1)" = "$(sha256sum "$B" | cut -d' ' -f1)"
+          cmp "$A" "$B"
+          mkdir -p release
+          cp "$A" release/
+
+      - name: Generate CycloneDX SBOM
+        shell: python3 {0}
+        run: |
+          import json, subprocess
+          from pathlib import Path
+          m = json.loads(subprocess.check_output(["cargo","metadata","--format-version","1","--locked"]))
+          components = []
+          seen = set()
+          for p in m["packages"]:
+              if not p["name"].startswith("nexusq"):
+                  continue
+              key = (p["name"], p["version"])
+              if key in seen:
+                  continue
+              seen.add(key)
+              licenses = []
+              for lic in p.get("license", "").split(" OR "):
+                  if lic:
+                      licenses.append({"license":{"id":lic}})
+              c = {
+                  "type":"library",
+                  "bom-ref":f"pkg:cargo/{p['name']}@{p['version']}",
+                  "name":p["name"],
+                  "version":p["version"],
+                  "purl":f"pkg:cargo/{p['name']}@{p['version']}",
+              }
+              if licenses:
+                  c["licenses"] = licenses
+              components.append(c)
+          bom = {
+              "bomFormat":"CycloneDX",
+              "specVersion":"1.5",
+              "serialNumber":"urn:nexusq:release:4.1.2",
+              "version":1,
+              "metadata":{
+                  "component":{"type":"application","name":"nexusq","version":"4.1.2"}
+              },
+              "components":components,
+          }
+          Path("release/nexusq-v4.1.2-sbom.cdx.json").write_text(json.dumps(bom,indent=2)+"\n")
+
+      - name: Upload release evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexusq-v4.1.2-release-evidence
+          path: release/
+          if-no-files-found: error
+
+  dry-run-release:
+    name: Dry-run release evidence (no attestation or GitHub Release)
+    if: github.event_name == 'workflow_dispatch' && inputs.dry_run
+    needs: [release-gate, sdk-runtime]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Download validated release evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: nexusq-v4.1.2-release-evidence
+          path: release
+      - name: Download native runtime artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: nexusq-sdk-runtime-*
+          path: native-runtimes
+          merge-multiple: false
+      - name: Package native runtime assets for dry-run
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > release/NATIVE-RUNTIME-SHA256SUMS
+          for directory in native-runtimes/nexusq-sdk-runtime-*; do
+            test -d "$directory"
+            target=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["target"])' "$directory/runtime.json")
+            case "$target" in
+              x86_64-unknown-linux-gnu) asset="nexusq-sdk-runtime-linux-x64.so" ;;
+              aarch64-unknown-linux-gnu) asset="nexusq-sdk-runtime-linux-arm64.so" ;;
+              aarch64-apple-darwin) asset="nexusq-sdk-runtime-macos-arm64.dylib" ;;
+              x86_64-pc-windows-msvc) asset="nexusq-sdk-runtime-windows-x64.dll" ;;
+              *) echo "Unsupported native runtime target: $target" >&2; exit 1 ;;
+            esac
+            library=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["library"])' "$directory/runtime.json")
+            cp "$directory/$library" "release/$asset"
+            archive="release/$(basename "$directory").tar.gz"
+            tar -czf "$archive" -C native-runtimes "$(basename "$directory")"
+            (cd release && sha256sum "$(basename "$archive")" "$asset") >> release/NATIVE-RUNTIME-SHA256SUMS
+          done
+          test -s release/NATIVE-RUNTIME-SHA256SUMS
+          (cd release && sha256sum -c NATIVE-RUNTIME-SHA256SUMS)
+          test -s release/nexusq-sdk-runtime-linux-x64.so
+          test -s release/nexusq-sdk-runtime-linux-arm64.so
+          test -s release/nexusq-sdk-runtime-macos-arm64.dylib
+          test -s release/nexusq-sdk-runtime-windows-x64.dll
+      - name: Generate provenance, manifest and complete SHA256SUMS
+        env:
+          RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
+          RELEASE_SHA: ${{ github.sha }}
+          RELEASE_REF: ${{ github.ref }}
+        run: python3 scripts/release-evidence.py
+      - name: Verify complete SHA256SUMS
+        run: (cd release && sha256sum -c SHA256SUMS)
+      - name: Assert evidence outputs
+        run: |
+          test -s release/nexusq-v4.1.2-provenance.json
+          test -s release/release-manifest.json
+          test -s release/SHA256SUMS
+          python3 -c 'import json; m=json.load(open("release/release-manifest.json")); names={x["name"] for x in m["assets"]}; required={"nexusq-sdk-runtime-linux-x64.so","nexusq-sdk-runtime-linux-arm64.so","nexusq-sdk-runtime-macos-arm64.dylib","nexusq-sdk-runtime-windows-x64.dll"}; assert required <= names, required-names; print(f"Manifest covers {len(names)} payload files including all native runtimes")'
+          echo "Dry-run passed. No attestation or GitHub Release was created."
+
+  platform-gate:
+    name: ${{ matrix.os }} release build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install OpenSSL for Windows release build
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $vcpkg = $env:VCPKG_INSTALLATION_ROOT
+          if (-not $vcpkg) { throw "VCPKG_INSTALLATION_ROOT is not set on this runner" }
+          & "$vcpkg\vcpkg.exe" install openssl:x64-windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "OPENSSL_DIR=$vcpkg\installed\x64-windows" >> $env:GITHUB_ENV
+      - name: Release build (macOS Rust workspace)
+        if: matrix.os == 'macos-15'
+        run: cargo build --workspace --locked --release --exclude nexusq-py
+
+      - name: Release build (full workspace)
+        if: matrix.os != 'macos-15'
+        run: cargo build --workspace --locked --release
+
+  sdk-runtime:
+    name: Build version-matched default-provider SDK runtimes
+    if: github.ref == 'refs/tags/v4.1.2' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    needs: [release-gate]
+    uses: ./.github/workflows/sdk-runtime.yml
+    permissions:
+      contents: read
+
+  public-release:
+    name: Publish GitHub v4.1.2 release
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_release == true && inputs.dry_run == false && github.ref == 'refs/tags/v4.1.2'
+    needs: [release-gate, platform-gate, sdk-runtime]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout exact validated revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Enforce annotated v4.1.2 tag and tag-only publication
+        env:
+          EXPECTED_REF: refs/tags/v4.1.2
+          EXPECTED_SHA: ${{ github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = "$EXPECTED_REF"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v4.1.2" --jq .object.type)" = tag
+          test "$(git rev-parse "$EXPECTED_REF^{}")" = "$EXPECTED_SHA"
+
+      - name: Download validated release evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: nexusq-v4.1.2-release-evidence
+          path: release
+
+      - name: Download native runtime artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: nexusq-sdk-runtime-*
+          path: native-runtimes
+          merge-multiple: false
+
+      - name: Package native runtime assets for release
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > release/NATIVE-RUNTIME-SHA256SUMS
+          for directory in native-runtimes/nexusq-sdk-runtime-*; do
+            test -d "$directory"
+            target=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["target"])' "$directory/runtime.json")
+            case "$target" in
+              x86_64-unknown-linux-gnu) asset="nexusq-sdk-runtime-linux-x64.so" ;;
+              aarch64-unknown-linux-gnu) asset="nexusq-sdk-runtime-linux-arm64.so" ;;
+              aarch64-apple-darwin) asset="nexusq-sdk-runtime-macos-arm64.dylib" ;;
+              x86_64-pc-windows-msvc) asset="nexusq-sdk-runtime-windows-x64.dll" ;;
+              *) echo "Unsupported native runtime target: $target" >&2; exit 1 ;;
+            esac
+            library=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["library"])' "$directory/runtime.json")
+            cp "$directory/$library" "release/$asset"
+            archive="release/$(basename "$directory").tar.gz"
+            tar -czf "$archive" -C native-runtimes "$(basename "$directory")"
+            (cd release && sha256sum "$(basename "$archive")" "$asset") >> release/NATIVE-RUNTIME-SHA256SUMS
+          done
+          test -s release/NATIVE-RUNTIME-SHA256SUMS
+          (cd release && sha256sum -c NATIVE-RUNTIME-SHA256SUMS)
+          test -s release/nexusq-sdk-runtime-linux-x64.so
+          test -s release/nexusq-sdk-runtime-linux-arm64.so
+          test -s release/nexusq-sdk-runtime-macos-arm64.dylib
+          test -s release/nexusq-sdk-runtime-windows-x64.dll
+
+      - name: Generate provenance, manifest and complete SHA256SUMS
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+          RELEASE_REF: ${{ github.ref }}
+          RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
+        run: python3 scripts/release-evidence.py
+
+      - name: Attest validated release artifacts
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            release/*
+
+      - name: Publish GitHub v4.1.2 release (fail closed)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = "refs/tags/v4.1.2"
+          (cd release && sha256sum -c SHA256SUMS)
+          assets=(release/*)
+          for asset in "${assets[@]}"; do test -f "$asset"; done
+          if gh release view v4.1.2 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release v4.1.2 already exists; refusing to overwrite or clobber assets." >&2
+            exit 1
+          fi
+          gh release create v4.1.2 \
+            --verify-tag \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "NEXUS-Q v4.1.2 — Audit-Ready Release" \
+            --notes-file docs/V4_RELEASE.md \
+            "${assets[@]}"
+          gh release view v4.1.2 --repo "$GITHUB_REPOSITORY" --json assets \
+            | python3 -c 'import json,sys; actual={x["name"] for x in json.load(sys.stdin)["assets"]}; lines=[x.strip().split("  ",1)[1] for x in open("release/SHA256SUMS") if x.strip()]; expected=set(lines)|{"SHA256SUMS"}; print("Published assets:", ", ".join(sorted(actual))); missing=expected-actual; extra=actual-expected; print("Missing:", sorted(missing), "Extra:", sorted(extra)); sys.exit(1 if missing or extra else 0)'

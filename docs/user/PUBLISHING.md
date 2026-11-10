@@ -37,7 +37,7 @@ On Termux the script builds and publishes the Python source distribution (sdist)
 
 ## NuGet
 
-NuGet is intentionally excluded from local credentials and local publishing. The script triggers `.github/workflows/publish-nuget.yml`, which obtains its API key through GitHub Actions OIDC.
+NuGet is intentionally excluded from local credentials and local publishing. The script manually dispatches `.github/workflows/publish-nuget.yml` with its explicit confirmation input; the workflow obtains its API key through GitHub Actions OIDC and first verifies the annotated tag and GitHub release manifest.
 
 ## v4.1.2 release identity and single-run guard
 

@@ -1,0 +1,976 @@
+name: PQC Benchmark Arena
+
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  validate-registry:
+    name: Validate Arena registry
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Validate JSON registry and schema
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for path in Path("arena").rglob("*.json"):
+              with path.open() as f:
+                  json.load(f)
+              print("valid:", path)
+          required = [
+              "arena/registry/algorithms.json",
+              "arena/registry/implementations.json",
+              "arena/registry/matrix.json",
+              "arena/schemas/benchmark-result.schema.json",
+          ]
+          for path in required:
+              assert Path(path).is_file(), path
+          matrix = json.loads(Path("arena/registry/matrix.json").read_text())["pairs"]
+          assert matrix
+          allowed = {"IMPLEMENTED", "CI_READY", "PLANNED"}
+          assert all(x["status"] in allowed for x in matrix)
+          assert all(not (x["status"] == "IMPLEMENTED" and not x.get("adapter")) for x in matrix)
+          implemented = [x for x in matrix if x["status"] == "IMPLEMENTED"]
+          ci_ready = [x for x in matrix if x["status"] == "CI_READY"]
+          assert {(x["implementation"], x["algorithm"]) for x in implemented} == {
+              ("nexusq", "ml-kem-768"), ("nexusq", "ml-kem-1024"), ("nexusq", "ml-dsa-65")
+          }
+          assert {(x["implementation"], x["algorithm"]) for x in ci_ready} == {
+              ("liboqs", "ml-kem-768"), ("liboqs", "ml-kem-1024"), ("liboqs", "ml-dsa-65"),
+              ("circl", "ml-kem-768"), ("circl", "ml-dsa-65"),
+              ("openssl", "ml-kem-768"), ("openssl", "ml-dsa-65"), ("openssl", "slh-dsa"),
+              ("aws-lc", "ml-kem-768"), ("aws-lc", "ml-dsa-65"),
+              ("botan", "ml-kem-768"), ("botan", "ml-dsa-65"),
+              ("rustcrypto-kems", "ml-kem-768"), ("rustcrypto-kems", "hqc"),
+              ("pq-code-package", "ml-kem-768"), ("pq-code-package", "ml-dsa-65")
+          }
+          implementations = {x["id"] for x in json.loads(Path("arena/registry/implementations.json").read_text())["implementations"]}
+          assert implementations == {
+              "nexusq", "liboqs", "circl", "openssl", "aws-lc", "boringssl",
+              "botan", "rustcrypto-kems", "pq-code-package"
+          }
+          assert {x["implementation"] for x in matrix} == implementations
+          assert len(matrix) == 23
+          print("Arena registry/matrix/state/coverage contract: OK", len(matrix), "pairs")
+          PY
+
+  reference-benchmarks:
+    name: V1 / V1+zeroize / V3 controlled benchmarks
+    runs-on: ubuntu-latest
+    needs: validate-registry
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Save V3 runner source
+        run: cp arena/runners/nexusq/src/main.rs "${{ runner.temp }}/nexusq-arena-runner-main.rs"
+      - uses: dtolnay/rust-toolchain@1.98.1
+      - name: Capture benchmark environment
+        id: env
+        run: |
+          echo "cpu=$(awk -F': ' '/model name|Hardware|Processor/{print $2; exit}' /proc/cpuinfo)" >> "$GITHUB_OUTPUT"
+          echo "features=$(awk -F': ' '/^flags|^Features/{print $2; exit}' /proc/cpuinfo | tr ' ' ',')" >> "$GITHUB_OUTPUT"
+          echo "rustc=$(rustc --version)" >> "$GITHUB_OUTPUT"
+          echo "rustc_verbose=$(rustc --version --verbose | tr '\n' ';')" >> "$GITHUB_OUTPUT"
+          echo "frequency=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq 2>/dev/null || true)" >> "$GITHUB_OUTPUT"
+          echo "governor=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || echo unknown)" >> "$GITHUB_OUTPUT"
+          lscpu
+          rustc --version --verbose
+      - name: Build unmodified V1 reference
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}/nexusq-arena-v1
+        run: |
+          git fetch --depth=1 origin refs/tags/v1.0.0:refs/tags/v1.0.0
+          git checkout v1.0.0
+          # Preserve the V1 implementation and dependencies; only annotate its JSON output.
+          python3 - <<'PYV1'
+          from pathlib import Path
+          p = Path("arena/runners/nexusq/src/main.rs")
+          s = p.read_text()
+          old = '"measurement_method":"std::time::Instant mean wall-clock latency"'
+          new = old + ',"measurement_scope":"reference_implementation_operation","comparison_contract":"fips_operation_v1"'
+          assert old in s, "V1 benchmark metadata marker not found"
+          s = s.replace(old, new, 1)
+          old_env = '"cpu":option_env!("NEXUSQ_CPU").unwrap_or("unknown"),"cpu_features":[],"compiler":"rustc","compiler_version":option_env!("RUSTC_VERSION").unwrap_or("unknown"),"optimization":option_env!("NEXUSQ_OPT").unwrap_or("unknown"),"harness_version":"arena-v1"'
+          new_env = r'''"cpu":env::var("NEXUSQ_CPU").unwrap_or_else(|_| "unknown".into()),"cpu_features":env::var("NEXUSQ_CPU_FEATURES").unwrap_or_default().split(',').filter(|x| !x.is_empty()).map(str::to_owned).collect::<Vec<_>>(),"compiler":"rustc","compiler_version":env::var("RUSTC_VERSION").unwrap_or_else(|_| "unknown".into()),"rustc_verbose":env::var("NEXUSQ_RUSTC_VERBOSE").unwrap_or_else(|_| "unknown".into()),"cargo_lock_sha256":env::var("NEXUSQ_CARGO_LOCK_SHA256").unwrap_or_else(|_| "unknown".into()),"run_order":env::var("NEXUSQ_RUN_ORDER").unwrap_or_else(|_| "unknown".into()),"optimization":env::var("NEXUSQ_OPT").unwrap_or_else(|_| "unknown".into()),"harness_version":"arena-v1"'''
+          assert old_env in s, "V1 environment metadata marker not found"
+          p.write_text(s.replace(old_env, new_env, 1))
+          PYV1
+          echo "$(sha256sum arena/runners/nexusq/Cargo.lock | cut -d' ' -f1)" > "${{ runner.temp }}/v1-lock-hash"
+          NEXUSQ_COMMIT="$(git rev-parse HEAD)" cargo build --locked --release --manifest-path arena/runners/nexusq/Cargo.toml
+      - name: Build V1 with zeroize hardening only
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}/nexusq-arena-v1-zeroize
+        run: |
+          python3 - <<'PY2'
+          from pathlib import Path
+          p = Path("Cargo.toml")
+          s = p.read_text()
+          old = 'ml-dsa = "0.1.1"'
+          new = 'ml-dsa = { version = "0.1.1", features = ["zeroize"] }'
+          assert old in s, "expected unmodified V1 ml-dsa dependency declaration"
+          p.write_text(s.replace(old, new, 1))
+          PY2
+          # Refresh only the runner lock after enabling the feature; the actual build is locked.
+          cargo check --offline --manifest-path arena/runners/nexusq/Cargo.toml
+          echo "$(sha256sum arena/runners/nexusq/Cargo.lock | cut -d' ' -f1)" > "${{ runner.temp }}/v1-zeroize-lock-hash"
+          NEXUSQ_COMMIT="$(git rev-parse HEAD)-zeroize-only" cargo build --locked --release --manifest-path arena/runners/nexusq/Cargo.toml
+      - name: Build current V3 runner
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}/nexusq-arena-v3
+        run: |
+          git fetch --depth=1 origin "${{ github.event.pull_request.head.sha || github.sha }}"
+          git reset --hard "${{ github.event.pull_request.head.sha || github.sha }}"
+          echo "$(sha256sum arena/runners/nexusq/Cargo.lock | cut -d' ' -f1)" > "${{ runner.temp }}/v3-lock-hash"
+          NEXUSQ_COMMIT="${{ github.event.pull_request.head.sha || github.sha }}" cargo build --locked --release --features cached-verifier --manifest-path arena/runners/nexusq/Cargo.toml
+      - name: Build diagnostic variant without SHA3 zeroize feature (non-production)
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}/nexusq-arena-v3-sha3-zeroize-off
+        run: |
+          python3 - <<'PYDIAG'
+          from pathlib import Path
+          p = Path("Cargo.toml")
+          s = p.read_text()
+          old = 'sha3 = { version = "0.11.0-rc.5", features = ["zeroize"] }'
+          new = 'sha3 = "0.11.0-rc.5"'
+          assert old in s, "expected V3 SHA3 zeroize feature declaration"
+          p.write_text(s.replace(old, new, 1))
+          PYDIAG
+          # Diagnostic only: isolate SHA3 state zeroization cost. Never publish this variant.
+          cargo check --offline --manifest-path arena/runners/nexusq/Cargo.toml
+          echo "$(sha256sum arena/runners/nexusq/Cargo.lock | cut -d' ' -f1)" > "${{ runner.temp }}/v3-sha3-zeroize-off-lock-hash"
+          NEXUSQ_COMMIT="${{ github.event.pull_request.head.sha || github.sha }}-sha3-zeroize-off-diagnostic" cargo build --locked --release --features cached-verifier --manifest-path arena/runners/nexusq/Cargo.toml
+          git checkout -- Cargo.toml arena/runners/nexusq/Cargo.lock
+          git diff --exit-code -- Cargo.toml arena/runners/nexusq/Cargo.lock
+      - name: Assert Arena resolves the intended patched PQC sources
+        run: |
+          kem_tree="$(cargo tree --locked --manifest-path arena/runners/nexusq/Cargo.toml -i ml-kem)"
+          printf '%s\n' "$kem_tree"
+          printf '%s\n' "$kem_tree" | grep -F 'vendor/ml-kem' >/dev/null || {
+            echo 'ERROR: Arena ml-kem does not resolve to vendor/ml-kem' >&2
+            exit 1
+          }
+          lattice_tree="$(cargo tree --locked --manifest-path arena/runners/nexusq/Cargo.toml -i module-lattice)"
+          printf '%s\n' "$lattice_tree"
+          printf '%s\n' "$lattice_tree" | grep -F 'vendor/module-lattice' >/dev/null || {
+            echo 'ERROR: Arena module-lattice does not resolve to vendor/module-lattice' >&2
+            exit 1
+          }
+          echo 'Arena patched PQC source resolution: OK'
+      - name: Run 10 randomized alternating rounds
+        env:
+          CPU: ${{ steps.env.outputs.cpu }}
+          FEATURES: ${{ steps.env.outputs.features }}
+          RUSTC_VERSION: ${{ steps.env.outputs.rustc }}
+          RUSTC_VERBOSE: ${{ steps.env.outputs.rustc_verbose }}
+          CPU_FREQUENCY: ${{ steps.env.outputs.frequency }}
+          CPU_GOVERNOR: ${{ steps.env.outputs.governor }}
+        run: |
+          mkdir -p arena/results/ci
+          : > arena/results/ci/v1-reference.jsonl
+          : > arena/results/ci/v1-zeroize-reference.jsonl
+          : > arena/results/ci/nexusq-reference.jsonl
+          for round in $(seq 1 10); do
+            for variant in $(printf '%s\n' v1 v1-zeroize v3 | shuf); do
+              case "$variant" in
+                v1)
+                  binary="${{ runner.temp }}/nexusq-arena-v1/release/nexusq-arena-runner"
+                  lock_hash="$(cat '${{ runner.temp }}/v1-lock-hash')"
+                  output=arena/results/ci/v1-reference.jsonl ;;
+                v1-zeroize)
+                  binary="${{ runner.temp }}/nexusq-arena-v1-zeroize/release/nexusq-arena-runner"
+                  lock_hash="$(cat '${{ runner.temp }}/v1-zeroize-lock-hash')"
+                  output=arena/results/ci/v1-zeroize-reference.jsonl ;;
+                v3)
+                  binary="${{ runner.temp }}/nexusq-arena-v3/release/nexusq-arena-runner"
+                  lock_hash="$(cat '${{ runner.temp }}/v3-lock-hash')"
+                  output=arena/results/ci/nexusq-reference.jsonl ;;
+              esac
+              echo "=== Arena round $round: $variant ==="
+              NEXUSQ_CPU="$CPU" NEXUSQ_CPU_FEATURES="$FEATURES" RUSTC_VERSION="$RUSTC_VERSION" \
+              NEXUSQ_RUSTC_VERBOSE="$RUSTC_VERBOSE" NEXUSQ_CARGO_LOCK_SHA256="$lock_hash" \
+              NEXUSQ_CPU_FREQUENCY_KHZ="$CPU_FREQUENCY" NEXUSQ_CPU_GOVERNOR="$CPU_GOVERNOR" \
+              NEXUSQ_RUN_ORDER="round-$round-$variant" NEXUSQ_OPT=release NEXUSQ_RUN_ID="$variant-round-$round" \
+                "$binary" >> "$output"
+            done
+          done
+          : > arena/results/ci/v3-sha3-zeroize-diagnostic.jsonl
+          for round in $(seq 1 10); do
+            for variant in $(printf '%s\n' v3-sha3-zeroize-on v3-sha3-zeroize-off | shuf); do
+              case "$variant" in
+                v3-sha3-zeroize-on)
+                  binary="${{ runner.temp }}/nexusq-arena-v3/release/nexusq-arena-runner"
+                  lock_hash="$(cat '${{ runner.temp }}/v3-lock-hash')" ;;
+                v3-sha3-zeroize-off)
+                  binary="${{ runner.temp }}/nexusq-arena-v3-sha3-zeroize-off/release/nexusq-arena-runner"
+                  lock_hash="$(cat '${{ runner.temp }}/v3-sha3-zeroize-off-lock-hash')" ;;
+              esac
+              echo "=== SHA3 zeroize diagnostic round $round: $variant ==="
+              NEXUSQ_CPU="$CPU" NEXUSQ_CPU_FEATURES="$FEATURES" RUSTC_VERSION="$RUSTC_VERSION" \
+              NEXUSQ_RUSTC_VERBOSE="$RUSTC_VERBOSE" NEXUSQ_CARGO_LOCK_SHA256="$lock_hash" \
+              NEXUSQ_CPU_FREQUENCY_KHZ="$CPU_FREQUENCY" NEXUSQ_CPU_GOVERNOR="$CPU_GOVERNOR" \
+              NEXUSQ_RUN_ORDER="round-$round-$variant" NEXUSQ_OPT=release NEXUSQ_RUN_ID="$variant-round-$round" \
+                "$binary" >> arena/results/ci/v3-sha3-zeroize-diagnostic.jsonl
+            done
+          done
+      - name: Validate samples, metadata and matched-seed comparisons
+        run: |
+          python3 -m pip install --disable-pip-version-check --no-input 'jsonschema==4.26.0'
+          python3 - <<'PY3'
+          import json
+          from pathlib import Path
+          import jsonschema
+          schema=json.loads(Path("arena/schemas/benchmark-result.schema.json").read_text())
+          paths={
+            "v1":Path("arena/results/ci/v1-reference.jsonl"),
+            "v1-zeroize":Path("arena/results/ci/v1-zeroize-reference.jsonl"),
+            "v3":Path("arena/results/ci/nexusq-reference.jsonl"),
+          }
+          rows={}
+          for name,path in paths.items():
+            rows[name]=[json.loads(line) for line in path.read_text().splitlines() if line.startswith("{")]
+            expected=90 if name != "v3" else 100
+            assert len(rows[name])==expected, (name,len(rows[name]),expected)
+            for row in rows[name]: jsonschema.Draft202012Validator(schema).validate(row)
+            sign_rows_for_variant=[r for r in rows[name] if r["operation"]=="sign"]
+            assert all(r["measurement"]["iterations"] > 0 for r in sign_rows_for_variant)
+            if name == "v3":
+              # V3 reports 64 deterministic keys × 16 sign samples per key.
+              assert all(r["measurement"]["iterations"]==1024 for r in sign_rows_for_variant)
+              assert all(len(r["measurement"].get("samples_ns",[]))==1024 for r in sign_rows_for_variant)
+              assert all(len(r["measurement"].get("seed_samples",[]))==64 for r in sign_rows_for_variant)
+              assert all(r["measurement"].get("samples_per_seed")==16 for r in sign_rows_for_variant)
+              for row in rows[name]:
+                measurement=row["measurement"]
+                if row["operation"] != "sign":
+                  iterations=measurement["iterations"]
+                  samples=measurement.get("samples_ns",[])
+                  assert iterations >= 50, (row["algorithm"],row["operation"],"too few samples",iterations)
+                  assert len(samples)==iterations, (row["algorithm"],row["operation"],"sample count differs from iterations",len(samples),iterations)
+                  stats=measurement.get("statistics",{})
+                  assert all(key in stats for key in ("sample_count","min_ns","median_ns","p95_ns","stddev_ns")), (row["algorithm"],row["operation"],"missing summary stats")
+                  assert stats["sample_count"]==iterations, (row["algorithm"],row["operation"],"summary sample count differs",stats.get("sample_count"),iterations)
+            assert all(r["environment"].get("cargo_lock_sha256") for r in rows[name])
+            assert all(r["environment"].get("rustc_verbose") for r in rows[name])
+            assert len({r["environment"]["cpu"] for r in rows[name]})==1
+            print(name, "schema/metadata/sign-sample contract: OK", len(rows[name]), "records")
+          # Historical V1/V1+zeroize runners expose aggregate sign timings only;
+          # they do not emit per-seed samples. Do not fabricate a matched-seed
+          # comparison against V3's deterministic 64-key distribution.
+          print("ML-DSA sign evolution: V1 aggregate vs V3 per-seed distribution; not directly comparable")
+          assert all(r["environment"]["run_order"]!="unknown" for group in rows.values() for r in group)
+          print("10 randomized rounds; V3 uses a fixed 64-key sign corpus: OK")
+          diagnostic_path=Path("arena/results/ci/v3-sha3-zeroize-diagnostic.jsonl")
+          diagnostic=[json.loads(line) for line in diagnostic_path.read_text().splitlines() if line.startswith("{")]
+          assert len(diagnostic)==200, ("sha3 zeroize diagnostic row count",len(diagnostic))
+          for row in diagnostic:
+            jsonschema.Draft202012Validator(schema).validate(row)
+            assert row["operation"] in {"keygen","encaps","decaps","sign","verify"}
+          from collections import defaultdict
+          grouped=defaultdict(dict)
+          for row in diagnostic:
+            order=row["environment"]["run_order"]
+            variant="off" if "zeroize-off" in order else "on"
+            round_id=order.split("-")[1]
+            key=(row["algorithm"]["id"],row["algorithm"]["parameter_set"],row["operation"])
+            grouped[key].setdefault(round_id,{})[variant]=row["measurement"]["statistics"]["median_ns"]
+          for key, rounds in sorted(grouped.items()):
+            if key[0] != "ml-kem":
+              continue
+            ratios=[pair["off"]/pair["on"] for pair in rounds.values() if set(pair)=={"on","off"}]
+            assert len(ratios)==10, (key,"expected ten paired rounds",len(ratios))
+            ratios.sort()
+            print("SHA3 zeroize diagnostic off/on median ratio",key,"min/median/max:",round(ratios[0],4),round(ratios[len(ratios)//2],4),round(ratios[-1],4))
+          assert all(len(rounds)==10 and all(set(pair)=={"on","off"} for pair in rounds.values()) for key,rounds in grouped.items() if key[0]=="ml-kem")
+          print("SHA3 zeroize diagnostic: 10 paired rounds per ML-KEM operation: OK")
+          PY3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pqc-arena-v1-reference
+          path: arena/results/ci/v1-reference.jsonl
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pqc-arena-v1-zeroize-reference
+          path: arena/results/ci/v1-zeroize-reference.jsonl
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pqc-arena-nexusq-reference
+          path: arena/results/ci/nexusq-reference.jsonl
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pqc-arena-v3-sha3-zeroize-diagnostic
+          path: arena/results/ci/v3-sha3-zeroize-diagnostic.jsonl
+          retention-days: 14
+
+# External implementations will be added only with pinned versions/commits,
+# semantically equivalent adapters, and recorded build/CPU feature metadata.
+# RISC-V and embedded remain dedicated-runner/hardware execution gates.
+
+  liboqs-reference:
+    name: liboqs 0.16.0 reference adapter
+    runs-on: ubuntu-latest
+    needs: validate-registry
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install liboqs build dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build gcc
+      - name: Fetch pinned liboqs
+        run: |
+          git clone --depth 1 --branch 0.16.0 https://github.com/open-quantum-safe/liboqs.git .arena-liboqs
+          test "$(git -C .arena-liboqs rev-parse --short=7 HEAD)" = "5a1a854"
+      - name: Build liboqs
+        run: |
+          cmake -S .arena-liboqs -B .arena-liboqs/build -G Ninja -DOQS_BUILD_ONLY_LIB=ON -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release
+          cmake --build .arena-liboqs/build --parallel 2
+      - name: Compile Arena adapter
+        env:
+          LIBOQS_COMMIT: 5a1a854
+        run: |
+          gcc -O3 -std=c11 -DLIBOQS_COMMIT=\"$LIBOQS_COMMIT\" \
+            -I.arena-liboqs/build/include -I.arena-liboqs/src \
+            arena/adapters/liboqs/runner.c .arena-liboqs/build/lib/liboqs.a \
+            -lcrypto -ldl -lpthread -lm -o arena-liboqs-runner
+      - name: Run adapter and validate JSONL
+        env:
+          ARENA_OPT: release
+          LIBOQS_COMMIT: 5a1a854
+        run: |
+          mkdir -p arena/results/ci
+          ARENA_TARGET="$(uname -m)-$(uname -s | tr '[:upper:]' '[:lower:]')" \
+          ARENA_OS="$(uname -s)" \
+          ARENA_CPU="$(awk -F': ' '/model name|Hardware|Processor/{print $2; exit}' /proc/cpuinfo || true)" \
+          ARENA_CPU_FEATURES="$(python3 -c 'import json; s=set(); [s.update(x.split()) for x in open("/proc/cpuinfo", errors="ignore") if x.startswith(("flags", "Features")) and ":" in x for x in [x.split(":",1)[1]]]; print(",".join(sorted(s)))')" \
+          ./arena-liboqs-runner | tee arena/results/ci/liboqs-0.16.0.jsonl
+          python3 -m pip install --disable-pip-version-check --no-input 'jsonschema==4.26.0'
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          import jsonschema
+          schema = json.loads(Path("arena/schemas/benchmark-result.schema.json").read_text())
+          rows = [json.loads(x) for x in Path("arena/results/ci/liboqs-0.16.0.jsonl").read_text().splitlines() if x.startswith("{")]
+          assert len(rows) == 9
+          for row in rows:
+              jsonschema.Draft202012Validator(schema).validate(row)
+          assert all(r["implementation"]["id"] == "liboqs" for r in rows)
+          print("liboqs Arena records/schema: OK", len(rows))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pqc-arena-liboqs-0.16.0
+          path: arena/results/ci/liboqs-0.16.0.jsonl
+
+  circl-reference:
+    name: CIRCL 1.6.4 reference adapter
+    runs-on: ubuntu-latest
+    needs: validate-registry
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.x"
+      - name: Fetch pinned CIRCL
+        run: |
+          git clone --depth 1 --branch v1.6.4 https://github.com/cloudflare/circl.git .arena-circl
+          test "$(git -C .arena-circl rev-parse --short=7 HEAD)" = "901199c"
+      - name: Build Arena adapter
+        env:
+          CIRCL_COMMIT: 901199c
+          CIRCL_VERSION: 1.6.4
+        run: |
+          cp arena/adapters/circl/runner.go .arena-circl/arena_runner.go
+          cp arena/adapters/circl/go.mod .arena-circl/arena_runner.mod
+          cat > .arena-circl/arena_runner.mod <<'EOF'
+          module nexusq-circl-arena
+
+          go 1.25
+
+          require github.com/cloudflare/circl v1.6.4
+          EOF
+          mkdir -p .arena-circl/arena-runner
+          mv .arena-circl/arena_runner.go .arena-circl/arena-runner/main.go
+          mv .arena-circl/arena_runner.mod .arena-circl/arena-runner/go.mod
+          (cd .arena-circl/arena-runner && go mod edit -replace github.com/cloudflare/circl=..)
+          (cd .arena-circl/arena-runner && go mod tidy)
+          (cd .arena-circl/arena-runner && go build -trimpath -o runner .)
+      - name: Run adapter and validate JSONL
+        env:
+          CIRCL_COMMIT: 901199c
+          CIRCL_VERSION: 1.6.4
+          ARENA_OPT: release
+        run: |
+          mkdir -p arena/results/ci
+          ARENA_TARGET="$(go env GOARCH)-$(go env GOOS)" \
+          ARENA_OS="$(uname -s)" \
+          ARENA_CPU="$(awk -F': ' '/model name|Hardware|Processor/{print $2; exit}' /proc/cpuinfo || true)" \
+          ARENA_CPU_FEATURES="" \
+          .arena-circl/arena-runner/runner | tee arena/results/ci/circl-1.6.4.jsonl
+          python3 -m pip install --disable-pip-version-check --no-input 'jsonschema==4.26.0'
+          python3 - <<'PY2'
+          import json
+          from pathlib import Path
+          import jsonschema
+          schema=json.loads(Path("arena/schemas/benchmark-result.schema.json").read_text())
+          rows=[json.loads(x) for x in Path("arena/results/ci/circl-1.6.4.jsonl").read_text().splitlines() if x.startswith("{")]
+          assert len(rows)==6
+          for row in rows: jsonschema.Draft202012Validator(schema).validate(row)
+          assert {r["implementation"]["id"] for r in rows}=={"circl"}
+          assert {(r["algorithm"]["id"],r["algorithm"]["parameter_set"],r["operation"]) for r in rows} == {
+              ("ml-kem","768","keygen"),("ml-kem","768","encaps"),("ml-kem","768","decaps"),
+              ("ml-dsa","65","keygen"),("ml-dsa","65","sign"),("ml-dsa","65","verify")
+          }
+          PY2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pqc-arena-circl-1.6.4
+          path: arena/results/ci/circl-1.6.4.jsonl
+
+  openssl-reference:
+    name: OpenSSL 3.5.9 reference adapter
+    runs-on: ubuntu-latest
+    needs: validate-registry
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install OpenSSL build dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential perl
+      - name: Fetch pinned OpenSSL release
+        run: |
+          git clone --depth 1 --branch openssl-3.5.9 https://github.com/openssl/openssl.git .arena-openssl
+          test "$(git -C .arena-openssl describe --tags --exact-match HEAD)" = "openssl-3.5.9"
+      - name: Build OpenSSL
+        run: |
+          cd .arena-openssl
+          ./Configure --prefix="$GITHUB_WORKSPACE/.arena-openssl-install" --openssldir="$GITHUB_WORKSPACE/.arena-openssl-install/ssl"
+          make -j"$(nproc)"
+          make install_sw
+      - name: Build Arena adapter
+        run: |
+          OPENSSL_LIBDIR="$(find "$GITHUB_WORKSPACE/.arena-openssl-install" -type f -name 'libcrypto.so*' -print -quit | xargs -r dirname)"
+          test -n "$OPENSSL_LIBDIR"
+          cc -std=c11 -O3 -Wall -Wextra -Werror \
+            -I"$GITHUB_WORKSPACE/.arena-openssl-install/include" \
+            arena/adapters/openssl/runner.c \
+            -L"$OPENSSL_LIBDIR" -Wl,-rpath,"$OPENSSL_LIBDIR" -lcrypto -o arena-openssl-runner
+      - name: Run adapter and validate JSONL
+        env:
+          ARENA_OPT: release
+          ARENA_TARGET: x86_64-linux-gnu
+          ARENA_OS: Ubuntu
+          ARENA_CPU: github-actions
+        run: |
+          mkdir -p arena/results/ci
+          ./arena-openssl-runner | tee arena/results/ci/openssl-3.5.9.jsonl
+          python3 -m pip install --disable-pip-version-check --no-input 'jsonschema==4.26.0'
+          python3 - <<'PY2'
+          import json
+          from pathlib import Path
+          import jsonschema
+          schema=json.loads(Path("arena/schemas/benchmark-result.schema.json").read_text())
+          rows=[json.loads(x) for x in Path("arena/results/ci/openssl-3.5.9.jsonl").read_text().splitlines() if x.startswith("{")]
+          assert len(rows)==9
+          for row in rows: jsonschema.Draft202012Validator(schema).validate(row)
+          assert {r["implementation"]["id"] for r in rows}=={"openssl"}
+          assert {(r["algorithm"]["id"],r["algorithm"]["parameter_set"],r["operation"]) for r in rows} == {
+              ("ml-kem","768","keygen"),("ml-kem","768","encaps"),("ml-kem","768","decaps"),
+              ("ml-dsa","65","keygen"),("ml-dsa","65","sign"),("ml-dsa","65","verify"),
+              ("slh-dsa","SHAKE-128f","keygen"),("slh-dsa","SHAKE-128f","sign"),("slh-dsa","SHAKE-128f","verify")
+          }
+          PY2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pqc-arena-openssl-3.5.9
+          path: arena/results/ci/openssl-3.5.9.jsonl
+
+  aws-lc-reference:
+    name: AWS-LC mainline reference adapter
+    runs-on: ubuntu-latest
+    needs: validate-registry
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned AWS-LC source
+        run: |
+          git init .arena-aws-lc
+          git -C .arena-aws-lc remote add origin https://github.com/aws/aws-lc.git
+          git -C .arena-aws-lc fetch --depth 1 origin ec05f25ef5bcb1bf03d2e2f44ba57973a878e0ba
+          git -C .arena-aws-lc checkout --detach ec05f25ef5bcb1bf03d2e2f44ba57973a878e0ba
+          test "$(git -C .arena-aws-lc rev-parse HEAD)" = "ec05f25ef5bcb1bf03d2e2f44ba57973a878e0ba"
+      - name: Build AWS-LC
+        run: |
+          cmake -S .arena-aws-lc -B .arena-aws-lc-build -GNinja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+          cmake --build .arena-aws-lc-build --parallel 2
+      - name: Build Arena adapter
+        run: |
+          cc -std=c11 -O3 -Wall -Wextra -Werror \
+            -I"$GITHUB_WORKSPACE/.arena-aws-lc/include" \
+            arena/adapters/aws-lc/runner.c \
+            -L"$GITHUB_WORKSPACE/.arena-aws-lc-build/crypto" \
+            -Wl,-rpath,"$GITHUB_WORKSPACE/.arena-aws-lc-build/crypto" \
+            -lcrypto -lm -o arena-aws-lc-runner
+      - name: Capture AWS-LC version and run adapter
+        env:
+          ARENA_OPT: release
+          ARENA_TARGET: x86_64-linux-gnu
+          ARENA_OS: Ubuntu
+          ARENA_CPU: github-actions
+        run: |
+          mkdir -p arena/results/ci
+          export AWSLC_VERSION="$(.arena-aws-lc-build/crypto/awslc_tool version 2>/dev/null | head -1 || true)"
+          if [ -z "$AWSLC_VERSION" ]; then AWSLC_VERSION="runtime"; fi
+          ./arena-aws-lc-runner | tee arena/results/ci/aws-lc-ec05f25.jsonl
+          python3 -m pip install --disable-pip-version-check --no-input 'jsonschema==4.26.0'
+          python3 - <<'PY2'
+          import json
+          from pathlib import Path
+          import jsonschema
+          schema=json.loads(Path("arena/schemas/benchmark-result.schema.json").read_text())
+          rows=[json.loads(x) for x in Path("arena/results/ci/aws-lc-ec05f25.jsonl").read_text().splitlines() if x.startswith("{")]
+          # AWS-LC emits ML-KEM-768, ML-KEM-1024 and ML-DSA-65 (three operations each).
+          assert len(rows)==9, ("unexpected AWS-LC operation count", len(rows))
+          for row in rows: jsonschema.Draft202012Validator(schema).validate(row)
+          assert {r["implementation"]["id"] for r in rows}=={"aws-lc"}
+          assert {(r["algorithm"]["id"],r["algorithm"]["parameter_set"],r["operation"]) for r in rows} == {
+              ("ml-kem","768","keygen"),("ml-kem","768","encaps"),("ml-kem","768","decaps"),
+              ("ml-kem","1024","keygen"),("ml-kem","1024","encaps"),("ml-kem","1024","decaps"),
+              ("ml-dsa","65","keygen"),("ml-dsa","65","sign"),("ml-dsa","65","verify")
+          }
+          PY2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pqc-arena-aws-lc-ec05f25
+          path: arena/results/ci/aws-lc-ec05f25.jsonl
+
+  botan-reference:
+    name: Botan 3.13.0 reference adapter
+    runs-on: ubuntu-latest
+    needs: validate-registry
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned Botan source
+        run: |
+          git clone --depth 1 --branch 3.13.0 https://github.com/randombit/botan.git .arena-botan
+          git -C .arena-botan describe --tags --exact-match HEAD
+          echo "BOTAN_COMMIT=$(git -C .arena-botan rev-parse HEAD)" >> "$GITHUB_ENV"
+      - name: Build Botan
+        run: |
+          cd .arena-botan
+          ./configure.py --prefix="$GITHUB_WORKSPACE/.arena-botan-install" --without-documentation --disable-shared
+          make -j"$(nproc)"
+          make install
+      - name: Build Arena adapter
+        env:
+          CXXFLAGS: -std=c++20 -O3 -Wall -Wextra -Werror
+        run: |
+          c++ $CXXFLAGS arena/adapters/botan/runner.cpp \
+            -I"$GITHUB_WORKSPACE/.arena-botan-install/include/botan-3" \
+            -L"$GITHUB_WORKSPACE/.arena-botan-install/lib" \
+            -Wl,-rpath,"$GITHUB_WORKSPACE/.arena-botan-install/lib" \
+            -lbotan-3 -o arena-botan-runner
+      - name: Run Botan adapter and validate schema
+        env:
+          BOTAN_VERSION: 3.13.0
+          BOTAN_COMMIT: ${{ env.BOTAN_COMMIT }}
+          ARENA_OPT: release
+          ARENA_TARGET: x86_64-linux-gnu
+          ARENA_OS: Ubuntu
+          ARENA_CPU: github-actions
+          ARENA_COMPILER: c++
+        run: |
+          mkdir -p arena/results/ci
+          ARENA_COMPILER_VERSION="$(c++ --version | head -1)" ./arena-botan-runner | tee arena/results/ci/botan-3.13.0.jsonl
+          python3 -m pip install --disable-pip-version-check --no-input 'jsonschema==4.26.0'
+          python3 - <<'PY2'
+          import json
+          from pathlib import Path
+          import jsonschema
+          schema=json.loads(Path("arena/schemas/benchmark-result.schema.json").read_text())
+          rows=[json.loads(x) for x in Path("arena/results/ci/botan-3.13.0.jsonl").read_text().splitlines() if x.startswith("{")]
+          assert len(rows)==6
+          for row in rows: jsonschema.Draft202012Validator(schema).validate(row)
+          assert {r["implementation"]["id"] for r in rows}=={"botan"}
+          assert {(r["algorithm"]["id"],r["algorithm"]["parameter_set"],r["operation"]) for r in rows} == {
+              ("ml-kem","768","keygen"),("ml-kem","768","encaps"),("ml-kem","768","decaps"),
+              ("ml-dsa","65","keygen"),("ml-dsa","65","sign"),("ml-dsa","65","verify")
+          }
+          PY2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pqc-arena-botan-3.13.0
+          path: arena/results/ci/botan-3.13.0.jsonl
+
+  rustcrypto-kems-reference:
+    name: RustCrypto KEMs reference adapter
+    runs-on: ubuntu-latest
+    needs: validate-registry
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build pinned RustCrypto adapter
+        working-directory: arena/adapters/rustcrypto-kems
+        env:
+          RUSTFLAGS: "-Dwarnings"
+        run: |
+          cargo build --release
+      - name: Run RustCrypto adapter and validate schema
+        working-directory: arena/adapters/rustcrypto-kems
+        env:
+          ARENA_TARGET: x86_64-linux-gnu
+          ARENA_OS: Ubuntu
+          ARENA_CPU: github-actions
+          ARENA_OPT: release
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/arena/results/ci"
+          ARENA_COMPILER_VERSION="$(rustc --version)" ./target/release/nexusq-arena-rustcrypto-kems | tee "$GITHUB_WORKSPACE/arena/results/ci/rustcrypto-kems.jsonl"
+          cd "$GITHUB_WORKSPACE"
+          python3 -m pip install --disable-pip-version-check --no-input 'jsonschema==4.26.0'
+          python3 - <<'PY2'
+          import json
+          from pathlib import Path
+          import jsonschema
+          schema=json.loads(Path("arena/schemas/benchmark-result.schema.json").read_text())
+          rows=[json.loads(x) for x in Path("arena/results/ci/rustcrypto-kems.jsonl").read_text().splitlines() if x.startswith("{")]
+          assert len(rows)==6
+          for row in rows: jsonschema.Draft202012Validator(schema).validate(row)
+          assert {r["implementation"]["id"] for r in rows}=={"rustcrypto-kems"}
+          assert {(r["algorithm"]["id"],r["algorithm"]["parameter_set"],r["operation"]) for r in rows} == {
+              ("ml-kem","768","keygen"),("ml-kem","768","encaps"),("ml-kem","768","decaps"),
+              ("hqc","128","keygen"),("hqc","128","encaps"),("hqc","128","decaps")
+          }
+          PY2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pqc-arena-rustcrypto-kems
+          path: arena/results/ci/rustcrypto-kems.jsonl
+
+  pq-code-package-reference:
+    name: PQ Code Package native reference adapters
+    runs-on: ubuntu-latest
+    needs: validate-registry
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native build dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential
+      - name: Fetch pinned PQ Code Package sources
+        run: |
+          git clone --depth 1 --branch v2.0.0 https://github.com/pq-code-package/mlkem-native.git .arena-mlkem-native
+          test "$(git -C .arena-mlkem-native rev-parse HEAD)" = "d1b2fe782888bdb761a50336012923180be7f502"
+          test "$(git -C .arena-mlkem-native describe --tags --exact-match HEAD)" = "v2.0.0"
+          git clone --depth 1 --branch v1.0.0-beta2 https://github.com/pq-code-package/mldsa-native.git .arena-mldsa-native
+          test "$(git -C .arena-mldsa-native rev-parse HEAD)" = "9b0ee84f4cf399043eca59eca4e5f8531ca1d61b"
+          test "$(git -C .arena-mldsa-native describe --tags --exact-match HEAD)" = "v1.0.0-beta2"
+      - name: Build pinned native libraries
+        run: |
+          make -C .arena-mlkem-native/examples/monolithic_build_native build
+          make -C .arena-mldsa-native/examples/monolithic_build_native build
+      - name: Compile Arena adapter
+        run: |
+          cc -std=c11 -O3 -Wall -Wextra -Werror \
+            -I"$GITHUB_WORKSPACE/.arena-mlkem-native/examples/monolithic_build_native/mlkem_native" \
+            -I"$GITHUB_WORKSPACE/.arena-mldsa-native/examples/monolithic_build_native/mldsa_native" \
+            arena/adapters/pq-code-package/runner.c \
+            "$GITHUB_WORKSPACE/.arena-mlkem-native/examples/monolithic_build_native/build/libmlkem768.a" \
+            "$GITHUB_WORKSPACE/.arena-mldsa-native/examples/monolithic_build_native/build/libmldsa65.a" \
+            -o arena-pq-code-package-runner
+      - name: Run adapter and validate JSONL
+        env:
+          PQCP_VERSION: "mlkem-native-v2.0.0 + mldsa-native-v1.0.0-beta2"
+          PQCP_COMMIT: "mlkem-native@d1b2fe782888bdb761a50336012923180be7f502;mldsa-native@9b0ee84f4cf399043eca59eca4e5f8531ca1d61b"
+          ARENA_OPT: release
+          ARENA_TARGET: x86_64-linux-gnu
+          ARENA_OS: Ubuntu
+          ARENA_CPU: github-actions
+          ARENA_COMPILER: cc
+        run: |
+          mkdir -p arena/results/ci
+          ARENA_COMPILER_VERSION="$(cc --version | head -1)" ./arena-pq-code-package-runner | tee arena/results/ci/pq-code-package.jsonl
+          python3 -m pip install --disable-pip-version-check --no-input 'jsonschema==4.26.0'
+          python3 - <<'PY2'
+          import json
+          from pathlib import Path
+          import jsonschema
+          schema=json.loads(Path("arena/schemas/benchmark-result.schema.json").read_text())
+          rows=[json.loads(x) for x in Path("arena/results/ci/pq-code-package.jsonl").read_text().splitlines() if x.startswith("{")]
+          assert len(rows)==6
+          for row in rows: jsonschema.Draft202012Validator(schema).validate(row)
+          assert {r["implementation"]["id"] for r in rows}=={"pq-code-package"}
+          assert {(r["algorithm"]["id"],r["algorithm"]["parameter_set"],r["operation"]) for r in rows} == {
+              ("ml-kem","768","keygen"),("ml-kem","768","encaps"),("ml-kem","768","decaps"),
+              ("ml-dsa","65","keygen"),("ml-dsa","65","sign"),("ml-dsa","65","verify")
+          }
+          PY2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pqc-arena-pq-code-package
+          path: arena/results/ci/pq-code-package.jsonl
+
+  compare-schema:
+    name: Validate normalized adapter output
+    runs-on: ubuntu-latest
+    needs: [reference-benchmarks, liboqs-reference, circl-reference, openssl-reference, aws-lc-reference, botan-reference, rustcrypto-kems-reference, pq-code-package-reference]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download V1 reference artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pqc-arena-v1-reference
+          path: arena/results/ci/v1
+      - name: Download NEXUS-Q artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pqc-arena-nexusq-reference
+          path: arena/results/ci/nexusq
+      - name: Download liboqs artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pqc-arena-liboqs-0.16.0
+          path: arena/results/ci/liboqs
+      - name: Download CIRCL artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pqc-arena-circl-1.6.4
+          path: arena/results/ci/circl
+      - name: Download OpenSSL artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pqc-arena-openssl-3.5.9
+          path: arena/results/ci/openssl
+      - name: Download AWS-LC artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pqc-arena-aws-lc-ec05f25
+          path: arena/results/ci/aws-lc
+      - name: Download Botan artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pqc-arena-botan-3.13.0
+          path: arena/results/ci/botan
+      - name: Download RustCrypto artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pqc-arena-rustcrypto-kems
+          path: arena/results/ci/rustcrypto-kems
+      - name: Download PQ Code Package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pqc-arena-pq-code-package
+          path: arena/results/ci/pq-code-package
+      - name: Validate normalized JSONL against schema
+        run: |
+          python3 -m pip install --disable-pip-version-check --no-input 'jsonschema==4.26.0'
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          import jsonschema
+          schema = json.loads(Path("arena/schemas/benchmark-result.schema.json").read_text())
+          files = list(Path("arena/results/ci").rglob("*.jsonl"))
+          assert files
+          rows = [json.loads(x) for p in files for x in p.read_text().splitlines() if x.startswith("{")]
+          # Ten-round V1 and V3 raw sample artifacts contain 90 and 100
+          # records respectively; the seven external adapters contribute 51.
+          assert len(rows) == 241, len(rows)
+          for row in rows:
+              jsonschema.Draft202012Validator(schema).validate(row)
+          matrix = {(r["algorithm"]["id"], r["algorithm"]["parameter_set"], r["operation"]) for r in rows}
+          expected = {
+              ("ml-kem", "768", "keygen"), ("ml-kem", "768", "encaps"), ("ml-kem", "768", "decaps"),
+              ("ml-kem", "1024", "keygen"), ("ml-kem", "1024", "encaps"), ("ml-kem", "1024", "decaps"),
+              ("ml-dsa", "65", "keygen"), ("ml-dsa", "65", "sign"), ("ml-dsa", "65", "verify"),
+              ("hqc", "128", "keygen"), ("hqc", "128", "encaps"), ("hqc", "128", "decaps"),
+              ("slh-dsa", "SHAKE-128f", "keygen"), ("slh-dsa", "SHAKE-128f", "sign"), ("slh-dsa", "SHAKE-128f", "verify"),
+          }
+          assert matrix == expected, matrix
+          assert {r["implementation"]["id"] for r in rows} == {"nexusq", "liboqs", "circl", "openssl", "aws-lc", "botan", "rustcrypto-kems", "pq-code-package"}
+          print("normalized Arena schema/matrix: OK", len(rows))
+          PY
+
+
+  profile-diagnostic:
+    name: V3 LTO / codegen-units diagnostic
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.98.1
+      - name: Capture profile diagnostic environment
+        run: |
+          mkdir -p arena/results/ci
+          rustc -vV > arena/results/ci/profile-diagnostic-rustc.txt
+          lscpu > arena/results/ci/profile-diagnostic-lscpu.txt
+          cargo tree --locked --manifest-path arena/runners/nexusq/Cargo.toml -i ml-kem > arena/results/ci/profile-diagnostic-ml-kem-tree.txt
+      - name: Build explicit production-equivalent and controlled profile variants
+        run: |
+          set -euo pipefail
+          # The Arena runner is an independent workspace, so the root Cargo.toml
+          # [profile.release] is NOT inherited. Pin every relevant setting explicitly.
+          # Match the repository release profile: opt=3, thin LTO, CGU=1,
+          # panic=abort, strip=symbols, debug=false.
+          printf '%s\n' \
+            'baseline: opt-level=3,lto=thin,codegen-units=1,panic=abort,strip=symbols,debug=false' \
+            'no-lto: opt-level=3,lto=false,codegen-units=1,panic=abort,strip=symbols,debug=false' \
+            'cgu16: opt-level=3,lto=thin,codegen-units=16,panic=abort,strip=symbols,debug=false' \
+            > arena/results/ci/profile-diagnostic-profiles.txt
+          CARGO_TARGET_DIR="$RUNNER_TEMP/nexusq-profile-baseline" cargo build --locked --release --features cached-verifier --config profile.release.opt-level=3 --config 'profile.release.lto="thin"' --config profile.release.codegen-units=1 --config 'profile.release.panic="abort"' --config 'profile.release.strip="symbols"' --config profile.release.debug=false --manifest-path arena/runners/nexusq/Cargo.toml
+          CARGO_TARGET_DIR="$RUNNER_TEMP/nexusq-profile-no-lto" cargo build --locked --release --features cached-verifier --config profile.release.opt-level=3 --config profile.release.lto=false --config profile.release.codegen-units=1 --config 'profile.release.panic="abort"' --config 'profile.release.strip="symbols"' --config profile.release.debug=false --manifest-path arena/runners/nexusq/Cargo.toml
+          CARGO_TARGET_DIR="$RUNNER_TEMP/nexusq-profile-cgu16" cargo build --locked --release --features cached-verifier --config profile.release.opt-level=3 --config 'profile.release.lto="thin"' --config profile.release.codegen-units=16 --config 'profile.release.panic="abort"' --config 'profile.release.strip="symbols"' --config profile.release.debug=false --manifest-path arena/runners/nexusq/Cargo.toml
+      - name: Run 10 randomized alternating rounds per profile
+        run: |
+          set -euo pipefail
+          : > arena/results/ci/profile-diagnostic.jsonl
+          cpu="$(lscpu | awk -F: '/Model name|Model:/ {sub(/^[ \t]+/, "", $2); print $2; exit}')"
+          # Linux reports x86 features as "flags" and ARM features as "Features";
+          # some virtualized runners may omit the field entirely. Never fail the
+          # diagnostic just because optional CPU metadata is unavailable.
+          features="$(python3 - <<'PYCPU'
+          from pathlib import Path
+          for line in Path('/proc/cpuinfo').read_text(errors='ignore').splitlines():
+              if ':' in line and line.split(':', 1)[0].strip().lower() in {'flags', 'features'}:
+                  print(' '.join(line.split(':', 1)[1].split()))
+                  break
+          PYCPU
+          )"
+          for round in $(seq 1 10); do
+            for variant in $(printf '%s\n' baseline no-lto cgu16 | shuf); do
+              case "$variant" in
+                baseline) binary="$RUNNER_TEMP/nexusq-profile-baseline/release/nexusq-arena-runner" ;;
+                no-lto) binary="$RUNNER_TEMP/nexusq-profile-no-lto/release/nexusq-arena-runner" ;;
+                cgu16) binary="$RUNNER_TEMP/nexusq-profile-cgu16/release/nexusq-arena-runner" ;;
+              esac
+              echo "=== profile round $round: $variant ==="
+              sample_file="$RUNNER_TEMP/profile-$variant-round-$round.jsonl"
+              : > "$sample_file"
+              NEXUSQ_CPU="$cpu" NEXUSQ_CPU_FEATURES="$features" RUSTC_VERSION="$(rustc --version --verbose | head -1)" NEXUSQ_OPT=release NEXUSQ_RUN_ID="profile-$variant-round-$round" \
+                "$binary" > "$sample_file"
+              sample_count="$(grep -c '^{"' "$sample_file" || true)"
+              echo "Profile $variant round $round emitted $sample_count JSON records"
+              if [[ "$sample_count" -ne 10 ]]; then
+                echo "Expected 10 records from one cached-verifier runner invocation; got $sample_count" >&2
+                cat "$sample_file" >&2
+                exit 1
+              fi
+              cat "$sample_file" >> arena/results/ci/profile-diagnostic.jsonl
+            done
+          done
+      - name: Validate profile samples and report descriptive medians
+        run: |
+          python3 - <<'PY'
+          import json, statistics
+          from pathlib import Path
+          p=Path('arena/results/ci/profile-diagnostic.jsonl')
+          rows=[json.loads(x) for x in p.read_text().splitlines() if x.strip()]
+          assert len(rows)==300, len(rows)
+          groups={}
+          for r in rows:
+            run=r['run_id']
+            variant=next(v for v in ('baseline','no-lto','cgu16') if f'profile-{v}-' in run)
+            # ML-DSA verify is emitted twice: cached-verifier and conventional
+            # verification. Include the method or these distinct measurements merge.
+            method=r['measurement']['measurement_method']
+            key=(r['algorithm']['id'],r['algorithm']['parameter_set'],r['operation'],method,variant)
+            groups.setdefault(key,[]).append(float(r['measurement']['latency_ns']))
+          assert len(groups)==30, len(groups)
+          assert all(len(v)==10 for v in groups.values()), {k:len(v) for k,v in groups.items() if len(v)!=10}
+          operations=sorted({k[:4] for k in groups})
+          assert len(operations)==10, operations
+          verify_methods={k[3] for k in operations if k[0]=='ml-dsa' and k[2]=='verify'}
+          assert len(verify_methods)==2 and sum('cached MlDsa65VerifyingKey' in method for method in verify_methods)==1, verify_methods
+          assert sum('direct RustCrypto ml-dsa API' in method for method in verify_methods)==1, verify_methods
+          for alg,param,op,method in operations:
+            baseline=statistics.median(groups[(alg,param,op,method,'baseline')])
+            ratios=[]
+            for variant in ('no-lto','cgu16'):
+              value=statistics.median(groups[(alg,param,op,method,variant)])
+              ratio=value/baseline
+              ratios.append((variant,value,ratio))
+            print(f'{alg}-{param} {op} [{method}]: baseline={baseline:.1f}ns ' + ' '.join(f'{v}={lat:.1f}ns ratio={ratio:.4f} ({(ratio-1)*100:+.2f}%)' for v,lat,ratio in ratios))
+          print('Profile diagnostic: 300 rows, 10 measurement-method/profile groups, 10 observations per group: OK')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pqc-arena-v3-profile-diagnostic
+          path: |
+            arena/results/ci/profile-diagnostic.jsonl
+            arena/results/ci/profile-diagnostic-rustc.txt
+            arena/results/ci/profile-diagnostic-lscpu.txt
+            arena/results/ci/profile-diagnostic-ml-kem-tree.txt
+            arena/results/ci/profile-diagnostic-profiles.txt
+          retention-days: 14
+
+
+  v2-performance-gate:
+    name: V2-10 performance evidence
+    # V2-10 is the frozen V2 release-line gate. V3 now uses a different
+    # ten-round benchmark schema and its own evidence checks; do not feed V3
+    # artifacts into the legacy five-round V2 evaluator.
+    if: github.ref == 'refs/heads/nexusqv2' || github.base_ref == 'nexusqv2'
+    runs-on: ubuntu-latest
+    needs: compare-schema
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download V1 reference artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pqc-arena-v1-reference
+          path: arena/results/ci/v1
+      - uses: actions/download-artifact@v4
+        with:
+          name: pqc-arena-nexusq-reference
+          path: arena/results/ci/nexusq
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: pqc-arena-*
+          path: arena/results/ci/comparators
+          merge-multiple: true
+      - name: Evaluate V2-10 gate
+        run: |
+          python3 - <<'PY'
+          import json, math
+          from pathlib import Path
+          v1_rows=[json.loads(x) for x in Path("arena/results/ci/v1/v1-reference.jsonl").read_text().splitlines() if x.startswith("{")]
+          from statistics import median
+          def aggregate(rows):
+            grouped={}
+            for r in rows:
+              k=(r["algorithm"]["id"],r["algorithm"]["parameter_set"],r["operation"])
+              grouped.setdefault(k,[]).append(float(r["measurement"]["latency_ns"]))
+            assert all(len(v)==5 for v in grouped.values()), {k:len(v) for k,v in grouped.items() if len(v)!=5}
+            return {k:median(v) for k,v in grouped.items()}
+          baseline=aggregate(v1_rows)
+          expected=set(baseline)
+          rows=[json.loads(x) for x in Path("arena/results/ci/nexusq/nexusq-reference.jsonl").read_text().splitlines() if x.startswith("{")]
+          assert len(rows)==45
+          v2_medians=aggregate(rows)
+          best={}
+          for p in Path("arena/results/ci/comparators").rglob("*.jsonl"):
+            for line in p.read_text().splitlines():
+              if not line.startswith("{"): continue
+              r=json.loads(line); k=(r["algorithm"]["id"],r["algorithm"]["parameter_set"],r["operation"])
+              if k in expected and r["implementation"]["id"]!="nexusq":
+                lat=float(r["measurement"]["latency_ns"])
+                if k not in best or lat<best[k]["latency_ns"]: best[k]={"implementation":r["implementation"]["id"],"latency_ns":lat}
+          assert {(r["algorithm"]["id"],r["algorithm"]["parameter_set"],r["operation"]) for r in rows}==expected
+          assert set(best)==expected
+          results=[]; ratios=[]; improved=0; no_regression=True
+          for k in sorted(expected):
+            lat=v2_medians[k]; vr=lat/baseline[k]; ratios.append(vr)
+            if vr<.95: improved+=1
+            if vr>1.05: no_regression=False
+            results.append({"algorithm":k[0],"parameter_set":k[1],"operation":k[2],"v2_latency_ns":lat,"v1_latency_ns":baseline[k],"v2_vs_v1":vr,"best_comparator":best[k]["implementation"],"best_comparator_ns":best[k]["latency_ns"],"v2_vs_best":lat/best[k]["latency_ns"]})
+          geomean=math.exp(sum(math.log(x) for x in ratios)/len(ratios))
+          report={"schema":"nexusq-v2-performance-evidence-v1","commit":"${{ github.sha }}","criteria":{"max_geomean_vs_v1":.95,"max_individual_regression_vs_v1":1.05,"baseline_source":"v1.0.0 code with V2 ml-dsa zeroize hardening overlay; V1 and V2 measured alternately on the same GitHub Actions runner, 5 rounds, 50 iterations and 10 warmups per round"},"geomean_vs_v1":geomean,"operations_improved_by_5_percent":improved,"no_individual_regression_over_5_percent":no_regression,"results":results}
+          Path("arena/results/ci/v2-performance-gate.json").write_text(json.dumps(report,indent=2)+"\n")
+          print(json.dumps(report,indent=2))
+          acceptance = geomean<=.95 and no_regression
+          report["acceptance_status"] = "PASS" if acceptance else "NOT_MET"
+          Path("arena/results/ci/v2-performance-gate.json").write_text(json.dumps(report,indent=2)+"\n")
+          print("V2-10 performance evidence: collected; acceptance status:", report["acceptance_status"])
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v2-10-performance-gate-${{ github.sha }}
+          path: arena/results/ci/v2-performance-gate.json
