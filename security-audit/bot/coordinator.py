@@ -237,6 +237,61 @@ def excerpts(items, sources):
             parts.append(name + ":" + str(line) + "\n" + "\n".join(str(n)+": "+lines[n-1] for n in range(lo, hi+1)))
     return "\n\n".join(parts)[:16000]
 
+def partial_findings(candidates, sources):
+    """Convert recoverable raw candidates into explicitly unvalidated findings."""
+    result = []
+    for item in candidates:
+        refs = refs_for(item, sources)
+        if not refs:
+            continue
+        trace, evidence = [], []
+        for i, (name, line) in enumerate(refs):
+            excerpt = sources[name].splitlines()[line - 1].strip()[:350]
+            trace.append({
+                "kind": "entrypoint" if i == 0 else ("sink" if i == len(refs) - 1 else "propagation"),
+                "file": name,
+                "line": line,
+                "scope": str(item.get("component") or "NEXUS-Q source")[:120],
+                "description": "Unvalidated candidate source line: " + (excerpt or "[blank line]"),
+            })
+            evidence.append({
+                "file": name,
+                "line": line,
+                "description": "Source excerpt: " + (excerpt or "[blank line]"),
+            })
+        cid = str(item.get("id") or item.get("title") or "")
+        fingerprint = "NQ-" + hashlib.sha256((cid + repr(refs)).encode()).hexdigest()[:20]
+        result.append({
+            "verdict": "needs_validation",
+            "fingerprint": fingerprint,
+            "title": str(item.get("title") or "Unvalidated security candidate")[:180],
+            "description": str(item.get("description") or item.get("attack_scenario") or "Candidate preserved after an incomplete run.")[:2500],
+            "claimed_root_cause": str(item.get("root_cause") or "Potential weakness; not independently validated.")[:1500],
+            "trace": trace,
+            "evidence": evidence,
+            "blockers": [
+                "Audit stopped before independent candidate validation completed.",
+                "Static-only workflow; exploitability remains unproven.",
+            ],
+            "validation_plan": {
+                "local": "Review the cited source path and design a bounded dummy-data regression test; do not execute target code in this workflow.",
+                "deployment": "Ask the owner to verify relevant deployment configuration without probing production.",
+            },
+        })
+    result.sort(key=lambda item: item["fingerprint"])
+    return result
+
+
+def recover_partial_findings(path, candidates, sources, status):
+    """Persist raw candidates only when an interrupted run has no final findings."""
+    if not candidates or status != "partial":
+        return
+    path = Path(path)
+    existing = json.loads(path.read_text(encoding="utf-8"))
+    if not existing:
+        save(path, partial_findings(candidates, sources))
+
+
 def ledger():
     from urllib.parse import quote
     rows = [
@@ -421,22 +476,9 @@ def main():
         ERRORS.append(type(exc).__name__+": "+str(exc)); status = "partial"
     if not (OUT/"findings.json").exists(): save(OUT/"findings.json",[])
     if not (OUT/"coverage-ledger.json").exists(): save(OUT/"coverage-ledger.json",[])
-    # Preserve candidates as explicit unvalidated leads when a later API call fails.
-    if candidates and not (OUT/"findings.json").exists():
-        partial = []
-        for item in candidates:
-            refs = refs_for(item, sources)
-            if not refs: continue
-            trace, evidence = [], []
-            for i,(name,line) in enumerate(refs):
-                excerpt = sources[name].splitlines()[line-1].strip()[:350]
-                trace.append({"kind":"entrypoint" if i==0 else ("sink" if i==len(refs)-1 else "propagation"),"file":name,"line":line,"scope":str(item.get("component") or "NEXUS-Q source")[:120],"description":"Unvalidated candidate source line: "+(excerpt or "[blank line]")})
-                evidence.append({"file":name,"line":line,"description":"Source excerpt: "+(excerpt or "[blank line]")})
-            cid=str(item.get("id") or item.get("title") or "")
-            fp="NQ-"+hashlib.sha256((cid+repr(refs)).encode()).hexdigest()[:20]
-            partial.append({"verdict":"needs_validation","fingerprint":fp,"title":str(item.get("title") or "Unvalidated security candidate")[:180],"description":str(item.get("description") or item.get("attack_scenario") or "Candidate preserved after an incomplete run.")[:2500],"claimed_root_cause":str(item.get("root_cause") or "Potential weakness; not independently validated.")[:1500],"trace":trace,"evidence":evidence,"blockers":["Audit stopped before independent candidate validation completed.","Static-only workflow; exploitability remains unproven."],"validation_plan":{"local":"Review the cited source path and design a bounded dummy-data regression test; do not execute target code in this workflow.","deployment":"Ask the owner to verify relevant deployment configuration without probing production."}})
-        partial.sort(key=lambda item: item["fingerprint"])
-        save(OUT/"findings.json",partial)
+    # If an interrupted run has no finalized findings, preserve raw candidates
+    # as explicit needs_validation leads even though the empty file now exists.
+    recover_partial_findings(OUT / "findings.json", candidates, sources, status)
     if coverage:
         if any(unit.get("status") == "in_progress" for unit in coverage):
             finalize_coverage(coverage, reviewed_paths_done, candidates, sources, coverage_paths)

@@ -39,6 +39,29 @@ class CoordinatorTests(unittest.TestCase):
         self.assertNotIn("sk-abcdefghijklmnopqrstuvwxyz123456", cleaned)
         self.assertNotIn("BEGIN PRIVATE KEY", cleaned)
 
+    def test_partial_candidates_are_preserved_when_empty_findings_file_exists(self):
+        sources = {"src/lib.rs": "pub fn entry() {}\npub fn sink() {}\n"}
+        candidates = [{
+            "id": "candidate-1",
+            "title": "Unvalidated boundary candidate",
+            "description": "Potential source-level issue",
+            "source_refs": ["src/lib.rs:2"],
+        }]
+        with tempfile.TemporaryDirectory() as directory:
+            findings_path = Path(directory) / "findings.json"
+            findings_path.write_text("[]\n", encoding="utf-8")
+            coordinator.recover_partial_findings(findings_path, candidates, sources, "partial")
+            saved = json.loads(findings_path.read_text())
+            self.assertEqual(len(saved), 1)
+            self.assertEqual(saved[0]["verdict"], "needs_validation")
+            self.assertEqual(saved[0]["evidence"][0]["file"], "src/lib.rs")
+
+            # A pre-existing finalized result must never be overwritten.
+            finalized = [{"verdict": "rejected", "fingerprint": "existing"}]
+            coordinator.save(findings_path, finalized)
+            coordinator.recover_partial_findings(findings_path, candidates, sources, "partial")
+            self.assertEqual(json.loads(findings_path.read_text()), finalized)
+
     def test_source_refs_must_exist_and_have_valid_line_numbers(self):
         sources = {"src/lib.rs": "first\nsecond\n"}
         item = {"source_refs": ["src/lib.rs:2", "src/lib.rs:0", "missing.rs:1", "src/lib.rs:nope"]}
