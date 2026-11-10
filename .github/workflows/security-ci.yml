@@ -1,8 +1,7 @@
-name: NEXUS-Q Phase 1 — Core and Security Gates
+name: NEXUS-Q Manual Full Rust Validation and Security
 
 on:
   workflow_dispatch:
-  workflow_call:
 
 permissions:
   contents: read
@@ -13,7 +12,7 @@ concurrency:
 
 jobs:
   rust-security:
-    name: Rust security gates
+    name: Full Rust, feature-matrix, and security validation
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -103,7 +102,7 @@ jobs:
           path: cargo-metadata.json
 
   fuzz-build:
-    name: Fuzz harness build (main and pull requests)
+    name: Manual fuzz harness build
     runs-on: ubuntu-latest
     # Always compile harnesses in phase 1; full campaigns run only in phase 11.
     steps:
