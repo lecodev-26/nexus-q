@@ -9,6 +9,7 @@ pub mod header;
 pub mod key_id;
 pub mod lifecycle;
 pub mod metadata;
+pub mod operation;
 pub mod purpose;
 pub mod record;
 pub mod serde_helpers;
@@ -34,6 +35,9 @@ pub use header::{
 pub use key_id::{KeyId, KeyIdError};
 pub use lifecycle::{DestructionConfirmation, LifecycleError, RevokeReason};
 pub use metadata::{KeyMetadata, Origin};
+pub use operation::{
+    OperationCancelled, OperationControl, OperationError, OperationPhase, OperationProgress,
+};
 pub use purpose::{Purpose, PurposeError};
 pub use record::{KeyRecord, RecordValidationError, WrappedKeyMaterial};
 pub use serde_helpers::{CborError, from_slice, to_vec};

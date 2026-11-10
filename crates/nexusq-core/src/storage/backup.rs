@@ -53,6 +53,9 @@ use crate::crypto::kdf::{self, KdfError};
 use crate::crypto::random::{OsRandomSource, RandomError, RandomSource};
 use crate::vault::body::VaultBody;
 use crate::vault::header::{HeaderError, KdfAlgorithm, KdfParams};
+use crate::vault::operation::{
+    OperationControl, OperationError, OperationPhase, OperationProgress,
+};
 use crate::vault::serde_helpers::{self, CborError};
 use crate::vault::{Session, Vault, VaultError};
 
@@ -216,6 +219,132 @@ pub fn export(
     Ok(())
 }
 
+/// Export a backup with cooperative cancellation and backend phase updates.
+/// The destination is published create-only; an existing file is never replaced.
+pub fn export_controlled(
+    session: &Session,
+    backup_path: impl AsRef<Path>,
+    backup_passphrase: &[u8],
+    control: &OperationControl,
+    progress: &mut dyn FnMut(OperationProgress),
+) -> Result<(), OperationError<BackupError>> {
+    control
+        .check_cancelled()
+        .map_err(OperationError::Cancelled)?;
+    let backup_path = backup_path.as_ref();
+    progress(OperationProgress::phase(OperationPhase::Preparing));
+    let rng = OsRandomSource::new();
+    let mut salt = [0u8; SALT_LEN];
+    rng.fill_bytes(&mut salt).map_err(BackupError::from)?;
+    let mut nonce = [0u8; BODY_NONCE_LEN];
+    rng.fill_bytes(&mut nonce).map_err(BackupError::from)?;
+    progress(OperationProgress::phase(OperationPhase::Processing));
+    let params = KdfParams::v1_default();
+    let backup_kek = derive_backup_kek(backup_passphrase, &salt, &params)?;
+    control
+        .check_cancelled()
+        .map_err(OperationError::Cancelled)?;
+    let header = build_header(params, salt.to_vec(), backup_kek.as_ref())?;
+    let backup_body = session
+        .clone_body_rewrapped(backup_kek.as_ref())
+        .map_err(BackupError::from)?;
+    let body_bytes =
+        Zeroizing::new(serde_helpers::to_vec(&backup_body).map_err(BackupError::from)?);
+    let header_bytes = serde_helpers::to_vec(&header).map_err(BackupError::from)?;
+    control
+        .check_cancelled()
+        .map_err(OperationError::Cancelled)?;
+    let ciphertext = aead::encrypt(
+        AeadAlgorithm::Aes256Gcm,
+        backup_kek.as_ref(),
+        &nonce,
+        &header_bytes,
+        &body_bytes,
+    )
+    .map_err(BackupError::from)?;
+    control
+        .check_cancelled()
+        .map_err(OperationError::Cancelled)?;
+    let total =
+        (MAGIC.len() + HEADER_LEN_PREFIX + header_bytes.len() + nonce.len() + ciphertext.len())
+            as u64;
+    progress(OperationProgress::measured(
+        OperationPhase::WritingOutput,
+        0,
+        total,
+    ));
+    write_backup_file_controlled(backup_path, &header_bytes, &nonce, &ciphertext, control)?;
+    progress(OperationProgress::measured(
+        OperationPhase::WritingOutput,
+        total,
+        total,
+    ));
+    progress(OperationProgress::phase(OperationPhase::Completed));
+    Ok(())
+}
+
+fn write_backup_file_controlled(
+    path: &Path,
+    header_bytes: &[u8],
+    nonce: &[u8],
+    ciphertext: &[u8],
+    control: &OperationControl,
+) -> Result<(), OperationError<BackupError>> {
+    let header_len =
+        u32::try_from(header_bytes.len()).map_err(|_| BackupError::Corrupt("header too large"))?;
+    let mut out = Vec::with_capacity(
+        MAGIC.len() + HEADER_LEN_PREFIX + header_bytes.len() + nonce.len() + ciphertext.len(),
+    );
+    out.extend_from_slice(&MAGIC);
+    out.extend_from_slice(&header_len.to_be_bytes());
+    out.extend_from_slice(header_bytes);
+    out.extend_from_slice(nonce);
+    out.extend_from_slice(ciphertext);
+    control
+        .check_cancelled()
+        .map_err(OperationError::Cancelled)?;
+    let (tmp, mut file) = create_unique_temp_file(path)?;
+    let mut published = false;
+    let result = (|| -> Result<(), OperationError<BackupError>> {
+        file.write_all(&out).map_err(BackupError::from)?;
+        file.sync_all().map_err(BackupError::from)?;
+        drop(file);
+        control
+            .check_cancelled()
+            .map_err(OperationError::Cancelled)?;
+        fs::hard_link(&tmp, path).map_err(BackupError::from)?;
+        published = true;
+        fs::remove_file(&tmp).map_err(BackupError::from)?;
+        restrict_file_permissions(path)?;
+        sync_parent_dir(path)?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let mut cleanup_errors = Vec::new();
+        if published
+            && let Err(error) = fs::remove_file(path)
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            cleanup_errors.push(error.to_string());
+        }
+        if let Err(error) = fs::remove_file(&tmp)
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            cleanup_errors.push(error.to_string());
+        }
+        if !cleanup_errors.is_empty() {
+            return Err(BackupError::Io(std::io::Error::other(format!(
+                "backup operation failed and partial-output cleanup failed: {}",
+                cleanup_errors.join("; ")
+            )))
+            .into());
+        }
+    } else {
+        let _ = fs::remove_file(&tmp);
+    }
+    result
+}
+
 // =============================================================================
 // Import
 // =============================================================================
@@ -282,6 +411,102 @@ pub fn import(
     let vault = session.lock()?;
 
     Ok(vault)
+}
+
+/// Import a backup with safe cancellation points and backend progress updates.
+/// Once destination creation starts, the operation completes or removes the
+/// newly-created vault file; cancellation is not reported mid-commit.
+pub fn import_controlled(
+    backup_path: impl AsRef<Path>,
+    backup_passphrase: &[u8],
+    new_vault_path: impl AsRef<Path>,
+    new_vault_password: &[u8],
+    control: &OperationControl,
+    progress: &mut dyn FnMut(OperationProgress),
+) -> Result<Vault, OperationError<BackupError>> {
+    control
+        .check_cancelled()
+        .map_err(OperationError::Cancelled)?;
+    let backup_path = backup_path.as_ref();
+    let new_vault_path = new_vault_path.as_ref();
+    let total = fs::metadata(backup_path).map_err(BackupError::from)?.len();
+    progress(OperationProgress::measured(
+        OperationPhase::ReadingInput,
+        0,
+        total,
+    ));
+    let bytes = fs::read(backup_path).map_err(BackupError::from)?;
+    if bytes.len() as u64 != total {
+        return Err(BackupError::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "backup changed while it was being read",
+        ))
+        .into());
+    }
+    progress(OperationProgress::measured(
+        OperationPhase::ReadingInput,
+        bytes.len() as u64,
+        total,
+    ));
+    control
+        .check_cancelled()
+        .map_err(OperationError::Cancelled)?;
+    let (header, rest) = parse_backup_file(&bytes)?;
+    if rest.len() < BODY_NONCE_LEN + aead::TAG_LEN {
+        return Err(BackupError::Corrupt("body is truncated").into());
+    }
+    let (nonce, ciphertext) = rest.split_at(BODY_NONCE_LEN);
+    progress(OperationProgress::phase(OperationPhase::Processing));
+    let backup_kek = derive_backup_kek(backup_passphrase, &header.salt, &header.kdf)?;
+    verify_backup_kek(&header, backup_kek.as_ref())?;
+    control
+        .check_cancelled()
+        .map_err(OperationError::Cancelled)?;
+    let header_bytes = serde_helpers::to_vec(&header).map_err(BackupError::from)?;
+    let plaintext = Zeroizing::new(
+        aead::decrypt(
+            AeadAlgorithm::Aes256Gcm,
+            backup_kek.as_ref(),
+            nonce,
+            &header_bytes,
+            ciphertext,
+        )
+        .map_err(|_| BackupError::WrongPassphrase)?,
+    );
+    let mut body: VaultBody =
+        serde_helpers::from_slice(plaintext.as_ref()).map_err(BackupError::from)?;
+    body.audit_dir = None;
+    body.audit_anchor = None;
+    control
+        .check_cancelled()
+        .map_err(OperationError::Cancelled)?;
+    progress(OperationProgress::phase(OperationPhase::Verifying));
+    control
+        .check_cancelled()
+        .map_err(OperationError::Cancelled)?;
+    progress(OperationProgress::phase(OperationPhase::WritingOutput));
+    Vault::create(new_vault_path, new_vault_password, None).map_err(BackupError::from)?;
+    let result = (|| -> Result<Vault, BackupError> {
+        let vault = Vault::open(new_vault_path)?;
+        let mut session = vault.unlock(new_vault_password)?;
+        session.rewrap_body_from(&mut body, backup_kek.as_ref())?;
+        *session.body_mut()? = body;
+        Ok(session.lock()?)
+    })();
+    match result {
+        Ok(vault) => {
+            progress(OperationProgress::phase(OperationPhase::Completed));
+            Ok(vault)
+        }
+        Err(error) => match fs::remove_file(new_vault_path) {
+            Ok(()) => Err(error.into()),
+            Err(cleanup) if cleanup.kind() == std::io::ErrorKind::NotFound => Err(error.into()),
+            Err(cleanup) => Err(BackupError::Io(std::io::Error::other(format!(
+                "{error}; newly-created vault cleanup failed: {cleanup}"
+            )))
+            .into()),
+        },
+    }
 }
 
 // =============================================================================
@@ -501,6 +726,158 @@ mod tests {
         let vault = Vault::open(&new_vault_path).unwrap();
         let session = vault.unlock(new_pw).unwrap();
         assert_eq!(session.key_count(), 1);
+    }
+
+    #[test]
+    fn controlled_backup_roundtrip_emits_truthful_progress() {
+        let dir = TempDir::new().unwrap();
+        let (vault_path, vault_pw) = create_vault_with_key(&dir, "controlled-source.nqv");
+        let backup_path = dir.path().join("controlled.nqb");
+        let restored_path = dir.path().join("controlled-restored.nqv");
+        let mut updates = Vec::new();
+        {
+            let session = Vault::open(&vault_path).unwrap().unlock(&vault_pw).unwrap();
+            let mut reporter = |progress| updates.push(progress);
+            export_controlled(
+                &session,
+                &backup_path,
+                b"separate-backup-passphrase",
+                &OperationControl::new(),
+                &mut reporter,
+            )
+            .unwrap();
+        }
+        assert!(
+            updates
+                .iter()
+                .any(|item| item.phase == OperationPhase::WritingOutput
+                    && item.completed == Some(0)
+                    && item.total.is_some())
+        );
+        assert_eq!(updates.first().unwrap().phase, OperationPhase::Preparing);
+        assert_eq!(updates.last().unwrap().phase, OperationPhase::Completed);
+        let processing_index = updates
+            .iter()
+            .position(|item| item.phase == OperationPhase::Processing)
+            .unwrap();
+        let writing_index = updates
+            .iter()
+            .position(|item| item.phase == OperationPhase::WritingOutput)
+            .unwrap();
+        assert!(processing_index < writing_index);
+        let mut import_updates = Vec::new();
+        let mut reporter = |progress| import_updates.push(progress);
+        import_controlled(
+            &backup_path,
+            b"separate-backup-passphrase",
+            &restored_path,
+            b"new-vault-password",
+            &OperationControl::new(),
+            &mut reporter,
+        )
+        .unwrap();
+        assert!(
+            import_updates
+                .iter()
+                .any(|item| item.phase == OperationPhase::ReadingInput
+                    && item.completed == item.total)
+        );
+        assert_eq!(
+            import_updates.first().unwrap().phase,
+            OperationPhase::ReadingInput
+        );
+        assert_eq!(
+            import_updates.last().unwrap().phase,
+            OperationPhase::Completed
+        );
+        let verifying_index = import_updates
+            .iter()
+            .position(|item| item.phase == OperationPhase::Verifying)
+            .unwrap();
+        let writing_index = import_updates
+            .iter()
+            .position(|item| item.phase == OperationPhase::WritingOutput)
+            .unwrap();
+        assert!(verifying_index < writing_index);
+        let restored = Vault::open(&restored_path)
+            .unwrap()
+            .unlock(b"new-vault-password")
+            .unwrap();
+        assert_eq!(restored.key_count(), 1);
+    }
+
+    #[test]
+    fn controlled_backup_import_cancellation_does_not_create_destination_vault() {
+        let dir = TempDir::new().unwrap();
+        let (vault_path, vault_pw) = create_vault_with_key(&dir, "cancel-import-source.nqv");
+        let backup_path = dir.path().join("cancel-import.nqb");
+        let restored_path = dir.path().join("cancel-import-restored.nqv");
+        {
+            let session = Vault::open(&vault_path).unwrap().unlock(&vault_pw).unwrap();
+            export(&session, &backup_path, b"separate-backup-passphrase").unwrap();
+        }
+        let control = OperationControl::new();
+        control.cancel();
+        let result = import_controlled(
+            &backup_path,
+            b"separate-backup-passphrase",
+            &restored_path,
+            b"new-vault-password",
+            &control,
+            &mut |_| {},
+        );
+        assert!(matches!(result, Err(OperationError::Cancelled(_))));
+        assert!(!restored_path.exists());
+    }
+
+    #[test]
+    fn controlled_backup_export_never_replaces_existing_destination() {
+        let dir = TempDir::new().unwrap();
+        let (vault_path, vault_pw) = create_vault_with_key(&dir, "existing-backup-source.nqv");
+        let backup_path = dir.path().join("existing.nqb");
+        fs::write(&backup_path, b"original backup bytes").unwrap();
+        let session = Vault::open(&vault_path).unwrap().unlock(&vault_pw).unwrap();
+        let result = export_controlled(
+            &session,
+            &backup_path,
+            b"separate-backup-passphrase",
+            &OperationControl::new(),
+            &mut |_| {},
+        );
+        assert!(
+            matches!(result, Err(OperationError::Failed(BackupError::Io(error))) if error.kind() == std::io::ErrorKind::AlreadyExists)
+        );
+        assert_eq!(fs::read(&backup_path).unwrap(), b"original backup bytes");
+        assert_eq!(
+            fs::read_dir(dir.path())
+                .unwrap()
+                .filter_map(Result::ok)
+                .filter(|entry| entry
+                    .file_name()
+                    .to_string_lossy()
+                    .contains("existing.nqb.tmp-"))
+                .count(),
+            0
+        );
+    }
+
+    #[test]
+    fn controlled_backup_cancellation_does_not_publish_output() {
+        let dir = TempDir::new().unwrap();
+        let (vault_path, vault_pw) = create_vault_with_key(&dir, "cancel-source.nqv");
+        let backup_path = dir.path().join("cancelled.nqb");
+        let session = Vault::open(&vault_path).unwrap().unlock(&vault_pw).unwrap();
+        let control = OperationControl::new();
+        control.cancel();
+        let result = export_controlled(
+            &session,
+            &backup_path,
+            b"separate-backup-passphrase",
+            &control,
+            &mut |_| {},
+        );
+        assert!(matches!(result, Err(OperationError::Cancelled(_))));
+        assert!(!backup_path.exists());
     }
 
     #[test]

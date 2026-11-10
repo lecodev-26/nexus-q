@@ -1,0 +1,61 @@
+name: NEXUS-Q Fast CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nexusq-fast-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quick-validation:
+    name: Fast Rust and repository validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install declared MSRV toolchain
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Check the complete Rust workspace
+        run: cargo check --workspace --locked
+      - name: Run core unit tests
+        run: cargo test -p nexusq-core --lib --locked
+      - name: Run C ABI crate tests
+        run: cargo test -p nexusq-c --locked
+      - name: Validate Arena JSON and required contracts
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          files = sorted(Path("arena").rglob("*.json"))
+          for path in files:
+              json.loads(path.read_text(encoding="utf-8"))
+          required = [
+              Path("arena/registry/algorithms.json"),
+              Path("arena/registry/implementations.json"),
+              Path("arena/registry/matrix.json"),
+              Path("arena/schemas/benchmark-result.schema.json"),
+          ]
+          missing = [str(path) for path in required if not path.is_file()]
+          if missing:
+              raise SystemExit(f"Missing Arena contracts: {missing}")
+          print(f"Validated {len(files)} Arena JSON files and all required contracts")
+          PY
+      - name: Validate locked Cargo metadata
+        run: cargo metadata --format-version 1 --locked --no-deps > /dev/null
+      - name: Enforce unsafe-code boundaries
+        run: |
+          python3 .github/scripts/check-kernel-unsafe.py
+          python3 .github/scripts/check-native-backend-unsafe.py

@@ -55,6 +55,16 @@
 - Updated the project site to link documentation and SDK pages to the immutable `v4.1.2` tag instead of a stale working branch.
 - Kept the public claims boundary unchanged: Audit-Ready Release only; no production-readiness claim, no FIPS validation, external audit pending.
 - `git diff --check` passes. The change set does not alter release assets, package version declarations, the release workflow, or any tag.
-- On push to `main`, the sequential CI workflow will run. Its job artifacts are temporary CI outputs, not GitHub Release assets. The tag-triggered release workflow is not triggered by a normal branch push. The NuGet `workflow_run` workflow can build and attempt to upload version 4.1.2 after the required CI/fuzz gates pass; `--skip-duplicate` prevents replacing an existing same-version package.
+- At the time of this 2026-10-28 closeout, pushes to `main` ran the sequential CI pipeline and the NuGet `workflow_run` workflow could publish after its gates. That historical automation was retired in the separate 2026-11-10 CI architecture reset recorded below.
 
 No release tag is to be moved, deleted, or recreated. No manual release workflow dispatch or package re-publication is part of this closeout.
+
+
+## CI architecture reset (2026-11-10)
+
+- Removed the former active workflow set from `.github/workflows/` in commit `4b362ec`; the historical copies remain under `.github/workflows-archive/`.
+- Replaced the sequential pipeline with `ci.yml` as the only automatic workflow on pushes to `main` and pull requests targeting `main`.
+- Reintroduced specialist security, fuzz, correctness, SDK, runtime, native assembly/backend, Arena, and benchmark workflows as independent manual dispatches (SDK/runtime workflows remain callable by the explicit release and NuGet workflows).
+- Package publication is now manual and confirmation-gated. Crates.io, PyPI, and RubyGems are grouped in `publish-packages.yml`; NuGet remains a separate OIDC-only workflow. Both verify an annotated version tag, its exact commit, and the matching existing GitHub release manifest.
+- `v4-release.yml` is manual-only, defaults to a dry run, requires an explicit publication input, verifies the exact annotated tag, and refuses to overwrite an existing release. Its version constant currently matches the repository's v4.1.2 package line and must be reviewed for a future version bump.
+- No workflow was pushed or executed on GitHub as part of this local preparation.

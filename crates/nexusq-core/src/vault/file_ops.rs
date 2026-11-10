@@ -36,6 +36,7 @@ use zeroize::Zeroizing;
 
 use super::envelope::{self, EnvelopeError};
 use super::key_id::KeyId;
+use super::operation::{OperationControl, OperationError, OperationPhase, OperationProgress};
 use super::record::KeyRecord;
 
 /// File extension used for encrypted files.
@@ -147,6 +148,185 @@ where
     Ok(())
 }
 
+/// Controlled variant of [`encrypt_file_with_key`]. Cancellation is observed
+/// after the complete input read, after encryption, and before publishing the
+/// output. The existing destination is never replaced.
+pub fn encrypt_file_with_key_controlled(
+    input: impl AsRef<Path>,
+    kek: &[u8],
+    key_record: &KeyRecord,
+    metadata: Vec<u8>,
+    control: &OperationControl,
+    progress: &mut dyn FnMut(OperationProgress),
+) -> Result<PathBuf, OperationError<EnvelopeError>> {
+    control
+        .check_cancelled()
+        .map_err(OperationError::Cancelled)?;
+    let input = input.as_ref();
+    let total = fs::metadata(input).map_err(EnvelopeError::Io)?.len();
+    progress(OperationProgress::measured(
+        OperationPhase::ReadingInput,
+        0,
+        total,
+    ));
+    let plaintext = Zeroizing::new(fs::read(input).map_err(EnvelopeError::Io)?);
+    if plaintext.len() as u64 != total {
+        return Err(EnvelopeError::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "input file changed while it was being read",
+        ))
+        .into());
+    }
+    progress(OperationProgress::measured(
+        OperationPhase::ReadingInput,
+        plaintext.len() as u64,
+        total,
+    ));
+    control
+        .check_cancelled()
+        .map_err(OperationError::Cancelled)?;
+    progress(OperationProgress::phase(OperationPhase::Processing));
+    let envelope_bytes = envelope::build_envelope(kek, key_record, &plaintext, metadata)?;
+    control
+        .check_cancelled()
+        .map_err(OperationError::Cancelled)?;
+    let output = encrypted_path_for(input);
+    progress(OperationProgress::measured(
+        OperationPhase::WritingOutput,
+        0,
+        envelope_bytes.len() as u64,
+    ));
+    write_new_atomic_controlled(&output, &envelope_bytes, control)?;
+    progress(OperationProgress::measured(
+        OperationPhase::WritingOutput,
+        envelope_bytes.len() as u64,
+        envelope_bytes.len() as u64,
+    ));
+    Ok(output)
+}
+
+/// Controlled variant of [`decrypt_file_with_key`]. Decrypted plaintext is
+/// held in zeroizing memory and is not published if cancellation is observed.
+pub fn decrypt_file_with_key_controlled<F>(
+    input: impl AsRef<Path>,
+    output: impl AsRef<Path>,
+    kek: &[u8],
+    lookup: F,
+    control: &OperationControl,
+    progress: &mut dyn FnMut(OperationProgress),
+) -> Result<(), OperationError<EnvelopeError>>
+where
+    F: FnOnce(&KeyId) -> Option<KeyRecord>,
+{
+    control
+        .check_cancelled()
+        .map_err(OperationError::Cancelled)?;
+    let input = input.as_ref();
+    let total = fs::metadata(input).map_err(EnvelopeError::Io)?.len();
+    progress(OperationProgress::measured(
+        OperationPhase::ReadingInput,
+        0,
+        total,
+    ));
+    let envelope_bytes = fs::read(input).map_err(EnvelopeError::Io)?;
+    if envelope_bytes.len() as u64 != total {
+        return Err(EnvelopeError::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "encrypted input changed while it was being read",
+        ))
+        .into());
+    }
+    progress(OperationProgress::measured(
+        OperationPhase::ReadingInput,
+        envelope_bytes.len() as u64,
+        total,
+    ));
+    control
+        .check_cancelled()
+        .map_err(OperationError::Cancelled)?;
+    progress(OperationProgress::phase(OperationPhase::Processing));
+    let plaintext = envelope::open_envelope(kek, &envelope_bytes, lookup)?;
+    control
+        .check_cancelled()
+        .map_err(OperationError::Cancelled)?;
+    progress(OperationProgress::measured(
+        OperationPhase::WritingOutput,
+        0,
+        plaintext.len() as u64,
+    ));
+    write_new_atomic_controlled(output.as_ref(), plaintext.as_slice(), control)?;
+    progress(OperationProgress::measured(
+        OperationPhase::WritingOutput,
+        plaintext.len() as u64,
+        plaintext.len() as u64,
+    ));
+    Ok(())
+}
+
+fn write_new_atomic_controlled(
+    path: &Path,
+    data: &[u8],
+    control: &OperationControl,
+) -> Result<(), OperationError<EnvelopeError>> {
+    control
+        .check_cancelled()
+        .map_err(OperationError::Cancelled)?;
+    let parent = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
+    let file_name = path.file_name().unwrap_or_default();
+    let (temp_path, mut file) =
+        create_unique_temp_file(parent, file_name).map_err(EnvelopeError::Io)?;
+    let mut published = false;
+    let result = (|| -> Result<(), OperationError<EnvelopeError>> {
+        use std::io::Write;
+        file.write_all(data).map_err(EnvelopeError::Io)?;
+        file.sync_all().map_err(EnvelopeError::Io)?;
+        drop(file);
+        control
+            .check_cancelled()
+            .map_err(OperationError::Cancelled)?;
+        fs::hard_link(&temp_path, path).map_err(EnvelopeError::Io)?;
+        published = true;
+        fs::remove_file(&temp_path).map_err(EnvelopeError::Io)?;
+        #[cfg(unix)]
+        {
+            let dir = fs::File::open(parent).map_err(EnvelopeError::Io)?;
+            match dir.sync_all() {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::Unsupported => {}
+                Err(error) => return Err(EnvelopeError::Io(error).into()),
+            }
+        }
+        Ok(())
+    })();
+    if result.is_err() {
+        let mut cleanup_errors = Vec::new();
+        if published
+            && let Err(error) = fs::remove_file(path)
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            cleanup_errors.push(error.to_string());
+        }
+        if let Err(error) = fs::remove_file(&temp_path)
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            cleanup_errors.push(error.to_string());
+        }
+        if !cleanup_errors.is_empty() {
+            return Err(EnvelopeError::Io(std::io::Error::other(format!(
+                "operation failed and partial-output cleanup failed: {}",
+                cleanup_errors.join("; ")
+            )))
+            .into());
+        }
+    } else {
+        let _ = fs::remove_file(&temp_path);
+    }
+    result
+}
+
 /// Writes plaintext without replacing an existing destination.
 fn write_zeroizing(path: &Path, data: &Zeroizing<Vec<u8>>) -> std::io::Result<()> {
     write_new_atomic(path, data.as_slice())
@@ -247,6 +427,172 @@ mod tests {
                 0o600
             );
         }
+    }
+
+    #[test]
+    fn controlled_session_file_roundtrip_reports_backend_phases() {
+        use crate::vault::{Algorithm, Purpose, Vault};
+        let dir = TempDir::new().unwrap();
+        let password = b"controlled-file-vault-password";
+        let vault =
+            Vault::create(dir.path().join("controlled-roundtrip.nqv"), password, None).unwrap();
+        let mut session = vault.unlock(password).unwrap();
+        let key_id = session
+            .generate_key(Algorithm::Aes256Gcm, Purpose::Encrypt)
+            .unwrap();
+        session.activate_key(&key_id).unwrap();
+        let input = dir.path().join("roundtrip.txt");
+        fs::write(&input, b"controlled file roundtrip").unwrap();
+        let mut encrypt_updates = Vec::new();
+        let mut reporter = |update| encrypt_updates.push(update);
+        let encrypted = session
+            .encrypt_file_controlled(
+                &input,
+                &key_id,
+                Vec::new(),
+                &OperationControl::new(),
+                &mut reporter,
+            )
+            .unwrap();
+        assert!(encrypted.exists());
+        assert_eq!(fs::read(&input).unwrap(), b"controlled file roundtrip");
+        assert_eq!(
+            encrypt_updates.last().unwrap().phase,
+            OperationPhase::Completed
+        );
+        let encrypt_phases: Vec<_> = encrypt_updates.iter().map(|item| item.phase).collect();
+        let read = encrypt_phases
+            .iter()
+            .position(|phase| *phase == OperationPhase::ReadingInput)
+            .unwrap();
+        let process = encrypt_phases
+            .iter()
+            .position(|phase| *phase == OperationPhase::Processing)
+            .unwrap();
+        let write = encrypt_phases
+            .iter()
+            .position(|phase| *phase == OperationPhase::WritingOutput)
+            .unwrap();
+        let completed = encrypt_phases
+            .iter()
+            .position(|phase| *phase == OperationPhase::Completed)
+            .unwrap();
+        assert!(read < process && process < write && write < completed);
+        assert!(encrypt_updates.iter().any(|item| {
+            item.phase == OperationPhase::ReadingInput
+                && item.completed == item.total
+                && item.total == Some(b"controlled file roundtrip".len() as u64)
+        }));
+        let output = dir.path().join("roundtrip-restored.txt");
+        let mut decrypt_updates = Vec::new();
+        let mut reporter = |update| decrypt_updates.push(update);
+        session
+            .decrypt_file_controlled(&encrypted, &output, &OperationControl::new(), &mut reporter)
+            .unwrap();
+        assert_eq!(fs::read(&output).unwrap(), b"controlled file roundtrip");
+        assert_eq!(
+            decrypt_updates.last().unwrap().phase,
+            OperationPhase::Completed
+        );
+        let decrypt_phases: Vec<_> = decrypt_updates.iter().map(|item| item.phase).collect();
+        let read = decrypt_phases
+            .iter()
+            .position(|phase| *phase == OperationPhase::ReadingInput)
+            .unwrap();
+        let process = decrypt_phases
+            .iter()
+            .position(|phase| *phase == OperationPhase::Processing)
+            .unwrap();
+        let write = decrypt_phases
+            .iter()
+            .position(|phase| *phase == OperationPhase::WritingOutput)
+            .unwrap();
+        let completed = decrypt_phases
+            .iter()
+            .position(|phase| *phase == OperationPhase::Completed)
+            .unwrap();
+        assert!(read < process && process < write && write < completed);
+    }
+
+    #[test]
+    fn controlled_session_encrypt_cancellation_after_read_keeps_original_and_publishes_nothing() {
+        use crate::vault::{Algorithm, Purpose, Vault};
+        let dir = TempDir::new().unwrap();
+        let password = b"controlled-file-vault-password";
+        let vault = Vault::create(dir.path().join("controlled.nqv"), password, None).unwrap();
+        let mut session = vault.unlock(password).unwrap();
+        let key_id = session
+            .generate_key(Algorithm::Aes256Gcm, Purpose::Encrypt)
+            .unwrap();
+        session.activate_key(&key_id).unwrap();
+        let input = dir.path().join("source.txt");
+        fs::write(&input, b"keep the original file").unwrap();
+        let output = encrypted_path_for(&input);
+        let control = OperationControl::new();
+        let mut reporter = |update: OperationProgress| {
+            if update.phase == OperationPhase::ReadingInput && update.completed == update.total {
+                control.cancel();
+            }
+        };
+        let result =
+            session.encrypt_file_controlled(&input, &key_id, Vec::new(), &control, &mut reporter);
+        assert!(matches!(result, Err(OperationError::Cancelled(_))));
+        assert_eq!(fs::read(&input).unwrap(), b"keep the original file");
+        assert!(!output.exists());
+    }
+
+    #[test]
+    fn controlled_session_decrypt_cancellation_after_read_publishes_no_plaintext() {
+        use crate::vault::{Algorithm, Purpose, Vault};
+        let dir = TempDir::new().unwrap();
+        let password = b"controlled-file-vault-password";
+        let vault =
+            Vault::create(dir.path().join("controlled-decrypt.nqv"), password, None).unwrap();
+        let mut session = vault.unlock(password).unwrap();
+        let key_id = session
+            .generate_key(Algorithm::Aes256Gcm, Purpose::Encrypt)
+            .unwrap();
+        session.activate_key(&key_id).unwrap();
+        let input = dir.path().join("source.txt");
+        fs::write(&input, b"plaintext stays protected").unwrap();
+        let encrypted = session.encrypt_file(&input, &key_id, Vec::new()).unwrap();
+        let output = dir.path().join("restored.txt");
+        let control = OperationControl::new();
+        let mut reporter = |update: OperationProgress| {
+            if update.phase == OperationPhase::ReadingInput && update.completed == update.total {
+                control.cancel();
+            }
+        };
+        let result = session.decrypt_file_controlled(&encrypted, &output, &control, &mut reporter);
+        assert!(matches!(result, Err(OperationError::Cancelled(_))));
+        assert!(!output.exists());
+        assert!(encrypted.exists());
+    }
+
+    #[test]
+    fn controlled_writer_cleans_up_when_cancelled_before_publish() {
+        let dir = TempDir::new().unwrap();
+        let destination = dir.path().join("cancelled.bin");
+        let control = OperationControl::new();
+        control.cancel();
+        let result = write_new_atomic_controlled(&destination, b"secret", &control);
+        assert!(matches!(result, Err(OperationError::Cancelled(_))));
+        assert!(!destination.exists());
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn controlled_writer_never_replaces_existing_destination() {
+        let dir = TempDir::new().unwrap();
+        let destination = dir.path().join("existing-controlled.bin");
+        fs::write(&destination, b"original").unwrap();
+        let result =
+            write_new_atomic_controlled(&destination, b"replacement", &OperationControl::new());
+        assert!(
+            matches!(result, Err(OperationError::Failed(EnvelopeError::Io(error))) if error.kind() == std::io::ErrorKind::AlreadyExists)
+        );
+        assert_eq!(fs::read(&destination).unwrap(), b"original");
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
     }
 
     #[test]

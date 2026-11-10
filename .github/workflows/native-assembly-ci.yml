@@ -1,7 +1,7 @@
 name: NEXUS-Q Native Assembly Specialized Checks
 
 on:
-  workflow_call:
+  workflow_dispatch:
 permissions:
   contents: read
 

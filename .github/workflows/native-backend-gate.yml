@@ -6,7 +6,7 @@ name: NEXUS-Q Native Backend Gate (experimental)
 # operations, three alternating rounds) on every replica.
 
 on:
-  workflow_call:
+  workflow_dispatch:
 permissions:
   contents: read
 

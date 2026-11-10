@@ -27,6 +27,7 @@ use super::header::{HeaderError, KdfParams, MAGIC, SALT_LEN, VaultHeader};
 use super::key_id::{KeyId, KeyIdError};
 use super::lifecycle::{DestructionConfirmation, LifecycleError, RevokeReason};
 use super::metadata::{KeyMetadata, Origin};
+use super::operation::{OperationControl, OperationError, OperationPhase, OperationProgress};
 use super::purpose::Purpose;
 use super::record::{KeyRecord, RecordValidationError, WrappedKeyMaterial};
 use super::serde_helpers::{self, CborError};
@@ -1389,6 +1390,86 @@ impl Session {
         let lookup = |id: &KeyId| self.body.find_key(id).cloned();
         super::file_ops::decrypt_file_with_key(input, output, self.kek.as_ref(), lookup)?;
         self.log_event("envelope-file", EventType::EnvelopeOpened)?;
+        Ok(())
+    }
+
+    /// Encrypt a file with cooperative cancellation and backend progress events.
+    /// Progress is phase-based; byte counts are emitted only for completed I/O
+    /// stages because the current envelope format is processed in memory.
+    pub fn encrypt_file_controlled(
+        &self,
+        input: impl AsRef<std::path::Path>,
+        key_id: &KeyId,
+        metadata: Vec<u8>,
+        control: &OperationControl,
+        progress: &mut dyn FnMut(OperationProgress),
+    ) -> Result<std::path::PathBuf, OperationError<VaultError>> {
+        control
+            .check_cancelled()
+            .map_err(OperationError::Cancelled)?;
+        self.require_writes_allowed()?;
+        let current_status = self
+            .body
+            .find_key(key_id)
+            .map(KeyRecord::status)
+            .ok_or_else(|| VaultError::from(LifecycleError::KeyNotFound(key_id.clone())))?;
+        self.check_policy(
+            PolicyOperation::EnvelopeSeal,
+            key_id.as_str(),
+            Some((key_id, current_status)),
+            None,
+        )?;
+        let record = self
+            .body
+            .find_key(key_id)
+            .ok_or_else(|| VaultError::from(LifecycleError::KeyNotFound(key_id.clone())))?;
+        progress(OperationProgress::phase(OperationPhase::Preparing));
+        let path = super::file_ops::encrypt_file_with_key_controlled(
+            input,
+            self.kek.as_ref(),
+            record,
+            metadata,
+            control,
+            progress,
+        )
+        .map_err(|error| match error {
+            OperationError::Cancelled(cancelled) => OperationError::Cancelled(cancelled),
+            OperationError::Failed(error) => OperationError::Failed(VaultError::Envelope(error)),
+        })?;
+        self.log_event(key_id.as_str(), EventType::EnvelopeSealed)?;
+        progress(OperationProgress::phase(OperationPhase::Completed));
+        Ok(path)
+    }
+
+    /// Decrypt a file with cooperative cancellation and backend progress events.
+    pub fn decrypt_file_controlled(
+        &self,
+        input: impl AsRef<std::path::Path>,
+        output: impl AsRef<std::path::Path>,
+        control: &OperationControl,
+        progress: &mut dyn FnMut(OperationProgress),
+    ) -> Result<(), OperationError<VaultError>> {
+        control
+            .check_cancelled()
+            .map_err(OperationError::Cancelled)?;
+        self.require_writes_allowed()?;
+        self.check_policy(PolicyOperation::EnvelopeOpen, "envelope-file", None, None)?;
+        progress(OperationProgress::phase(OperationPhase::Preparing));
+        let lookup = |id: &KeyId| self.body.find_key(id).cloned();
+        super::file_ops::decrypt_file_with_key_controlled(
+            input,
+            output,
+            self.kek.as_ref(),
+            lookup,
+            control,
+            progress,
+        )
+        .map_err(|error| match error {
+            OperationError::Cancelled(cancelled) => OperationError::Cancelled(cancelled),
+            OperationError::Failed(error) => OperationError::Failed(VaultError::Envelope(error)),
+        })?;
+        self.log_event("envelope-file", EventType::EnvelopeOpened)?;
+        progress(OperationProgress::phase(OperationPhase::Completed));
         Ok(())
     }
 
