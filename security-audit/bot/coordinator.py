@@ -9,6 +9,8 @@ PROFILE = os.environ.get("AUDIT_PROFILE", "standard")
 BASE = "https://openrouter.ai/api/v1"
 KEY = os.environ.get("OPENROUTER_API_KEY", "")
 MODEL = ""
+MODELS_USED = []
+MODEL_SELECTIONS = []
 REQUESTS = 0
 MAX_REQUESTS = 0
 ERRORS = []
@@ -29,7 +31,7 @@ def save(path, data):
 
 def checkpoint(meta, candidates, coverage, phase, **extra):
     """Durably persist progress after each completed model/API phase."""
-    meta.update({"phase": phase, "inference_requests": REQUESTS, "run_status": "in_progress"})
+    meta.update({"phase": phase, "inference_requests": REQUESTS, "models_used": MODELS_USED, "model_selections": MODEL_SELECTIONS, "run_status": "in_progress"})
     meta.update(extra)
     save(OUT / "run-metadata.json", meta)
     save(OUT / "candidates.json", candidates)
@@ -47,29 +49,31 @@ def redact(text):
     return re.sub(r"(?i)(OPENROUTER_API_KEY\s*[=:]\s*)[^\s,;]+", r"\1[REDACTED]", text)
 
 def choose_model():
-    req = urllib.request.Request(BASE + "/models", headers={"Accept": "application/json"})
+    """Delegate live free-model discovery and selection to OpenRouter's free router."""
+    return "openrouter/free"
+
+
+def openrouter_http_error(exc):
+    """Extract a bounded, redacted provider diagnostic without exposing request secrets."""
+    provider_code, message = None, ""
     try:
-        with urllib.request.urlopen(req, timeout=30) as res:
-            data = json.loads(res.read().decode())
-    except Exception as exc:
-        raise Stop("OpenRouter model catalogue unavailable: " + type(exc).__name__)
-    eligible = []
-    for item in data.get("data", []):
-        mid, price = item.get("id", ""), item.get("pricing") or {}
-        architecture = item.get("architecture") or {}
-        inputs = architecture.get("input_modalities") or []
-        outputs = architecture.get("output_modalities") or []
-        try:
-            free = float(price.get("prompt", "inf")) == 0 and float(price.get("completion", "inf")) == 0
-            context = int(item.get("context_length") or 0)
-        except (ValueError, TypeError):
-            continue
-        if (isinstance(mid, str) and mid.endswith(":free") and free and context >= 16000
-                and "text" in inputs and "text" in outputs):
-            eligible.append((context, mid))
-    if not eligible:
-        raise Stop("No eligible text model with a :free ID and zero prompt/completion pricing.")
-    return sorted(eligible, reverse=True)[0][1]
+        payload = json.loads(exc.read().decode("utf-8", errors="replace"))
+        detail = payload.get("error") if isinstance(payload, dict) else None
+        if isinstance(detail, dict):
+            provider_code = detail.get("code")
+            message = detail.get("message", "")
+    except (ValueError, OSError, AttributeError):
+        pass
+    if isinstance(provider_code, (str, int)):
+        provider_code = str(provider_code)[:40]
+    else:
+        provider_code = None
+    message = redact(str(message)).replace("\r", " ").replace("\n", " ")
+    message = re.sub(r"[^\w .,:;()/'-]", "", message)[:240]
+    detail = ("; provider_code=" + provider_code) if provider_code else ""
+    if message:
+        detail += "; message=" + message
+    return "OpenRouter HTTP " + str(exc.code) + detail + "; no paid fallback."
 
 def normalized_api_key(value):
     """Trim accidental surrounding whitespace and reject unsafe HTTP header characters."""
@@ -101,16 +105,17 @@ def ask(system, prompt, max_tokens=2200):
         with urllib.request.urlopen(req, timeout=120) as res:
             payload = json.loads(res.read().decode())
     except urllib.error.HTTPError as exc:
-        if exc.code == 429:
-            raise Stop("OpenRouter free quota/rate limit reached; stopped without retry or paid fallback.")
-        if exc.code in (402, 403):
-            raise Stop("OpenRouter rejected the free request; stopped without paid fallback.")
-        raise Stop("OpenRouter HTTP failure " + str(exc.code) + "; no retry.")
+        raise Stop(openrouter_http_error(exc))
     except ValueError:
         # Never include exception text here: urllib may embed the Authorization header.
         raise Stop("OpenRouter rejected the HTTP request/header format (ValueError); verify the secret is a single-line API key. No retry.")
     except Exception as exc:
         raise Stop("OpenRouter request failed: " + type(exc).__name__ + "; no retry.")
+    actual_model = payload.get("model")
+    if isinstance(actual_model, str) and actual_model:
+        MODEL_SELECTIONS.append({"request": REQUESTS, "model": actual_model})
+        if actual_model not in MODELS_USED:
+            MODELS_USED.append(actual_model)
     choices = payload.get("choices") or []
     if not choices:
         raise Stop("OpenRouter returned no completion.")
@@ -418,7 +423,7 @@ def main():
     coverage_paths = {}
     meta = {"repo":"lecodev-26/nexus-q","profile":PROFILE,"source_ref":"unknown",
         "execution_policy":"static-source-only-no-target-execution",
-        "model_policy":"OpenRouter :free IDs only; zero prompt/completion pricing; no paid fallback",
+        "model_policy":"OpenRouter Free Models Router (openrouter/free); OpenRouter selects a currently available free model; no paid fallback",
         "request_budget":{"quick":8,"standard":18,"deep":35}.get(PROFILE),"run_status":"in_progress"}
     save(OUT/"run-metadata.json",meta)
     try:
@@ -550,7 +555,7 @@ def main():
     pending = [x for x in findings if x["verdict"]=="needs_validation"]
     rejected = [x for x in findings if x["verdict"]=="rejected"]
     arch = (OUT/"architecture.md").read_text()
-    summary = "# NEXUS-Q AI-assisted Security Audit\n\n- Profile: "+PROFILE+"\n- Model: "+(MODEL or "none")+"\n- Requests: "+str(REQUESTS)+"\n- Status: "+status+"\n- Source revision: "+str(meta.get("source_ref"))+"\n- Execution policy: static only; no target-controlled code executed.\n\n## Summary\n\n- Confirmed: 0\n- Needs validation: "+str(len(pending))+"\n- Rejected after source review: "+str(len(rejected))+"\n\nNo candidate is confirmed or assigned severity by this static-only workflow.\n\n## Architecture\n\n"+arch+"\n\n## Pending validation\n\n"
+    summary = "# NEXUS-Q AI-assisted Security Audit\n\n- Profile: "+PROFILE+"\n- Model router: "+(MODEL or "none")+"\n- Models actually used: "+(", ".join(MODELS_USED) or "not reported")+"\n- Requests: "+str(REQUESTS)+"\n- Status: "+status+"\n- Source revision: "+str(meta.get("source_ref"))+"\n- Execution policy: static only; no target-controlled code executed.\n\n## Summary\n\n- Confirmed: 0\n- Needs validation: "+str(len(pending))+"\n- Rejected after source review: "+str(len(rejected))+"\n\nNo candidate is confirmed or assigned severity by this static-only workflow.\n\n## Architecture\n\n"+arch+"\n\n## Pending validation\n\n"
     for item in pending: summary += "### "+item["title"]+"\n\n- Fingerprint: "+item["fingerprint"]+"\n- "+" ".join(item["blockers"])+"\n\n"
     summary += "## Limitations\n\nLogical stages are sequential prompts, not isolated agents. No dynamic testing, target execution, production probing or independent human verification is performed.\n"
     (OUT/"REPORT.md").write_text(summary)
@@ -565,7 +570,7 @@ def main():
             needs += "## "+item["title"]+"\n\n"+"\n".join("- "+b for b in item.get("blockers",[]))+"\n\n"
     (OUT/"FINDINGS-DETAIL.md").write_text(detail)
     (OUT/"NEEDS-VALIDATION.md").write_text(needs)
-    meta.update({"model":MODEL or None,"inference_requests":REQUESTS,"run_status":status,"errors":ERRORS,"phase":"finished" if status == "completed" else "interrupted"})
+    meta.update({"model":MODEL or None,"models_used":MODELS_USED,"model_selections":MODEL_SELECTIONS,"inference_requests":REQUESTS,"run_status":status,"errors":ERRORS,"phase":"finished" if status == "completed" else "interrupted"})
     save(OUT/"run-metadata.json",meta)
     print("Audit "+status+"; model="+(MODEL or "none")+"; requests="+str(REQUESTS)+"; findings="+str(len(findings)))
     for error in ERRORS: print("Audit note: "+error)

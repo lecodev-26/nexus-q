@@ -32,6 +32,54 @@ class CoordinatorTests(unittest.TestCase):
             finally:
                 coordinator.OUT = old_out
 
+    def test_model_selection_uses_openrouter_free_router_not_a_pinned_model(self):
+        self.assertEqual(coordinator.choose_model(), "openrouter/free")
+
+    def test_openrouter_http_error_reports_status_and_redacts_provider_message(self):
+        import io
+        from urllib.error import HTTPError
+        secret = "sk-or-v1-abcdefghijklmnopqrstuvwxyz123456"
+        body = json.dumps({"error": {"code": 402, "message": "Insufficient credits for " + secret}}).encode()
+        error = HTTPError("https://openrouter.ai/api/v1/chat/completions", 402, "Payment Required", {}, io.BytesIO(body))
+        diagnostic = coordinator.openrouter_http_error(error)
+        self.assertIn("OpenRouter HTTP 402", diagnostic)
+        self.assertIn("provider_code=402", diagnostic)
+        self.assertIn("Insufficient credits", diagnostic)
+        self.assertNotIn(secret, diagnostic)
+        self.assertIn("no paid fallback", diagnostic)
+        error.close()
+
+    def test_chat_request_uses_free_router_and_records_concrete_model(self):
+        from unittest.mock import patch
+        class FakeResponse:
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self):
+                return json.dumps({"model": "provider/available-model:free", "choices": [
+                    {"message": {"content": "{\"ok\": true}"}}
+                ]}).encode()
+
+        old = (coordinator.KEY, coordinator.MODEL, coordinator.MAX_REQUESTS,
+               coordinator.REQUESTS, coordinator.MODELS_USED, coordinator.MODEL_SELECTIONS)
+        try:
+            coordinator.KEY = "test-key"
+            coordinator.MODEL = "openrouter/free"
+            coordinator.MAX_REQUESTS = 1
+            coordinator.REQUESTS = 0
+            coordinator.MODELS_USED = []
+            coordinator.MODEL_SELECTIONS = []
+            with patch.object(coordinator.urllib.request, "urlopen", return_value=FakeResponse()) as mocked:
+                self.assertEqual(coordinator.ask("system", "prompt"), {"ok": True})
+            request = mocked.call_args.args[0]
+            self.assertEqual(json.loads(request.data)["model"], "openrouter/free")
+            self.assertEqual(coordinator.MODELS_USED, ["provider/available-model:free"])
+            self.assertEqual(coordinator.MODEL_SELECTIONS, [
+                {"request": 1, "model": "provider/available-model:free"}
+            ])
+        finally:
+            (coordinator.KEY, coordinator.MODEL, coordinator.MAX_REQUESTS,
+             coordinator.REQUESTS, coordinator.MODELS_USED, coordinator.MODEL_SELECTIONS) = old
+
     def test_api_key_normalization_trims_outer_whitespace_and_rejects_embedded_newlines(self):
         self.assertEqual(coordinator.normalized_api_key("  test-key\n"), "test-key")
         with self.assertRaisesRegex(ValueError, "embedded newline"):

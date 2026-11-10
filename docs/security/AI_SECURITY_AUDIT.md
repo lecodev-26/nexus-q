@@ -13,11 +13,11 @@ The workflow is manual-only and is gated to `main`. It does not run for pushes o
 
 ## Free-only model policy
 
-The coordinator discovers models through OpenRouter's public model catalogue and selects only model IDs ending in `:free` whose prompt and completion prices are both zero. It does not use `openrouter/free`, paid model IDs, paid fallbacks, credit top-ups, or automatic retries. If no eligible model is available, the run stops before sending source code. HTTP 429/quota exhaustion stops further requests and preserves partial reports.
+The coordinator sends inference requests through OpenRouter's `openrouter/free` Free Models Router. OpenRouter dynamically selects a currently available free model that supports the request, rather than pinning NEXUS-Q to a specific model ID or maintaining a stale local model list. The API response's `model` field is recorded in the report metadata so operators can see which concrete model handled each request. The router is free-only; NEXUS-Q does not select paid model IDs, enable paid fallbacks, or top up credits. Provider HTTP status and a bounded, redacted error message are recorded when a request is rejected. Failed requests stop the run and preserve partial reports; no automatic retry is performed.
 
 The single required credential is the GitHub Actions **repository secret** `OPENROUTER_API_KEY`. Do not store it as a repository variable. The key is passed only to the coordinator process; it is never written to reports or included in model prompts.
 
-Free model availability and provider limits are controlled by OpenRouter and can change. The coordinator uses bounded request budgets: Quick 8, Standard 18, Deep 35 inference requests per run. OpenRouter's published free-variant limits may also apply (currently 20 requests/minute and 50/day for `:free` variants); failed requests can count against the daily quota. No paid fallback is attempted.
+Free model availability and provider limits are controlled by OpenRouter and can change. The coordinator uses bounded request budgets: Quick 8, Standard 18, Deep 35 inference requests per run. OpenRouter's published free-model limits and provider availability may change; the router chooses among currently available free models and may still encounter provider or account limits. Failed requests can count against usage limits. No paid fallback is attempted.
 
 ## What this version does
 
