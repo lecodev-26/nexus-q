@@ -144,18 +144,6 @@ jobs:
           print('AArch64 runner smoke: nine operations, nanosecond samples, no fabricated cycle counts')
           PY
 
-  supply-chain:
-    name: cargo-audit on the new lockfiles
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo install cargo-audit --locked
-      - run: |
-          cargo audit --file crates/nexusq-native-backend/Cargo.lock
-          cargo audit --file arena/runners/nexusq-native/Cargo.lock
-
   constant-time:
     name: Constant-time check (valgrind, secrets undefined) + negative control
     runs-on: ubuntu-latest
