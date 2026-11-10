@@ -71,18 +71,30 @@ def choose_model():
         raise Stop("No eligible text model with a :free ID and zero prompt/completion pricing.")
     return sorted(eligible, reverse=True)[0][1]
 
+def normalized_api_key(value):
+    """Trim accidental surrounding whitespace and reject unsafe HTTP header characters."""
+    key = value.strip()
+    if "\r" in key or "\n" in key:
+        raise ValueError("API key contains an embedded newline")
+    return key
+
+
 def ask(system, prompt, max_tokens=2200):
     global REQUESTS
     if REQUESTS >= MAX_REQUESTS:
         raise Stop("Configured free-model request budget exhausted; stopping without fallback.")
-    if not KEY:
+    try:
+        api_key = normalized_api_key(KEY)
+    except ValueError:
+        raise Stop("OPENROUTER_API_KEY has invalid formatting; store it as a single-line secret.")
+    if not api_key:
         raise Stop("Missing OPENROUTER_API_KEY repository secret.")
     if REQUESTS:
         time.sleep(6.1)
     body = json.dumps({"model": MODEL, "temperature": 0.1, "max_tokens": max_tokens,
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}]}).encode()
     req = urllib.request.Request(BASE + "/chat/completions", data=body, method="POST", headers={
-        "Authorization": "Bearer " + KEY, "Content-Type": "application/json",
+        "Authorization": "Bearer " + api_key, "Content-Type": "application/json",
         "HTTP-Referer": "https://github.com/lecodev-26/nexus-q", "X-Title": "NEXUS-Q Static Security Audit"})
     REQUESTS += 1
     try:
@@ -94,6 +106,9 @@ def ask(system, prompt, max_tokens=2200):
         if exc.code in (402, 403):
             raise Stop("OpenRouter rejected the free request; stopped without paid fallback.")
         raise Stop("OpenRouter HTTP failure " + str(exc.code) + "; no retry.")
+    except ValueError:
+        # Never include exception text here: urllib may embed the Authorization header.
+        raise Stop("OpenRouter rejected the HTTP request/header format (ValueError); verify the secret is a single-line API key. No retry.")
     except Exception as exc:
         raise Stop("OpenRouter request failed: " + type(exc).__name__ + "; no retry.")
     choices = payload.get("choices") or []

@@ -32,6 +32,11 @@ class CoordinatorTests(unittest.TestCase):
             finally:
                 coordinator.OUT = old_out
 
+    def test_api_key_normalization_trims_outer_whitespace_and_rejects_embedded_newlines(self):
+        self.assertEqual(coordinator.normalized_api_key("  test-key\n"), "test-key")
+        with self.assertRaisesRegex(ValueError, "embedded newline"):
+            coordinator.normalized_api_key("test\nkey")
+
     def test_child_environment_excludes_openrouter_key_and_preserves_other_variables(self):
         import os
         old_key = os.environ.get("OPENROUTER_API_KEY")
