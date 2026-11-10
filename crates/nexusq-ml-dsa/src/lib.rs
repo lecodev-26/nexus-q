@@ -541,11 +541,12 @@ mod test {
             let kp = SigningKey::<P>::from_seed(&Array::default());
 
             let mut kp_debug = alloc::string::String::new();
-            write!(&mut kp_debug, "{:?}", kp).unwrap();
+            write!(&mut kp_debug, "{kp:?}").unwrap();
             assert!(kp_debug.contains("SigningKey"));
 
             let mut sk_debug = alloc::string::String::new();
-            write!(&mut sk_debug, "{:?}", kp.expanded_key()).unwrap();
+            let expanded_key = kp.expanded_key();
+            write!(&mut sk_debug, "{expanded_key:?}").unwrap();
             assert!(sk_debug.contains("ExpandedSigningKey"));
         }
         test_debug::<MlDsa44>();
