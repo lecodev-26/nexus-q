@@ -1,0 +1,35 @@
+{
+  "quick": {
+    "description": "Fast static triage of the highest-priority source areas.",
+    "max_requests": 8,
+    "max_hunt_batches": 4,
+    "max_validation_batches": 2,
+    "max_verification_batches": 1,
+    "max_source_files": 80,
+    "max_file_bytes": 24000,
+    "max_total_source_bytes": 500000,
+    "max_context_chars": 18000
+  },
+  "standard": {
+    "description": "Broader static review across core, interfaces, services, SDKs and supply chain.",
+    "max_requests": 18,
+    "max_hunt_batches": 12,
+    "max_validation_batches": 4,
+    "max_verification_batches": 1,
+    "max_source_files": 140,
+    "max_file_bytes": 32000,
+    "max_total_source_bytes": 1000000,
+    "max_context_chars": 22000
+  },
+  "deep": {
+    "description": "Maximum bounded static coverage within the free-model request budget.",
+    "max_requests": 35,
+    "max_hunt_batches": 26,
+    "max_validation_batches": 6,
+    "max_verification_batches": 2,
+    "max_source_files": 220,
+    "max_file_bytes": 40000,
+    "max_total_source_bytes": 1600000,
+    "max_context_chars": 24000
+  }
+}

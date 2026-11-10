@@ -1,0 +1,56 @@
+name: NEXUS-Q AI-assisted Security Audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Audit depth (free-model request budget)
+        required: true
+        type: choice
+        default: standard
+        options:
+          - quick
+          - standard
+          - deep
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nexusq-ai-security-audit-main
+  cancel-in-progress: false
+
+jobs:
+  static-ai-audit:
+    name: Static AI security review (free OpenRouter models only)
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Check out the reviewed main revision
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run static AI security audit
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          AUDIT_PROFILE: ${{ inputs.profile }}
+          AUDIT_OUTPUT_DIR: ${{ runner.temp }}/nexusq-ai-security-audit
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 security-audit/bot/coordinator.py
+
+      - name: Upload audit report and machine-readable evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexusq-ai-security-audit-${{ inputs.profile }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/nexusq-ai-security-audit/
+          if-no-files-found: warn
+          retention-days: 30
