@@ -35,6 +35,12 @@ def checkpoint(meta, candidates, coverage, phase, **extra):
     save(OUT / "candidates.json", candidates)
     save(OUT / "coverage-ledger.json", coverage)
 
+def child_environment():
+    """Return a child-process environment without the inference credential."""
+    env = os.environ.copy()
+    env.pop("OPENROUTER_API_KEY", None)
+    return env
+
 def redact(text):
     text = PEM.sub("[REDACTED PRIVATE KEY]", text)
     text = TOKEN.sub("[REDACTED TOKEN]", text)
@@ -123,7 +129,7 @@ def source_category(name):
 
 
 def collect(limits):
-    result = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, check=True, capture_output=True)
+    result = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, check=True, capture_output=True, env=child_environment())
     names = result.stdout.decode("utf-8", "replace").split("\0")
     skip = {".git", "target", "vendor", "node_modules", "dist", "build", "workflows-archive"}
     buckets = {"meta": [], "core": [], "services": [], "sdk": [], "ci": [], "other": []}
@@ -405,7 +411,7 @@ def main():
         if PROFILE not in profiles: raise Stop("Unknown audit profile.")
         limits = profiles[PROFILE]
         MAX_REQUESTS = limits["max_requests"]
-        meta["source_ref"] = subprocess.run(["git","rev-parse","HEAD"],cwd=ROOT,capture_output=True,text=True,check=True).stdout.strip()
+        meta["source_ref"] = subprocess.run(["git","rev-parse","HEAD"],cwd=ROOT,capture_output=True,text=True,check=True,env=child_environment()).stdout.strip()
         MODEL = choose_model()
         sources = collect(limits)
         if not sources: raise Stop("No eligible tracked source files.")
@@ -508,7 +514,7 @@ def main():
                     unit["status"] = "covered"; unit["unresolved"] = []
         checkpoint(meta, candidates, coverage, "coverage_finalized", coverage_units=len(coverage))
         for script,file in (("validate-findings.cjs","findings.json"),("validate-coverage-ledger.cjs","coverage-ledger.json")):
-            check = subprocess.run(["node",str(ROOT/"security-audit/cloudflare-skill"/script),str(OUT/file)],cwd=ROOT,capture_output=True,text=True,timeout=20)
+            check = subprocess.run(["node",str(ROOT/"security-audit/cloudflare-skill"/script),str(OUT/file)],cwd=ROOT,capture_output=True,text=True,timeout=20,env=child_environment())
             if check.returncode: raise Stop("Upstream schema validator failed for "+file+": "+check.stderr[:800])
         status = "completed"
     except Stop as exc:

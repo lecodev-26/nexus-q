@@ -32,6 +32,27 @@ class CoordinatorTests(unittest.TestCase):
             finally:
                 coordinator.OUT = old_out
 
+    def test_child_environment_excludes_openrouter_key_and_preserves_other_variables(self):
+        import os
+        old_key = os.environ.get("OPENROUTER_API_KEY")
+        old_marker = os.environ.get("NEXUSQ_CHILD_ENV_TEST")
+        try:
+            os.environ["OPENROUTER_API_KEY"] = "test-secret-do-not-propagate"
+            os.environ["NEXUSQ_CHILD_ENV_TEST"] = "preserved"
+            child_env = coordinator.child_environment()
+            self.assertNotIn("OPENROUTER_API_KEY", child_env)
+            self.assertEqual(child_env["NEXUSQ_CHILD_ENV_TEST"], "preserved")
+            self.assertEqual(os.environ["OPENROUTER_API_KEY"], "test-secret-do-not-propagate")
+        finally:
+            if old_key is None:
+                os.environ.pop("OPENROUTER_API_KEY", None)
+            else:
+                os.environ["OPENROUTER_API_KEY"] = old_key
+            if old_marker is None:
+                os.environ.pop("NEXUSQ_CHILD_ENV_TEST", None)
+            else:
+                os.environ["NEXUSQ_CHILD_ENV_TEST"] = old_marker
+
     def test_secret_redaction_covers_private_keys_tokens_and_api_key(self):
         raw = "OPENROUTER_API_KEY=or-secret sk-abcdefghijklmnopqrstuvwxyz123456 -----BEGIN PRIVATE KEY-----abc-----END PRIVATE KEY-----"
         cleaned = coordinator.redact(raw)
