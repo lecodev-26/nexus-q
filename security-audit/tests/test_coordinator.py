@@ -62,6 +62,23 @@ class CoordinatorTests(unittest.TestCase):
             coordinator.recover_partial_findings(findings_path, candidates, sources, "partial")
             self.assertEqual(json.loads(findings_path.read_text()), finalized)
 
+    def test_file_is_not_covered_until_every_planned_fragment_completed(self):
+        planned = {
+            ("src/large.rs", 1, 40),
+            ("src/large.rs", 41, 80),
+            ("src/other.rs", 1, 12),
+        }
+        first_wave = {("src/large.rs", 1, 40), ("src/other.rs", 1, 12)}
+        self.assertEqual(coordinator.fully_reviewed_paths(planned, first_wave), {"src/other.rs"})
+        completed = first_wave | {("src/large.rs", 41, 80)}
+        self.assertEqual(coordinator.fully_reviewed_paths(planned, completed), {"src/large.rs", "src/other.rs"})
+
+    def test_batch_fragments_preserve_file_and_line_ranges(self):
+        batch = "FILE src/lib.rs:1-20\n1: first\n\nFILE src/lib.rs:21-35\n21: second\n"
+        self.assertEqual(coordinator.batch_fragments(batch), {
+            ("src/lib.rs", 1, 20), ("src/lib.rs", 21, 35)
+        })
+
     def test_source_refs_must_exist_and_have_valid_line_numbers(self):
         sources = {"src/lib.rs": "first\nsecond\n"}
         item = {"source_refs": ["src/lib.rs:2", "src/lib.rs:0", "missing.rs:1", "src/lib.rs:nope"]}
