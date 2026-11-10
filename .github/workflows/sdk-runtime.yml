@@ -1,6 +1,9 @@
 name: SDK RustCrypto runtime artifacts
 
 on:
+  # Also validate the stacked Core PR through head-branch pushes.
+  push:
+    branches: [feature/issue-16-session-kem-open-stacked]
   pull_request:
     branches: [main]
   workflow_call:

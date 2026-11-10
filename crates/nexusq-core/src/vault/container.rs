@@ -1311,6 +1311,83 @@ impl Session {
         Ok(bytes)
     }
 
+    /// Opens a public-key envelope addressed to a key stored in this session.
+    ///
+    /// The selected key must be an active, rotating, or retired ML-KEM-768
+    /// key with the `KeyAgreement` purpose. Its wrapped private seed is
+    /// unwrapped and used only inside Core; private key bytes are never
+    /// returned to the caller.
+    ///
+    /// Both the `KeyAgreement` and `EnvelopeOpen` policy operations are
+    /// evaluated before decapsulation. Successful opens are recorded in the
+    /// audit log using only the receiving key id.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VaultError::StateDenied`] when the session cannot perform
+    /// writes, [`VaultError::Lifecycle`] when the key does not exist,
+    /// [`VaultError::Envelope`] for an unsupported key or envelope, or
+    /// [`VaultError::PolicyDenied`] when either policy refuses the operation.
+    pub fn open_envelope_with_key_agreement(
+        &self,
+        key_id: &KeyId,
+        envelope_bytes: &[u8],
+    ) -> Result<Zeroizing<Vec<u8>>, VaultError> {
+        self.require_writes_allowed()?;
+
+        let record = self
+            .body
+            .find_key(key_id)
+            .ok_or_else(|| LifecycleError::KeyNotFound(key_id.clone()))?;
+        let status = record.status();
+
+        if !matches!(
+            status,
+            KeyStatus::Active | KeyStatus::Rotating | KeyStatus::Retired
+        ) {
+            return Err(VaultError::Envelope(EnvelopeError::KeyNotUsable {
+                key_id: key_id.clone(),
+                status,
+            }));
+        }
+
+        if record.algorithm() != Algorithm::MlKem768
+            || record.purpose() != Purpose::KeyAgreement
+            || !matches!(&record.material, WrappedKeyMaterial::Asymmetric(_))
+        {
+            return Err(VaultError::Envelope(EnvelopeError::WrongKemKey {
+                key_id: key_id.clone(),
+            }));
+        }
+
+        self.check_policy(
+            PolicyOperation::KeyAgreement,
+            key_id.as_str(),
+            Some((key_id, status)),
+            None,
+        )?;
+        self.check_policy(
+            PolicyOperation::EnvelopeOpen,
+            key_id.as_str(),
+            Some((key_id, status)),
+            None,
+        )?;
+
+        let WrappedKeyMaterial::Asymmetric(wrapped) = &record.material else {
+            // The material variant was checked above. Keep this branch
+            // defensive in case the record representation changes.
+            return Err(VaultError::Envelope(EnvelopeError::WrongKemKey {
+                key_id: key_id.clone(),
+            }));
+        };
+        let secret_seed = wrapping::unwrap(wrapped, self.kek.as_ref(), key_id)?;
+        let key_pair = crate::crypto::kem::hybrid::from_secret_key_bytes(&secret_seed)?;
+        let plaintext = envelope::open_envelope_with_kem(&key_pair, envelope_bytes)?;
+
+        self.log_event(key_id.as_str(), EventType::EnvelopeOpened)?;
+        Ok(plaintext)
+    }
+
     /// Decrypts a CBOR-encoded envelope produced by [`Session::encrypt`].
     ///
     /// The KeyId embedded in the envelope is resolved against the
@@ -2930,6 +3007,166 @@ mod tests {
 
         let err = session.decrypt(&env_bytes).unwrap_err();
         assert!(matches!(err, VaultError::Envelope(_)));
+    }
+
+    fn make_active_kem_key(session: &mut Session) -> KeyId {
+        let id = session
+            .generate_key(Algorithm::MlKem768, Purpose::KeyAgreement)
+            .unwrap();
+        session.activate_key(&id).unwrap();
+        id
+    }
+
+    #[test]
+    fn session_opens_public_key_envelope_with_stored_kem_key() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "recipient.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut recipient = vault.unlock(b"pw").unwrap();
+        let key_id = make_active_kem_key(&mut recipient);
+        let public_key = recipient
+            .find_key(&key_id)
+            .unwrap()
+            .public_key_bytes()
+            .unwrap();
+
+        // The sender only receives the public key; it never sees the recipient's seed.
+        let plaintext = b"shared file payload";
+        let package =
+            envelope::build_envelope_to_public_key(public_key, plaintext, Vec::new()).unwrap();
+
+        let recovered = recipient
+            .open_envelope_with_key_agreement(&key_id, &package)
+            .unwrap();
+        assert_eq!(recovered.as_slice(), plaintext);
+    }
+
+    #[test]
+    fn session_kem_open_rejects_a_different_receiving_identity() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "recipient.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut recipient = vault.unlock(b"pw").unwrap();
+        let recipient_key = make_active_kem_key(&mut recipient);
+        let public_key = recipient
+            .find_key(&recipient_key)
+            .unwrap()
+            .public_key_bytes()
+            .unwrap()
+            .to_vec();
+        let package =
+            envelope::build_envelope_to_public_key(&public_key, b"secret", Vec::new()).unwrap();
+
+        let other_path = temp_path(&dir, "other.nqv");
+        Vault::create(&other_path, b"pw", None).unwrap();
+        let other_vault = Vault::open(&other_path).unwrap();
+        let mut other = other_vault.unlock(b"pw").unwrap();
+        let other_key = make_active_kem_key(&mut other);
+
+        assert!(matches!(
+            other.open_envelope_with_key_agreement(&other_key, &package),
+            Err(VaultError::Envelope(_))
+        ));
+    }
+
+    #[test]
+    fn session_kem_open_rejects_wrong_purpose_and_inactive_keys() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "recipient.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+
+        let signing_key = session
+            .generate_key(Algorithm::Ed25519, Purpose::Sign)
+            .unwrap();
+        session.activate_key(&signing_key).unwrap();
+        assert!(matches!(
+            session.open_envelope_with_key_agreement(&signing_key, b"not an envelope"),
+            Err(VaultError::Envelope(EnvelopeError::WrongKemKey { .. }))
+        ));
+
+        let inactive_key = session
+            .generate_key(Algorithm::MlKem768, Purpose::KeyAgreement)
+            .unwrap();
+        assert!(matches!(
+            session.open_envelope_with_key_agreement(&inactive_key, b"not an envelope"),
+            Err(VaultError::Envelope(EnvelopeError::KeyNotUsable { .. }))
+        ));
+    }
+
+    #[test]
+    fn session_kem_open_enforces_key_agreement_and_envelope_policies() {
+        use crate::policy::{Policy, PolicyEffect, PolicyOperation, PolicySet, PolicyTarget};
+
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "recipient.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+        let key_id = make_active_kem_key(&mut session);
+        let public_key = session
+            .find_key(&key_id)
+            .unwrap()
+            .public_key_bytes()
+            .unwrap()
+            .to_vec();
+        let package =
+            envelope::build_envelope_to_public_key(&public_key, b"policy", Vec::new()).unwrap();
+
+        let mut policies = PolicySet::new();
+        policies.add(
+            Policy::new("allow-kem-use", PolicyEffect::Allow)
+                .for_operations(vec![PolicyOperation::KeyAgreement])
+                .on(PolicyTarget::AnyKey),
+        );
+        policies.add(
+            Policy::new(
+                "deny-envelope-open",
+                PolicyEffect::Deny {
+                    reason: "shared file opening disabled".into(),
+                },
+            )
+            .for_operations(vec![PolicyOperation::EnvelopeOpen])
+            .on(PolicyTarget::AnyKey),
+        );
+        session.set_policies(policies).unwrap();
+
+        assert!(matches!(
+            session.open_envelope_with_key_agreement(&key_id, &package),
+            Err(VaultError::PolicyDenied(_))
+        ));
+    }
+
+    #[test]
+    fn session_kem_open_rejects_tampered_packages_and_sealed_sessions() {
+        let dir = TempDir::new().unwrap();
+        let path = temp_path(&dir, "recipient.nqv");
+        Vault::create(&path, b"pw", None).unwrap();
+        let vault = Vault::open(&path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+        let key_id = make_active_kem_key(&mut session);
+        let public_key = session
+            .find_key(&key_id)
+            .unwrap()
+            .public_key_bytes()
+            .unwrap();
+        let mut package =
+            envelope::build_envelope_to_public_key(public_key, b"tamper me", Vec::new()).unwrap();
+        let last = package.len() - 1;
+        package[last] ^= 0x01;
+        assert!(matches!(
+            session.open_envelope_with_key_agreement(&key_id, &package),
+            Err(VaultError::Envelope(_))
+        ));
+
+        session.seal().unwrap();
+        assert!(matches!(
+            session.open_envelope_with_key_agreement(&key_id, &package),
+            Err(VaultError::StateDenied { .. })
+        ));
     }
 
     #[test]

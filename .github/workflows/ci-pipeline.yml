@@ -1,8 +1,10 @@
 name: NEXUS-Q Sequential CI Pipeline
 
 on:
+  # This stacked Core PR targets PR #107 rather than main. Run the full
+  # sequential pipeline on its head-branch pushes so CI is not skipped.
   push:
-    branches: [main]
+    branches: [main, feature/issue-16-session-kem-open-stacked]
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]

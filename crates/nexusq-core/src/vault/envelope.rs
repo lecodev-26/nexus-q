@@ -152,6 +152,13 @@ pub enum EnvelopeError {
         found: EnvelopeMode,
     },
 
+    /// The selected key is not a supported ML-KEM-768 key-agreement key.
+    #[error("key {key_id} is not a supported ML-KEM-768 key-agreement key")]
+    WrongKemKey {
+        /// The selected key.
+        key_id: KeyId,
+    },
+
     /// The KEM encapsulated or decapsulated incorrectly.
     #[error("kem operation failed")]
     Kem,
