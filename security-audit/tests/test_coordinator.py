@@ -64,20 +64,71 @@ class CoordinatorTests(unittest.TestCase):
 
     def test_file_is_not_covered_until_every_planned_fragment_completed(self):
         planned = {
-            ("src/large.rs", 1, 40),
-            ("src/large.rs", 41, 80),
-            ("src/other.rs", 1, 12),
+            ("src/large.rs", 1, 40, 1),
+            ("src/large.rs", 41, 80, 1),
+            ("src/other.rs", 1, 12, 1),
         }
-        first_wave = {("src/large.rs", 1, 40), ("src/other.rs", 1, 12)}
+        first_wave = {("src/large.rs", 1, 40, 1), ("src/other.rs", 1, 12, 1)}
         self.assertEqual(coordinator.fully_reviewed_paths(planned, first_wave), {"src/other.rs"})
-        completed = first_wave | {("src/large.rs", 41, 80)}
+        completed = first_wave | {("src/large.rs", 41, 80, 1)}
         self.assertEqual(coordinator.fully_reviewed_paths(planned, completed), {"src/large.rs", "src/other.rs"})
 
     def test_batch_fragments_preserve_file_and_line_ranges(self):
         batch = "FILE src/lib.rs:1-20\n1: first\n\nFILE src/lib.rs:21-35\n21: second\n"
         self.assertEqual(coordinator.batch_fragments(batch), {
-            ("src/lib.rs", 1, 20), ("src/lib.rs", 21, 35)
+            ("src/lib.rs", 1, 20, 1), ("src/lib.rs", 21, 35, 1)
         })
+
+
+    def test_long_source_lines_are_split_without_loss_and_require_every_part(self):
+        line = "x" * 5000
+        fragments = coordinator.source_fragments("src/long.rs", line, 1200)
+        self.assertGreater(len(fragments), 1)
+        payloads = [fragment.split("\n", 1)[1] for fragment in fragments]
+        self.assertEqual("".join(payloads), "1: " + line + "\n")
+
+        planned = set().union(*(coordinator.batch_fragments(fragment) for fragment in fragments))
+        self.assertEqual(len(planned), len(fragments))
+        self.assertEqual(coordinator.fully_reviewed_paths(planned, planned - {next(iter(planned))}), set())
+        self.assertEqual(coordinator.fully_reviewed_paths(planned, planned), {"src/long.rs"})
+
+    def test_core_and_sdk_coverage_include_kernel_and_python_crates(self):
+        sources = {
+            "crates/nexusq-kernels/src/lib.rs": "pub fn kernel() {}\n",
+            "crates/nexusq-ml-kem/src/lib.rs": "pub fn kem() {}\n",
+            "crates/nexusq-py/src/lib.rs": "pub fn python_binding() {}\n",
+            "crates/nexusq-c/src/lib.rs": "pub fn c_binding() {}\n",
+        }
+        units = coordinator.ledger()
+        core = next(unit for unit in units if unit["subsystem"] == "Core crates")
+        sdk = next(unit for unit in units if unit["subsystem"] == "SDKs and FFI")
+        self.assertEqual(set(coordinator.coverage_paths_for_unit(core, sources)), {
+            "crates/nexusq-kernels/src/lib.rs", "crates/nexusq-ml-kem/src/lib.rs"
+        })
+        self.assertEqual(set(coordinator.coverage_paths_for_unit(sdk, sources)), {
+            "crates/nexusq-py/src/lib.rs", "crates/nexusq-c/src/lib.rs"
+        })
+
+    def test_coverage_does_not_silently_truncate_more_than_30_paths(self):
+        sources = {f"crates/nexusq-core/src/module_{index}.rs": "pub fn safe() {}\n" for index in range(35)}
+        unit = next(item for item in coordinator.ledger() if item["subsystem"] == "Core crates")
+        paths = coordinator.coverage_paths_for_unit(unit, sources)
+        self.assertEqual(len(paths), 35)
+        unit["starting_paths"] = paths
+        unit["status"] = "in_progress"
+        unit["agent_id"] = "static-coordinator"
+        coordinator.finalize_coverage([unit], set(paths[:30]), [], sources, {unit["coverage_id"]: paths})
+        self.assertEqual(unit["status"], "blocked")
+        self.assertEqual(len(unit["reviewed_paths"]), 30)
+        self.assertEqual(unit["unresolved"], ["5 assigned source path(s) were not included in completed hunt batches."])
+
+        unit["status"] = "in_progress"
+        unit["reviewed_paths"] = []
+        unit["local_checks"] = []
+        unit["unresolved"] = []
+        coordinator.finalize_coverage([unit], set(paths), [], sources, {unit["coverage_id"]: paths})
+        self.assertEqual(unit["status"], "covered")
+        self.assertEqual(set(unit["reviewed_paths"]), set(paths))
 
     def test_source_refs_must_exist_and_have_valid_line_numbers(self):
         sources = {"src/lib.rs": "first\nsecond\n"}

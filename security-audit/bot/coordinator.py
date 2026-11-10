@@ -107,6 +107,21 @@ def ask(system, prompt, max_tokens=2200):
         raise Stop("Model JSON must be an object.")
     return result
 
+def source_category(name):
+    if name in DOCS or name in {"Cargo.toml", "deny.toml"} or name.startswith(".cargo/"):
+        return "meta"
+    if name.startswith(("crates/nexusq-core/", "crates/nexusq-kernels/", "crates/nexusq-ml-kem/", "crates/nexusq-ml-dsa/")):
+        return "core"
+    if name.startswith("bindings/") or name.startswith(("crates/nexusq-c/", "crates/nexusq-py/")):
+        return "sdk"
+    if name.startswith(".github/workflows/") or name.startswith(".github/scripts/"):
+        return "ci"
+    if name.startswith("crates/"):
+        return "services"
+    return "other"
+
+
+
 def collect(limits):
     result = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, check=True, capture_output=True)
     names = result.stdout.decode("utf-8", "replace").split("\0")
@@ -121,19 +136,7 @@ def collect(limits):
         low = name.lower()
         if low.startswith(".env") or any(x in p.name.lower() for x in ("secret", "credential", "private-key", "id_rsa")) or low.endswith((".pem", ".key", ".p12", ".pfx")):
             continue
-        if name in DOCS or name in {"Cargo.toml", "deny.toml"} or name.startswith(".cargo/"):
-            bucket = "meta"
-        elif name.startswith(("crates/nexusq-core/", "crates/nexusq-kernels/", "crates/nexusq-ml-kem/", "crates/nexusq-ml-dsa/")):
-            bucket = "core"
-        elif name.startswith("bindings/") or name.startswith(("crates/nexusq-c/", "crates/nexusq-py/")):
-            bucket = "sdk"
-        elif name.startswith(".github/workflows/") or name.startswith(".github/scripts/"):
-            bucket = "ci"
-        elif name.startswith("crates/"):
-            bucket = "services"
-        else:
-            bucket = "other"
-        buckets[bucket].append(name)
+        buckets[source_category(name)].append(name)
     weights = {"meta": 0.12, "core": 0.30, "services": 0.20, "sdk": 0.14, "ci": 0.14, "other": 0.10}
     file_weights = {"meta": 0.16, "core": 0.30, "services": 0.20, "sdk": 0.14, "ci": 0.12, "other": 0.08}
     selected = {key: [] for key in buckets}
@@ -166,32 +169,55 @@ def collect(limits):
         index += 1
     return result_sources
 
-def batches(sources, limit):
-    categories = {"meta": [], "core": [], "services": [], "sdk": [], "ci": [], "other": []}
-    for name, text in sources.items():
-        if name in DOCS or name in {"Cargo.toml", "deny.toml"} or name.startswith(".cargo/"):
-            category = "meta"
-        elif name.startswith(("crates/nexusq-core/", "crates/nexusq-kernels/", "crates/nexusq-ml-kem/", "crates/nexusq-ml-dsa/")):
-            category = "core"
-        elif name.startswith("bindings/") or name.startswith(("crates/nexusq-c/", "crates/nexusq-py/")):
-            category = "sdk"
-        elif name.startswith(".github/workflows/") or name.startswith(".github/scripts/"):
-            category = "ci"
-        elif name.startswith("crates/"):
-            category = "services"
-        else:
-            category = "other"
-        lines = text.splitlines()
-        chunk, start = "", 1
-        chunk_limit = max(1200, limit // 7)
-        for number, line in enumerate(lines, 1):
-            row = str(number) + ": " + line + "\n"
-            if len(chunk) + len(row) > chunk_limit and chunk:
-                categories[category].append("FILE " + name + ":" + str(start) + "-" + str(number-1) + "\n" + chunk)
-                chunk, start = "", number
-            chunk += row[:chunk_limit]
+
+def coverage_paths_for_unit(unit, sources):
+    subsystem = unit["subsystem"]
+    if subsystem == "Core crates":
+        prefixes = ("crates/nexusq-core/", "crates/nexusq-kernels/", "crates/nexusq-ml-")
+        return [name for name in sources if name.startswith(prefixes)]
+    if subsystem == "CLI/server/API":
+        return [name for name in sources if any(part in name.lower() for part in ("cli", "server", "admin"))]
+    if subsystem == "SDKs and FFI":
+        return [name for name in sources if name.startswith("bindings/") or name.startswith(("crates/nexusq-c/", "crates/nexusq-py/"))]
+    return [name for name in sources if name.startswith(".github/") or name.endswith("Cargo.toml") or name == "deny.toml"]
+
+
+def source_fragments(name, text, chunk_limit):
+    """Split source without dropping characters, including exceptionally long lines."""
+    fragments = []
+    chunk, start, end = [], None, None
+
+    def flush():
+        nonlocal chunk, start, end
         if chunk:
-            categories[category].append("FILE " + name + ":" + str(start) + "-" + str(len(lines)) + "\n" + chunk)
+            fragments.append("FILE " + name + ":" + str(start) + "-" + str(end) + "\n" + "".join(chunk))
+            chunk, start, end = [], None, None
+
+    for number, line in enumerate(text.splitlines(), 1):
+        row = str(number) + ": " + line + "\n"
+        if len(row) > chunk_limit:
+            flush()
+            pieces = [row[index:index + chunk_limit] for index in range(0, len(row), chunk_limit)]
+            for part_number, piece in enumerate(pieces, 1):
+                fragments.append("FILE " + name + ":" + str(number) + "-" + str(number) + "#" + str(part_number) + "\n" + piece)
+            continue
+        if chunk and sum(map(len, chunk)) + len(row) > chunk_limit:
+            flush()
+        if not chunk:
+            start = number
+        chunk.append(row)
+        end = number
+    flush()
+    return fragments
+
+
+def batches(sources, limit):
+    if limit < 2048:
+        raise ValueError("max_context_chars must be at least 2048 to preserve bounded source fragments")
+    categories = {"meta": [], "core": [], "services": [], "sdk": [], "ci": [], "other": []}
+    chunk_limit = max(1200, min(6000, limit // 7))
+    for name, text in sources.items():
+        categories[source_category(name)].extend(source_fragments(name, text, chunk_limit))
     result = []
     order = list(categories)
     while any(categories.values()):
@@ -199,33 +225,33 @@ def batches(sources, limit):
         for category in order:
             if not categories[category]:
                 continue
-            part = categories[category].pop(0)
+            part = categories[category][0]
+            if len(part) > limit:
+                raise ValueError("Source fragment exceeds max_context_chars; refusing to truncate reviewed input")
             if current and len(current) + len(part) + 2 > limit:
-                categories[category].insert(0, part)
                 continue
+            categories[category].pop(0)
             current += ("\n\n" if current else "") + part
         if not current:
-            # A single source fragment is always bounded below the context limit.
-            for category in order:
-                if categories[category]:
-                    current = categories[category].pop(0)[:limit]
-                    break
+            raise ValueError("Unable to fit a complete source fragment into max_context_chars")
         result.append(current)
     return result
 
+
 def batch_fragments(batch):
-    """Return the exact source fragments included in a completed hunt batch."""
-    return set((match.group(1), int(match.group(2)), int(match.group(3)))
-        for match in re.finditer(r"^FILE (.+?):(\d+)-(\d+)\s*$", batch, re.M))
+    """Return exact line ranges and sub-line parts included in a completed hunt batch."""
+    return set((match.group(1), int(match.group(2)), int(match.group(3)), int(match.group(4) or 1))
+        for match in re.finditer(r"^FILE (.+?):(\d+)-(\d+)(?:#(\d+))?\s*$", batch, re.M))
+
 
 def fully_reviewed_paths(planned_fragments, completed_fragments):
-    """Only count a file after every fragment planned for it was reviewed."""
+    """Only count a file after every complete line-range and long-line part was reviewed."""
     planned_by_path = {}
     completed_by_path = {}
-    for path, start, end in planned_fragments:
-        planned_by_path.setdefault(path, set()).add((start, end))
-    for path, start, end in completed_fragments:
-        completed_by_path.setdefault(path, set()).add((start, end))
+    for path, start, end, part in planned_fragments:
+        planned_by_path.setdefault(path, set()).add((start, end, part))
+    for path, start, end, part in completed_fragments:
+        completed_by_path.setdefault(path, set()).add((start, end, part))
     return {path for path, fragments in planned_by_path.items()
         if fragments and fragments.issubset(completed_by_path.get(path, set()))}
 
@@ -391,16 +417,11 @@ def main():
         selected_batches = all_batches[:hunt_limit]
         coverage = ledger()
         for unit in coverage:
-            if unit["subsystem"] == "Core crates":
-                paths = [n for n in sources if n.startswith("crates/nexusq-core/") or n.startswith("crates/nexusq-ml-")]
-            elif unit["subsystem"] == "CLI/server/API":
-                paths = [n for n in sources if "cli" in n or "server" in n or "admin" in n]
-            elif unit["subsystem"] == "SDKs and FFI":
-                paths = [n for n in sources if n.startswith("bindings/") or n.startswith("crates/nexusq-c/")]
-            else:
-                paths = [n for n in sources if n.startswith(".github/") or n.endswith("Cargo.toml") or n=="deny.toml"]
-            coverage_paths[unit["coverage_id"]] = paths[:30]
-            unit["starting_paths"] = (paths or list(sources)[:1])[:30]
+            paths = coverage_paths_for_unit(unit, sources)
+            # Keep every selected path. Profile/batch limits must produce blocked
+            # coverage, never a silently truncated list that can appear complete.
+            coverage_paths[unit["coverage_id"]] = paths
+            unit["starting_paths"] = paths or list(sources)[:1]
         coverage.sort(key=lambda item: item["coverage_id"])
         for unit in coverage:
             unit["status"] = "in_progress"
