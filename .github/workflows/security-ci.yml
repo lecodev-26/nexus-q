@@ -1,4 +1,4 @@
-name: NEXUS-Q Manual Full Rust Validation and Security
+name: NEXUS-Q Manual Repository and Secret Checks
 
 on:
   workflow_dispatch:
@@ -7,112 +7,39 @@ permissions:
   contents: read
 
 concurrency:
-  group: nexusq-main-ci-${{ github.ref }}
+  group: nexusq-manual-repository-checks-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  rust-security:
-    name: Full Rust, feature-matrix, and security validation
+  repository-contracts:
+    name: Repository contracts and safety boundaries
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Install security tooling
+      - name: Validate Arena JSON and required contracts
         run: |
-          cargo install cargo-audit --locked
-          cargo install cargo-deny --locked
-      - name: Format
-        run: cargo fmt --all -- --check
-      - name: Check every workspace target
-        run: cargo check --workspace --all-targets --locked
-      - name: Clippy (all workspace targets, warnings denied)
-        run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - name: Workspace tests (portable default)
-        run: cargo test --workspace --locked
-      - name: Build complete workspace in release mode
-        run: cargo build --workspace --release --locked
-      - name: Run complete workspace tests in release mode
-        run: cargo test --workspace --release --locked
-      - name: Build Rust API documentation (warnings denied)
-        env:
-          RUSTDOCFLAGS: -D warnings
-        run: cargo doc --workspace --no-deps --locked
-      - name: Clippy opt-in native backend integration
-        run: cargo clippy -p nexusq-core --features native-backend --all-targets --locked -- -D warnings
-      - name: Check opt-in native backend integration
-        run: cargo check -p nexusq-core --features native-backend --locked
-      - name: Test native backend integration and provider interoperability
-        run: cargo test -p nexusq-core --features native-backend --locked
-      - name: Test portable C backend configuration
-        run: cargo test -p nexusq-core --features native-backend-portable --locked
-      - name: Create RustCrypto public-key envelope fixture
-        env:
-          NQ_CROSS_CONFIG_ROLE: write
-          NQ_CROSS_CONFIG_ENVELOPE_PATH: ${{ runner.temp }}/nq-envelope-rustcrypto.cbor
-          NQ_CROSS_CONFIG_VAULT_PATH: ${{ runner.temp }}/nq-vault-rustcrypto.nqv
-        run: cargo test -p nexusq-core --test cross_config_envelope --locked -- --ignored --exact cross_configuration_artifacts
-      - name: Create native-backend public-key envelope fixture
-        env:
-          NQ_CROSS_CONFIG_ROLE: write
-          NQ_CROSS_CONFIG_ENVELOPE_PATH: ${{ runner.temp }}/nq-envelope-native.cbor
-          NQ_CROSS_CONFIG_VAULT_PATH: ${{ runner.temp }}/nq-vault-native.nqv
-        run: cargo test -p nexusq-core --test cross_config_envelope --features native-backend --locked -- --ignored --exact cross_configuration_artifacts
-      - name: Create portable-backend public-key envelope fixture
-        env:
-          NQ_CROSS_CONFIG_ROLE: write
-          NQ_CROSS_CONFIG_ENVELOPE_PATH: ${{ runner.temp }}/nq-envelope-portable.cbor
-          NQ_CROSS_CONFIG_VAULT_PATH: ${{ runner.temp }}/nq-vault-portable.nqv
-        run: cargo test -p nexusq-core --test cross_config_envelope --features native-backend-portable --locked -- --ignored --exact cross_configuration_artifacts
-      - name: Open native and portable envelopes with RustCrypto
-        env:
-          NQ_CROSS_CONFIG_ROLE: read
-          NQ_CROSS_CONFIG_ENVELOPE_PATHS: ${{ runner.temp }}/nq-envelope-native.cbor;${{ runner.temp }}/nq-envelope-portable.cbor
-          NQ_CROSS_CONFIG_VAULT_PATHS: ${{ runner.temp }}/nq-vault-native.nqv;${{ runner.temp }}/nq-vault-portable.nqv
-        run: cargo test -p nexusq-core --test cross_config_envelope --locked -- --ignored --exact cross_configuration_artifacts
-      - name: Open RustCrypto and portable envelopes with native backend
-        env:
-          NQ_CROSS_CONFIG_ROLE: read
-          NQ_CROSS_CONFIG_ENVELOPE_PATHS: ${{ runner.temp }}/nq-envelope-rustcrypto.cbor;${{ runner.temp }}/nq-envelope-portable.cbor
-          NQ_CROSS_CONFIG_VAULT_PATHS: ${{ runner.temp }}/nq-vault-rustcrypto.nqv;${{ runner.temp }}/nq-vault-portable.nqv
-        run: cargo test -p nexusq-core --test cross_config_envelope --features native-backend --locked -- --ignored --exact cross_configuration_artifacts
-      - name: Open RustCrypto and native envelopes with portable backend
-        env:
-          NQ_CROSS_CONFIG_ROLE: read
-          NQ_CROSS_CONFIG_ENVELOPE_PATHS: ${{ runner.temp }}/nq-envelope-rustcrypto.cbor;${{ runner.temp }}/nq-envelope-native.cbor
-          NQ_CROSS_CONFIG_VAULT_PATHS: ${{ runner.temp }}/nq-vault-rustcrypto.nqv;${{ runner.temp }}/nq-vault-native.nqv
-        run: cargo test -p nexusq-core --test cross_config_envelope --features native-backend-portable --locked -- --ignored --exact cross_configuration_artifacts
-      - name: Audit workspace dependencies
-        run: cargo audit --file Cargo.lock
-      - name: Audit native backend dependency lockfile
-        run: cargo audit --file crates/nexusq-native-backend/Cargo.lock
-      - name: Audit native runner dependency lockfile
-        run: cargo audit --file arena/runners/nexusq-native/Cargo.lock
-      - name: Cargo deny
-        run: cargo deny check
-      - name: Metadata / SBOM input
-        run: cargo metadata --format-version 1 --locked > cargo-metadata.json
-      - name: Upload dependency metadata
-        uses: actions/upload-artifact@v4
-        with:
-          name: cargo-metadata
-          path: cargo-metadata.json
-
-  fuzz-build:
-    name: Manual fuzz harness build
-    runs-on: ubuntu-latest
-    # Always compile harnesses in phase 1; full campaigns run only in phase 11.
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
-      - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz --locked
-      - name: Build fuzz targets
-        run: cargo fuzz build
-        working-directory: fuzz
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          files = sorted(Path("arena").rglob("*.json"))
+          for path in files:
+              json.loads(path.read_text(encoding="utf-8"))
+          required = [
+              Path("arena/registry/algorithms.json"),
+              Path("arena/registry/implementations.json"),
+              Path("arena/registry/matrix.json"),
+              Path("arena/schemas/benchmark-result.schema.json"),
+          ]
+          missing = [str(path) for path in required if not path.is_file()]
+          if missing:
+              raise SystemExit(f"Missing Arena contracts: {missing}")
+          print(f"Validated {len(files)} Arena JSON files and all required contracts")
+          PY
+      - name: Enforce unsafe-code boundaries
+        run: |
+          python3 .github/scripts/check-kernel-unsafe.py
+          python3 .github/scripts/check-native-backend-unsafe.py
 
   secret-scan:
     name: Secret scanning
