@@ -21,7 +21,7 @@ use ml_kem::kem::{Decapsulate as _, Encapsulate as _};
 use ml_kem::{DecapsulationKey768, EncapsulationKey768, KeyExport, MlKem768};
 use sha3::digest::{ExtendableOutput, Update, XofReader};
 use sha3::{Digest, Sha3_256, Shake256};
-use x25519_dalek::{EphemeralSecret, PublicKey as X25519Public, StaticSecret};
+use x25519_dalek::{PublicKey as X25519Public, StaticSecret};
 use zeroize::Zeroizing;
 
 /// Length in bytes of a shared secret produced by either KEM.
@@ -183,6 +183,39 @@ pub mod ml_kem_768 {
         }
     }
 
+    /// Derandomized ML-KEM-768 encapsulation (FIPS 203 `ML-KEM.Encaps_internal`)
+    /// with the 32-byte message `m` supplied by the caller.
+    ///
+    /// Internal building block for the X-Wing hybrid, which derives `m` from
+    /// its encapsulation seed. `m` MUST be fresh uniform randomness; reusing it
+    /// breaks the security of the encapsulation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`KemError::Encapsulate`] if the native backend rejects the
+    /// key or fails.
+    pub(super) fn encapsulate_derand(
+        public: &EncapsulationKey768,
+        m: &[u8; 32],
+    ) -> Result<(Vec<u8>, Zeroizing<[u8; SHARED_SECRET_LEN]>), KemError> {
+        #[cfg(feature = "native-backend")]
+        {
+            let encoded = public.to_bytes();
+            let native_public =
+                nexusq_native_backend::mlkem768::EncapsulationKey::from_bytes(encoded.as_slice())
+                    .map_err(|_| KemError::Encapsulate)?;
+            let (ct, ss) = native_public
+                .encapsulate_derand(m)
+                .map_err(|_| KemError::Encapsulate)?;
+            Ok((ct.0.to_vec(), Zeroizing::new(*ss.as_bytes())))
+        }
+        #[cfg(not(feature = "native-backend"))]
+        {
+            let (ct, ss) = public.encapsulate_deterministic(&(*m).into());
+            Ok((ct.as_slice().to_vec(), Zeroizing::new(ss.into())))
+        }
+    }
+
     /// Decapsulates `ciphertext` with `secret`.
     ///
     /// # Errors
@@ -339,9 +372,30 @@ pub mod hybrid {
     ///
     /// # Errors
     ///
-    /// Returns [`KemError::InvalidPublicKey`] if the length is wrong.
+    /// Returns [`KemError::InvalidPublicKey`] if the length is wrong, and
+    /// [`KemError::Randomness`] if the operating system cannot provide the
+    /// encapsulation seed.
     pub fn encapsulate(
         public_key: &[u8],
+    ) -> Result<(Vec<u8>, Zeroizing<[u8; SHARED_SECRET_LEN]>), KemError> {
+        encapsulate_with_rng(public_key, |eseed| {
+            getrandom::fill(eseed).map_err(|_| KemError::Randomness)
+        })
+    }
+
+    /// Length in bytes of the X-Wing encapsulation seed (`eseed`).
+    const ENCAPSULATION_SEED_LEN: usize = 64;
+
+    /// X-Wing `EncapsulateDerand` (draft-connolly-cfrg-xwing-kem-11, section 5.4)
+    /// with the 64-byte encapsulation seed written by `fill`.
+    ///
+    /// `eseed[0..32]` is the ML-KEM-768 encapsulation randomness and
+    /// `eseed[32..64]` is the X25519 ephemeral secret. Production code reaches
+    /// this only through [`encapsulate`], which fills the seed from the OS
+    /// CSPRNG; tests inject the official test-vector seeds.
+    pub(super) fn encapsulate_with_rng(
+        public_key: &[u8],
+        fill: impl FnOnce(&mut [u8]) -> Result<(), KemError>,
     ) -> Result<(Vec<u8>, Zeroizing<[u8; SHARED_SECRET_LEN]>), KemError> {
         if public_key.len() != PUBLIC_KEY_LEN {
             return Err(KemError::InvalidPublicKey);
@@ -349,14 +403,20 @@ pub mod hybrid {
         let (ml_pk_bytes, x_pk_bytes) = public_key.split_at(ml_kem_768::PUBLIC_KEY_LEN);
 
         let ml_pk = ml_kem_768::public_key_from_bytes(ml_pk_bytes)?;
-        let (ml_ct, ml_ss) = ml_kem_768::encapsulate(&ml_pk);
 
         let x_pk_arr: [u8; 32] = x_pk_bytes
             .try_into()
             .map_err(|_| KemError::InvalidPublicKey)?;
         let x_pk = X25519Public::from(x_pk_arr);
 
-        let eph = EphemeralSecret::random();
+        let mut eseed = Zeroizing::new([0u8; ENCAPSULATION_SEED_LEN]);
+        fill(eseed.as_mut())?;
+        let ml_m: &[u8; 32] = eseed[..32].try_into().expect("32-byte slice");
+        let x_ek: &[u8; 32] = eseed[32..].try_into().expect("32-byte slice");
+
+        let (ml_ct, ml_ss) = ml_kem_768::encapsulate_derand(&ml_pk, ml_m)?;
+
+        let eph = StaticSecret::from(*x_ek);
         let eph_pub = X25519Public::from(&eph);
         let x_ss = eph.diffie_hellman(&x_pk);
 
