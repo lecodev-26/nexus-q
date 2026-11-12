@@ -401,38 +401,24 @@ The audit log stores the chained events described in `SECURITY_MODEL.md`
 
 ### 7.1 Structure
 
-```
-
+```text
 +---------------------------------------------------------+
-
 | Magic           | "NQA2" (4 bytes)                       |
 +---------------------------------------------------------+
-
-| Version         | 0x01 (1 byte)                          |
+| Version         | 0x03 (1 byte; 0x02 remains readable)    |
 +---------------------------------------------------------+
-
 | Segment ID      | 16 bytes (random, per segment)         |
 +---------------------------------------------------------+
-
-| Prev segment    | 32 bytes (hash of previous segment's  |
-
-|                 | trailer, or zeros for the first)       |
+| Key epoch ID    | 16 bytes (random; zero for legacy v2)  |
 +---------------------------------------------------------+
-
-| Event[0]        | length-prefixed event record           |
+| Prev segment    | 32 bytes (previous segment commitment) |
 +---------------------------------------------------------+
-
-| Event[1]        | length-prefixed event record           |
+| Event count     | 4 bytes (big-endian)                   |
 +---------------------------------------------------------+
-
-| ...             | ...                                    |
+| Events          | length-prefixed CBOR event records     |
 +---------------------------------------------------------+
-
-| Segment hash    | 32 bytes (chain hash over all events   |
-
-|                 | in this segment + prev_segment)        |
+| Segment hash    | 32 bytes (HMAC-SHA256)                 |
 +---------------------------------------------------------+
-
 ```
 
 Each event matches the structure in `SECURITY_MODEL.md` §7.1.
@@ -454,7 +440,7 @@ Segmentation allows:
 
 Every audit event is `fsync`'d before the operation is considered
 successful. If the audit write fails, the operation **fails** (see
-`SECURITY_MODEL.md` §7.6).
+`SECURITY_MODEL.md` §7.7).
 
 ### 7.4 Verification
 
@@ -486,6 +472,9 @@ session.enable_audit("audit/")?;
 //    event and persists the segment before returning.
 let key_id = session.generate_key(algorithm, purpose)?;
 session.activate_key(&key_id)?;
+
+// Rotate the audit HMAC key when required by the security policy.
+session.rotate_audit_key()?;
 
 // 5. On shutdown, lock the session. The audit log is already on
 //    disk; no explicit flush is needed.
@@ -522,6 +511,16 @@ Rotation. Segments rotate automatically at max_events (default
 1000). The rotation is transparent: appending past the threshold
 finalizes the current segment and starts a new one whose
 prev_segment is the hash of the closed segment.
+
+Segment rotation and HMAC-key rotation are separate operations. F-04 format
+v3 binds a 16-byte key-epoch identifier into each segment commitment. The
+vault body retains random 256-bit epoch keys encrypted by the vault AEAD;
+legacy v2 segments and NQA3 anchors remain readable as epoch zero. The public
+`Session::rotate_audit_key()` operation persists the new keyring/current epoch
+before switching the log to a new segment. Historical epochs are retained for
+verification and are not deleted by rotation. See
+[`security/AUDIT_LOG_KEY_LIFECYCLE.md`](security/AUDIT_LOG_KEY_LIFECYCLE.md)
+for exact lifecycle and recovery semantics.
 
 ### 7.6 What is never logged
 

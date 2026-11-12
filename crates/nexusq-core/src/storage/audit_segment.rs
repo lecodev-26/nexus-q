@@ -10,8 +10,9 @@
 //!
 //! ```text
 //! [magic \"NQA2\"]
-//! [version 1]
+//! [version 3; version 2 is read and preserved for legacy segments]
 //! [segment_id 16 bytes]
+//! [key_epoch_id 16 bytes, v3 only]
 //! [prev_segment 32 bytes]
 //! [event_count u32 BE]
 //! [event]* (each length-prefixed, CBOR)
@@ -27,11 +28,14 @@
 //! ## Segment hash
 //!
 //! ```text
-//! segment_hash = HMAC-SHA256(audit_key, prev_segment || last_event_hash)
+//! segment_hash = HMAC-SHA256(audit_key, prev_segment || key_epoch_id || last_event_hash)
+//!
+//! Version-2 segments omit `key_epoch_id` from this commitment and are
+//! verified with the legacy formula. Version 3 binds the epoch identifier.
 //! ```
 //!
-//! For an empty segment, `last_event_hash` is omitted and the hash is
-//! `HMAC-SHA256(audit_key, prev_segment)`.
+//! For an empty segment, `last_event_hash` is omitted. The version-3 hash is
+//! `HMAC-SHA256(audit_key, prev_segment || key_epoch_id)`.
 //!
 //! Modifying any event breaks its own hash, which breaks the segment
 //! hash, which breaks the next segment's `prev_segment` link.
@@ -58,7 +62,9 @@ use super::db::DbError;
 pub const MAGIC: [u8; 4] = *b"NQA2";
 
 /// Current format version.
-pub const FORMAT_VERSION: u8 = 2;
+pub const FORMAT_VERSION: u8 = 3;
+const LEGACY_FORMAT_VERSION: u8 = 2;
+pub const KEY_EPOCH_ID_LEN: usize = 16;
 
 /// Length in bytes of a segment identifier.
 pub const SEGMENT_ID_LEN: usize = 16;
@@ -115,7 +121,9 @@ impl std::fmt::Display for SegmentId {
 #[derive(Clone)]
 pub struct AuditSegment {
     id: SegmentId,
+    format_version: u8,
     prev_segment: [u8; HASH_LEN],
+    key_epoch_id: [u8; KEY_EPOCH_ID_LEN],
     events: Vec<AuditEvent>,
     auth_key: Zeroizing<[u8; HASH_LEN]>,
     stored_hash: [u8; HASH_LEN],
@@ -139,16 +147,36 @@ impl AuditSegment {
         prev_segment: Option<[u8; HASH_LEN]>,
         auth_key: &[u8; HASH_LEN],
     ) -> Result<Self, DbError> {
+        Self::new_with_key_epoch(prev_segment, auth_key, &[0u8; KEY_EPOCH_ID_LEN])
+    }
+
+    /// Creates a segment authenticated by the supplied key epoch.
+    pub fn new_with_key_epoch(
+        prev_segment: Option<[u8; HASH_LEN]>,
+        auth_key: &[u8; HASH_LEN],
+        key_epoch_id: &[u8; KEY_EPOCH_ID_LEN],
+    ) -> Result<Self, DbError> {
         let prev_segment = prev_segment.unwrap_or(GENESIS_HASH);
         let auth_key = Zeroizing::new(*auth_key);
-        let stored_hash = authenticate_segment(&auth_key, &prev_segment);
+        let mut initial_commitment = Vec::with_capacity(HASH_LEN + KEY_EPOCH_ID_LEN);
+        initial_commitment.extend_from_slice(&prev_segment);
+        initial_commitment.extend_from_slice(key_epoch_id);
+        let stored_hash = authenticate_segment(&auth_key, &initial_commitment);
         Ok(Self {
             id: SegmentId::generate()?,
+            format_version: FORMAT_VERSION,
             prev_segment,
+            key_epoch_id: *key_epoch_id,
             events: Vec::new(),
             auth_key,
             stored_hash,
         })
+    }
+
+    /// Returns the key epoch identifier authenticated by this segment.
+    #[must_use]
+    pub const fn key_epoch_id(&self) -> &[u8; KEY_EPOCH_ID_LEN] {
+        &self.key_epoch_id
     }
 
     /// Returns the segment's identifier.
@@ -216,8 +244,11 @@ impl AuditSegment {
     /// match the shape of other hashing helpers and to leave room for
     /// a fallible hasher in the future.
     pub fn segment_hash(&self) -> Result<[u8; HASH_LEN], DbError> {
-        let mut buf = Vec::with_capacity(HASH_LEN + HASH_LEN);
+        let mut buf = Vec::with_capacity(HASH_LEN + KEY_EPOCH_ID_LEN + HASH_LEN);
         buf.extend_from_slice(&self.prev_segment);
+        if self.format_version >= FORMAT_VERSION {
+            buf.extend_from_slice(&self.key_epoch_id);
+        }
         if let Some(last) = self.events.last() {
             buf.extend_from_slice(&last.hash);
         }
@@ -270,8 +301,11 @@ impl AuditSegment {
     pub fn to_bytes(&self) -> Result<Vec<u8>, DbError> {
         let mut out = Vec::new();
         out.extend_from_slice(&MAGIC);
-        out.push(FORMAT_VERSION);
+        out.push(self.format_version);
         out.extend_from_slice(self.id.as_bytes());
+        if self.format_version >= FORMAT_VERSION {
+            out.extend_from_slice(&self.key_epoch_id);
+        }
         out.extend_from_slice(&self.prev_segment);
 
         let count = u32::try_from(self.events.len()).map_err(|_| DbError::LengthLimitExceeded)?;
@@ -300,35 +334,50 @@ impl AuditSegment {
     /// check: too short, bad magic, unknown version, malformed event,
     /// or segment hash mismatch.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, DbError> {
-        // Header: magic (4) + version (1) + id (16) + prev (32) + count (4)
-        const HEADER_LEN: usize = 4 + 1 + SEGMENT_ID_LEN + HASH_LEN + 4;
         const TRAILER_LEN: usize = HASH_LEN;
-
-        if bytes.len() < HEADER_LEN + TRAILER_LEN {
+        if bytes.len() < 5 + SEGMENT_ID_LEN + HASH_LEN + 4 + TRAILER_LEN {
             return Err(DbError::TooShort);
         }
         if bytes[..4] != MAGIC {
             return Err(DbError::BadMagic);
         }
-        if bytes[4] != FORMAT_VERSION {
-            return Err(DbError::UnsupportedVersion(bytes[4]));
+        let version = bytes[4];
+        if version != FORMAT_VERSION && version != LEGACY_FORMAT_VERSION {
+            return Err(DbError::UnsupportedVersion(version));
         }
-
+        let required_header = if version == FORMAT_VERSION {
+            5 + SEGMENT_ID_LEN + KEY_EPOCH_ID_LEN + HASH_LEN + 4
+        } else {
+            5 + SEGMENT_ID_LEN + HASH_LEN + 4
+        };
+        if bytes.len() < required_header + TRAILER_LEN {
+            return Err(DbError::TooShort);
+        }
         let mut id_bytes = [0u8; SEGMENT_ID_LEN];
         id_bytes.copy_from_slice(&bytes[5..5 + SEGMENT_ID_LEN]);
         let id = SegmentId::from_bytes(id_bytes);
-
+        let mut key_epoch_id = [0u8; KEY_EPOCH_ID_LEN];
+        let prev_offset = if version == FORMAT_VERSION {
+            key_epoch_id
+                .copy_from_slice(&bytes[5 + SEGMENT_ID_LEN..5 + SEGMENT_ID_LEN + KEY_EPOCH_ID_LEN]);
+            5 + SEGMENT_ID_LEN + KEY_EPOCH_ID_LEN
+        } else {
+            5 + SEGMENT_ID_LEN
+        };
         let mut prev_segment = [0u8; HASH_LEN];
-        prev_segment.copy_from_slice(&bytes[5 + SEGMENT_ID_LEN..5 + SEGMENT_ID_LEN + HASH_LEN]);
-
-        let count_offset = 5 + SEGMENT_ID_LEN + HASH_LEN;
+        prev_segment.copy_from_slice(&bytes[prev_offset..prev_offset + HASH_LEN]);
+        let count_offset = prev_offset + HASH_LEN;
+        let header_len = count_offset + 4;
+        if bytes.len() < header_len + TRAILER_LEN {
+            return Err(DbError::TooShort);
+        }
         let count = u32::from_be_bytes(
             bytes[count_offset..count_offset + 4]
                 .try_into()
                 .expect("4 bytes"),
         ) as usize;
 
-        let body_start = HEADER_LEN;
+        let body_start = header_len;
         let body_end = bytes.len() - TRAILER_LEN;
         let body = &bytes[body_start..body_end];
         if count > body.len() / 4 {
@@ -364,7 +413,9 @@ impl AuditSegment {
 
         let segment = Self {
             id,
+            format_version: version,
             prev_segment,
+            key_epoch_id,
             events,
             auth_key: Zeroizing::new([0u8; HASH_LEN]),
             stored_hash,
@@ -552,7 +603,9 @@ mod tests {
     #[test]
     fn empty_segment_hash_matches_formula() {
         let seg = AuditSegment::new(None).unwrap();
-        let expected = authenticate_segment(&[0u8; HASH_LEN], &GENESIS_HASH);
+        let mut commitment = Vec::from(GENESIS_HASH);
+        commitment.extend_from_slice(&[0u8; KEY_EPOCH_ID_LEN]);
+        let expected = authenticate_segment(&[0u8; HASH_LEN], &commitment);
         assert_eq!(seg.segment_hash().unwrap(), expected);
     }
 
@@ -573,6 +626,7 @@ mod tests {
         bytes.extend_from_slice(&MAGIC);
         bytes.push(FORMAT_VERSION);
         bytes.extend_from_slice(&[0u8; SEGMENT_ID_LEN]);
+        bytes.extend_from_slice(&[0u8; KEY_EPOCH_ID_LEN]);
         bytes.extend_from_slice(&[0u8; HASH_LEN]);
         bytes.extend_from_slice(&u32::MAX.to_be_bytes());
         bytes.extend_from_slice(&[0u8; HASH_LEN]);
@@ -594,9 +648,36 @@ mod tests {
 
         assert_eq!(back.id(), seg.id());
         assert_eq!(back.prev_segment(), seg.prev_segment());
+        assert_eq!(back.key_epoch_id(), seg.key_epoch_id());
         assert_eq!(back.len(), seg.len());
         assert!(back.verify().is_ok());
         assert_eq!(back.segment_hash().unwrap(), seg.segment_hash().unwrap());
+    }
+
+    #[test]
+    fn legacy_v2_segment_remains_verifiable_and_keeps_its_wire_version() {
+        let key = [0x42; HASH_LEN];
+        let mut source = AuditSegment::new_with_key(None, &key).unwrap();
+        source.append(ts(1), spec(EventType::KeyCreated)).unwrap();
+        let event = &source.events[0];
+        let event_bytes = crate::vault::to_vec(event).unwrap();
+        let mut commitment = GENESIS_HASH.to_vec();
+        commitment.extend_from_slice(&event.hash);
+        let legacy_hash = authenticate_segment(&key, &commitment);
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&MAGIC);
+        bytes.push(LEGACY_FORMAT_VERSION);
+        bytes.extend_from_slice(source.id.as_bytes());
+        bytes.extend_from_slice(&GENESIS_HASH);
+        bytes.extend_from_slice(&1u32.to_be_bytes());
+        bytes.extend_from_slice(&(event_bytes.len() as u32).to_be_bytes());
+        bytes.extend_from_slice(&event_bytes);
+        bytes.extend_from_slice(&legacy_hash);
+        let mut segment = AuditSegment::from_bytes(&bytes).unwrap();
+        segment.set_auth_key(&key);
+        segment.verify().unwrap();
+        assert_eq!(segment.key_epoch_id(), &[0u8; KEY_EPOCH_ID_LEN]);
+        assert_eq!(segment.to_bytes().unwrap(), bytes);
     }
 
     #[test]

@@ -17,10 +17,50 @@
 //! See `docs/STORAGE.md` §4.4.
 
 use serde::{Deserialize, Serialize};
+use zeroize::Zeroize;
 
 use super::{KeyRecord, Timestamp};
 use crate::identity::Identity;
 use crate::policy::PolicySet;
+
+/// One retained audit authentication key. The key material is serialized only
+/// inside the AEAD-encrypted vault body and is redacted from debug output.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuditKeyEpoch {
+    id: [u8; 16],
+    key: Vec<u8>,
+}
+
+impl AuditKeyEpoch {
+    pub(crate) fn new(id: [u8; 16], mut key: [u8; 32]) -> Self {
+        let material = key.to_vec();
+        key.zeroize();
+        Self { id, key: material }
+    }
+
+    pub(crate) fn id(&self) -> &[u8; 16] {
+        &self.id
+    }
+
+    pub(crate) fn key(&self) -> Option<[u8; 32]> {
+        self.key.as_slice().try_into().ok()
+    }
+}
+
+impl std::fmt::Debug for AuditKeyEpoch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AuditKeyEpoch")
+            .field("id", &hex::encode(self.id))
+            .field("key", &"[REDACTED]")
+            .finish()
+    }
+}
+
+impl Drop for AuditKeyEpoch {
+    fn drop(&mut self) {
+        self.key.zeroize();
+    }
+}
 
 /// Current body schema version.
 ///
@@ -113,6 +153,12 @@ pub struct VaultBody {
     /// SHA3-256 identifiers of individually revoked credentials.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub revoked_credentials: Vec<Vec<u8>>,
+    /// Retained audit authentication epochs, encrypted at rest with the vault body.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub audit_key_epochs: Vec<AuditKeyEpoch>,
+    /// Epoch used for newly appended audit events. Missing means legacy KEK-derived epoch 0.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audit_current_epoch: Option<[u8; 16]>,
 }
 
 impl VaultBody {
@@ -127,6 +173,8 @@ impl VaultBody {
             audit_dir: None,
             audit_anchor: None,
             revoked_credentials: Vec::new(),
+            audit_key_epochs: Vec::new(),
+            audit_current_epoch: None,
         }
     }
 
@@ -274,6 +322,8 @@ mod tests {
         assert!(decoded.audit_dir.is_none());
         assert!(decoded.audit_anchor.is_none());
         assert!(decoded.revoked_credentials.is_empty());
+        assert!(decoded.audit_key_epochs.is_empty());
+        assert!(decoded.audit_current_epoch.is_none());
         assert_eq!(decoded.metadata.schema_version, CURRENT_SCHEMA_VERSION);
     }
 
