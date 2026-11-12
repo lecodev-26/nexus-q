@@ -751,9 +751,13 @@ mod tests {
         let epoch = [0x19; KEY_EPOCH_ID_LEN];
         let replacement = [0x73; 32];
         let keys = [(LEGACY_EPOCH_ID, TEST_KEY), (epoch, replacement)];
-        let mut log =
-            AuditLog::open_with_keyring(&audit, AuditLogConfig::default(), &keys, &LEGACY_EPOCH_ID)
-                .unwrap();
+        let mut log = AuditLog::open_with_keyring(
+            &audit,
+            AuditLogConfig::default(),
+            &[(LEGACY_EPOCH_ID, TEST_KEY)],
+            &LEGACY_EPOCH_ID,
+        )
+        .unwrap();
         log.append(ts(1), spec(EventType::VaultCreated)).unwrap();
         let old_hash = log.head_event_hash().unwrap().to_vec();
         log.add_key_epoch(epoch, &replacement).unwrap();
@@ -776,9 +780,13 @@ mod tests {
         let epoch = [0x39; KEY_EPOCH_ID_LEN];
         let replacement = [0x64; 32];
         let keys = [(LEGACY_EPOCH_ID, TEST_KEY), (epoch, replacement)];
-        let mut log =
-            AuditLog::open_with_keyring(&audit, AuditLogConfig::default(), &keys, &LEGACY_EPOCH_ID)
-                .unwrap();
+        let mut log = AuditLog::open_with_keyring(
+            &audit,
+            AuditLogConfig::default(),
+            &[(LEGACY_EPOCH_ID, TEST_KEY)],
+            &LEGACY_EPOCH_ID,
+        )
+        .unwrap();
         log.append(ts(1), spec(EventType::VaultCreated)).unwrap();
         log.add_key_epoch(epoch, &replacement).unwrap();
         log.rotate_to_epoch(epoch).unwrap();
@@ -800,9 +808,13 @@ mod tests {
         let epoch = [0x29; KEY_EPOCH_ID_LEN];
         let replacement = [0x64; 32];
         let keys = [(LEGACY_EPOCH_ID, TEST_KEY), (epoch, replacement)];
-        let mut log =
-            AuditLog::open_with_keyring(&audit, AuditLogConfig::default(), &keys, &LEGACY_EPOCH_ID)
-                .unwrap();
+        let mut log = AuditLog::open_with_keyring(
+            &audit,
+            AuditLogConfig::default(),
+            &[(LEGACY_EPOCH_ID, TEST_KEY)],
+            &LEGACY_EPOCH_ID,
+        )
+        .unwrap();
         log.append(ts(1), spec(EventType::VaultCreated)).unwrap();
         let old_anchor = fs::read(audit.join(ANCHOR_FILE)).unwrap();
         log.add_key_epoch(epoch, &replacement).unwrap();
