@@ -1,9 +1,9 @@
 # Audit-log HMAC key lifecycle and rotation design
 
-**Status:** design record for the current F-04 implementation. This document
-separates controls that exist today from key-rotation capabilities that are
-not implemented. It is not a claim that independent HMAC-key rotation is
-available.
+**Status:** implementation record for F-04 segment format v3. Independent
+audit-key rotation is implemented through `Session::rotate_audit_key()`;
+historical epochs are retained for verification and cannot currently be
+retired or destroyed independently.
 
 ## 1. Current key derivation and ownership
 
@@ -23,16 +23,18 @@ The input is the already password-derived vault KEK; the audit key is not
 independently random and is not a user-managed key. HKDF domain separation
 keeps this use distinct from the vault's other key purposes.
 
-The key is held in `Zeroizing<[u8; 32]>` by `AuditLog` and by each active
-`AuditSegment`. It is not serialized into segment files, `audit.anchor`, logs,
-or event payloads. It exists only in the unlocked process memory and is
-zeroized when those owners are dropped. The vault-side `audit_anchor` is an
-event hash, not key material, and is stored inside the encrypted vault body.
+Legacy epoch zero is held as a `Zeroizing<[u8; 32]>` derived from the KEK.
+New random 256-bit epoch keys are stored in `VaultBody::audit_key_epochs`,
+which is serialized only inside the vault AEAD envelope. `AuditLog` and active
+segments keep zeroizing key copies in process memory. The epoch identifier is
+non-secret and appears in v3 segment headers and NQA4 anchors; key bytes never
+appear in the audit directory, logs, or event payloads. The vault-side
+`audit_anchor` remains an event hash, not key material.
 
-**Consequences:** anyone who can unlock the vault can derive the current audit
-key. Anyone who can read only the audit directory cannot derive it from the
-files. Compromise of the vault password/KEK compromises the audit key too.
-There is no separate KMS/HSM integration for this key in the core vault path.
+Anyone able to unlock the vault can access retained epoch keys. Anyone able
+to read only the audit directory cannot derive them. Compromise of the vault
+password/KEK therefore compromises the encrypted keyring too. There is no
+separate KMS/HSM integration.
 
 ## 2. File and process permissions
 
@@ -54,54 +56,42 @@ root, or the host.
 
 ## 3. Rotation, revocation, and historical verification
 
-### What exists now
+### Implemented rotation
 
-`AuditLog::rotate()` and `max_events` rotate **segments**, not HMAC keys. Every
-segment currently uses the same vault-derived audit key. The key derivation
-label is fixed at `nexusq-audit-log-v2`.
+`Session::rotate_audit_key()` creates a fresh random 256-bit key and 128-bit
+epoch identifier using the OS CSPRNG. It retains all previous epochs in the
+encrypted vault body, marks the new epoch current, and persists that body
+before changing the audit log. The log then closes the previous segment and
+creates a new v3 segment linked to the old segment hash. A `key_rotated` event
+is appended under the new epoch.
 
-There is no public API to rotate, revoke, or recover an independent audit HMAC
-key, and no password/KEK-change migration that re-authenticates existing audit
-segments. Changing the vault KEK or changing the derivation label changes the
-audit key; old segments and `audit.anchor` then fail authentication. Do not
-change the HKDF label, replace the vault KEK, or manually substitute an audit
-key while retaining the existing log directory. Do not describe segment
-rotation as key rotation.
+F-04 v3 stores the epoch identifier in the segment header and includes it in
+the HMAC segment commitment. This prevents changing the epoch identifier
+without invalidating the segment. Legacy v2 segments are interpreted as epoch
+zero and retain their original hash formula and wire version when read or
+saved. NQA4 anchors authenticate the segment number, epoch identifier, and
+segment hash; NQA3 anchors remain supported for legacy logs.
 
-### Required design for a future key-rotation implementation
+Rotation ordering is recoverable: the encrypted keyring/current-epoch marker
+is durable before the new segment is created. If interrupted before segment
+creation, unlock completes the switch. If the new segment is durable but
+its anchor replacement is not, unlock accepts only the one-segment predecessor
+anchor whose epoch and hash match the authenticated preceding segment and the
+new segment's `prev_segment`, then repairs the anchor. Unknown epoch IDs, missing keys, malformed key lengths, duplicate
+epoch IDs, and unrelated/stale anchors fail closed.
 
-A compatible implementation must be versioned and must not silently
-re-authenticate history under a new key. The required properties are:
+Historical keys are retained so every old segment remains verifiable. The
+current API does not delete or cryptographically revoke historical keys, does
+not support KMS/HSM custody, and does not publish external checkpoints. The
+new segment is linked to the prior segment hash; the transition is not a
+separate dual-signature certificate. Deployments needing stronger transition
+attestation or independent rollback resistance should add an external
+append-only checkpoint before relying on those properties.
 
-1. Store a random 256-bit audit-key epoch in the encrypted vault body (or in a
-   separately authenticated KMS/HSM keyring). Never store plaintext key bytes
-   beside the audit files.
-2. Give every epoch a non-secret, monotonically increasing key identifier.
-   Bind the identifier and format version into each segment's authenticated
-   header and into the tail anchor.
-3. Rotate only at a segment boundary. The transition record must bind the
-   previous segment hash, old and new key identifiers, and new segment hash;
-   authenticate the transition with both the retiring and activating keys.
-4. Verify historical segments with their original epoch keys. Retiring a key
-   means it can no longer authenticate new writes; it does **not** mean
-   deleting it while retained history still depends on it.
-5. Permit key destruction only after the corresponding history is expired or
-   archived under an independently verifiable checkpoint, according to an
-   explicit retention policy. Record the destruction/retirement action in the
-   audit chain before it takes effect.
-6. Make rotation crash-safe: persist the encrypted keyring update and durable
-   transition evidence in a defined order; recovery must either select the
-   complete old epoch or the complete new epoch, never guess or silently reset
-   to a new genesis.
-7. Version the segment and anchor formats, define migration from the current
-   single-key format, and reject unknown epochs or missing historical keys
-   fail-closed.
-
-Until that design is implemented and tested, the only supported response to
-suspected audit-key compromise is to preserve the vault and complete audit
-history as evidence, restrict access to the host, and plan a separately
-reviewed migration. Starting a fresh audit directory is not a cryptographic
-rotation of the old history.
+`AuditLog::rotate()` and `max_events` continue to rotate segments only; they
+do not create new key epochs. Use `Session::rotate_audit_key()` for key
+rotation. Changing the vault KEK still requires a separate migration that
+preserves the encrypted audit keyring and audit history.
 
 ## 4. Recovery and backup
 
@@ -128,8 +118,8 @@ under a new key to make verification pass.
 
 The implementation uses two local authenticated commitments:
 
-- `audit.anchor` authenticates the current segment number and segment hash
-  with the audit HMAC key.
+- `audit.anchor` authenticates the current segment number, key epoch ID, and
+  segment hash with the corresponding audit HMAC key (NQA4; NQA3 is legacy).
 - The encrypted vault body stores the last successfully persisted event hash.
 
 Opening a log checks its complete segment chain and local tail commitment;
@@ -160,9 +150,7 @@ The existing implementation includes regression coverage for:
 | Vault rollback behind persisted audit state | Reject on unlock | `audit_rollback_before_last_persisted_state_is_detected` |
 | Wrong HMAC key | Reject | `opening_with_a_different_authentication_key_fails_closed` |
 
-A future key-epoch implementation must add tests for a successful old-to-new
-epoch transition, verification of pre-rotation history, rejection of a forged
-transition, retirement/revocation behavior, interrupted rotation recovery,
-and rejection when a required historical key is unavailable. Passing the
-current regression matrix is not evidence that independent key rotation is
-implemented.
+The key-epoch regression coverage includes a successful old-to-new transition,
+verification of pre-rotation history after reopen, legacy v2 segment parsing,
+and fail-closed behavior when a required epoch is unavailable. Retirement and
+cryptographic revocation remain unsupported and must not be claimed.

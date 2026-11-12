@@ -12,14 +12,14 @@ use std::fs;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::crypto::aead::{self, AeadError, Algorithm as AeadAlgorithm};
 use crate::crypto::kdf::{self, KdfError};
 use crate::crypto::random::{OsRandomSource, RandomError, RandomSource};
 
 use super::algorithm::Algorithm;
-use super::body::{CURRENT_SCHEMA_VERSION, VaultBody, VaultMetadata};
+use super::body::{AuditKeyEpoch, CURRENT_SCHEMA_VERSION, VaultBody, VaultMetadata};
 use std::cell::{Cell, RefCell};
 
 use super::envelope::{self, EnvelopeError};
@@ -395,8 +395,7 @@ impl Vault {
         let audit = match &body.audit_dir {
             Some(dir) => {
                 let resolved = resolve_audit_path(&self.path, Path::new(dir));
-                let audit_auth = audit_key(kek.as_ref())?;
-                let log = AuditLog::open_with(&resolved, AuditLogConfig::default(), &audit_auth)?;
+                let log = open_audit_log(&resolved, &body, kek.as_ref())?;
                 log.verify_all()?;
                 if let Some(anchor) = body.audit_anchor.as_deref()
                     && !log.contains_event_hash(anchor)
@@ -1820,8 +1819,7 @@ impl Session {
         // Open the log first so a bad path fails before we touch the
         // body.
         let resolved = resolve_audit_path(&self.vault.path, audit_dir);
-        let audit_auth = audit_key(self.kek.as_ref())?;
-        let log = AuditLog::open_with(&resolved, AuditLogConfig::default(), &audit_auth)?;
+        let log = open_audit_log(&resolved, &self.body, self.kek.as_ref())?;
 
         self.body.audit_anchor = log.head_event_hash().map(ToOwned::to_owned);
         *self.audit.borrow_mut() = Some(log);
@@ -1879,11 +1877,59 @@ impl Session {
         audit_dir: impl AsRef<std::path::Path>,
     ) -> Result<(), VaultError> {
         self.require_writes_allowed()?;
-        let audit_auth = audit_key(self.kek.as_ref())?;
-        let log = AuditLog::open_with(audit_dir.as_ref(), AuditLogConfig::default(), &audit_auth)?;
+        let log = open_audit_log(audit_dir.as_ref(), &self.body, self.kek.as_ref())?;
         self.body.audit_anchor = log.head_event_hash().map(ToOwned::to_owned);
         *self.audit.borrow_mut() = Some(log);
         self.body.audit_dir = Some(audit_dir.as_ref().to_string_lossy().into_owned());
+        Ok(())
+    }
+
+    /// Rotates the audit authentication key without discarding historical keys.
+    ///
+    /// The new keyring is committed inside the encrypted vault body before the
+    /// log switches epochs. On the next unlock, an interrupted transition can
+    /// be completed from the durable current-epoch marker.
+    pub fn rotate_audit_key(&mut self) -> Result<(), VaultError> {
+        self.require_writes_allowed()?;
+        if self.audit.borrow().is_none() {
+            return Err(VaultError::Corrupt("audit logging is not enabled"));
+        }
+        if self.body.audit_key_epochs.is_empty() {
+            let legacy = audit_key(self.kek.as_ref())?;
+            self.body
+                .audit_key_epochs
+                .push(AuditKeyEpoch::new([0u8; 16], *legacy));
+        }
+        let rng = OsRandomSource::new();
+        let mut epoch = [0u8; 16];
+        let mut key = Zeroizing::new([0u8; 32]);
+        rng.fill_bytes(&mut epoch)?;
+        rng.fill_bytes(key.as_mut())?;
+        if epoch == [0u8; 16]
+            || self
+                .body
+                .audit_key_epochs
+                .iter()
+                .any(|entry| entry.id() == &epoch)
+        {
+            return Err(VaultError::Corrupt("audit key epoch identifier collision"));
+        }
+        self.body
+            .audit_key_epochs
+            .push(AuditKeyEpoch::new(epoch, *key));
+        self.body.audit_current_epoch = Some(epoch);
+        // Persist the key before creating any segment that depends on it.
+        self.vault.write_body(&self.body, &self.kek)?;
+        {
+            let mut audit = self.audit.borrow_mut();
+            let log = audit
+                .as_mut()
+                .ok_or(VaultError::Corrupt("audit logging is not enabled"))?;
+            log.add_key_epoch(epoch, &key)?;
+            log.rotate_to_epoch(epoch)?;
+            self.body.audit_anchor = log.head_event_hash().map(ToOwned::to_owned);
+        }
+        self.vault.write_body(&self.body, &self.kek)?;
         Ok(())
     }
 
@@ -2239,6 +2285,58 @@ fn generate_material<S: RandomSource>(
 /// the vault file itself is opened.
 fn audit_key(kek: &[u8]) -> Result<Zeroizing<[u8; 32]>, KdfError> {
     kdf::hkdf_sha256(kek, None, b"nexusq-audit-log-v2")
+}
+
+fn open_audit_log(dir: &Path, body: &VaultBody, kek: &[u8]) -> Result<AuditLog, VaultError> {
+    let (mut keys, current_epoch) = audit_keyring(body, kek)?;
+    let result = AuditLog::open_with_keyring(dir, AuditLogConfig::default(), &keys, &current_epoch);
+    for (_, key) in &mut keys {
+        key.zeroize();
+    }
+    Ok(result?)
+}
+
+fn audit_keyring(
+    body: &VaultBody,
+    kek: &[u8],
+) -> Result<(Vec<([u8; 16], [u8; 32])>, [u8; 16]), VaultError> {
+    if body.audit_key_epochs.is_empty() {
+        if body.audit_current_epoch.is_some() {
+            return Err(VaultError::Corrupt("audit current epoch has no keyring"));
+        }
+        let legacy = audit_key(kek)?;
+        return Ok((vec![([0u8; 16], *legacy)], [0u8; 16]));
+    }
+    let mut keys: Vec<([u8; 16], [u8; 32])> = Vec::with_capacity(body.audit_key_epochs.len());
+    for epoch in &body.audit_key_epochs {
+        let Some(material) = epoch.key() else {
+            for (_, key) in &mut keys {
+                key.zeroize();
+            }
+            return Err(VaultError::Corrupt("invalid audit key length"));
+        };
+        let key = Zeroizing::new(material);
+        if keys.iter().any(|(id, _)| id == epoch.id()) {
+            for (_, key) in &mut keys {
+                key.zeroize();
+            }
+            return Err(VaultError::Corrupt("duplicate audit key epoch"));
+        }
+        keys.push((*epoch.id(), *key));
+    }
+    let Some(current) = body.audit_current_epoch else {
+        for (_, key) in &mut keys {
+            key.zeroize();
+        }
+        return Err(VaultError::Corrupt("audit keyring has no current epoch"));
+    };
+    if !keys.iter().any(|(id, _)| id == &current) {
+        for (_, key) in &mut keys {
+            key.zeroize();
+        }
+        return Err(VaultError::Corrupt("current audit key epoch is missing"));
+    }
+    Ok((keys, current))
 }
 
 fn resolve_audit_path(vault_path: &Path, audit_dir: &Path) -> PathBuf {
@@ -4138,6 +4236,41 @@ mod tests {
 
         session.verify_audit().unwrap();
         assert_eq!(session.audit_events().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn audit_key_rotation_preserves_history_across_lock_and_unlock() {
+        let dir = TempDir::new().unwrap();
+        let vault_path = temp_path(&dir, "v.nqv");
+        let audit_dir = dir.path().join("audit");
+        std::fs::create_dir(&audit_dir).unwrap();
+        Vault::create(&vault_path, b"pw", None).unwrap();
+        let vault = Vault::open(&vault_path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+        session.enable_audit(&audit_dir).unwrap();
+        let key_id = session
+            .generate_key(Algorithm::Ed25519, Purpose::Sign)
+            .unwrap();
+        session.activate_key(&key_id).unwrap();
+        let before = session.audit_events().unwrap().last().unwrap().hash.clone();
+
+        session.rotate_audit_key().unwrap();
+        session.verify_audit().unwrap();
+        assert_eq!(session.body().audit_key_epochs.len(), 2);
+        assert!(session.body().audit_current_epoch.is_some());
+        let vault = session.lock().unwrap();
+
+        let reopened = vault.unlock(b"pw").unwrap();
+        reopened.verify_audit().unwrap();
+        let events = reopened.audit_events().unwrap();
+        assert!(
+            events
+                .iter()
+                .any(|event| event.event_type == EventType::KeyRotated)
+        );
+        assert_eq!(events.len(), 4); // rotation, lock, session end, and unlock
+        let log = open_audit_log(&audit_dir, reopened.body(), reopened.kek.as_ref()).unwrap();
+        assert!(log.contains_event_hash(&before));
     }
 
     #[test]
