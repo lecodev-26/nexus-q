@@ -4333,29 +4333,26 @@ mod tests {
         let mut session = vault.unlock(b"pw").unwrap();
         session.enable_audit(&audit_dir).unwrap();
 
-        // Make the audit directory read-only so subsequent writes fail.
-        let mut perms = std::fs::metadata(&audit_dir).unwrap().permissions();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt as _;
-            perms.set_mode(0o500); // r-x for owner, no write
-            std::fs::set_permissions(&audit_dir, perms).unwrap();
+        // Move the directory after the log is opened and put a regular file
+        // at its former path. This makes segment persistence fail with ENOTDIR
+        // for every user, including root (which can bypass chmod permissions).
+        let displaced_audit_dir = dir.path().join("audit-displaced");
+        std::fs::rename(&audit_dir, &displaced_audit_dir).unwrap();
+        std::fs::write(&audit_dir, b"not a directory").unwrap();
 
-            // Now generate_key should fail because the audit write fails.
-            let err = session
-                .generate_key(Algorithm::Ed25519, Purpose::Sign)
-                .unwrap_err();
-            assert!(matches!(err, VaultError::Audit(_)));
+        let err = session
+            .generate_key(Algorithm::Ed25519, Purpose::Sign)
+            .unwrap_err();
+        assert!(matches!(err, VaultError::Audit(_)));
 
-            // Restore permissions so the temp dir can be cleaned up.
-            let mut perms = std::fs::metadata(&audit_dir).unwrap().permissions();
-            perms.set_mode(0o700);
-            std::fs::set_permissions(&audit_dir, perms).unwrap();
+        // Restore the original audit directory before checking the poisoned
+        // session and allowing TempDir to clean up its contents.
+        std::fs::remove_file(&audit_dir).unwrap();
+        std::fs::rename(&displaced_audit_dir, &audit_dir).unwrap();
 
-            // The failed audit write permanently blocks persistence of the
-            // in-memory mutation. The vault on disk must remain unchanged.
-            assert!(session.lock().is_err());
-        }
+        // The failed audit write permanently blocks persistence of the
+        // in-memory mutation. The vault on disk must remain unchanged.
+        assert!(session.lock().is_err());
     }
 
     // =========================================================================
