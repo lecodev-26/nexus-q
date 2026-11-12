@@ -500,23 +500,16 @@ Report suspected vulnerabilities through the [private GitHub Security Advisories
 
 ## Contributing
 
-Issues, reproducible bug reports, documentation improvements, and focused pull requests are welcome. Before opening a change:
+Contributions of code, tests, documentation, security research, reviews, and design feedback are welcome. **You do not need to contact the maintainer before opening a focused, non-sensitive Pull Request.**
 
-1. Read the [architecture](docs/ARCHITECTURE.md), [threat model](docs/THREAT_MODEL.md), [cryptographic rules](docs/CRYPTOGRAPHY.md), and [security policy](SECURITY.md) relevant to the change.
-2. Keep cryptographic primitives delegated to established libraries; do not introduce home-grown cryptography or silently change serialized formats.
-3. Add or update tests and documentation alongside behavior changes. For performance work, include reproducible measurements and preserve the benchmark conditions and raw evidence.
-4. Run the relevant local checks before submitting. A useful baseline for Rust changes is:
+- **New contributors:** start with [CONTRIBUTING.md](CONTRIBUTING.md) for the complete workflow and [AGENT.md](AGENT.md) for the repository map and detailed instructions for human and AI-assisted work.
+- **Find work:** browse [open issues](https://github.com/lecodev-26/nexus-q/issues), review [GitHub Discussions](https://github.com/lecodev-26/nexus-q/discussions), or propose a focused improvement in a PR.
+- **Open a change:** fork the repository, create a topic branch, and open a PR against main. GitHub provides a PR checklist automatically. Explain scope, security/correctness impact, compatibility, validation evidence, and limitations.
+- **Ask for help:** see [SUPPORT.md](SUPPORT.md), or ask in [Discussions](https://github.com/lecodev-26/nexus-q/discussions).
+- **Community standards:** participation follows [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+- **Security vulnerabilities:** report them privately using [SECURITY.md](SECURITY.md), never in public issues, discussions, or PRs.
 
-   ```bash
-   cargo fmt --all -- --check
-   cargo test --workspace
-   cargo build --workspace --release
-   ```
-
-   Run the checks applicable to the crates and SDKs you changed; CI remains the authoritative check for the full supported matrix.
-5. Describe security-impacting changes and compatibility implications clearly in the pull request. Never include secrets, private keys, vault contents, production credentials, or sensitive logs.
-
-Please report suspected vulnerabilities privately using the process in [`SECURITY.md`](SECURITY.md), rather than publishing exploitable details in a public issue.
+GitHub Actions is the authoritative validation for configured CI checks. Contributors should report exactly which local commands and Actions runs were executed; a green CI run is not an independent security audit or certification.
 
 
 <div align="center">

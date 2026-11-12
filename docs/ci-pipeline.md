@@ -1,38 +1,65 @@
 # NEXUS-Q GitHub Actions architecture
 
-`ci.yml` is the **only automatic workflow**. It runs on pushes to `main` and pull requests targeting `main`. It is intentionally short: Rust formatting, a locked workspace check, focused core/C ABI tests, Arena JSON contract validation, Cargo metadata validation, and the repository's unsafe-code boundary checks. It does not run long fuzz campaigns, performance benchmarks, multi-platform SDK builds, native assembly gates, or package publication.
+This document describes the workflow configuration in .github/workflows/. Workflow triggers are authoritative: a workflow listed below does not run on every Pull Request unless its YAML explicitly configures that trigger.
 
-## Manually dispatched engineering gates
+## Automatic Fast CI
 
-Run these from **Actions → workflow → Run workflow**, selecting the branch or tag to test:
+.github/workflows/ci.yml is named **NEXUS-Q Fast CI**. It runs on pushes to main, pull requests targeting main (opened, synchronized, reopened, or marked ready for review), and manual workflow_dispatch with an optional ref or commit SHA.
 
-| Workflow | Purpose |
-|---|---|
-| `security-ci.yml` | Full workspace tests and lint/security/dependency checks, secret scanning, fuzz harness compilation, and provider-configuration regression coverage |
-| `correctness-interoperability.yml` | Core interoperability regression and vendored ML-KEM/module-lattice vector suites |
-| `fuzz-soak.yml` | Sequential multi-hour vault, envelope, and backup-import fuzz campaigns |
-| `sdk-ci.yml` | Builds and smoke/tests for the C ABI and language bindings |
-| `sdk-runtime.yml` | Builds the default RustCrypto C ABI runtime for the documented Linux, macOS, and Windows targets; artifacts are not published automatically |
-| `native-runtime.yml` | Builds explicitly experimental native-provider runtime artifacts; these are not the default SDK runtime and are not published automatically |
-| `native-assembly-ci.yml` | Specialized kernel/assembly, formatting, documentation, and unsafe-boundary checks |
-| `native-backend-gate.yml` | Experimental native backend provenance, upstream comparison, differential/constant-time checks, and performance gate |
-| `native-backend-aa-control.yml` | Informational A/A control for hosted-runner benchmark noise |
-| `pqc-arena.yml` | PQC Arena registry, runner, schema, and benchmark evidence validation |
-| `benchmarks.yml` | Cross-platform core benchmark runs and reproducibility metadata |
-| `hybrid-benchmark.yml` | Production hybrid ML-KEM-768/X25519 benchmark evidence |
-| `publish-packages.yml` | Explicitly confirmed crates.io, PyPI, and RubyGems publication from an already released, annotated version tag |
-| `publish-nuget.yml` | Explicitly confirmed NuGet publication using GitHub Actions OIDC and validated RustCrypto runtime artifacts |
-| `v4-release.yml` | Manual release evidence build/dry-run; actual GitHub Release publication requires a separate explicit input and the exact annotated version tag |
+The workflow checks out recursive submodules and uses Rust 1.88.0 with rustfmt and Clippy. Its workspace job runs:
+
+1. cargo fmt --all -- --check
+2. cargo check --workspace --all-targets --locked
+3. cargo clippy --workspace --all-targets --locked -- -D warnings
+4. cargo test --workspace --locked
+
+A successful run is evidence that these configured steps passed for the exact checked-out revision. It does not establish that every standalone crate, SDK, fuzz target, platform, release path, or manually dispatched workflow passed. It is not an independent security audit, certification, or production-readiness assessment.
+
+## Specialized workflows and their triggers
+
+These workflows are separate from Fast CI. The trigger column reflects the workflow YAML currently in this repository; inspect that YAML for exact inputs, matrices, and job-level conditions before dispatching or relying on a result.
+
+| Workflow | Trigger | Purpose / boundary |
+|---|---|---|
+| audit-ci.yml | Manual dispatch | Dependency audit and cargo-deny checks. |
+| security-ci.yml | Manual dispatch | Repository security/data-contract checks, secret scanning, and related security validation. |
+| correctness-interoperability.yml | Manual dispatch | Additional correctness, interoperability, and official/vendored vector suites. |
+| fuzz-soak.yml | Manual dispatch | Longer sequential fuzz campaigns; not equivalent to compiling the fuzz harness. |
+| native-backend-gate.yml | Manual dispatch | Experimental native backend provenance, differential/constant-time checks, and performance gates. |
+| native-backend-aa-control.yml | Manual dispatch | Informational A/A control for hosted-runner benchmark noise. |
+| native-assembly-ci.yml | Manual dispatch | Specialized kernel/assembly, formatting, documentation, and unsafe-boundary checks. |
+| sdk-ci.yml | Manual dispatch or reusable workflow call | Language SDK and native runtime checks. |
+| sdk-runtime.yml | Manual dispatch or reusable workflow call | Default RustCrypto C ABI runtime artifacts; not automatically published. |
+| native-runtime.yml | Manual dispatch or reusable workflow call | Experimental native-provider runtime artifacts; separate from default SDK runtime and not automatically published. |
+| pqc-arena.yml | Manual dispatch | PQC Arena registry, runner, schema, and benchmark evidence validation. |
+| benchmarks.yml | Manual dispatch | Cross-platform core benchmark runs and reproducibility metadata. |
+| hybrid-benchmark.yml | Manual dispatch | Production hybrid ML-KEM-768/X25519 benchmark evidence. |
+| ai-audit-validation.yml | Push to main or PR, limited to security-audit/workflow paths | Lightweight validation for AI-assisted audit tooling; this is a separate automatic check when its path filters match. |
+| ai-security-audit.yml | Manual dispatch | AI-assisted static security audit workflow, with selectable audit profile. |
+| publish-packages.yml | Manual dispatch | Explicitly confirmed crates.io, PyPI, and RubyGems publication from an already released annotated version tag. |
+| publish-nuget.yml | Manual dispatch | Explicitly confirmed NuGet publication using GitHub Actions OIDC and validated RustCrypto runtime artifacts. |
+| v4-release.yml | Manual dispatch | Release evidence build/dry-run; actual GitHub Release publication requires a separate explicit input and exact annotated version tag. |
+
+The specialized manual workflows do not automatically run on every PR. Reusable workflows run only when called by another workflow. A workflow being present does not mean it has run for a given PR or commit.
+
+## PR validation discipline
+
+1. Open a focused PR against main and describe scope, motivation, security/correctness impact, compatibility, tests, and limitations.
+2. Wait for required Actions checks to finish.
+3. Confirm the successful run corresponds to the latest PR HEAD SHA, not an earlier push.
+4. Inspect failed logs and fix the root cause; do not weaken checks.
+5. Respond to review comments and push follow-up commits as needed.
+6. A maintainer merges when ready. Contributors must not merge their own PR unless explicitly authorized.
+
+Do not claim a manual security, fuzz, benchmark, SDK, or release workflow passed unless it was dispatched and its run and exact revision were checked.
 
 ## Publication and security boundaries
 
-- No registry publication is triggered by a push, pull request, or successful CI run.
+- No registry publication is triggered by an ordinary push, PR, or successful Fast CI run.
 - Publishing workflows default to a no-op unless the operator explicitly sets the confirmation input.
-- Package publication is allowed only from an annotated `vX.Y.Z` tag whose commit matches the checked-out SHA and the existing GitHub release manifest.
+- Package publication is restricted by configured release/tag and provenance checks; inspect the current workflow before preparing a release.
 - NuGet uses OIDC; do not add a long-lived NuGet API key to repository secrets.
 - The ordinary SDK runtime remains RustCrypto. Experimental native-provider artifacts are separate and must not be substituted into ordinary SDK packages.
-- A green CI or benchmark result is evidence for the checks actually run; it is not a claim of FIPS validation, production readiness, or completed independent audit.
+- A green CI or benchmark result is evidence only for the checks actually run. It is not proof of FIPS validation, production readiness, or a completed independent audit.
 
-The release workflow currently pins `RELEASE_VERSION` to the repository’s v4.1.2 line; update and review that constant, release notes, and package metadata together before preparing a later version. The existing v4.1.2 GitHub Release must never be overwritten.
-
-The workflows are intentionally independent so that expensive jobs run only when requested and their results remain attributable to the exact selected ref.
+The workflows are intentionally separated so expensive jobs run only when requested and results remain attributable to the exact selected ref.
