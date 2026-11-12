@@ -2152,10 +2152,17 @@ fn derive_kek(
     salt: &[u8],
     params: &KdfParams,
 ) -> Result<Zeroizing<[u8; kdf::DERIVED_KEY_LEN]>, VaultError> {
-    // Only Argon2id is supported in v1; unknown values will be rejected
-    // at header parse time once more algorithms are added.
-    let _ = params.algorithm;
-    kdf::argon2id(password, salt).map_err(VaultError::Kdf)
+    if !params.is_supported() {
+        return Err(VaultError::Kdf(KdfError::InvalidParams));
+    }
+    kdf::argon2id_with_params(
+        password,
+        salt,
+        params.memory_kib,
+        params.iterations,
+        params.parallelism,
+    )
+    .map_err(VaultError::Kdf)
 }
 
 fn generate_vault_id<S: RandomSource>(source: &S) -> Result<String, VaultError> {

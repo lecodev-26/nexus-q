@@ -160,13 +160,15 @@ truncated hash below 224 bits.
 - Used for: deriving the vault Key Encryption Key (KEK) from a user
   password.
 - Parameters (v1.0 minimum):
-  - Memory: 64 MiB
-  - Iterations: 3
-  - Parallelism: 1
-  - Salt: 16 bytes, unique per vault
-  - Output: 32 bytes
-- Parameters are stored alongside the vault (so future versions can
-  upgrade the cost).
+  - Memory: 64 MiB (maximum accepted: 256 MiB)
+  - Iterations: 3 (maximum accepted: 10)
+  - Parallelism: 1 (maximum accepted: 4)
+  - Salt: 32 bytes, unique per vault or backup
+  - Output: exactly 32 bytes
+- Parameters are stored in each vault and backup header and are used for
+  key derivation. Readers reject values below the v1 minimum, above these
+  resource ceilings, or with an unsupported output length before running
+  Argon2id. Existing v1 files retain their original derivation.
 
 **Non-password KDF:** HKDF (RFC 5869) with SHA-256
 
