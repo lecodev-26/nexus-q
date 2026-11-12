@@ -199,15 +199,33 @@ mod tests {
     fn argon2id_rejects_costs_outside_supported_bounds() {
         let salt = [0u8; ARGON2_SALT_LEN];
         assert!(matches!(
-            argon2id_with_params(b"password", &salt, ARGON2_MEMORY_KIB - 1, ARGON2_ITERATIONS, ARGON2_PARALLELISM),
+            argon2id_with_params(
+                b"password",
+                &salt,
+                ARGON2_MEMORY_KIB - 1,
+                ARGON2_ITERATIONS,
+                ARGON2_PARALLELISM
+            ),
             Err(KdfError::InvalidParams)
         ));
         assert!(matches!(
-            argon2id_with_params(b"password", &salt, ARGON2_MAX_MEMORY_KIB + 1, ARGON2_ITERATIONS, ARGON2_PARALLELISM),
+            argon2id_with_params(
+                b"password",
+                &salt,
+                ARGON2_MAX_MEMORY_KIB + 1,
+                ARGON2_ITERATIONS,
+                ARGON2_PARALLELISM
+            ),
             Err(KdfError::InvalidParams)
         ));
         assert!(matches!(
-            argon2id_with_params(b"password", &salt, ARGON2_MEMORY_KIB, ARGON2_ITERATIONS - 1, ARGON2_PARALLELISM),
+            argon2id_with_params(
+                b"password",
+                &salt,
+                ARGON2_MEMORY_KIB,
+                ARGON2_ITERATIONS - 1,
+                ARGON2_PARALLELISM
+            ),
             Err(KdfError::InvalidParams)
         ));
         assert!(matches!(
@@ -215,7 +233,13 @@ mod tests {
             Err(KdfError::InvalidParams)
         ));
         assert!(matches!(
-            argon2id_with_params(b"password", &salt, ARGON2_MEMORY_KIB, ARGON2_ITERATIONS, ARGON2_MAX_PARALLELISM + 1),
+            argon2id_with_params(
+                b"password",
+                &salt,
+                ARGON2_MEMORY_KIB,
+                ARGON2_ITERATIONS,
+                ARGON2_MAX_PARALLELISM + 1
+            ),
             Err(KdfError::InvalidParams)
         ));
     }
