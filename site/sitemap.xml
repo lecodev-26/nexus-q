@@ -46,4 +46,10 @@
     <loc>https://nexus-q.link/contributors</loc>
     <lastmod>2026-11-09</lastmod>
   </url>
-<url><loc>https://nexus-q.link/post-quantum-cryptography</loc><lastmod>2026-11-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url><url><loc>https://nexus-q.link/pqc-sdk</loc><lastmod>2026-11-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url><url><loc>https://nexus-q.link/install-pqc</loc><lastmod>2026-11-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url><url><loc>https://nexus-q.link/rust-post-quantum-cryptography</loc><lastmod>2026-11-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url><url><loc>https://nexus-q.link/python-post-quantum-cryptography</loc><lastmod>2026-11-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url></urlset>
+<url><loc>https://nexus-q.link/post-quantum-cryptography</loc><lastmod>2026-11-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url><url><loc>https://nexus-q.link/pqc-sdk</loc><lastmod>2026-11-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url><url><loc>https://nexus-q.link/install-pqc</loc><lastmod>2026-11-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url><url><loc>https://nexus-q.link/rust-post-quantum-cryptography</loc><lastmod>2026-11-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url><url><loc>https://nexus-q.link/python-post-quantum-cryptography</loc><lastmod>2026-11-09</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>  <url>
+    <loc>https://nexus-q.link/community/</loc>
+    <lastmod>2026-11-12</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+</urlset>
