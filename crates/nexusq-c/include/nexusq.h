@@ -4,37 +4,43 @@
 #include <stdlib.h>
 
 /**
- * Returns the library version as a static NUL-terminated string.
+ * Returns the library version as a static, borrowed NUL-terminated C string.
  *
- * The returned pointer is owned by the library and must not be
- * freed by the caller.
+ * The pointer is owned by the library and must not be passed to
+ * `nexusq_string_free`.
  */
 const char *nexusq_version(void);
 
-/** Returns the compiled cryptographic provider (`rustcrypto` or `native-experimental`). */
+/**
+ * Returns the compiled cryptographic provider (`rustcrypto` or `native-experimental`).
+ * The returned pointer is static/borrowed and must not be freed.
+ */
 const char *nexusq_backend_name(void);
 
 /** Returns 1 if the compiled cryptographic provider is experimental, otherwise 0. */
 uint8_t nexusq_backend_is_experimental(void);
 
 /**
- * Frees a string previously returned by a NEXUS-Q function.
+ * Frees a heap-allocated C string explicitly documented as owned by NEXUS-Q.
  *
- * Passing a null pointer is a no-op. Passing a pointer not returned
- * by this library is undefined behavior.
+ * Passing null is a no-op. Borrowed/static pointers returned by
+ * `nexusq_version`, `nexusq_backend_name`, or `nexusq_last_error_message`
+ * must not be passed to this function. No current C ABI function returns an
+ * owned heap-allocated string; this function is reserved for future owned
+ * string-returning APIs.
  *
- * # Safety
- *
- * `s` must be a pointer previously returned by one of the functions
- * in this crate, or null.
+ * The pointer must be the exact allocation returned by a NEXUS-Q function
+ * whose documentation explicitly states that it is compatible with this
+ * deallocator. Passing borrowed, static, interior, already-freed, or foreign
+ * pointers is undefined behavior.
  */
 void nexusq_string_free(char *s);
 
 /**
  * Returns the last error message on the calling thread, or null.
  *
- * The returned pointer is owned by the library and remains valid
- * until the next NEXUS-Q call on the same thread.
+ * The returned pointer is borrowed, owned by the library, and remains valid
+ * only until the next NEXUS-Q call on the same thread. Do not free it.
  */
 const char *nexusq_last_error_message(void);
 

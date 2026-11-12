@@ -14,10 +14,10 @@ use std::ffi::{CStr, CString, c_char};
 
 use nexusq_core::prelude::*;
 
-/// Returns the library version as a static NUL-terminated string.
+/// Returns the library version as a static, borrowed NUL-terminated C string.
 ///
-/// The returned pointer is owned by the library and must not be
-/// freed by the caller.
+/// The pointer is owned by the library and must not be passed to
+/// `nexusq_string_free`.
 #[unsafe(no_mangle)]
 pub extern "C" fn nexusq_version() -> *const c_char {
     clear_last_error();
@@ -26,8 +26,9 @@ pub extern "C" fn nexusq_version() -> *const c_char {
     VERSION.as_ptr().cast()
 }
 
-/// Returns the compile-time cryptographic provider as a static C string.
-/// The value is either `rustcrypto` or `native-experimental`.
+/// Returns the compile-time cryptographic provider as a static, borrowed C string.
+/// The value is either `rustcrypto` or `native-experimental`. The pointer is
+/// owned by the library and must not be passed to `nexusq_string_free`.
 #[unsafe(no_mangle)]
 pub extern "C" fn nexusq_backend_name() -> *const c_char {
     if nexusq_core::backend_info().native_available {
@@ -43,15 +44,20 @@ pub extern "C" fn nexusq_backend_is_experimental() -> u8 {
     u8::from(nexusq_core::backend_info().experimental)
 }
 
-/// Frees a string previously returned by a NEXUS-Q function.
+/// Frees a heap-allocated C string explicitly documented as owned by NEXUS-Q.
 ///
-/// Passing a null pointer is a no-op. Passing a pointer not returned
-/// by this library is undefined behavior.
+/// Passing null is a no-op. Borrowed/static pointers returned by
+/// `nexusq_version`, `nexusq_backend_name`, or `nexusq_last_error_message`
+/// must not be passed to this function. No current C ABI function returns an
+/// owned heap-allocated string; this function is reserved for future owned
+/// string-returning APIs.
 ///
 /// # Safety
 ///
-/// `s` must be a pointer previously returned by one of the functions
-/// in this crate, or null.
+/// `s` must be null or the exact pointer returned by a NEXUS-Q function whose
+/// documentation explicitly states that it returns an owned allocation
+/// compatible with `nexusq_string_free`. Passing any borrowed, static,
+/// interior, already-freed, or foreign pointer is undefined behavior.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nexusq_string_free(s: *mut c_char) {
     if s.is_null() {
@@ -79,10 +85,11 @@ fn set_last_error(message: String) {
     });
 }
 
-/// Returns the last error message on the calling thread, or null.
+/// Returns a borrowed last-error message on the calling thread, or null.
 ///
-/// The returned pointer is owned by the library and remains valid
-/// until the next NEXUS-Q call on the same thread.
+/// The pointer is owned by the library, remains valid only until the next
+/// NEXUS-Q call on the same thread, and must not be passed to
+/// `nexusq_string_free`.
 #[unsafe(no_mangle)]
 pub extern "C" fn nexusq_last_error_message() -> *const c_char {
     LAST_ERROR.with(|slot| match slot.borrow().as_ref() {
