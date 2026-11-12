@@ -312,7 +312,22 @@ design documents. In particular, there is no generic key_used event and no
 independent session_ended or vault_locked event claim. This document describes
 only behavior that the code actually emits.
 
-### 7.6 Failure to log = failure to operate
+### 7.6 Audit-key lifecycle and rotation boundary
+
+The current audit HMAC key is derived from the unlocked vault KEK using
+HKDF-SHA256 and the domain-separation label `nexusq-audit-log-v2`. It is held
+in zeroizing process memory and is not stored in the audit directory. Segment
+rotation does not rotate this key. There is no independent audit-key rotation
+or revocation API in the current F-04 format; changing the KEK or derivation
+label without a versioned migration makes historical segments unverifiable.
+
+The current derivation, storage, permissions, recovery, rollback boundary,
+and required future key-epoch protocol are specified in
+[`security/AUDIT_LOG_KEY_LIFECYCLE.md`](security/AUDIT_LOG_KEY_LIFECYCLE.md).
+Do not claim independent HMAC-key rotation until that protocol is implemented
+and its cross-epoch recovery tests pass.
+
+### 7.7 Failure to log = failure to operate
 
 If the audit log cannot be written (disk full, permission denied), the
 **operation is denied**. We do not perform security-relevant operations

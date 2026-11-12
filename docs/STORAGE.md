@@ -454,7 +454,7 @@ Segmentation allows:
 
 Every audit event is `fsync`'d before the operation is considered
 successful. If the audit write fails, the operation **fails** (see
-`SECURITY_MODEL.md` §7.6).
+`SECURITY_MODEL.md` §7.7).
 
 ### 7.4 Verification
 
@@ -522,6 +522,12 @@ Rotation. Segments rotate automatically at max_events (default
 1000). The rotation is transparent: appending past the threshold
 finalizes the current segment and starts a new one whose
 prev_segment is the hash of the closed segment.
+
+This is **segment rotation only**, not HMAC-key rotation. All current F-04
+segments use the same vault-derived audit key. Independent key rotation is
+not supported by the current format; see
+[`security/AUDIT_LOG_KEY_LIFECYCLE.md`](security/AUDIT_LOG_KEY_LIFECYCLE.md)
+for the key lifecycle, recovery boundary, and required versioned epoch design.
 
 ### 7.6 What is never logged
 

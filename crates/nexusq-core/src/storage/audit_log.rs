@@ -30,7 +30,7 @@
 //! Every append writes the segment to disk before returning. If the
 //! write fails, the append fails and the caller must treat the
 //! operation as failed. This is the "failure to log = failure to
-//! operate" rule from `docs/SECURITY_MODEL.md` §7.6.
+//! operate" rule from `docs/SECURITY_MODEL.md` §7.7.
 //!
 //! ## Performance note
 //!
@@ -532,6 +532,38 @@ mod tests {
             AuditLog::open(&missing, &TEST_KEY),
             Err(DbError::Io(_))
         ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn audit_segment_and_anchor_files_are_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let (_tmp, audit) = init_dir();
+        let _log = AuditLog::open(&audit, &TEST_KEY).unwrap();
+
+        for path in [audit.join("audit-00001.nqa"), audit.join(ANCHOR_FILE)] {
+            let mode = fs::metadata(path).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600);
+        }
+    }
+
+    #[test]
+    fn opening_with_a_different_authentication_key_fails_closed() {
+        let (_tmp, audit) = init_dir();
+        {
+            let mut log = AuditLog::open(&audit, &TEST_KEY).unwrap();
+            log.append(ts(1), spec(EventType::VaultCreated)).unwrap();
+            log.rotate().unwrap();
+            log.append(ts(2), spec(EventType::VaultUnlocked)).unwrap();
+            log.verify_all().unwrap();
+        }
+
+        // A replacement key must not silently authenticate old segments or
+        // the tail commitment. Key rotation needs an explicit epoch protocol.
+        let replacement_key = [0x24; 32];
+        assert!(AuditLog::open(&audit, &replacement_key).is_err());
+        assert!(AuditLog::open(&audit, &TEST_KEY).is_ok());
     }
 
     #[test]

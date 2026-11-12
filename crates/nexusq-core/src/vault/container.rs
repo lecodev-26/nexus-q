@@ -191,7 +191,7 @@ pub enum VaultError {
 
     /// The audit log could not be written. The operation is refused:
     /// a security-relevant action is never performed without being
-    /// logged (see `docs/SECURITY_MODEL.md` §7.6).
+    /// logged (see `docs/SECURITY_MODEL.md` §7.7).
     #[error("audit error: {0}")]
     Audit(#[from] crate::storage::DbError),
 
