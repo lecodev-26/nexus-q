@@ -113,7 +113,10 @@ impl BackupHeader {
     /// what this build supports.
     #[must_use]
     pub fn is_supported(&self) -> bool {
-        self.magic == MAGIC && self.version == FORMAT_VERSION && self.flags == 0
+        self.magic == MAGIC
+            && self.version == FORMAT_VERSION
+            && self.flags == 0
+            && self.kdf.is_supported()
     }
 }
 
@@ -554,11 +557,18 @@ fn compute_kek_verifier(kek: &[u8]) -> Result<[u8; KEK_VERIFIER_LEN], BackupErro
 fn derive_backup_kek(
     passphrase: &[u8],
     salt: &[u8],
-    _params: &KdfParams,
+    params: &KdfParams,
 ) -> Result<Zeroizing<[u8; kdf::DERIVED_KEY_LEN]>, BackupError> {
-    // Only Argon2id is supported in v1; the params field is present
-    // for future algorithm agility, the same way it is in the vault.
-    Ok(kdf::argon2id(passphrase, salt)?)
+    if !params.is_supported() {
+        return Err(BackupError::Kdf(KdfError::InvalidParams));
+    }
+    Ok(kdf::argon2id_with_params(
+        passphrase,
+        salt,
+        params.memory_kib,
+        params.iterations,
+        params.parallelism,
+    )?)
 }
 
 // =============================================================================
