@@ -1,6 +1,6 @@
 [package]
 name = "nexusq-kernels"
-description = "Portable scalar reference kernels and audited dispatch boundary for NEXUS-Q"
+description = "Portable scalar reference kernels and backend dispatch boundary for NEXUS-Q"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

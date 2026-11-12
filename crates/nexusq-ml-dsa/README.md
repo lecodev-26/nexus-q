@@ -4,7 +4,7 @@ ML-DSA (FIPS 204, formerly known as CRYSTALS-Dilithium) as used by [NEXUS-Q](htt
 
 This is a fork of the pure Rust [RustCrypto `ml-dsa`](https://github.com/RustCrypto/signatures)
 implementation (vendored at version 0.1.1 in the NEXUS-Q repository), adding an
-optional `nexusq-kernels` feature that wires the NEXUS-Q audited scalar kernel
+optional `nexusq-kernels` feature that wires the NEXUS-Q scalar reference kernel
 set (`nexusq-kernels`) into the arithmetic hot paths. The library target name
 remains `ml_dsa`, so code written against the upstream crate keeps compiling.
 
