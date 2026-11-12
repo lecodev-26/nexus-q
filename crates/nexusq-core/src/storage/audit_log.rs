@@ -779,7 +779,6 @@ mod tests {
         let (_tmp, audit) = init_dir();
         let epoch = [0x39; KEY_EPOCH_ID_LEN];
         let replacement = [0x64; 32];
-        let keys = [(LEGACY_EPOCH_ID, TEST_KEY), (epoch, replacement)];
         let mut log = AuditLog::open_with_keyring(
             &audit,
             AuditLogConfig::default(),
