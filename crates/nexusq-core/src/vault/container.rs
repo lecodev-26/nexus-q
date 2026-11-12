@@ -2298,10 +2298,7 @@ fn open_audit_log(dir: &Path, body: &VaultBody, kek: &[u8]) -> Result<AuditLog, 
 
 type AuditKeyring = Vec<([u8; 16], [u8; 32])>;
 
-fn audit_keyring(
-    body: &VaultBody,
-    kek: &[u8],
-) -> Result<(AuditKeyring, [u8; 16]), VaultError> {
+fn audit_keyring(body: &VaultBody, kek: &[u8]) -> Result<(AuditKeyring, [u8; 16]), VaultError> {
     if body.audit_key_epochs.is_empty() {
         if body.audit_current_epoch.is_some() {
             return Err(VaultError::Corrupt("audit current epoch has no keyring"));
