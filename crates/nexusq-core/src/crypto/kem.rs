@@ -186,9 +186,15 @@ pub mod ml_kem_768 {
     /// Derandomized ML-KEM-768 encapsulation (FIPS 203 `ML-KEM.Encaps_internal`)
     /// with the 32-byte message `m` supplied by the caller.
     ///
-    /// Internal building block for the X-Wing hybrid, which derives `m` from
-    /// its encapsulation seed. `m` MUST be fresh uniform randomness; reusing it
-    /// breaks the security of the encapsulation.
+    /// Internal building block for the X-Wing hybrid, which takes `m` from its
+    /// encapsulation seed.
+    ///
+    /// # Security
+    ///
+    /// `m` MUST be secret, uniformly random and used for exactly one
+    /// encapsulation. Anyone who learns `m` can recompute the shared secret
+    /// from the public key, and reusing `m` with the same key repeats both the
+    /// ciphertext and the shared secret.
     ///
     /// # Errors
     ///
@@ -393,6 +399,13 @@ pub mod hybrid {
     /// `eseed[32..64]` is the X25519 ephemeral secret. Production code reaches
     /// this only through [`encapsulate`], which fills the seed from the OS
     /// CSPRNG; tests inject the official test-vector seeds.
+    ///
+    /// # Security
+    ///
+    /// `fill` MUST write fresh, uniformly random bytes and a seed MUST never
+    /// be reused. A known `eseed` lets anyone recompute the shared secret, and
+    /// a repeated one repeats the ciphertext and the shared secret. Fixed seeds
+    /// are only acceptable in tests.
     pub(super) fn encapsulate_with_rng(
         public_key: &[u8],
         fill: impl FnOnce(&mut [u8]) -> Result<(), KemError>,

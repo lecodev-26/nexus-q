@@ -190,7 +190,21 @@ macro_rules! mlkem_level {
                         _ => Err(super::map_err(rc)),
                     }
                 }
-                /// Deterministic variant for KAT/differential tests only.
+                /// Derandomized encapsulation (FIPS 203 `ML-KEM.Encaps_internal`)
+                /// with a caller-supplied 32-byte message `m`.
+                ///
+                /// Used by the KAT/differential tests and by the `nexusq-core`
+                /// X-Wing encapsulation, which passes fresh output of the
+                /// operating system CSPRNG. `encapsulate` does the same with
+                /// randomness drawn internally.
+                ///
+                /// # Security
+                ///
+                /// `m` MUST be secret, uniformly random and used for exactly one
+                /// encapsulation. Anyone who learns `m` can recompute the shared
+                /// secret from the public key alone, and reusing `m` with the
+                /// same key repeats both the ciphertext and the shared secret.
+                /// Fixed or predictable values are only acceptable in tests.
                 pub fn encapsulate_derand(
                     &self,
                     m: &[u8; 32],
