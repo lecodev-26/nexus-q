@@ -490,6 +490,111 @@ pub mod hybrid {
 mod tests {
     use super::*;
 
+    /// Official X-Wing test vectors: draft-connolly-cfrg-xwing-kem-11,
+    /// Appendix C. Byte-for-byte copy of `spec/test-vectors.json` from the
+    /// specification repository at commit 984c2f7; see
+    /// `testdata/xwing/README.md` for provenance and the SHA-256.
+    const XWING_DRAFT_11_VECTORS: &str =
+        include_str!("../../testdata/xwing/draft-connolly-cfrg-xwing-kem-11.json");
+
+    #[derive(serde::Deserialize)]
+    struct XWingVectorHex {
+        seed: String,
+        sk: String,
+        pk: String,
+        eseed: String,
+        ct: String,
+        ss: String,
+    }
+
+    struct XWingVector {
+        seed: Vec<u8>,
+        sk: Vec<u8>,
+        pk: Vec<u8>,
+        eseed: Vec<u8>,
+        ct: Vec<u8>,
+        ss: Vec<u8>,
+    }
+
+    fn xwing_vectors() -> Vec<XWingVector> {
+        let raw: Vec<XWingVectorHex> =
+            serde_json::from_str(XWING_DRAFT_11_VECTORS).expect("valid X-Wing vector JSON");
+        raw.into_iter()
+            .map(|v| XWingVector {
+                seed: hex::decode(v.seed).expect("hex seed"),
+                sk: hex::decode(v.sk).expect("hex sk"),
+                pk: hex::decode(v.pk).expect("hex pk"),
+                eseed: hex::decode(v.eseed).expect("hex eseed"),
+                ct: hex::decode(v.ct).expect("hex ct"),
+                ss: hex::decode(v.ss).expect("hex ss"),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn xwing_official_vectors_are_present() {
+        let vectors = xwing_vectors();
+        assert_eq!(vectors.len(), 3, "draft-11 ships three vectors");
+        for v in &vectors {
+            assert_eq!(v.seed.len(), hybrid::SECRET_KEY_LEN);
+            assert_eq!(v.sk.len(), hybrid::SECRET_KEY_LEN);
+            assert_eq!(v.pk.len(), hybrid::PUBLIC_KEY_LEN);
+            assert_eq!(v.eseed.len(), 64);
+            assert_eq!(v.ct.len(), hybrid::CIPHERTEXT_LEN);
+            assert_eq!(v.ss.len(), SHARED_SECRET_LEN);
+        }
+    }
+
+    #[test]
+    fn xwing_official_vectors_key_generation() {
+        for (i, v) in xwing_vectors().iter().enumerate() {
+            // GenerateKeyPairDerand(seed) through the production key generation path.
+            let pair = hybrid::try_generate_with_rng(|buf| {
+                buf.copy_from_slice(&v.seed);
+                Ok(())
+            })
+            .unwrap();
+            assert_eq!(*pair.secret_key_bytes(), v.sk, "vector {i}: sk");
+            assert_eq!(pair.public_key_bytes(), v.pk, "vector {i}: pk");
+
+            // Loading the serialized decapsulation key gives the same key pair.
+            let loaded = hybrid::from_secret_key_bytes(&v.sk).unwrap();
+            assert_eq!(loaded.public_key_bytes(), v.pk, "vector {i}: pk from sk");
+        }
+    }
+
+    #[test]
+    fn xwing_official_vectors_encapsulation() {
+        for (i, v) in xwing_vectors().iter().enumerate() {
+            // EncapsulateDerand(pk, eseed) through the production encapsulation path.
+            let (ct, ss) = hybrid::encapsulate_with_rng(&v.pk, |buf| {
+                assert_eq!(buf.len(), v.eseed.len());
+                buf.copy_from_slice(&v.eseed);
+                Ok(())
+            })
+            .unwrap();
+            assert_eq!(ct, v.ct, "vector {i}: ct");
+            assert_eq!(ss.as_slice(), v.ss.as_slice(), "vector {i}: ss");
+        }
+    }
+
+    #[test]
+    fn xwing_official_vectors_decapsulation() {
+        for (i, v) in xwing_vectors().iter().enumerate() {
+            let pair = hybrid::from_secret_key_bytes(&v.sk).unwrap();
+            let ss = hybrid::decapsulate(&pair, &v.ct).unwrap();
+            assert_eq!(ss.as_slice(), v.ss.as_slice(), "vector {i}: ss");
+        }
+    }
+
+    #[test]
+    fn hybrid_encapsulate_with_rng_propagates_randomness_error() {
+        let pair = hybrid::generate();
+        let result =
+            hybrid::encapsulate_with_rng(&pair.public_key_bytes(), |_| Err(KemError::Randomness));
+        assert!(matches!(result, Err(KemError::Randomness)));
+    }
+
     #[test]
     fn ml_kem_768_roundtrip() {
         let (sk, pk) = ml_kem_768::generate();

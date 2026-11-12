@@ -1616,6 +1616,7 @@ dependencies = [
  "rand_core 0.9.5",
  "serde",
  "serde_bytes",
+ "serde_json",
  "sha2",
  "sha3",
  "slh-dsa",
