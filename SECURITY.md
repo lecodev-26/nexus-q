@@ -9,10 +9,20 @@ Security fixes are developed against the active engineering baseline and backpor
 ## Reporting a vulnerability
 
 Please report suspected vulnerabilities privately through the repository's
-GitHub **Security Advisories** / private vulnerability reporting mechanism when
-available. Do not disclose an unpatched vulnerability in a public issue.
+[GitHub Security Advisories form](https://github.com/lecodev-26/nexus-q/security/advisories/new)
+(private vulnerability reporting). Do **not** create a public issue containing
+vulnerability details, exploit steps, proof-of-concept code, affected secrets,
+or information that would help an attacker reproduce the issue.
 
-Include, when safe to provide:
+The repository's issue tracker links to this private reporting channel. If you
+cannot access the private form, create only a minimal public issue titled
+"Request for a private security contact" and state that you need a secure
+reporting channel. Do not include technical details, attachments, logs, or
+proof-of-concept material in that public issue. Maintainers will follow up with
+a private channel.
+
+Include the following information **only in the private report**, and only
+when safe to provide:
 
 - affected commit, tag, or package version;
 - affected component/API;
@@ -24,8 +34,9 @@ Include, when safe to provide:
 Do not include production secrets, private keys, passwords, customer data, or
 other sensitive material in a report.
 
-If private reporting is temporarily unavailable, open a minimal public issue
-requesting a private contact channel; do not publish exploit details there.
+Never use a public issue, pull request, discussion, or comment to disclose
+unpatched vulnerability details. The public issue fallback is for requesting a
+private contact channel only.
 
 ## Response targets
 

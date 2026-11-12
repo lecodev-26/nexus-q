@@ -10,6 +10,7 @@
 <img src="assets/banner.jpg" alt="NEXUS-Q: post-quantum cryptographic security engine" width="100%">
 
 [![Fast CI](https://github.com/lecodev-26/nexus-q/actions/workflows/ci.yml/badge.svg)](https://github.com/lecodev-26/nexus-q/actions/workflows/ci.yml)
+[![Dependency audit (manual)](https://github.com/lecodev-26/nexus-q/actions/workflows/audit-ci.yml/badge.svg)](https://github.com/lecodev-26/nexus-q/actions/workflows/audit-ci.yml)
 
 <a href="https://nexus-q.link"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/dark/b-site.svg"><img src="assets/light/b-site.svg" alt="Project website" width="96"></picture></a>&nbsp;<a href="https://github.com/lecodev-26/nexus-q/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/dark/b-rel.svg"><img src="assets/light/b-rel.svg" alt="Releases" width="104"></picture></a>&nbsp;<a href="docs/user/README.md"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/dark/b-docs.svg"><img src="assets/light/b-docs.svg" alt="Documentation" width="151"></picture></a>&nbsp;<a href="SECURITY.md"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/dark/b-sec.svg"><img src="assets/light/b-sec.svg" alt="Security policy" width="154"></picture></a>
 
@@ -495,7 +496,7 @@ V1–V4 are engineering version lines/snapshots, not proof of production readine
 | Security CI, SDK CI, benchmark CI and fuzz targets | Registry publication as an audit or production-readiness endorsement |
 | Published threat model and security model | Hardware isolation from the default software backend |
 
-Report suspected vulnerabilities privately through GitHub Security Advisories. See [`SECURITY.md`](SECURITY.md).
+Report suspected vulnerabilities through the [private GitHub Security Advisories form](https://github.com/lecodev-26/nexus-q/security/advisories/new), not in public issues. See [`SECURITY.md`](SECURITY.md) for the private-reporting process and safe public fallback.
 
 ## Contributing
 
