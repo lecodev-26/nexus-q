@@ -18,26 +18,22 @@ implemented, tested and added to `vault::Algorithm`.
 
 ---
 
+
 ## 2. The golden rule
 
-> **We do not invent cryptography.**
+> **We do not invent production cryptography.**
 
 Concretely, this means:
 
-1. Every primitive is a standardized, peer-reviewed algorithm (NIST, IETF,
-   ISO, or equivalent).
-2. Algorithms are implemented through maintained cryptographic libraries.
-   NEXUS-Q does not write its own AES, SHA-3, or PQC primitive. This project
-   does not claim that every dependency has undergone an independent audit.
-3. We do not modify primitives, key schedules, or padding schemes.
-4. We do not compose primitives ad-hoc when a standard composition exists
-   (e.g., we use HPKE instead of rolling our own KEM+AEAD+HKDF pipeline
-   unless there is a documented reason).
-5. If we need a primitive that has no acceptable maintained implementation,
-   we do not silently replace it with a custom construction.
+1. Every production primitive is a standardized, peer-reviewed algorithm (NIST, IETF, ISO, or equivalent).
+2. Production cryptographic implementations are provided by maintained cryptographic libraries. NEXUS-Q does not replace its default AES, SHA-3, ML-KEM, or ML-DSA implementations with project-written code. This project does not claim that every dependency has undergone an independent audit.
+3. NEXUS-Q contains a separate `nexusq-kernels` crate with project-written, experimental reference kernels, including Keccak-f[1600], SHAKE128/SHAKE256, and ML-KEM/ML-DSA NTT operations. These are correctness-oriented experimental implementations, not constant-time production cryptography.
+4. The `nexusq-kernels` feature only enables the kernel dependency. Kernel call sites are enabled separately through `experimental-kernels`. The default build does not select these experimental kernels for cryptographic operations.
+5. We do not silently modify cryptographic algorithm semantics, key schedules, or padding schemes. Local changes to upstream cryptographic crates must be documented, reviewed, and tested.
+6. We do not compose primitives ad hoc when a standard composition exists (e.g., we use HPKE instead of rolling our own KEM+AEAD+HKDF pipeline unless there is a documented reason).
+7. If we need a primitive that has no acceptable maintained implementation, we do not silently replace it with a custom construction.
 
-Any deviation from this rule requires an ADR (Architecture Decision Record)
-in the repository and explicit approval in review.
+Any deviation from this rule requires an ADR (Architecture Decision Record) in the repository and explicit approval in review. The experimental kernels are documented in ADR 0006.
 
 ---
 
