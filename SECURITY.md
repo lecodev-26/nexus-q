@@ -61,6 +61,10 @@ and the configured fuzzing gates. Main-branch fuzz soak is configured for
 45 minutes per designated parser target; V2 development PRs use the shorter
 5-minute smoke gate.
 
+## Static analysis
+
+The repository runs CodeQL SAST for Rust, C/C++, Go, Python, and GitHub Actions. The versioned workflow, query scope, exclusions, local reproduction guidance, and false-positive triage process are documented in [`docs/security/STATIC_ANALYSIS.md`](docs/security/STATIC_ANALYSIS.md). A clean scan is not a guarantee that the code is vulnerability-free.
+
 ## Scope and limitations
 
 NEXUS-Q is software. The software backend does not provide hardware isolation
