@@ -2,15 +2,21 @@
 
 ## Supported security line
 
-NEXUS-Q v4.1.2 is the current release. Public status: “Audit-Ready Release. No production-readiness claim, no FIPS validation, external audit pending.” Release evidence is provided separately and must be checked against the exact tagged commit and artifact digests. Registry availability alone is not proof that every ecosystem package was built from the same Git commit.
+**Policy approved and last reviewed: 2026-11-14.** Only the latest published stable NEXUS-Q release is supported for security fixes. As of this review, that release is **v4.1.2** (the current v4.1.x release). Earlier patches and development snapshots are not independently supported. The v4.2.x line is not supported until a v4.2.x stable release is published; when a newer stable release is published, it becomes the supported release line.
 
-Security fixes are developed against the active engineering baseline and backported only when maintainers judge the change safe and applicable. NEXUS-Q does **not** claim FIPS validation, Common Criteria certification, formal verification, or completion of an independent external security audit unless corresponding public evidence is linked from this repository.
+Security fixes are developed against the active engineering baseline. Backports to an older release are considered case by case, based on security impact, compatibility, and the risk of introducing regressions; there is no automatic backport commitment. Any maintenance of an older line must be explicitly announced by the maintainers.
+
+The current release's public status is: “Audit-Ready Release. No production-readiness claim, no FIPS validation, external audit pending.” Release evidence is provided separately and must be checked against the exact tagged commit and artifact digests. Registry availability alone is not proof that every ecosystem package was built from the same Git commit.
+
+NEXUS-Q does **not** claim FIPS validation, Common Criteria certification, formal verification, or completion of an independent external security audit unless corresponding public evidence is linked from this repository.
 
 ## Reporting a vulnerability
 
 Please report suspected vulnerabilities privately through the repository's
 [GitHub Security Advisories form](https://github.com/lecodev-26/nexus-q/security/advisories/new)
-(private vulnerability reporting). Do **not** create a public issue containing
+(private vulnerability reporting). Private vulnerability reporting is enabled
+in the repository settings; GitHub sign-in is required to access the form. Do
+**not** create a public issue containing
 vulnerability details, exploit steps, proof-of-concept code, affected secrets,
 or information that would help an attacker reproduce the issue.
 
@@ -42,16 +48,20 @@ private contact channel only.
 
 These are engineering targets, not contractual SLAs:
 
-| Severity | Acknowledge | Triage target | Fix/release target |
+| Severity | Acknowledge receipt | Initial triage and substantive reporter update | Fix/release target |
 |---|---:|---:|---:|
 | Critical | 2 business days | 5 business days | 14 calendar days |
 | High | 3 business days | 10 business days | 30 calendar days |
 | Medium | 5 business days | 15 business days | Next appropriate release |
 | Low | 10 business days | 30 business days | Planned maintenance |
 
-Targets may be extended when coordinated disclosure, upstream fixes, or
-reproduction requires additional time. The reason and current status should be
-recorded internally.
+Acknowledgement confirms receipt and gives the reporter a point of contact.
+The initial substantive update communicates the current severity assessment,
+known impact, next steps, or any information still needed; if triage is not
+complete, it provides a status update by the target above. These are engineering
+targets, not guarantees. Targets may be extended when coordinated disclosure,
+upstream fixes, or reproduction requires additional time. The reason and
+current status should be recorded internally.
 
 ## Security gates
 
