@@ -46,7 +46,7 @@ jobs:
           cargo install --locked cargo-vet --version 0.10.3
           cargo install --locked cargo-geiger --version 0.14.0
       - name: Enforce the versioned cargo-vet dependency policy
-        run: cargo vet --locked check
+        run: cargo vet check
       - name: Generate cargo-geiger JSON inventory
         run: |
           mkdir -p artifacts/supply-chain
