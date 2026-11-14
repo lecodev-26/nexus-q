@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NEXUS-Q Sign 0.1.0 — Post-quantum document signing for desktop</title>
+<meta name="description" content="Download NEXUS-Q Sign 0.1.0, a local-first desktop app for detached document signing and verification with post-quantum ML-DSA-65 signatures on Windows, macOS and Linux.">
+<meta property="og:title" content="NEXUS-Q Sign 0.1.0 — Post-quantum document signing">
+<meta property="og:description" content="Create and verify detached .nqsig document signatures with ML-DSA-65. Local identities, encrypted key storage and SHA-256 integrity checks.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="NEXUS-Q">
+<meta property="og:url" content="https://nexus-q.link/apps/sign">
+<meta property="og:image" content="https://nexus-q.link/assets/sign/banner.webp">
+<meta property="og:image:width" content="1600">
+<meta property="og:image:height" content="520">
+<meta property="og:image:alt" content="NEXUS-Q Sign desktop app for post-quantum document signing">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="NEXUS-Q Sign 0.1.0 — Post-quantum document signing">
+<meta name="twitter:description" content="Download Sign 0.1.0 for Windows, macOS and Linux. Sign and verify documents locally with post-quantum ML-DSA-65 signatures.">
+<meta name="twitter:image" content="https://nexus-q.link/assets/sign/banner.webp">
+<link rel="canonical" href="https://nexus-q.link/apps/sign"><link rel="alternate" hreflang="en" href="https://nexus-q.link/apps/sign">
+<meta name="google-site-verification" content="uxWm8El2GOsP6QysZ7LhFuo-IBxQUeFpS2Lgpgq3T5I" />
+<meta name="keywords" content="NEXUS-Q Sign, post-quantum document signing, ML-DSA-65, FIPS 204, detached digital signatures, document verification, .nqsig, SHA-256, Rust, Tauri">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"NEXUS-Q Sign","description":"Local-first desktop application for detached document signing and verification using post-quantum ML-DSA-65 signatures.","applicationCategory":"SecurityApplication","operatingSystem":"Windows x64, macOS Apple Silicon and Intel, Linux x86_64","softwareVersion":"0.1.0","url":"https://nexus-q.link/apps/sign","downloadUrl":"https://github.com/lecodev-26/nexus-q-sign/releases/tag/v0.1.0","author":{"@type":"Person","name":"lecodev-26"},"codeRepository":"https://github.com/lecodev-26/nexus-q-sign","license":"https://opensource.org/license/mit"}</script>
+<meta name="application-name" content="NEXUS-Q Sign">
+<meta name="theme-color" content="#06080b">
+<link rel="icon" href="https://nexus-q.link/favicon.ico" sizes="48x48">
+<link rel="icon" type="image/png" sizes="48x48" href="https://nexus-q.link/favicon-48.png">
+<link rel="icon" type="image/png" sizes="96x96" href="https://nexus-q.link/favicon-96.png">
+<link rel="icon" type="image/png" sizes="192x192" href="https://nexus-q.link/nexus-q-logo.webp">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=optional" rel="stylesheet">
+<style>
+:root{--bg:#06080b;--fg:#eaf0f4;--mut:#8a97a3;--line:#1b242d;--card:#0c1117;--acc:#5cf2d6;--acc2:#8b7bff;--ink:#04110e;--warn:#ffb454;--bad:#ff7a7a;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#f4f7f9;--fg:#0b1218;--mut:#52606c;--line:#d5dde3;--card:#e9eef2;--acc:#0a7d6a;--acc2:#5b45e0;--ink:#fff;--warn:#a85d00;--bad:#b3261e}}
+:root[data-theme="light"]{--bg:#f4f7f9;--fg:#0b1218;--mut:#52606c;--line:#d5dde3;--card:#e9eef2;--acc:#0a7d6a;--acc2:#5b45e0;--ink:#fff;--warn:#a85d00;--bad:#b3261e}
+:root[data-theme="dark"]{--bg:#06080b;--fg:#eaf0f4;--mut:#8a97a3;--line:#1b242d;--card:#0c1117;--acc:#5cf2d6;--acc2:#8b7bff;--ink:#04110e;--warn:#ffb454;--bad:#ff7a7a}
+*{box-sizing:border-box;margin:0}
+html{height:auto;scroll-behavior:smooth;scroll-padding-top:calc(76px + env(safe-area-inset-top,0px))}
+body{background:var(--bg);color:var(--fg);font-family:"Instrument Sans",system-ui,sans-serif;line-height:1.6;overflow-x:hidden;transition:background .4s,color .4s}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--acc);outline-offset:3px;border-radius:6px}
+code,pre,.mono{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace}
+.d{font-family:Anton,Impact,"Arial Narrow",sans-serif;text-transform:uppercase;font-weight:400;line-height:.95;letter-spacing:.005em}
+.wrap{max-width:1180px;margin:0 auto;padding:0 clamp(16px,4vw,40px)}
+nav{position:fixed;top:env(safe-area-inset-top,0px);left:0;right:0;z-index:50;background:color-mix(in srgb,var(--bg) 80%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;justify-content:space-between;gap:16px;height:64px}
+.logo{display:flex;align-items:center;gap:10px;font-family:Anton,Impact,sans-serif;font-size:22px;letter-spacing:.04em}
+.logo{white-space:nowrap}.logo img{border-radius:8px;display:block}
+.logo i{width:26px;height:26px;border-radius:7px;background:var(--acc);display:grid;place-items:center;color:var(--ink);font-style:normal;font-size:14px}
+.links{display:flex;gap:22px;font-size:14px;color:var(--mut)}
+.links a:hover{color:var(--fg)}
+.navr{display:flex;gap:10px;align-items:center}
+.btn,.tg{display:inline-flex;align-items:center;gap:8px;border-radius:99px;font:600 14px "Instrument Sans",sans-serif;padding:10px 18px;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--fg);transition:transform .2s,background .2s,border-color .2s}
+.btn:hover,.tg:hover{transform:translateY(-1px);border-color:var(--acc)}
+.btn.p{background:var(--acc);color:var(--ink);border-color:var(--acc)}
+.tg svg{width:16px;height:16px}
+.mb{display:none;width:42px;height:42px;padding:0;justify-content:center;align-items:center;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:99px;cursor:pointer}
+.mb svg{width:20px;height:20px}
+.links .mo{display:none}
+@media (max-width:1080px){
+.mb{display:inline-flex}
+.links{display:none;position:absolute;top:100%;left:0;right:0;flex-direction:column;gap:0;background:var(--bg);border-bottom:1px solid var(--line);padding:4px clamp(16px,4vw,40px) 14px;max-height:calc(100vh - 80px);overflow-y:auto}
+.links.open{display:flex}
+.links a{padding:14px 2px;border-bottom:1px solid var(--line);font-size:16px;color:var(--fg)}
+.links .mo{display:block;border-bottom:0;color:var(--acc);font-weight:600}
+}
+@media (max-width:560px){#tgt{display:none}.navr>.btn.p{display:none}.tg{padding:10px 12px}}
+.aud{max-width:60ch;margin-top:14px;font-size:16px}
+.by{margin-top:10px;font-size:14px;color:var(--mut)}
+.hero{position:relative;padding:150px 0 90px;overflow:hidden}
+#cv{position:absolute;inset:0;width:100%;height:100%;opacity:.9}
+.hero:after{content:"";position:absolute;inset:0;background:radial-gradient(60% 60% at 30% 40%,transparent,var(--bg) 85%);pointer-events:none}
+.hero .wrap{position:relative;z-index:2}
+.chip{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:99px;padding:6px 14px;font-size:13px;color:var(--mut);background:color-mix(in srgb,var(--bg) 70%,transparent)}
+.chip b{width:8px;height:8px;border-radius:50%;background:var(--acc);animation:pl 1.6s infinite}
+@keyframes pl{50%{opacity:.25}}
+h1{font-size:clamp(54px,10.5vw,148px);margin:22px 0 22px;max-width:14ch}
+h1 em{font-style:normal;color:var(--acc)}
+.lead{max-width:60ch;font-size:clamp(17px,2vw,21px);color:var(--mut)}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin:30px 0 40px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);margin-top:20px}
+.stats div{padding:22px 18px 0 0}
+.stats b{display:block;font-family:Anton,Impact,sans-serif;font-weight:400;font-size:clamp(34px,5vw,58px);color:var(--acc);line-height:1}
+.stats span{font-size:13px;color:var(--mut)}
+@media (max-width:700px){.stats{grid-template-columns:1fr 1fr}}
+section{padding:clamp(64px,9vw,120px) 0}
+.eyebrow{font:500 13px "JetBrains Mono",monospace;color:var(--acc);letter-spacing:.08em;text-transform:uppercase;margin-bottom:14px}
+h2{font-size:clamp(40px,6.4vw,84px);margin-bottom:22px;max-width:18ch}
+.sec-lead{max-width:66ch;color:var(--mut);font-size:clamp(16px,1.7vw,19px);margin-bottom:44px}
+.grid{display:grid;gap:18px}
+.g3{grid-template-columns:repeat(3,1fr)}.g2{grid-template-columns:repeat(2,1fr)}.g4{grid-template-columns:repeat(4,1fr)}
+@media (max-width:900px){.g3,.g4{grid-template-columns:1fr 1fr}}
+@media (max-width:620px){.g3,.g2,.g4{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:26px;transition:transform .3s,border-color .3s}
+.card:hover{transform:translateY(-4px);border-color:color-mix(in srgb,var(--acc) 55%,var(--line))}
+.card h3{font-size:22px;margin:0 0 8px;font-weight:600}
+.card p,.card li{color:var(--mut);font-size:15px}
+.card ul{padding-left:18px;margin-top:10px}
+.ico{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:color-mix(in srgb,var(--acc) 14%,transparent);color:var(--acc);margin-bottom:16px}
+.ico svg{width:22px;height:22px}
+.flow{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;position:relative}
+.step{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px 16px;position:relative;overflow:hidden}
+.step:before{content:"";position:absolute;left:0;top:0;height:3px;width:100%;background:linear-gradient(90deg,var(--acc),var(--acc2));transform:scaleX(0);transform-origin:left;animation:fill 7s infinite}
+.step:nth-child(2):before{animation-delay:1.2s}.step:nth-child(3):before{animation-delay:2.4s}.step:nth-child(4):before{animation-delay:3.6s}.step:nth-child(5):before{animation-delay:4.8s}
+@keyframes fill{0%{transform:scaleX(0)}12%,40%{transform:scaleX(1)}60%,100%{transform:scaleX(0);transform-origin:right}}
+.step .n{font:500 12px "JetBrains Mono",monospace;color:var(--acc)}
+.step h4{font-size:17px;margin:6px 0 6px}
+.step p{font-size:13.5px;color:var(--mut);line-height:1.5}
+@media (max-width:900px){.flow{grid-template-columns:1fr 1fr}}
+@media (max-width:560px){.flow{grid-template-columns:1fr}}
+.table{width:100%;border-collapse:collapse;font-size:14.5px}
+.table th,.table td{text-align:left;padding:13px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+.table th{font:500 12px "JetBrains Mono",monospace;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
+.table td:first-child{font-weight:600;white-space:nowrap}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:18px;background:var(--card)}
+.tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:22px}
+.tab{border:1px solid var(--line);background:var(--card);color:var(--mut);border-radius:99px;padding:9px 16px;font:500 14px "Instrument Sans",sans-serif;cursor:pointer;transition:all .2s}
+.tab[aria-selected="true"]{background:var(--acc);color:var(--ink);border-color:var(--acc)}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:clamp(18px,3vw,32px)}
+.panel .cap{color:var(--mut);font-size:14px;margin-bottom:22px;max-width:75ch}
+.row{display:grid;grid-template-columns:170px 1fr 92px;gap:14px;align-items:center;padding:9px 0;border-top:1px solid var(--line);font-size:14px}
+.row .nm{font-weight:600}
+.bars{display:flex;flex-direction:column;gap:5px}
+.bar{height:9px;border-radius:5px;width:0;transition:width 1s cubic-bezier(.2,.8,.1,1)}
+.bar.a{background:var(--acc)}.bar.b{background:var(--acc2);opacity:.85}.bar.w{background:var(--warn)}.bar.g{background:var(--acc)}
+.row .val{text-align:right;font:500 13px "JetBrains Mono",monospace;color:var(--mut)}
+.sub{grid-column:1/-1;font-size:12px;color:var(--mut);margin:-4px 0 4px}
+.legend{display:flex;flex-wrap:wrap;gap:18px;font-size:13px;color:var(--mut);margin-top:18px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px}
+@media (max-width:640px){.row{grid-template-columns:1fr 70px}.row .nm{grid-column:1/-1}}
+.note{border-left:3px solid var(--warn);background:color-mix(in srgb,var(--warn) 9%,transparent);border-radius:0 14px 14px 0;padding:16px 20px;font-size:15px;color:var(--fg);margin-top:26px}
+.note b{color:var(--warn)}
+.tl{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;position:relative}
+.ver{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:22px;position:relative}
+.ver .tag{font:500 12px "JetBrains Mono",monospace;color:var(--acc)}
+.ver h3{font-family:Anton,Impact,sans-serif;font-weight:400;font-size:44px;line-height:1;margin:8px 0 10px}
+.ver p{font-size:14px;color:var(--mut)}
+.ver .st{display:inline-block;margin-top:12px;font-size:12px;border:1px solid var(--line);border-radius:99px;padding:3px 10px;color:var(--mut)}
+.ver.cur{border-color:var(--acc)}
+.ver.plan{border-style:dashed}
+@media (max-width:900px){.tl{grid-template-columns:1fr 1fr}}@media (max-width:560px){.tl{grid-template-columns:1fr}}
+.yn{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media (max-width:760px){.yn{grid-template-columns:1fr}}
+.yn .card li{list-style:none;position:relative;padding-left:26px;margin:9px 0;color:var(--fg)}
+.yn ul{padding-left:0}
+.yn .y li:before{content:"✓";position:absolute;left:0;color:var(--acc);font-weight:700}
+.yn .n li:before{content:"✕";position:absolute;left:0;color:var(--bad);font-weight:700}
+.code{position:relative;background:#04070a;border:1px solid var(--line);border-radius:16px;margin:14px 0}
+:root[data-theme="light"] .code{background:#0e151b}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]) .code{background:#0e151b}}
+.code pre{padding:18px 20px;overflow-x:auto;font-size:13.5px;line-height:1.7;color:#d7e3ea}
+.code .c{color:#6b7c88}
+.copy{position:absolute;top:10px;right:10px;border:1px solid #26333d;background:#0b1319;color:#9fb0bc;border-radius:8px;font:500 12px "Instrument Sans",sans-serif;padding:5px 11px;cursor:pointer}
+.copy:hover{color:#fff;border-color:#5cf2d6}
+.qs{display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:start}
+@media (max-width:900px){.qs{grid-template-columns:1fr}}
+.docs a{display:flex;justify-content:space-between;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:15px 18px;transition:all .2s;font-weight:500}
+.docs a span{color:var(--mut);font-weight:400;font-size:13px;text-align:right}
+.docs a:hover{border-color:var(--acc);transform:translateX(3px)}
+.lk{color:var(--acc)}
+details{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:0 22px;margin-bottom:10px}
+summary{cursor:pointer;padding:18px 0;font-weight:600;list-style:none;display:flex;justify-content:space-between;gap:16px}
+summary::-webkit-details-marker{display:none}
+summary:after{content:"+";color:var(--acc);font-size:22px;line-height:1}
+details[open] summary:after{content:"–"}
+details p{color:var(--mut);padding:0 0 18px;max-width:75ch}
+.sdk-grid{display:flex;align-items:flex-start;gap:16px;margin:28px 0 22px;padding:8px 2px 18px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scrollbar-width:thin;scrollbar-color:var(--acc) var(--line)}
+.sdk-card{flex:0 0 clamp(280px,31vw,360px);min-width:0;align-self:flex-start;scroll-snap-align:start;background:var(--card);border:1px solid var(--line);border-radius:20px;overflow:hidden;transition:border-color .2s,transform .2s}
+.sdk-card:hover{border-color:color-mix(in srgb,var(--acc) 65%,var(--line));transform:translateY(-3px)}
+.sdk-card[open]{border-color:var(--acc)}
+.sdk-card summary{padding:20px;align-items:center;justify-content:flex-start;gap:14px}
+.sdk-card summary:after{margin-left:auto;flex:none}
+.sdk-logo{width:48px;height:48px;object-fit:contain;flex:none;padding:5px;border-radius:12px;background:color-mix(in srgb,var(--fg) 5%,var(--bg))}
+.sdk-heading{display:flex;flex-direction:column;gap:3px;min-width:0}
+.sdk-heading strong{font-size:19px;line-height:1.2}
+.sdk-heading small{font-size:12px;color:var(--mut);font-weight:400}
+.sdk-body{padding:0 20px 20px}
+.sdk-body p{font-size:13px;color:var(--mut);margin:0 0 12px}
+.sdk-crates{display:grid;gap:8px;margin:12px 0 16px}
+.sdk-crate{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:13px;min-width:0}
+.sdk-crate code{font-size:12px;overflow-wrap:anywhere}
+.sdk-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.sdk-link{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:13px;font-weight:600;color:var(--fg);transition:border-color .2s,background .2s}
+.sdk-link.primary{background:var(--acc);border-color:var(--acc);color:var(--ink)}
+.sdk-link:hover{border-color:var(--acc)}
+.sdk-note{border-top:1px solid var(--line);padding-top:14px;margin-top:14px!important}
+@media(max-width:900px){.sdk-card{flex-basis: min(78vw,340px)}}
+@media(max-width:560px){.sdk-grid{gap:12px;margin-right:-20px;padding-right:20px}.sdk-card{flex-basis: min(84vw,340px)}.sdk-card summary{padding:17px}.sdk-body{padding:0 17px 17px}.sdk-logo{width:44px;height:44px}}
+footer{border-top:1px solid var(--line);padding:40px 0 60px;color:var(--mut);font-size:14px}
+footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px;align-items:center}.footer-links{display:flex;flex-wrap:wrap;gap:10px 16px;justify-content:flex-end}.footer-links a:hover{color:var(--acc)}@media(max-width:700px){footer .wrap{align-items:flex-start;flex-direction:column}.footer-links{justify-content:flex-start}}
+.rv{opacity:0;transform:translateY(28px);transition:opacity .8s,transform .8s}.rv.on{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}.rv{opacity:1;transform:none}.bar{transition:none}}
+@media (pointer:coarse){.rv{opacity:1;transform:none;transition:none}}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+img,svg,canvas{max-width:100%}
+.grid>*,.qs>*,.yn>*,.flow>*,.tl>*{min-width:0}
+.chip{max-width:100%;line-height:1.45;align-items:flex-start}
+.chip b{flex:none;margin-top:7px}
+h1,h2,h3{overflow-wrap:anywhere}
+.lead,.sec-lead,.aud,.card p{overflow-wrap:break-word}
+.docs a span{max-width:55%}
+@media (min-width:1400px){.wrap{max-width:1280px}}
+@media (max-width:700px){
+.hero{padding:104px 0 56px}
+h1{font-size:clamp(44px,13vw,80px);max-width:none;margin:18px 0}
+h2{font-size:clamp(36px,10vw,60px);max-width:none}
+.cta .btn{flex:1 1 auto;justify-content:center}
+.stats div{padding-right:10px}
+.card{padding:20px}
+.ver h3{font-size:38px}
+.panel{padding:16px}
+.table{font-size:13.5px}
+.table td:first-child{white-space:normal}
+}
+@media (max-width:380px){.btn{padding:9px 14px;font-size:13px}}
+
+/* NEXUS-Q visual refresh: precise graphite panels, fine grid and explicit theme picker */
+:root{--bg:#101112;--fg:#f4f4f5;--mut:#b0b0b5;--line:#303034;--card:#19191c;--acc:#f2f2f4;--acc2:#bfc0c6;--ink:#111113;--warn:#e8bd73;--bad:#ff8989}
+:root[data-theme="light"]{--bg:#f4f4f2;--fg:#171719;--mut:#626269;--line:#d7d7d4;--card:#fff;--acc:#202024;--acc2:#65656e;--ink:#fff;--warn:#99651d;--bad:#b3261e}
+:root[data-theme="dark"]{--bg:#101112;--fg:#f4f4f5;--mut:#b0b0b5;--line:#303034;--card:#19191c;--acc:#f2f2f4;--acc2:#bfc0c6;--ink:#111113;--warn:#e8bd73;--bad:#ff8989}
+body{background-color:var(--bg);background-image:linear-gradient(to right,color-mix(in srgb,var(--fg) 4%,transparent) 1px,transparent 1px),linear-gradient(to bottom,color-mix(in srgb,var(--fg) 4%,transparent) 1px,transparent 1px);background-size:22px 22px}
+nav{background:color-mix(in srgb,var(--bg) 92%,transparent);border:1px solid var(--line);border-radius:10px;top:max(14px,env(safe-area-inset-top,0px));left:max(16px,calc((100vw - 1120px)/2));right:max(16px,calc((100vw - 1120px)/2));box-shadow:0 10px 36px #0002}
+nav .wrap{height:68px;max-width:none;padding:0 26px}.logo{font-family:"Instrument Sans",sans-serif;font-weight:700;letter-spacing:.1em;font-size:21px}.logo img{width:32px;height:32px;object-fit:contain;border-radius:6px}.logo i{background:var(--fg);color:var(--bg)}
+.links{color:var(--fg);gap:20px}.links a{font-weight:600}.navr{gap:12px}.btn,.tg{border-radius:5px}.btn.p{background:var(--fg);border-color:var(--fg);color:var(--bg)}.btn.p:hover{background:var(--card);color:var(--fg)}
+.theme-picker{display:flex;align-items:center;gap:3px;border:1px solid var(--line);padding:3px;border-radius:6px;background:var(--card)}.theme-choice{font:600 12px "Instrument Sans",sans-serif;border:1px solid transparent;border-radius:4px;background:transparent;color:var(--mut);padding:7px 9px;cursor:pointer;white-space:nowrap}.theme-choice[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}.theme-choice:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.hero{padding:142px 0 70px;min-height:500px;border-bottom:1px solid var(--line);background:linear-gradient(100deg,color-mix(in srgb,var(--bg) 98%,transparent) 8%,color-mix(in srgb,var(--bg) 72%,transparent) 62%,color-mix(in srgb,var(--card) 70%,transparent))}.hero:after{background:linear-gradient(90deg,var(--bg) 0%,color-mix(in srgb,var(--bg) 85%,transparent) 40%,transparent 100%);opacity:.82}#cv{opacity:.58;mask-image:linear-gradient(90deg,transparent 12%,#000 52%)}
+.chip{border-radius:4px;background:var(--card);color:var(--mut)}h1{font-family:"Instrument Sans",sans-serif;font-weight:750;letter-spacing:-.055em;line-height:1.04;font-size:clamp(44px,6.4vw,78px);max-width:11ch;margin:24px 0 18px}h1 em{color:var(--fg)}.lead{color:var(--fg);max-width:58ch;font-size:clamp(17px,1.7vw,20px)}.aud,.by{font-size:14px;color:var(--mut)}.cta{margin:26px 0 30px}.cta .btn{border-radius:5px}
+section{padding:clamp(48px,6vw,76px) 0}.eyebrow{font:700 12px "Instrument Sans",sans-serif;letter-spacing:.16em;color:var(--mut)}h2{font-family:"Instrument Sans",sans-serif;font-weight:750;letter-spacing:-.045em;line-height:1.08;font-size:clamp(32px,4.4vw,54px);max-width:22ch}.sec-lead{font-size:16px}.grid{gap:14px}.card,.step,.ver,.panel,details{border-radius:5px;box-shadow:0 2px 9px #00008}.card{padding:24px;background:color-mix(in srgb,var(--card) 95%,transparent)}.card h3{font-size:19px}.ico{border-radius:5px;background:transparent;border:1px solid var(--line)}.tw{border-radius:5px}.table th,.table td{padding:12px}.ver{border-radius:5px}.code{border-radius:5px}details{border-radius:5px}.docs a{border-radius:5px}footer{background:color-mix(in srgb,var(--card) 65%,transparent);padding:36px 0 48px}
+:root[data-theme="light"] #cv{opacity:.24}:root[data-theme="light"] .hero{background:linear-gradient(100deg,#f4f4f2 0%,#f4f4f2e8 45%,#dfe0e2aa 100%)}
+@media(max-width:1080px){nav .wrap{padding:0 16px}.theme-choice{padding:7px 8px}}
+@media(max-width:700px){nav{left:8px;right:8px;top:max(8px,env(safe-area-inset-top,0px))}nav .wrap{height:62px;padding:0 10px;gap:8px}.logo{font-size:17px;gap:7px}.logo img{width:27px;height:27px}.navr{gap:6px}.theme-picker{gap:1px}.theme-choice{font-size:11px;padding:7px 6px}.navr>.btn.p{display:none}.hero{padding:112px 0 50px;min-height:0}.hero:after{background:linear-gradient(90deg,var(--bg) 0%,color-mix(in srgb,var(--bg) 78%,transparent) 70%,transparent)}h1{font-size:clamp(43px,12vw,66px);max-width:11ch}.stats{grid-template-columns:1fr 1fr}}
+@media(max-width:390px){.logo{font-size:15px}.logo img{width:24px;height:24px}.theme-choice{font-size:10px;padding:6px 5px}.navr{gap:4px}}
+/* Compact, balanced mobile navigation: no oversized empty rows. */
+@media(max-width:1080px){
+  .links.open{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:14px;top:calc(100% + 8px);left:0;right:0;max-height:calc(100dvh - 105px);overflow-y:auto;border:1px solid var(--line);border-radius:8px;background:var(--bg);box-shadow:0 16px 40px #0004}
+  .links a,.links .mo{display:flex;align-items:center;min-height:44px;padding:10px 12px;border:1px solid var(--line);border-radius:5px;background:var(--card);font-size:14px;line-height:1.3;color:var(--fg);font-weight:600}
+  .links a:hover,.links a:focus-visible{border-color:var(--acc);background:color-mix(in srgb,var(--acc) 8%,var(--card))}
+  .links .mo{grid-column:1/-1;justify-content:center;color:var(--fg);background:var(--card)}
+  .mb[aria-expanded="true"]{border-color:var(--fg);background:var(--fg);color:var(--bg)}
+}
+@media(max-width:380px){.links.open{padding:10px;gap:6px}.links a,.links .mo{padding:9px;font-size:13px}}
+
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}#cv{display:none}}
+</style>
+
+<style>
+.app-shell{padding:0;overflow:hidden}
+.app-banner{display:block;width:100%;height:auto;aspect-ratio:16/9;object-fit:cover;background:var(--card)}
+.app-copy{padding:clamp(22px,4vw,42px)}
+.platform-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.platform-card{display:flex;flex-direction:column;gap:14px;min-width:0}
+.platform-head{display:flex;align-items:center;gap:12px;font-size:19px;font-weight:600}
+.platform-logo{width:30px;height:30px;display:block;flex:none;color:var(--fg)}
+.platform-card p{color:var(--mut);font-size:14px}
+.platform-downloads{display:flex;flex-wrap:wrap;gap:9px;margin-top:auto;padding-top:4px}
+.platform-downloads .btn{padding:9px 13px;border-radius:6px;font-size:13px}
+.shot-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.shot{margin:0;min-width:0;background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.shot img{display:block;width:100%;height:auto;aspect-ratio:1.47;object-fit:cover}
+.shot figcaption{padding:12px 16px;color:var(--mut);font-size:14px}
+.app-note{color:var(--mut);font-size:14px;margin-top:20px}
+@media(max-width:760px){.platform-grid,.shot-grid{grid-template-columns:1fr}.app-copy{padding:20px}}
+</style>
+<style>
+.app-banner{aspect-ratio:1600/520;object-fit:cover}
+.sign-brand{display:block;width:min(340px,80%);height:auto;object-fit:contain;margin:0 0 18px;background:#fff;padding:12px;border-radius:10px}
+.sign-icon{width:54px;height:54px;object-fit:contain;border-radius:10px;background:#fff;padding:5px;flex:none;display:block}
+.app-note strong{color:var(--fg)}
+</style>
+<link rel="stylesheet" href="/nexus-global.css">
+<!-- NEXUS-Q analytics: Google Tag Manager is loaded only after analytics consent. -->
+<script>
+window.dataLayer=window.dataLayer||[];
+function gtag(){dataLayer.push(arguments);}
+gtag('consent','default',{analytics_storage:'denied',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',functionality_storage:'granted',security_storage:'granted'});
+gtag('js',new Date());
+window.nqLoadGTM=function(){if(window.__nqGtmLoaded)return;window.__nqGtmLoaded=true;gtag('consent','update',{analytics_storage:'granted',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});var s=document.createElement('script');s.async=true;s.src='https://www.googletagmanager.com/gtm.js?id=GTM-PMTD89PQ';document.head.appendChild(s);};
+try{if(localStorage.getItem('nq-analytics-consent')==='granted')window.nqLoadGTM();}catch(e){}
+</script>
+<link rel="stylesheet" href="/nq-analytics-consent.css">
+  <link rel="stylesheet" href="/nq-bot-widget.css">
+</head>
+<body>
+<nav><div class="wrap">
+<a class="logo notranslate" translate="no" href="/"><img src="/nexus-q-logo-64.webp" alt="" width="30" height="30">NEXUS-Q</a>
+<div class="links" id="menu"><a href="/#overview">Overview</a><a href="/#release">v4.1.2 release</a><a href="/news">News</a><a href="/apps" aria-current="page">Apps</a><a href="/#how">How it works</a><a href="/#crypto">Crypto</a><a href="/#packages">Packages</a><a href="/#benchmarks">Benchmarks</a><a href="/#versions">Versions</a><a href="/#quickstart">Quick start</a><a href="/#docs">Documentation</a><a href="/#contribute">Contribute</a><a href="/#faq">FAQ</a></div>
+<div class="navr"><div class="theme-picker" role="group" aria-label="Choose color theme"><button class="theme-choice" id="theme-light" type="button" aria-pressed="false" title="Use light mode">☀ Light</button><button class="theme-choice" id="theme-dark" type="button" aria-pressed="false" title="Use dark mode">☾ Dark</button></div><a class="btn p" href="https://github.com/lecodev-26/nexus-q-sign" target="_blank" rel="noopener">GitHub</a><button class="mb" id="mb" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button></div>
+</div></nav>
+<header class="hero" id="top"><canvas id="cv" aria-hidden="true"></canvas><div class="wrap">
+<span class="chip"><b></b>NEXUS-Q APPS · DESKTOP SOFTWARE</span>
+<h1 class="d">NEXUS-Q <em>Sign.</em></h1>
+<p class="lead">Local-first document signing and verification with post-quantum ML-DSA-65 signatures. Keep the original document untouched and store each detached signature in its own .nqsig file.</p>
+<div class="cta"><a class="btn" href="/apps">All apps</a><a class="btn p" href="#downloads">Download v0.1.0</a><a class="btn" href="https://github.com/lecodev-26/nexus-q-sign" target="_blank" rel="noopener">View source code</a></div>
+</div></header>
+<main id="main">
+<section id="sign"><div class="wrap">
+<div class="eyebrow rv">/ apps / desktop</div>
+<h2 class="d rv">Sign documents. <em>Keep them intact.</em></h2>
+<p class="sec-lead rv">NEXUS-Q Sign is an independent desktop application built with Rust, Tauri 2, Svelte 5 and TypeScript. Signing and verification run locally; the original document is never modified.</p>
+<article class="card app-shell rv">
+<img class="app-banner" src="/assets/sign/banner.webp" srcset="/assets/sign/banner-640.webp 640w, /assets/sign/banner-1280.webp 1280w" sizes="(max-width: 700px) 100vw, 660px" alt="NEXUS-Q Sign desktop application banner" width="1600" height="520" loading="lazy" decoding="async">
+<div class="app-copy">
+<img class="sign-brand" src="/assets/sign/horizontal.webp" alt="NEXUS-Q Sign" width="2048" height="1024" loading="lazy" decoding="async">
+<span class="chip">v0.1.0 · Early access · 14 Nov 2026</span>
+<h3 style="font-size:clamp(28px,4vw,44px);margin:18px 0 10px">Detached post-quantum signatures</h3>
+<p style="color:var(--mut);max-width:72ch">Create a separate <code>.nqsig</code> signature sidecar for a document, then verify the signature and the SHA-256 digest of the exact original bytes. Sign uses ML-DSA-65 and keeps identity and private-key operations in its native Rust backend.</p>
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(210px,1fr));margin-top:24px">
+<div class="card"><h3>ML-DSA-65 signing</h3><p>Create detached post-quantum document signatures without changing the source file.</p></div>
+<div class="card"><h3>Document verification</h3><p>Check the signature and document digest, with distinct outcomes for changed files and invalid signatures.</p></div>
+<div class="card"><h3>Local identities</h3><p>Create and manage Sign-specific identities and recognize identities stored locally.</p></div>
+<div class="card"><h3>Encrypted key custody</h3><p>Private-key seeds are encrypted at rest and remain inside the Rust backend.</p></div>
+<div class="card"><h3>Operation history</h3><p>Local SQLite history stores operation metadata, not document contents, full paths or private keys.</p></div>
+<div class="card"><h3>Multilingual UI</h3><p>English by default, with Spanish and Catalan translations.</p></div>
+</div>
+<p class="app-note" style="margin-top:18px">Built with Rust · Tauri 2 · Svelte 5 · TypeScript · Vite · SHA-256 · ML-DSA-65. Sign is independent from NEXUS-Q Vault, with separate identities, keys, storage and history.</p>
+</div></article>
+</div></section>
+<section id="workflow"><div class="wrap">
+<div class="eyebrow rv">/ workflow / detached signatures</div><h2 class="d rv">A clear signing <em>workflow.</em></h2>
+<p class="sec-lead rv">Sign separates document integrity, mathematical signature validity and local identity recognition instead of treating them as the same claim.</p>
+<div class="grid g3">
+<article class="card rv"><h3>01 · Select and sign</h3><p>Choose a document and a local signing identity. Sign calculates its SHA-256 digest and creates a detached ML-DSA-65 signature.</p></article>
+<article class="card rv"><h3>02 · Keep both files</h3><p>The original document remains unchanged. The signature is saved separately as a <code>.nqsig</code> sidecar file.</p></article>
+<article class="card rv"><h3>03 · Verify independently</h3><p>Choose the original document and its sidecar. Sign checks the digest and signature, and reports whether the identity is recognized locally.</p></article>
+</div>
+<div class="note"><strong>Verification distinction:</strong> a mathematically valid signature from an unknown identity can still be valid. Local recognition is not certificate-chain validation, identity proof or revocation checking.</div>
+</div></section>
+<section id="downloads"><div class="wrap">
+<div class="eyebrow rv">/ downloads / v0.1.0</div><h2 class="d rv">Choose your <em>platform.</em></h2>
+<p class="sec-lead rv">Direct installers from the GitHub v0.1.0 release. Choose the package for your operating system and architecture.</p>
+<div class="platform-grid">
+<article class="card platform-card rv"><div class="platform-head"><svg class="platform-logo" viewBox="0 0 128 128" role="img" aria-label="Windows logo"><path fill="currentColor" d="M126 1.637l-67 9.834v49.831l67-.534zM1.647 66.709l.003 42.404 50.791 6.983-.04-49.057zm56.82.68l.094 49.465 67.376 9.509.016-58.863zM1.61 19.297l.047 42.383 50.791-.289-.023-49.016z"/></svg><span>Windows</span></div><p>Windows x64 · EXE installer or MSI package</p><div class="platform-downloads"><a class="btn p" href="https://github.com/lecodev-26/nexus-q-sign/releases/download/v0.1.0/NEXUS-Q.Sign_0.1.0_x64-setup.exe" target="_blank" rel="noopener">Download .EXE</a><a class="btn" href="https://github.com/lecodev-26/nexus-q-sign/releases/download/v0.1.0/NEXUS-Q.Sign_0.1.0_x64_en-US.msi" target="_blank" rel="noopener">Download .MSI</a></div></article>
+<article class="card platform-card rv"><div class="platform-head"><svg class="platform-logo" viewBox="0 0 24 24" role="img" aria-label="Apple logo"><path fill="currentColor" d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg><span>macOS</span></div><p>Apple Silicon (ARM64) and Intel (x64) disk images</p><div class="platform-downloads"><a class="btn p" href="https://github.com/lecodev-26/nexus-q-sign/releases/download/v0.1.0/NEXUS-Q.Sign_0.1.0_aarch64.dmg" target="_blank" rel="noopener">Download ARM64</a><a class="btn" href="https://github.com/lecodev-26/nexus-q-sign/releases/download/v0.1.0/NEXUS-Q.Sign_0.1.0_x64.dmg" target="_blank" rel="noopener">Download Intel</a></div></article>
+<article class="card platform-card rv"><div class="platform-head"><svg class="platform-logo" viewBox="0 0 24 24" role="img" aria-label="Linux logo"><path fill="currentColor" d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333l.003.003c.391.778 1.113 1.132 1.884 1.071.771-.06 1.592-.536 2.257-1.306.631-.765 1.683-1.084 2.378-1.503.348-.199.629-.469.649-.853.023-.4-.2-.811-.714-1.376v-.097l-.003-.003c-.17-.2-.25-.535-.338-.926-.085-.401-.182-.786-.492-1.046h-.003c-.059-.054-.123-.067-.188-.135a.357.357 0 00-.19-.064c.431-1.278.264-2.55-.173-3.694-.533-1.41-1.465-2.638-2.175-3.483-.796-1.005-1.576-1.957-1.56-3.368.026-2.152.236-6.133-3.544-6.139zm.529 3.405h.013c.213 0 .396.062.584.198.19.135.33.332.438.533.105.259.158.459.166.724 0-.02.006-.04.006-.06v.105a.086.086 0 01-.004-.021l-.004-.024a1.807 1.807 0 01-.15.706.953.953 0 01-.213.335.71.71 0 00-.088-.042c-.104-.045-.198-.064-.284-.133a1.312 1.312 0 00-.22-.066c.05-.06.146-.133.183-.198.053-.128.082-.264.088-.402v-.02a1.21 1.21 0 00-.061-.4c-.045-.134-.101-.2-.183-.333-.084-.066-.167-.132-.267-.132h-.016c-.093 0-.176.03-.262.132a.8.8 0 00-.205.334 1.18 1.18 0 00-.09.4v.019c.002.089.008.179.02.267-.193-.067-.438-.135-.607-.202a1.635 1.635 0 01-.018-.2v-.02a1.772 1.772 0 01.15-.768c.082-.22.232-.406.43-.533a.985.985 0 01.594-.2zm-2.962.059h.036c.142 0 .27.048.399.135.146.129.264.288.344.465.09.199.14.4.153.667v.004c.007.134.006.2-.002.266v.08c-.03.007-.056.018-.083.024-.152.055-.274.135-.393.2.012-.09.013-.18.003-.267v-.015c-.012-.133-.04-.2-.082-.333a.613.613 0 00-.166-.267.248.248 0 00-.183-.064h-.021c-.071.006-.13.04-.186.132a.552.552 0 00-.12.27.944.944 0 00-.023.33v.015c.012.135.037.2.08.334.046.134.098.2.166.268.01.009.02.018.034.024-.07.057-.117.07-.176.136a.304.304 0 01-.131.068 2.62 2.62 0 01-.275-.402 1.772 1.772 0 01-.155-.667 1.759 1.759 0 01.08-.668 1.43 1.43 0 01.283-.535c.128-.133.26-.2.418-.2zm1.37 1.706c.332 0 .733.065 1.216.399.293.2.523.269 1.052.468h.003c.255.136.405.266.478.399v-.131a.571.571 0 01.016.47c-.123.31-.516.643-1.063.842v.002c-.268.135-.501.333-.775.465-.276.135-.588.292-1.012.267a1.139 1.139 0 01-.448-.067 3.566 3.566 0 01-.322-.198c-.195-.135-.363-.332-.612-.465v-.005h-.005c-.4-.246-.616-.512-.686-.71-.07-.268-.005-.47.193-.6.224-.135.38-.271.483-.336.104-.074.143-.102.176-.131h.002v-.003c.169-.202.436-.47.839-.601.139-.036.294-.065.466-.065zm2.8 2.142c.358 1.417 1.196 3.475 1.735 4.473.286.534.855 1.659 1.102 3.024.156-.005.33.018.513.064.646-1.671-.546-3.467-1.089-3.966-.22-.2-.232-.335-.123-.335.59.534 1.365 1.572 1.646 2.757.13.535.16 1.104.021 1.67.067.028.135.06.205.067 1.032.534 1.413.938 1.23 1.537v-.043c-.06-.003-.12 0-.18 0h-.016c.151-.467-.182-.825-1.065-1.224-.915-.4-1.646-.336-1.77.465-.008.043-.013.066-.018.135-.068.023-.139.053-.209.064-.43.268-.662.669-.793 1.187-.13.533-.17 1.156-.205 1.869v.003c-.02.334-.17.838-.319 1.35-1.5 1.072-3.58 1.538-5.348.334a2.645 2.645 0 00-.402-.533 1.45 1.45 0 00-.275-.333c.182 0 .338-.03.465-.067a.615.615 0 00.314-.334c.108-.267 0-.697-.345-1.163-.345-.467-.931-.995-1.788-1.521-.63-.4-.986-.87-1.15-1.396-.165-.534-.143-1.085-.015-1.645.245-1.07.873-2.11 1.274-2.763.107-.065.037.135-.408.974-.396.751-1.14 2.497-.122 3.854a8.123 8.123 0 01.647-2.876c.564-1.278 1.743-3.504 1.836-5.268.048.036.217.135.289.202.218.133.38.333.59.465.21.201.477.335.876.335.039.003.075.006.11.006.412 0 .73-.134.997-.268.29-.134.52-.334.74-.4h.005c.467-.135.835-.402 1.044-.7zm2.185 8.958c.037.6.343 1.245.882 1.377.588.134 1.434-.333 1.791-.765l.211-.01c.315-.007.577.01.847.268l.003.003c.208.199.305.53.391.876.085.4.154.78.409 1.066.486.527.645.906.636 1.14l.003-.007v.018l-.003-.012c-.015.262-.185.396-.498.595-.63.401-1.746.712-2.457 1.57-.618.737-1.37 1.14-2.036 1.191-.664.053-1.237-.2-1.574-.898l-.005-.003c-.21-.4-.12-1.025.056-1.69.176-.668.428-1.344.463-1.897.037-.714.076-1.335.195-1.814.12-.465.308-.797.641-.984l.045-.022zm-10.814.049h.01c.053 0 .105.005.157.014.376.055.706.333 1.023.752l.91 1.664.003.003c.243.533.754 1.064 1.189 1.637.434.598.77 1.131.729 1.57v.006c-.057.744-.48 1.148-1.125 1.294-.645.135-1.52.002-2.395-.464-.968-.536-2.118-.469-2.857-.602-.369-.066-.61-.2-.723-.4-.11-.2-.113-.602.123-1.23v-.004l.002-.003c.117-.334.03-.752-.027-1.118-.055-.401-.083-.71.043-.94.16-.334.396-.4.69-.533.294-.135.64-.202.915-.47h.002v-.002c.256-.268.445-.601.668-.838.19-.201.38-.336.663-.336zm7.159-9.074c-.435.201-.945.535-1.488.535-.542 0-.97-.267-1.28-.466-.154-.134-.28-.268-.373-.335-.164-.134-.144-.333-.074-.333.109.016.129.134.199.2.096.066.215.2.36.333.292.2.68.467 1.167.467.485 0 1.053-.267 1.398-.466.195-.135.445-.334.648-.467.156-.136.149-.267.279-.267.128.016.034.134-.147.332a8.097 8.097 0 01-.69.468zm-1.082-1.583V5.64c-.006-.02.013-.042.029-.05.074-.043.18-.027.26.004.063 0 .16.067.15.135-.006.049-.085.066-.135.066-.055 0-.092-.043-.141-.068-.052-.018-.146-.008-.163-.065zm-.551 0c-.02.058-.113.049-.166.066-.047.025-.086.068-.14.068-.05 0-.13-.02-.136-.068-.01-.066.088-.133.15-.133.08-.031.184-.047.259-.005.019.009.036.03.03.05v.02h.003z"/></svg><span>Linux</span></div><p>Linux x86_64 · Debian package or AppImage</p><div class="platform-downloads"><a class="btn p" href="https://github.com/lecodev-26/nexus-q-sign/releases/download/v0.1.0/NEXUS-Q.Sign_0.1.0_amd64.deb" target="_blank" rel="noopener">Download .DEB</a><a class="btn" href="https://github.com/lecodev-26/nexus-q-sign/releases/download/v0.1.0/NEXUS-Q.Sign_0.1.0_amd64.AppImage" target="_blank" rel="noopener">Download AppImage</a></div></article>
+</div>
+<p class="app-note">Linux release packages include a workaround for a reproduced WebKitGTK blank-window issue on systems with exceptionally large Fontconfig catalogues. It is Linux-only and not a universal fix. See the <a class="lk" href="https://github.com/lecodev-26/nexus-q-sign/blob/main/docs/diagnostics/2026-11-14-linux-webkitgtk-fontconfig-blank-window.md" target="_blank" rel="noopener">diagnostic notes</a>. <a class="lk" href="https://github.com/lecodev-26/nexus-q-sign/releases/tag/v0.1.0" target="_blank" rel="noopener">Release notes and all assets</a>.</p>
+</div></section>
+<section id="screenshots"><div class="wrap">
+<div class="eyebrow rv">/ product / screenshots</div><h2 class="d rv">A closer <em>look.</em></h2>
+<p class="sec-lead rv">Screenshots from the NEXUS-Q Sign desktop application, covering its main workspace and primary workflows.</p>
+<div class="shot-grid">
+<figure class="shot rv"><img src="/assets/sign/screenshots/01-overview.webp" alt="NEXUS-Q Sign overview and desktop workspace" width="1446" height="980" loading="lazy" decoding="async"><figcaption>Overview · main workspace</figcaption></figure>
+<figure class="shot rv"><img src="/assets/sign/screenshots/02-sign-document.webp" alt="NEXUS-Q Sign document signing workflow" width="1446" height="980" loading="lazy" decoding="async"><figcaption>Sign document · detached signature creation</figcaption></figure>
+<figure class="shot rv"><img src="/assets/sign/screenshots/03-verify-signature.webp" alt="NEXUS-Q Sign signature verification workflow" width="1446" height="980" loading="lazy" decoding="async"><figcaption>Verify signature · document integrity and signature status</figcaption></figure>
+<figure class="shot rv"><img src="/assets/sign/screenshots/04-identities.webp" alt="NEXUS-Q Sign local identity management" width="1446" height="980" loading="lazy" decoding="async"><figcaption>Identities · local signing identity management</figcaption></figure>
+<figure class="shot rv"><img src="/assets/sign/screenshots/05-history.webp" alt="NEXUS-Q Sign local operation history" width="1446" height="980" loading="lazy" decoding="async"><figcaption>History · local operation metadata</figcaption></figure>
+</div></div></section>
+<section id="security"><div class="wrap">
+<div class="eyebrow rv">/ scope / security notes</div><h2 class="d rv">Know what v0.1.0 <em>does and does not claim.</em></h2>
+<div class="grid g2">
+<article class="card rv"><h3>Included in this release</h3><ul><li>Detached NQSIG v1 signature files.</li><li>ML-DSA-65 signatures and SHA-256 document digests.</li><li>Local identities and encrypted private-key seed storage.</li><li>Local-only operation history metadata.</li><li>Windows x64, macOS ARM64/Intel and Linux x86_64 packages.</li></ul></article>
+<article class="card rv"><h3>Not provided by v0.1.0</h3><ul><li>No independent security audit.</li><li>No guarantee of external NQSIG interoperability.</li><li>No PAdES or embedded PDF signatures.</li><li>No certificate authority, revocation checking or trusted timestamps.</li><li>No qualified electronic signature or legal-validity claim.</li><li>No cloud signing, synchronization or bulk-signing workflow.</li></ul></article>
+</div>
+<div class="note"><strong>Early-access notice:</strong> successful CI builds do not replace runtime testing on every target machine, end-to-end validation or an independent security review. A valid cryptographic signature alone does not prove the real-world identity of its signer or establish legal validity.</div>
+<p class="app-note" style="margin-top:20px"><a class="lk" href="https://github.com/lecodev-26/nexus-q-sign/releases/tag/v0.1.0" target="_blank" rel="noopener">Read the complete v0.1.0 release notes ↗</a> · <a class="lk" href="https://github.com/lecodev-26/nexus-q-sign/blob/main/NQSIG_FORMAT.md" target="_blank" rel="noopener">NQSIG format ↗</a> · <a class="lk" href="https://github.com/lecodev-26/nexus-q-sign/blob/main/SECURITY.md" target="_blank" rel="noopener">Security policy ↗</a></p>
+</div></section>
+</main>
+<footer><div class="wrap"><div>NEXUS-Q · MIT License · an engineering project by <a class="lk" href="https://github.com/lecodev-26" target="_blank" rel="noopener">lecodev-26</a></div><div class="footer-links"><a href="https://github.com/lecodev-26/nexus-q-sign" target="_blank" rel="noopener">Sign repository</a><a href="https://github.com/lecodev-26/nexus-q-sign/issues" target="_blank" rel="noopener">Issues</a><a href="https://github.com/lecodev-26/nexus-q-sign/blob/main/SECURITY.md" target="_blank" rel="noopener">Security</a><a href="/apps">All apps</a><a href="/legal">Legal notice</a><a href="/privacy">Privacy</a><a href="/cookies">Cookies</a><a href="/accessibility">Accessibility</a></div></div></footer>
+<script>
+(function(){
+var root=document.documentElement,lightBtn=document.getElementById('theme-light'),darkBtn=document.getElementById('theme-dark');
+function cur(){var t=root.getAttribute('data-theme');return t||(matchMedia('(prefers-color-scheme:light)').matches?'light':'dark')}
+function applyTheme(t){root.setAttribute('data-theme',t);lightBtn.setAttribute('aria-pressed',t==='light'?'true':'false');darkBtn.setAttribute('aria-pressed',t==='dark'?'true':'false');try{localStorage.setItem('nq-theme',t)}catch(e){}}
+try{var s=localStorage.getItem('nq-theme');if(s==='light'||s==='dark')root.setAttribute('data-theme',s)}catch(e){}
+applyTheme(cur());lightBtn.addEventListener('click',function(){applyTheme('light')});darkBtn.addEventListener('click',function(){applyTheme('dark')});
+var mb=document.getElementById('mb'),menu=document.getElementById('menu');
+function closeMenu(){menu.classList.remove('open');mb.setAttribute('aria-expanded','false')}
+mb.addEventListener('click',function(){var o=menu.classList.toggle('open');mb.setAttribute('aria-expanded',o?'true':'false')});
+menu.addEventListener('click',function(e){if(e.target.tagName==='A')closeMenu()});
+document.addEventListener('keydown',function(e){if(e.key==='Escape')closeMenu()});
+addEventListener('resize',function(){if(innerWidth>1080)closeMenu()});
+if(!matchMedia('(pointer:coarse)').matches){var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('on');io.unobserve(e.target)}})},{threshold:.1});document.querySelectorAll('.rv').forEach(function(el){io.observe(el)});}
+/* SDK cards live in a horizontal snap carousel; each disclosure opens independently. */
+document.querySelectorAll('.copy').forEach(function(b){b.addEventListener('click',function(){var t=b.parentNode.querySelector('pre').innerText;(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){b.textContent='Copied'},function(){b.textContent='Select + copy'});setTimeout(function(){b.textContent='Copy'},1600)})});
+
+
+
+var c=document.getElementById('cv'),x=c.getContext('2d'),W,H,P=[],m={x:-999,y:-999},dpr=Math.min(devicePixelRatio||1,2),still=matchMedia('(prefers-reduced-motion:reduce)').matches||matchMedia('(pointer:coarse)').matches;
+function init(){var r=c.getBoundingClientRect();W=r.width;H=r.height;c.width=W*dpr;c.height=H*dpr;x.setTransform(dpr,0,0,dpr,0,0);P=[];var g=Math.max(54,Math.round(W/20));for(var i=0;i<W+g;i+=g)for(var j=0;j<H+g;j+=g){P.push({ox:i+(Math.random()-.5)*g*.5,oy:j+(Math.random()-.5)*g*.5,x:0,y:0,s:Math.random()*6.28,f:0})}P.forEach(function(p){p.x=p.ox;p.y=p.oy})}
+function draw(t){var col=getComputedStyle(root).getPropertyValue('--acc').trim()||'#5cf2d6';x.clearRect(0,0,W,H);x.fillStyle=col;x.strokeStyle=col;
+for(var k=0;k<P.length;k++){var p=P[k],dx=p.x-m.x,dy=p.y-m.y,d=Math.sqrt(dx*dx+dy*dy),f=d<170?(170-d)/170*30:0;var tx=p.ox+Math.sin(t/1700+p.s)*7+(d?dx/d*f:0),ty=p.oy+Math.cos(t/1900+p.s)*7+(d?dy/d*f:0);p.x+=(tx-p.x)*.1;p.y+=(ty-p.y)*.1;p.f=f}
+x.lineWidth=1;for(var a=0;a<P.length;a++){for(var b=a+1;b<P.length;b++){var q=P[a],r=P[b],ddx=q.x-r.x,ddy=q.y-r.y,dd=ddx*ddx+ddy*ddy;if(dd<8500){x.globalAlpha=(1-dd/8500)*.22;x.beginPath();x.moveTo(q.x,q.y);x.lineTo(r.x,r.y);x.stroke()}}}
+for(var k2=0;k2<P.length;k2++){var pp=P[k2];x.globalAlpha=.35+Math.min(.65,pp.f/30);x.beginPath();x.arc(pp.x,pp.y,1.6+pp.f/14,0,6.283);x.fill()}
+x.globalAlpha=1;if(!still)requestAnimationFrame(draw)}
+if(!still){addEventListener('resize',init);var hero=document.getElementById('top');hero.addEventListener('pointermove',function(e){var r=c.getBoundingClientRect();m.x=e.clientX-r.left;m.y=e.clientY-r.top});hero.addEventListener('pointerleave',function(){m.x=m.y=-999});init();requestAnimationFrame(draw);}
+})();
+</script>
+<script src="/nexus-nav.js" defer></script>
+
+<script src="/nq-analytics-consent.js" defer></script>
+  <script src="/nq-bot-widget.js" defer></script>
+</body>
+</html>

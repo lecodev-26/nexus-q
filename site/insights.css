@@ -1,0 +1,44 @@
+
+:root{--ins-bg:#101112;--ins-fg:#f4f4f5;--ins-mut:#b0b0b5;--ins-line:#303034;--ins-card:#19191c;--ins-accent:#f2f2f4;--ins-violet:#bfc0c6}
+*{box-sizing:border-box}.insight-page{margin:0;background:var(--ins-bg);color:var(--ins-fg);font:16px/1.65 "Instrument Sans",system-ui,sans-serif;background-image:linear-gradient(to right,#ffffff07 1px,transparent 1px),linear-gradient(to bottom,#ffffff07 1px,transparent 1px);background-size:22px 22px}
+.insight-page a{color:inherit;text-decoration:none}.insight-page a:hover{color:var(--ins-accent)}.insight-page .wrap{width:min(1180px,calc(100% - 32px));margin:auto}
+.insight-page .top{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--ins-bg) 92%,transparent);border-bottom:1px solid var(--ins-line);backdrop-filter:blur(14px)}
+.insight-page .nav{min-height:68px;display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap}
+.insight-page .brand{font:700 21px "Instrument Sans",system-ui,sans-serif;letter-spacing:.1em;white-space:nowrap}.insight-page .links{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--ins-mut)}
+.insight-page .links a[aria-current=page]{color:var(--ins-accent)}.insight-page .lang{border:1px solid var(--ins-line);border-radius:99px;padding:6px 12px;font-size:12px}
+.insight-page .hero{padding:142px 0 70px;border-bottom:1px solid var(--ins-line);background:linear-gradient(100deg,color-mix(in srgb,var(--ins-bg) 98%,transparent) 8%,color-mix(in srgb,var(--ins-bg) 72%,transparent) 62%,color-mix(in srgb,var(--ins-card) 70%,transparent))}
+.insight-page .eyebrow{font:12px "JetBrains Mono",monospace;text-transform:uppercase;letter-spacing:.14em;color:var(--ins-accent)}
+.insight-page h1{font:750 clamp(44px,6.4vw,78px)/1.04 "Instrument Sans",system-ui,sans-serif;letter-spacing:-.055em;margin:18px 0;max-width:980px}
+.insight-page h1 em{font-style:normal;color:var(--ins-accent)}.insight-page .lead{font-size:clamp(17px,2vw,21px);max-width:74ch;color:var(--ins-mut)}
+.insight-page .actions{display:flex;gap:10px;flex-wrap:wrap;margin:24px 0}.insight-page .btn{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--ins-line);border-radius:5px;padding:10px 17px;font-weight:650;font-size:13px;background:var(--ins-card)}
+.insight-page .btn.primary{background:var(--ins-accent);color:#04110e;border-color:var(--ins-accent)}.insight-page .section{padding:58px 0;border-bottom:1px solid var(--ins-line)}
+.insight-page h2{font:750 clamp(32px,4.4vw,54px)/1.08 "Instrument Sans",system-ui,sans-serif;letter-spacing:-.045em;margin:0 0 14px}.insight-page h3{font-size:20px;margin:0 0 8px}
+.insight-page p{color:var(--ins-mut);max-width:82ch}.insight-page .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:24px}
+.insight-page .grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}.insight-page .card,.insight-page .layer,.insight-page .metric{background:var(--ins-card);border:1px solid var(--ins-line);border-radius:5px;padding:22px;min-width:0}
+.insight-page .card p{font-size:14px;margin-bottom:0}.insight-page .tag{font:11px "JetBrains Mono",monospace;color:var(--ins-accent);letter-spacing:.08em;text-transform:uppercase}
+.insight-page .notice{border-left:3px solid #ffb454;background:#ffb45412;border-radius:0 12px 12px 0;padding:16px 18px;margin:22px 0;color:var(--ins-fg)}
+.insight-page .notice p{margin:4px 0 0}.insight-page .diagram{display:grid;gap:12px;margin-top:26px}
+.insight-page .layer{display:grid;grid-template-columns:90px 1fr;gap:18px;align-items:center}
+.insight-page .layer-no{font:700 24px "Instrument Sans",system-ui,sans-serif;color:var(--ins-accent)}
+.insight-page .layer-items{display:flex;gap:9px;flex-wrap:wrap}.insight-page .node{border:1px solid #35414b;border-radius:5px;padding:8px 12px;font-size:13px;background:var(--ins-bg)}
+.insight-page .arrow{text-align:center;color:var(--ins-accent);font:12px "JetBrains Mono",monospace;letter-spacing:.08em}
+.insight-page .metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:24px 0}
+.insight-page .metric strong{display:block;font:700 36px "Instrument Sans",system-ui,sans-serif;color:var(--ins-accent);line-height:1.1}
+.insight-page .metric span{font-size:12px;color:var(--ins-mut)}
+.insight-page .table-wrap{overflow-x:auto;border:1px solid var(--ins-line);border-radius:5px;background:var(--ins-card);margin:20px 0}
+.insight-page table{width:100%;border-collapse:collapse;font-size:13px}.insight-page th,.insight-page td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--ins-line);white-space:nowrap}
+.insight-page th{color:var(--ins-mut);font:11px "JetBrains Mono",monospace;text-transform:uppercase}.insight-page td:last-child{font-family:"JetBrains Mono",monospace}
+.insight-page .person{display:flex;gap:14px;align-items:center}.insight-page .avatar{width:58px;height:58px;border-radius:50%;border:1px solid var(--ins-line);object-fit:cover;background:#17212a}
+.insight-page .person strong{display:block}.insight-page .person small{color:var(--ins-mut)}
+.insight-page .foot{padding:30px 0 46px;color:var(--ins-mut);font-size:13px}.insight-page .foot .wrap{display:flex;gap:14px;flex-wrap:wrap;justify-content:space-between}
+.insight-page .foot a{text-decoration:underline;text-underline-offset:3px}.insight-page .small{font-size:12px}
+.insight-page .status{font:12px "JetBrains Mono",monospace;color:var(--ins-mut)}.insight-page .skeleton{color:var(--ins-mut)}
+@media(max-width:760px){.insight-page .grid,.insight-page .grid.three{grid-template-columns:1fr 1fr}.insight-page .metrics{grid-template-columns:1fr 1fr}.insight-page .nav{padding:12px 0}.insight-page .links{gap:10px}}
+@media(max-width:540px){.insight-page .grid,.insight-page .grid.three{grid-template-columns:1fr}.insight-page .layer{grid-template-columns:1fr;gap:5px}.insight-page .hero{padding:112px 0 50px}.insight-page .section{padding:40px 0}.insight-page .wrap{width:min(100% - 28px,1180px)}}
+@media(prefers-reduced-motion:reduce){.insight-page *{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
+
+.insight-page h1,.insight-page h2,.insight-page h3,.insight-page .brand,.insight-page .metric strong,.insight-page .layer-no{font-family:"Instrument Sans",system-ui,sans-serif!important}
+.insight-page .brand{font-weight:700;letter-spacing:.1em}
+.insight-page h1{font-weight:750;letter-spacing:-.055em}
+.insight-page h2{font-weight:750;letter-spacing:-.045em}
+.insight-page .metric strong{font-weight:700}

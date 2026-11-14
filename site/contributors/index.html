@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Contributors · NEXUS-Q — Open source community</title><meta name="description" content="Meet the public GitHub contributors to NEXUS-Q and find contribution guidelines, issues and discussions."><meta name="keywords" content="NEXUS-Q contributors, open source Rust, contribute to NEXUS-Q">
+<link rel="canonical" href="https://nexus-q.link/contributors"><link rel="alternate" hreflang="en" href="https://nexus-q.link/contributors">
+<meta property="og:title" content="Contributors · NEXUS-Q — Open source community"><meta property="og:description" content="Meet the public GitHub contributors to NEXUS-Q and find contribution guidelines, issues and discussions."><meta property="og:type" content="website"><meta property="og:site_name" content="NEXUS-Q"><meta property="og:url" content="https://nexus-q.link/contributors"><meta property="og:image" content="https://nexus-q.link/og.jpg">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Contributors · NEXUS-Q — Open source community"><meta name="twitter:description" content="Meet the public GitHub contributors to NEXUS-Q and find contribution guidelines, issues and discussions."><meta name="twitter:image" content="https://nexus-q.link/og.jpg">
+<meta name="theme-color" content="#06080b"><link rel="icon" href="/favicon.ico"><link rel="stylesheet" href="/insights.css">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Anton&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebPage","name":"Contributors · NEXUS-Q — Open source community","description":"Meet the public GitHub contributors to NEXUS-Q and find contribution guidelines, issues and discussions.","url":"https://nexus-q.link/contributors","inLanguage":"en","isPartOf":{"@type":"WebSite","name":"NEXUS-Q","url":"https://nexus-q.link/"}}</script><link rel="stylesheet" href="/nexus-global.css">
+<!-- NEXUS-Q analytics: Google Tag Manager is loaded only after analytics consent. -->
+<script>
+window.dataLayer=window.dataLayer||[];
+function gtag(){dataLayer.push(arguments);}
+gtag('consent','default',{analytics_storage:'denied',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',functionality_storage:'granted',security_storage:'granted'});
+gtag('js',new Date());
+window.nqLoadGTM=function(){if(window.__nqGtmLoaded)return;window.__nqGtmLoaded=true;gtag('consent','update',{analytics_storage:'granted',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});var s=document.createElement('script');s.async=true;s.src='https://www.googletagmanager.com/gtm.js?id=GTM-PMTD89PQ';document.head.appendChild(s);};
+try{if(localStorage.getItem('nq-analytics-consent')==='granted')window.nqLoadGTM();}catch(e){}
+</script>
+<link rel="stylesheet" href="/nq-analytics-consent.css">
+  <link rel="stylesheet" href="/nq-bot-widget.css">
+</head><body class="insight-page"><header class="top"><div class="wrap nav"><a class="brand" href="/">NEXUS-Q</a><nav class="links" aria-label="Main navigation"><a href="/architecture">Architecture</a><a href="/benchmarks">Benchmarks</a><a href="/contributors" aria-current="page">Contributors</a></nav></div></header><main>
+<section class="hero"><div class="wrap"><div class="eyebrow">/ open source / people</div><h1>Built in the open. <em>Contributions matter.</em></h1><p class="lead">People listed here are loaded from GitHub's public contributors endpoint for the NEXUS-Q repository. Counts reflect GitHub's contribution aggregation and can change over time.</p><div class="actions"><a class="btn primary" href="https://github.com/lecodev-26/nexus-q/graphs/contributors" target="_blank" rel="noopener">Open GitHub contribution graph ↗</a><a class="btn" href="https://github.com/lecodev-26/nexus-q/blob/v4.1.2/CONTRIBUTING.md" target="_blank" rel="noopener">Contribution guide ↗</a></div></div></section>
+<section class="section"><div class="wrap"><div class="eyebrow">/ contributors</div><h2>People behind the repository</h2><p>Profiles and contribution counts are fetched live from GitHub. This page does not infer employment, ownership, endorsement or individual responsibilities from commit counts.</p><p id="contributors-status" class="status" aria-live="polite">Loading public contributor data…</p><div class="grid three" id="contributors-list"><article class="card skeleton">Loading GitHub contributors…</article></div><div class="notice"><strong>Want to contribute?</strong> Start with a focused issue or pull request. Security-sensitive changes should follow the repository's disclosure and review process; do not publish exploit details in a public issue before coordinating with maintainers.</div><div class="actions"><a class="btn primary" href="https://github.com/lecodev-26/nexus-q/issues" target="_blank" rel="noopener">Browse issues ↗</a><a class="btn" href="https://github.com/lecodev-26/nexus-q/discussions" target="_blank" rel="noopener">Join discussions ↗</a></div></div></section>
+</main><footer class="foot"><div class="wrap"><span>NEXUS-Q · MIT OR Apache-2.0 · <a href="https://github.com/lecodev-26/nexus-q" target="_blank" rel="noopener noreferrer">GitHub</a></span><span><a href="/">Home</a> · <a href="/legal">Legal notice</a> · <a href="/privacy">Privacy</a></span></div></footer><script>
+const repo="lecodev-26/nexus-q";
+const target=document.getElementById("contributors-list");
+const status=document.getElementById("contributors-status");
+const fmt=n=>new Intl.NumberFormat("en-US").format(n);
+async function loadContributors(){
+ try{
+  const response=await fetch("https://api.github.com/repos/"+repo+"/contributors?per_page=100");
+  if(!response.ok)throw new Error("GitHub API "+response.status);
+  const people=await response.json();
+  target.innerHTML="";
+  for(const p of people){
+   const article=document.createElement("article");article.className="card";
+   const person=document.createElement("div");person.className="person";
+   const avatar=document.createElement("img");avatar.className="avatar";avatar.src=p.avatar_url;avatar.alt="";avatar.width=58;avatar.height=58;avatar.loading="lazy";avatar.referrerPolicy="no-referrer";
+   const info=document.createElement("div");const name=document.createElement("strong");name.textContent=p.login;
+   const count=document.createElement("small");count.textContent=fmt(p.contributions)+" recorded contributions";
+   info.append(name,count);person.append(avatar,info);article.append(person);
+   const link=document.createElement("a");link.className="btn";link.href=p.html_url;link.target="_blank";link.rel="noopener noreferrer";link.textContent="View profile ↗";link.style.marginTop="16px";article.append(link);target.append(article);
+  }
+  status.textContent=fmt(people.length)+(" contributors shown · live GitHub data");
+ }catch(e){status.textContent="Contributors could not be loaded. Visit GitHub.";target.innerHTML='<article class="card"><a href="https://github.com/lecodev-26/nexus-q/graphs/contributors" target="_blank" rel="noopener noreferrer">'+"Open the contributors graph on GitHub ↗"+'</a></article>';}
+}
+loadContributors();
+</script>
+<script src="/nq-analytics-consent.js" defer></script>
+  <script src="/nq-bot-widget.js" defer></script>
+</body></html>
