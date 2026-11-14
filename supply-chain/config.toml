@@ -705,7 +705,7 @@ criteria = "safe-to-deploy"
 notes = "Initial issue #89 baseline; not audited. Review and replace with a recorded audit or trusted import."
 
 [[exemptions."josekit"]]
-version = "0.10"
+version = "0.10.3"
 criteria = "safe-to-deploy"
 notes = "Initial issue #89 baseline; not audited. Review and replace with a recorded audit or trusted import."
 
@@ -1010,7 +1010,7 @@ criteria = "safe-to-deploy"
 notes = "Initial issue #89 baseline; not audited. Review and replace with a recorded audit or trusted import."
 
 [[exemptions."rand"]]
-version = "0.10"
+version = "0.10.3"
 criteria = "safe-to-deploy"
 notes = "Initial issue #89 baseline; not audited. Review and replace with a recorded audit or trusted import."
 
@@ -1150,7 +1150,7 @@ criteria = "safe-to-deploy"
 notes = "Initial issue #89 baseline; not audited. Review and replace with a recorded audit or trusted import."
 
 [[exemptions."secrecy"]]
-version = "0.10"
+version = "0.10.3"
 criteria = "safe-to-deploy"
 notes = "Initial issue #89 baseline; not audited. Review and replace with a recorded audit or trusted import."
 
