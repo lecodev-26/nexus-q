@@ -23,6 +23,7 @@ These workflows are separate from Fast CI. The trigger column reflects the workf
 |---|---|---|
 | audit-ci.yml | Manual dispatch | Dependency audit and cargo-deny checks. |
 | security-ci.yml | Manual dispatch | Repository security/data-contract checks, secret scanning, and related security validation. |
+| miri.yml | Relevant pull requests, weekly schedule, or manual dispatch | Pinned-nightly Miri run for Rust-side C ABI pointer/string tests; uploads its console output. See [Miri memory-safety checks](security/MIRI.md) for coverage and exclusions. |
 | correctness-interoperability.yml | Manual dispatch | Additional correctness, interoperability, and official/vendored vector suites. |
 | fuzz-soak.yml | Manual dispatch | Longer sequential fuzz campaigns; not equivalent to compiling the fuzz harness. |
 | native-backend-gate.yml | Manual dispatch | Experimental native backend provenance, differential/constant-time checks, and performance gates. |

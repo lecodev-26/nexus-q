@@ -1,0 +1,49 @@
+name: NEXUS-Q Miri
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/nexusq-c/**'
+      - 'crates/nexusq-core/**'
+      - 'docs/security/MIRI.md'
+      - '.github/workflows/miri.yml'
+  schedule:
+    - cron: '30 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nexusq-miri-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  c-abi:
+    name: Miri — C ABI pointer and string handling
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install pinned nightly with Miri
+        run: rustup toolchain install nightly-2026-11-01 --component miri --profile minimal
+      - name: Prepare Miri sysroot
+        run: cargo +nightly-2026-11-01 miri setup
+      - name: Run C ABI tests under Miri
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo +nightly-2026-11-01 miri test -p nexusq-c --locked 2>&1 | tee miri-results.txt
+      - name: Upload Miri results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: miri-c-abi-${{ github.sha }}
+          path: miri-results.txt
+          if-no-files-found: warn
+          retention-days: 30
