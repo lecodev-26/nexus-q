@@ -24,7 +24,7 @@ nexusq-ml-kem = "4.1.2"
 | Feature | Effect |
 |---------|--------|
 | `nexusq-kernels` | Only adds the `nexusq-kernels` dependency (`dep:nexusq-kernels`). It does **not** change which arithmetic runs. |
-| `experimental-kernels` | Actually routes NTT, inverse NTT and `MultiplyNTTs` to the `nexusq-kernels` implementations. |
+| `experimental-kernels` | Actually routes NTT, inverse NTT and `MultiplyNTTs` to the `nexusq-kernels` implementations, and uses the SHAKE128 x4 kernel for batched `matrix_sample_ntt` sampling. |
 
 **Default builds use the upstream RustCrypto arithmetic implementations.**
 Some local structural and compatibility changes remain active in all builds;

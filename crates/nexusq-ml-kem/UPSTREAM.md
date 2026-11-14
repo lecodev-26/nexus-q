@@ -13,7 +13,7 @@ Compared with upstream `ml-kem` 0.3.2 @ `4407682`, six files under `src/` differ
 
 | File | Local change | Default build |
 |------|--------------|---------------|
-| `src/algebra.rs` | `matrix_sample_ntt` restructured; new `sample_ntt_x4`; kernel routing for NTT, inverse NTT and `MultiplyNTTs` | Restructuring is **active**. Kernel routing is gated behind `experimental-kernels` and is **inactive**. |
+| `src/algebra.rs` | `matrix_sample_ntt` restructured; new `sample_ntt_x4` batches four matrix polynomials through the SHAKE128 x4 API; kernel routing for NTT, inverse NTT and `MultiplyNTTs` | Restructuring is **active**. SHAKE128 x4 sampling and arithmetic-kernel routing are gated behind `experimental-kernels` and are **inactive** by default. |
 | `src/param.rs` | Extra `K: Mul<K>` and `Prod<K, K>: ArraySize` bounds on the public traits `ParameterSet` and `PkeParams` | **Active** (not feature-gated) |
 | `src/compress.rs` | Fully qualified `Truncate` call | **Active**; no behavior change |
 | `src/pke.rs` | New `from_generated_*` constructor(s), absent upstream | **Active** (always compiled) |
@@ -37,8 +37,10 @@ Their current callers are in `nexusq-core` (`crypto/kem.rs` and
 
 - `nexusq-kernels` only adds the `nexusq-kernels` dependency.
 - `experimental-kernels` gates every call into `nexusq_kernels::`
-  (`src/algebra.rs`). The kernels are correctness-oriented reference code, not a
-  constant-time production implementation.
+  (`src/algebra.rs`), including the SHAKE128 x4 batch used by
+  `matrix_sample_ntt` and the NTT, inverse NTT and `MultiplyNTTs` operations.
+  The kernels are correctness-oriented reference code, not a constant-time
+  production implementation.
 
 ## Reproducing the diff
 
