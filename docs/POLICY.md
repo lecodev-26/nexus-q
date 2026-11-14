@@ -227,6 +227,44 @@ There are two ways to test a policy:
 Both are useful. Use unit tests for rule semantics and integration
 tests for the wiring.
 
+## Property-based security invariants
+
+`crates/nexusq-core/tests/policy_proptest.rs` uses `proptest` to generate
+operations, key and identity identifiers, resource targets, and context
+boundaries. It checks these invariants over generated cases:
+
+- An empty attached set always returns `NoDecision` and never permits.
+- Any applicable deny takes precedence over all matching allows, whether
+  those allows appear before or after it.
+- Rules for a different operation cannot change the current decision.
+- Repeated evaluation of the same immutable set/context is deterministic.
+- Key- and identity-specific targets never authorize a different or missing
+  resource.
+- Missing caller or attestation data cannot satisfy guarded rules.
+- `NotBefore` is inclusive and `NotAfter` is exclusive at exact timestamp
+  boundaries, including generated large `u64` values.
+- Concurrent readers of one immutable `PolicySet` observe stable decisions.
+
+The property suite is part of the existing workspace CI command
+`cargo test --workspace --locked`; no separate workflow is required. Each
+property runs 256 cases by default. Proptest prints the failing seed and case;
+replay with `PROPTEST_RNG_SEED` and, when useful, `PROPTEST_CASES`. Persisted
+counterexamples belong in the proptest regression directory associated with
+this integration-test target and should be committed with the regression fix.
+
+The concurrency property covers concurrent read-only evaluation of a shared
+snapshot. `PolicySet::evaluate` takes `&self`, while `add` requires `&mut
+self`; Rust's ownership and borrowing rules prevent a safe concurrent mutation
+of that same snapshot. This does not test application-level synchronization,
+concurrent vault writes, or policy replacement across sessions. Those require
+separate integration tests if mutable shared policy management is introduced.
+
+These generated properties complement, rather than replace, example-based
+unit tests, end-to-end session enforcement tests, fuzzing, or review of the
+policy context supplied by callers. In particular, they do not establish that
+a caller identity or hardware-attestation value is authentic; the current
+session integration limitations above still apply.
+
 Reference
 
 · docs/SECURITY_MODEL.md §5.2 — authorization design
