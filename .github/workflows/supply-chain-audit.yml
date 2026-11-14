@@ -1,0 +1,62 @@
+name: NEXUS-Q Supply Chain Inventory
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/**/Cargo.toml'
+      - 'supply-chain/**'
+      - 'deny.toml'
+      - 'docs/security/SUPPLY_CHAIN.md'
+      - '.github/workflows/supply-chain-audit.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/**/Cargo.toml'
+      - 'supply-chain/**'
+      - 'deny.toml'
+      - 'docs/security/SUPPLY_CHAIN.md'
+      - '.github/workflows/supply-chain-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nexusq-supply-chain-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-trust-and-unsafe-inventory:
+    name: Cargo dependency trust and unsafe inventory
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install pinned supply-chain tools
+        run: |
+          cargo install --locked cargo-vet --version 0.10.3
+          cargo install --locked cargo-geiger --version 0.14.0
+      - name: Enforce the versioned cargo-vet dependency policy
+        run: cargo vet --locked check
+      - name: Generate cargo-geiger JSON inventory
+        run: |
+          mkdir -p artifacts/supply-chain
+          cargo geiger --all-features --all-targets --output-format Json --locked \
+            > artifacts/supply-chain/cargo-geiger.json
+          test -s artifacts/supply-chain/cargo-geiger.json
+      - name: Upload cargo-geiger inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-geiger-${{ github.sha }}
+          path: artifacts/supply-chain/cargo-geiger.json
+          if-no-files-found: error
+          retention-days: 30

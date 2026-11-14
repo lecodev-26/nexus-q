@@ -104,3 +104,12 @@ security analysis.
 ## Dylint cryptographic rules
 
 NEXUS-Q also maintains supplemental, heuristic Dylint rules for cryptographic code. They run in the dedicated `NEXUS-Q Dylint Crypto Rules` workflow with an isolated pinned nightly toolchain; they do not alter Fast CI or the workspace MSRV. See [Dylint cryptographic rules](DYLINT_CRYPTO_RULES.md) for scope, limitations, false-positive guidance, and the manual invocation command.
+
+## Dependency trust and unsafe-code inventory
+
+Rust dependency trust is tracked separately from source-code SAST. The
+`NEXUS-Q Supply Chain Inventory` workflow runs the versioned `cargo-vet`
+policy and uploads a `cargo-geiger` JSON inventory. The initial cargo-vet
+exemptions are explicitly unaudited baseline entries, not security approvals.
+See [Rust dependency trust and unsafe-code inventory](SUPPLY_CHAIN.md) for the
+review process, policy semantics, artifact handling, and tool limitations.
