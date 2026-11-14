@@ -1,0 +1,132 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" role="img" aria-label="NEXUS-Q Post-Quantum Cryptographic Security Engine">
+  <title>NEXUS-Q - Post-Quantum Cryptographic Security Engine</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0B0B0B"/>
+      <stop offset="45%" stop-color="#141414"/>
+      <stop offset="100%" stop-color="#000000"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F5E6B8"/>
+      <stop offset="35%" stop-color="#D9B96A"/>
+      <stop offset="65%" stop-color="#B8964A"/>
+      <stop offset="100%" stop-color="#F0D99A"/>
+    </linearGradient>
+    <linearGradient id="goldLine" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#C9A84C" stop-opacity="0"/>
+      <stop offset="30%" stop-color="#E8D9A0"/>
+      <stop offset="70%" stop-color="#C9A84C"/>
+      <stop offset="100%" stop-color="#C9A84C" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#D9B96A" stop-opacity="0.28"/>
+      <stop offset="60%" stop-color="#D9B96A" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#D9B96A" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <style>
+    @keyframes fadeUp { from { opacity:0; transform: translateY(14px); } to { opacity:1; transform: translateY(0); } }
+    @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+    @keyframes shieldFloat { 0%,100% { transform: translateY(0px); } 50% { transform: translateY(-8px); } }
+    @keyframes shieldGlow { 0%,100% { opacity:0.55; } 50% { opacity:1; } }
+    @keyframes keyholePulse { 0%,100% { opacity:0.9; transform: scale(1); } 50% { opacity:1; transform: scale(1.08); } }
+    @keyframes dashMove { to { stroke-dashoffset: -240; } }
+    @keyframes drawLine { 0% { stroke-dashoffset: 1200; opacity:0; } 20% { opacity:1; } 100% { stroke-dashoffset: 0; opacity:1; } }
+    @keyframes shimmer { 0% { transform: translateX(-220px); opacity:0; } 15% { opacity:0.5; } 50% { opacity:0.15; } 100% { transform: translateX(1250px); opacity:0; } }
+    @keyframes blinkDot { 0%,100% { opacity:0.25; } 50% { opacity:1; } }
+    .eyebrow { animation: fadeUp 0.9s ease 0.1s both; }
+    .title { animation: fadeUp 0.9s ease 0.25s both; }
+    .sub1 { animation: fadeUp 0.9s ease 0.45s both; }
+    .sub2 { animation: fadeUp 0.9s ease 0.60s both; }
+    .footer { animation: fadeIn 1s ease 0.9s both; }
+    .shieldWrap { animation: shieldFloat 5s ease-in-out infinite; transform-origin: 910px 340px; }
+    .shieldStroke { animation: shieldGlow 3.2s ease-in-out infinite; }
+    .keyhole { animation: keyholePulse 2.8s ease-in-out infinite; transform-origin: 910px 420px; }
+    .lineDraw { stroke-dasharray: 1200; animation: drawLine 2.2s ease 0.3s both; }
+    .lineDash { stroke-dasharray: 6 14; animation: dashMove 6s linear infinite; }
+    .orbit { animation: fadeIn 1.2s ease 0.2s both; }
+    .dotBlink { animation: blinkDot 2.4s ease-in-out infinite; }
+    .shimmer { animation: shimmer 7s ease-in-out infinite; }
+  </style>
+
+  <!-- FONDO -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#glow)" opacity="0.35"/>
+  <!-- Brillo que cruza -->
+  <rect class="shimmer" x="0" y="0" width="220" height="630" fill="#FFFFFF" opacity="0.12" transform="skewX(-18)"/>
+
+  <!-- CÍRCULOS ORBITALES DETRÁS DEL ESCUDO -->
+  <g class="orbit" fill="none" stroke="#D9B96A" stroke-width="1">
+    <circle cx="905" cy="330" r="265" opacity="0.18"/>
+    <circle cx="905" cy="330" r="205" opacity="0.14"/>
+    <circle cx="905" cy="330" r="155" opacity="0.08"/>
+  </g>
+  <g fill="none" stroke="#FFFFFF" stroke-width="0.6" opacity="0.18">
+    <path d="M 620 210 L 1150 210"/>
+    <path d="M 640 280 L 1150 280"/>
+    <path d="M 620 370 L 1150 370"/>
+  </g>
+
+  <!-- LÍNEAS CURVAS INFERIORES - ANIMADAS -->
+  <g fill="none" stroke="url(#goldLine)" stroke-width="1.6" stroke-linecap="round">
+    <path class="lineDraw" d="M 590 470 C 720 580, 920 610, 1180 485"/>
+    <path class="lineDraw" d="M 610 445 C 750 545, 950 575, 1180 455" style="animation-delay:0.5s" opacity="0.85"/>
+    <path class="lineDraw" d="M 690 405 C 830 495, 1000 515, 1180 410" style="animation-delay:0.7s" opacity="0.6"/>
+  </g>
+  <!-- Puntos que viajan por las curvas -->
+  <g fill="#F5E6B8">
+    <circle r="4.5"><animateMotion dur="5.5s" repeatCount="indefinite" path="M 590 470 C 720 580, 920 610, 1180 485"/></circle>
+    <circle r="3.5"><animateMotion dur="4.2s" repeatCount="indefinite" path="M 610 445 C 750 545, 950 575, 1180 455"/></circle>
+    <circle r="3"><animateMotion dur="6.5s" repeatCount="indefinite" begin="1s" path="M 690 405 C 830 495, 1000 515, 1180 410"/></circle>
+  </g>
+  <!-- Puntos fijos con parpadeo -->
+  <g fill="#E8D9A0">
+    <circle class="dotBlink" cx="650" cy="435" r="4"/>
+    <circle class="dotBlink" cx="830" cy="540" r="4" style="animation-delay:0.6s"/>
+    <circle class="dotBlink" cx="1085" cy="440" r="4" style="animation-delay:1.1s"/>
+    <circle class="dotBlink" cx="760" cy="520" r="3" style="animation-delay:0.3s"/>
+  </g>
+
+  <!-- TEXTO IZQUIERDA -->
+  <g font-family="Inter, Helvetica, Arial, sans-serif">
+    <text class="eyebrow" x="70" y="155" font-size="23" letter-spacing="6" fill="#EDEDED" font-weight="400">NEXUS-Q ECOSYSTEM</text>
+    <text class="title" x="58" y="280" font-size="108" letter-spacing="-2" fill="#FFFFFF" font-weight="800">NEXUS-Q</text>
+    <text class="sub1" x="70" y="362" font-size="42" letter-spacing="0.5" fill="#E8D9A0" font-weight="800">POST-QUANTUM CRYPTOGRAPHIC</text>
+    <text class="sub2" x="70" y="418" font-size="42" letter-spacing="0.5" fill="#E8D9A0" font-weight="800">SECURITY ENGINE</text>
+  </g>
+
+  <!-- LÍNEA DIVISORIA -->
+  <line x1="0" y1="485" x2="1200" y2="485" stroke="#2A2A2A" stroke-width="1"/>
+  <line x1="0" y1="486" x2="1200" y2="486" stroke="#000000" stroke-width="1" opacity="0.4"/>
+
+  <text class="footer" x="70" y="538" font-family="Inter, Helvetica, Arial, sans-serif" font-size="19" letter-spacing="3.2" fill="#D9C98A" font-weight="500">RUST  •  ML-KEM  •  ML-DSA  •  OPEN SOURCE</text>
+
+  <!-- ESCUDO -->
+  <g class="shieldWrap">
+    <ellipse cx="910" cy="340" rx="230" ry="210" fill="url(#glow)"/>
+    <g fill="none" stroke="url(#gold)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#soft)" class="shieldStroke">
+      <!-- Exterior -->
+      <path d="M 910 140 C 965 108, 1035 125, 1098 163 L 1098 340 C 1098 435, 1012 505, 910 548 C 808 505, 722 435, 722 340 L 722 163 C 785 125, 855 108, 910 140 Z"/>
+      <!-- Interior -->
+      <path d="M 910 178 C 955 152, 1010 166, 1062 195 L 1062 335 C 1062 415, 992 478, 910 512 C 828 478, 758 415, 758 335 L 758 195 C 810 166, 865 152, 910 178 Z" stroke-width="2.6"/>
+    </g>
+    <!-- Cerradura -->
+    <g class="keyhole" fill="none" stroke="url(#gold)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="910" cy="402" r="26"/>
+      <path d="M 898 420 L 887 478 L 933 478 L 922 420 Z"/>
+    </g>
+    <!-- Brillo en el escudo -->
+    <path d="M 760 200 C 800 170, 860 150, 910 145" fill="none" stroke="#FFFFFF" stroke-width="2" opacity="0.35" stroke-linecap="round"/>
+  </g>
+
+  <!-- Línea de escaneo sutil -->
+  <rect x="0" y="0" width="1200" height="1.5" fill="#E8D9A0" opacity="0.18">
+    <animate attributeName="y" values="0;630;0" dur="9s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0;0.22;0" dur="9s" repeatCount="indefinite"/>
+  </rect>
+</svg>

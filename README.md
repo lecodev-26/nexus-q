@@ -2,12 +2,12 @@
 
 <table align="center" border="0">
 <tr>
-<td><img src="assets/logo.png" alt="NEXUS-Q logo" width="132"></td>
+<td><img src="assets/nexusqlogo.png" alt="NEXUS-Q logo" width="144"></td>
 <td><strong>NEXUS-Q is an open-source post-quantum cryptographic engine written in Rust</strong></td>
 </tr>
 </table>
 
-<img src="assets/banner.jpg" alt="NEXUS-Q: post-quantum cryptographic security engine" width="100%">
+<img src="assets/nexus-q-banner-animado.svg" alt="NEXUS-Q animated post-quantum cryptographic security engine banner" width="100%">
 
 [![Fast CI](https://github.com/lecodev-26/nexus-q/actions/workflows/ci.yml/badge.svg)](https://github.com/lecodev-26/nexus-q/actions/workflows/ci.yml)
 [![Dependency audit (manual)](https://github.com/lecodev-26/nexus-q/actions/workflows/audit-ci.yml/badge.svg)](https://github.com/lecodev-26/nexus-q/actions/workflows/audit-ci.yml)
