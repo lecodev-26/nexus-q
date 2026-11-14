@@ -5,11 +5,12 @@ dylint_linting::dylint_library!();
 
 extern crate rustc_hir;
 extern crate rustc_lint;
+extern crate rustc_lint_defs;
 extern crate rustc_session;
 
 use rustc_hir::{BinOpKind, Expr, ExprKind, Item, ItemKind};
-use rustc_lint::{LateContext, LateLintPass};
-use rustc_session::{declare_lint, impl_lint_pass};
+use rustc_lint::{LateContext, LateLintPass, LintContext};
+use rustc_lint_defs::{declare_lint, impl_lint_pass};
 
 // These checks are intentionally heuristic. They flag review candidates, not proofs
 // of a vulnerability. See docs/security/DYLINT_CRYPTO_RULES.md for scope and limits.
@@ -53,11 +54,10 @@ impl<'tcx> LateLintPass<'tcx> for NexusqCryptoLints {
             && let Ok(snippet) = cx.sess().source_map().span_to_snippet(expr.span)
         {
             if looks_secret_bearing(&snippet) {
-                cx.span_lint(
-                    NEXUSQ_CRYPTO_SECRET_COMPARISON,
+                cx.sess().dcx().struct_span_warn(
                     expr.span,
                     "review this equality comparison: secret-bearing values should use a constant-time comparison such as `subtle::ConstantTimeEq`",
-                );
+                ).emit();
             }
             let _ = (lhs, rhs);
         }
@@ -71,11 +71,10 @@ impl<'tcx> LateLintPass<'tcx> for NexusqCryptoLints {
                     .span_to_filename(expr.span)
                     .to_string();
                 if is_crypto_source_path(&path) {
-                    cx.span_lint(
-                        NEXUSQ_CRYPTO_UNWRAP_EXPECT,
+                    cx.sess().dcx().struct_span_warn(
                         expr.span,
                         "avoid panic-based error handling in cryptographic code; propagate or map the error instead",
-                    );
+                    ).emit();
                 }
             }
             let _ = (receiver, args);
@@ -83,7 +82,7 @@ impl<'tcx> LateLintPass<'tcx> for NexusqCryptoLints {
     }
 
     fn check_item(&mut self, cx: &LateContext<'tcx>, item: &'tcx Item<'tcx>) {
-        if !matches!(item.kind, ItemKind::Fn(..)) {
+        if !matches!(item.kind, ItemKind::Fn { .. }) {
             return;
         }
         let Ok(snippet) = cx.sess().source_map().span_to_snippet(item.span) else {
@@ -93,11 +92,10 @@ impl<'tcx> LateLintPass<'tcx> for NexusqCryptoLints {
         // in source text to common AEAD encryption calls. Variable/data-flow reuse is not
         // inferred by this first version.
         if has_reused_nonce_literals(&snippet) {
-            cx.span_lint(
-                NEXUSQ_CRYPTO_NONCE_LITERAL_REUSE,
+            cx.sess().dcx().struct_span_warn(
                 item.span,
                 "the same explicit nonce literal appears in multiple encryption call sites in this item; use a fresh nonce for each encryption under a key",
-            );
+            ).emit();
         }
     }
 }
