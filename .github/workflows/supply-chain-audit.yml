@@ -48,9 +48,24 @@ jobs:
       - name: Enforce the versioned cargo-vet dependency policy
         run: cargo vet check
       - name: Generate cargo-geiger JSON inventory
+        shell: bash
         run: |
-          mkdir -p artifacts/supply-chain
-          cargo geiger --all-features --all-targets --output-format Json --locked \
+          set -euo pipefail
+          mkdir -p artifacts/supply-chain/per-package
+          cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[].name' \
+            | sort -u > artifacts/supply-chain/workspace-packages.txt
+
+          while IFS= read -r package; do
+            echo "Scanning workspace package: ${package}"
+            cargo geiger --package "${package}" --all-features --all-targets \
+              --output-format Json --locked \
+              > "artifacts/supply-chain/per-package/${package}.json"
+            test -s "artifacts/supply-chain/per-package/${package}.json"
+          done < artifacts/supply-chain/workspace-packages.txt
+
+          jq -s '{format_version: 1, packages: .}' \
+            artifacts/supply-chain/per-package/*.json \
             > artifacts/supply-chain/cargo-geiger.json
           test -s artifacts/supply-chain/cargo-geiger.json
       - name: Upload cargo-geiger inventory

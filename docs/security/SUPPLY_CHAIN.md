@@ -25,7 +25,7 @@ When adding or updating a third-party dependency:
 
 ## Cargo-geiger inventory
 
-The GitHub Actions workflow pins `cargo-geiger` to 0.14.0 and generates JSON for all workspace features and targets. Each successful run uploads `cargo-geiger.json` as an artifact named with the validated commit SHA; artifacts are retained for 30 days.
+The GitHub Actions workflow pins `cargo-geiger` to 0.14.0. Because the root manifest is a virtual workspace and cargo-geiger accepts one package root per invocation, the workflow enumerates every root-workspace package with Cargo metadata, scans each package with all features and targets enabled, and combines the per-package JSON reports into `cargo-geiger.json`. Each successful run uploads that aggregate as an artifact named with the validated commit SHA; artifacts are retained for 30 days.
 
 Treat the report as an inventory and triage aid only:
 
