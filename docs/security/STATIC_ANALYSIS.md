@@ -28,7 +28,7 @@ to one language:
 | --- | --- | --- |
 | Rust | `none` | Rust source without invoking a full Cargo build |
 | C/C++ | `none` | Native backend and C/C++ SDK source |
-| Go | `manual` | Go SDK and CIRCL adapter modules, built with Go 1.22.0 |
+| Go | `manual` | Go SDK and CIRCL adapter modules, built with Go 1.25.0 |
 | Python | interpreted | Repository Python tooling and scripts |
 | GitHub Actions | interpreted | Workflow definitions |
 
