@@ -1,4 +1,5 @@
 #![feature(rustc_private)]
+#![feature(default_field_values)]
 #![allow(unused_extern_crates)]
 
 dylint_linting::dylint_library!();
@@ -68,8 +69,8 @@ impl<'tcx> LateLintPass<'tcx> for NexusqCryptoLints {
                 let path = cx
                     .sess()
                     .source_map()
-                    .span_to_filename(expr.span)
-                    .to_string();
+                    .span_to_filename(expr.span);
+                let path = format!("{path:?}");
                 if is_crypto_source_path(&path) {
                     cx.sess().dcx().struct_span_warn(
                         expr.span,
