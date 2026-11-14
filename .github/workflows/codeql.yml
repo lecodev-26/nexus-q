@@ -1,13 +1,6 @@
 name: NEXUS-Q CodeQL SAST
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened, ready_for_review]
-  schedule:
-    - cron: '23 5 * * 1'
   workflow_dispatch:
 
 permissions:
