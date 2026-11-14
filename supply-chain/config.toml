@@ -1708,3 +1708,77 @@ notes = "Initial issue #89 baseline; not audited. Review and replace with a reco
 version = "1.0.23"
 criteria = "safe-to-deploy"
 notes = "Initial issue #89 baseline; not audited. Review and replace with a recorded audit or trusted import."
+
+# These are first-party NEXUS-Q packages. They intentionally use local workspace
+# or path sources and must not be audited as published crates.io packages.
+[policy.nexusq]
+audit-as-crates-io = false
+notes = "First-party NEXUS-Q workspace package; local source is authoritative."
+
+[policy.nexusq-admin]
+audit-as-crates-io = false
+notes = "First-party NEXUS-Q workspace package; local source is authoritative."
+
+[policy.nexusq-c]
+audit-as-crates-io = false
+notes = "First-party NEXUS-Q workspace package; local source is authoritative."
+
+[policy.nexusq-cli]
+audit-as-crates-io = false
+notes = "First-party NEXUS-Q workspace package; local source is authoritative."
+
+[policy.nexusq-core]
+audit-as-crates-io = false
+notes = "First-party NEXUS-Q workspace package; local source is authoritative."
+
+[policy.nexusq-enrollment]
+audit-as-crates-io = false
+notes = "First-party NEXUS-Q workspace package; local source is authoritative."
+
+[policy.nexusq-ha]
+audit-as-crates-io = false
+notes = "First-party NEXUS-Q workspace package; local source is authoritative."
+
+[policy.nexusq-hsm]
+audit-as-crates-io = false
+notes = "First-party NEXUS-Q workspace package; local source is authoritative."
+
+[policy.nexusq-kernels]
+audit-as-crates-io = false
+notes = "First-party NEXUS-Q workspace package; local source is authoritative."
+
+[policy.nexusq-ml-dsa]
+audit-as-crates-io = false
+notes = "First-party NEXUS-Q workspace package; local source is authoritative."
+
+[policy.nexusq-ml-kem]
+audit-as-crates-io = false
+notes = "First-party NEXUS-Q workspace package; local source is authoritative."
+
+[policy.nexusq-native-backend]
+audit-as-crates-io = false
+notes = "First-party NEXUS-Q path package; local source is authoritative."
+
+[policy.nexusq-ocsp]
+audit-as-crates-io = false
+notes = "First-party NEXUS-Q workspace package; local source is authoritative."
+
+[policy.nexusq-pki-cluster]
+audit-as-crates-io = false
+notes = "First-party NEXUS-Q workspace package; local source is authoritative."
+
+[policy.nexusq-py]
+audit-as-crates-io = false
+notes = "First-party NEXUS-Q workspace package; local source is authoritative."
+
+[policy.nexusq-server]
+audit-as-crates-io = false
+notes = "First-party NEXUS-Q workspace package; local source is authoritative."
+
+[policy.nexusq-tsa]
+audit-as-crates-io = false
+notes = "First-party NEXUS-Q workspace package; local source is authoritative."
+
+[policy.nexusq-x509]
+audit-as-crates-io = false
+notes = "First-party NEXUS-Q workspace package; local source is authoritative."
