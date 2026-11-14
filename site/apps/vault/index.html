@@ -263,6 +263,7 @@ section{padding:clamp(48px,6vw,76px) 0}.eyebrow{font:700 12px "Instrument Sans",
 .shot img{display:block;width:100%;height:auto;aspect-ratio:1.47;object-fit:cover}
 .shot figcaption{padding:12px 16px;color:var(--mut);font-size:14px}
 .app-note{color:var(--mut);font-size:14px;margin-top:20px}
+.vault-brand{display:block;width:112px;height:112px;object-fit:contain;margin:0 0 18px;background:#fff;padding:10px;border-radius:12px}
 @media(max-width:760px){.platform-grid,.shot-grid{grid-template-columns:1fr}.app-copy{padding:20px}}
 </style>
 
@@ -299,6 +300,7 @@ try{if(localStorage.getItem('nq-analytics-consent')==='granted')window.nqLoadGTM
 <article class="card app-shell rv">
 <img class="app-banner" src="/assets/vault/banner.webp" srcset="/assets/vault/banner-640.webp 640w, /assets/vault/banner-1280.webp 1280w" sizes="(max-width: 700px) 100vw, 660px" alt="NEXUS-Q Vault application banner" width="1600" height="900" loading="lazy" decoding="async">
 <div class="app-copy">
+<img class="vault-brand" src="/assets/vault/logo.webp" alt="NEXUS-Q Vault" width="112" height="112" loading="lazy" decoding="async">
 <span class="chip">v0.2.0 · Early access · 13 Nov 2026</span>
 <h3 style="font-size:clamp(28px,4vw,44px);margin:18px 0 10px">NEXUS-Q Vault</h3>
 <p style="color:var(--mut);max-width:72ch">Encrypt and decrypt individual files, create authenticated encrypted folder vaults, and back up or restore vault keys. Folder vaults use an authenticated encrypted manifest and encrypted objects. The original source files are retained.</p>
