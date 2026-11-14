@@ -103,7 +103,7 @@ not replace, review, tests, fuzzing, dependency auditing, and platform-specific
 security analysis.
 ## Dylint cryptographic rules
 
-NEXUS-Q also maintains supplemental, heuristic Dylint rules for cryptographic code. They run in the dedicated `NEXUS-Q Dylint Crypto Rules` workflow with an isolated pinned nightly toolchain; they do not alter Fast CI or the workspace MSRV. See [Dylint cryptographic rules](DYLINT_CRYPTO_RULES.md) for scope, limitations, false-positive guidance, and the manual invocation command.
+NEXUS-Q also maintains supplemental, heuristic Dylint rules for cryptographic code. They run in the dedicated `NEXUS-Q Dylint Crypto Rules` workflow with an isolated pinned nightly toolchain; they do not alter Fast CI or the workspace MSRV. See [Dylint cryptographic rules](DYLINT_CRYPTO_RULES.md) for scope, limitations, false-positive guidance, and the manual invocation command. The reviewed authentication and secret-equality paths are recorded in the [constant-time comparison inventory](CONSTANT_TIME_COMPARISONS.md); functional tests and a clean lint run are not proof of constant-time execution.
 
 ## Dependency trust and unsafe-code inventory
 

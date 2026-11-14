@@ -65,6 +65,15 @@ impl<'tcx> LateLintPass<'tcx> for NexusqCryptoLints {
 
         if let ExprKind::MethodCall(segment, receiver, args, _) = expr.kind {
             let method = segment.ident.as_str();
+            if matches!(method, "eq" | "ne")
+                && let Ok(snippet) = cx.sess().source_map().span_to_snippet(expr.span)
+                && looks_secret_bearing(&snippet)
+            {
+                cx.sess().dcx().struct_span_warn(
+                    expr.span,
+                    "review this equality method call: secret-bearing values should use a constant-time comparison such as `subtle::ConstantTimeEq`",
+                ).emit();
+            }
             if matches!(method, "unwrap" | "expect") {
                 let path = cx
                     .sess()
@@ -108,9 +117,32 @@ fn is_crypto_source_path(path: &str) -> bool {
 
 fn looks_secret_bearing(snippet: &str) -> bool {
     let lower = snippet.to_ascii_lowercase();
-    ["secret", "private_key", "privatekey", "mac", "token", "tag"]
-        .iter()
-        .any(|needle| lower.contains(needle))
+    let identifiers = lower.split(|character: char| {
+        !character.is_ascii_alphanumeric() && character != '_'
+    });
+    identifiers.into_iter().any(|identifier| {
+        matches!(
+            identifier,
+            "secret"
+                | "private_key"
+                | "privatekey"
+                | "secret_key"
+                | "secretkey"
+                | "mac"
+                | "token"
+                | "tag"
+                | "seed"
+                | "password"
+                | "dk_pke"
+                | "decapsulation_key"
+                | "decapsulationkey"
+        ) || identifier.starts_with("secret_")
+            || identifier.starts_with("private_")
+            || identifier.starts_with("token_")
+            || identifier.ends_with("_mac")
+            || identifier.ends_with("_token")
+            || identifier.ends_with("_tag")
+    }) || lower.contains(".z")
 }
 
 fn has_reused_nonce_literals(snippet: &str) -> bool {
@@ -156,12 +188,29 @@ mod tests {
     fn flags_secret_named_equality_operands() {
         assert!(looks_secret_bearing("secret_key == candidate"));
         assert!(looks_secret_bearing("expected_mac != actual_mac"));
+        assert!(looks_secret_bearing("seed == candidate"));
+        assert!(looks_secret_bearing("dk_pke == candidate"));
+    }
+
+    #[test]
+    fn flags_secret_field_equality_method_calls() {
+        assert!(looks_secret_bearing("self.z.eq(&other.z)"));
+        assert!(looks_secret_bearing("secret_seed.ne(&candidate_seed)"));
     }
 
     #[test]
     fn allows_public_value_comparisons() {
         assert!(!looks_secret_bearing("version == supported_version"));
         assert!(!looks_secret_bearing("left == right"));
+        assert!(!looks_secret_bearing("version.eq(&supported_version)"));
+    }
+
+    #[test]
+    fn positive_and_negative_fixtures_cover_secret_and_public_equality() {
+        let positive = include_str!("../fixtures/positive.rs");
+        let negative = include_str!("../fixtures/negative.rs");
+        assert!(positive.lines().any(|line| looks_secret_bearing(line)));
+        assert!(!negative.lines().any(|line| looks_secret_bearing(line)));
     }
 
     #[test]

@@ -178,7 +178,11 @@ where
     P: KemParams,
 {
     fn eq(&self, other: &Self) -> bool {
-        self.dk_pke.ct_eq(&other.dk_pke).into() && self.ek.eq(&other.ek) && self.z.eq(&other.z)
+        // The encapsulation key is public metadata and may use ordinary equality.
+        // Compare both secret components as Choices before converting the result to bool:
+        // short-circuiting between secret fields would leak which component differs.
+        self.ek == other.ek
+            && bool::from(self.dk_pke.ct_eq(&other.dk_pke).and(self.z.ct_eq(&other.z)))
     }
 }
 
