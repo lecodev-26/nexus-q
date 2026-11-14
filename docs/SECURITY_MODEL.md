@@ -454,6 +454,10 @@ Threats that the security model **cannot** mitigate in v1.0:
 
 ---
 
+### 10.1 STRIDE assessment and evidence matrix
+
+The implementation-linked STRIDE assessment records actors, assets, trust boundaries, attack surfaces, abuse cases, controls, repository test/evidence references, and residual risks. It is maintained in [`STRIDE_THREAT_MODEL.md`](STRIDE_THREAT_MODEL.md). The assessment is a living design review, not an independent security audit or certification.
+
 ## 11. Open questions
 
 - [ ] Concrete timeout values for sessions (per platform)

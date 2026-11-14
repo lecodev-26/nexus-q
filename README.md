@@ -460,6 +460,7 @@ User-facing documentation starts at [`docs/user/README.md`](docs/user/README.md)
 | [CRYPTOGRAPHY](docs/CRYPTOGRAPHY.md) | Algorithms and rules |
 | [KEY_MANAGEMENT](docs/KEY_MANAGEMENT.md) | Key lifecycle |
 | [SECURITY_MODEL](docs/SECURITY_MODEL.md) | Security guarantees |
+| [STRIDE_THREAT_MODEL](docs/STRIDE_THREAT_MODEL.md) | STRIDE abuse cases, controls, evidence, and residual risks |
 | [STORAGE](docs/STORAGE.md) | Persistent formats |
 | [API](docs/API.md) | Public interfaces |
 | [POLICY](docs/POLICY.md) | Access control engine |
