@@ -1,0 +1,34 @@
+name: NEXUS-Q Dylint Crypto Rules
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tools/dylint/**'
+      - 'crates/**/*.rs'
+      - '.github/workflows/dylint-crypto.yml'
+      - 'docs/security/DYLINT_CRYPTO_RULES.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nexusq-dylint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  crypto-lints:
+    name: Dylint crypto rules
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned nightly toolchain
+        run: rustup toolchain install nightly-2026-11-01 --component rustc-dev --component rust-src --component llvm-tools-preview --profile minimal
+      - name: Install Dylint tools
+        run: cargo +nightly-2026-11-01 install cargo-dylint --version 6.4.0 --locked && cargo +nightly-2026-11-01 install dylint-link --version 6.4.0 --locked
+      - name: Test lint heuristics and fixtures
+        run: cargo +nightly-2026-11-01 test --manifest-path tools/dylint/nexusq-crypto-lints/Cargo.toml
+      - name: Run NEXUS-Q crypto lints
+        run: cargo +nightly-2026-11-01 dylint --path tools/dylint/nexusq-crypto-lints -- --workspace --all-targets

@@ -101,3 +101,6 @@ constant-time behavior, memory safety, cryptographic correctness, certification,
 or completion of an independent security audit. CodeQL complements, but does
 not replace, review, tests, fuzzing, dependency auditing, and platform-specific
 security analysis.
+## Dylint cryptographic rules
+
+NEXUS-Q also maintains supplemental, heuristic Dylint rules for cryptographic code. They run in the dedicated `NEXUS-Q Dylint Crypto Rules` workflow with an isolated pinned nightly toolchain; they do not alter Fast CI or the workspace MSRV. See [Dylint cryptographic rules](DYLINT_CRYPTO_RULES.md) for scope, limitations, false-positive guidance, and the manual invocation command.
