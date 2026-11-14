@@ -42,3 +42,9 @@
 .insight-page h1{font-weight:750;letter-spacing:-.055em}
 .insight-page h2{font-weight:750;letter-spacing:-.045em}
 .insight-page .metric strong{font-weight:700}
+
+/* NEXUS-Q gold identity for editorial, architecture and community routes. */
+:root{--ins-accent:#d9b96a;--ins-violet:#f0d99a}
+.insight-page .btn.primary{background:linear-gradient(135deg,#f0d99a,#c9a84c);color:#17130a;border-color:#c9a84c;box-shadow:0 3px 14px #c9a84c26}
+.insight-page .btn.primary:hover{background:linear-gradient(135deg,#f7e8bd,#d9b96a);color:#17130a}
+.insight-page .card:hover,.insight-page .layer:hover,.insight-page .metric:hover{border-color:color-mix(in srgb,var(--ins-accent) 65%,var(--ins-line))}

@@ -45,3 +45,15 @@ body:has(nav) nav .mb[aria-expanded="true"]{background:var(--fg)!important;color
   body:has(nav) nav .links>a{min-height:44px!important;font-size:14px!important}
   body:has(nav) nav .navr>.btn.p{display:inline-flex!important;padding:7px 9px!important;font-size:12px!important}
 }
+
+/* NEXUS-Q gold identity: shared by the homepage, apps and product pages. */
+:root{--acc:#d9b96a!important;--acc2:#f0d99a!important;--warn:#e8bd73!important}
+:root[data-theme="dark"]{--acc:#d9b96a!important;--acc2:#f0d99a!important;--warn:#e8bd73!important}
+:root[data-theme="light"]{--acc:#9b7428!important;--acc2:#c9a84c!important;--warn:#99651d!important}
+@media(prefers-color-scheme:light){:root:not([data-theme="dark"]){--acc:#9b7428!important;--acc2:#c9a84c!important;--warn:#99651d!important}}
+body:has(nav) nav .logo img{border:1px solid color-mix(in srgb,var(--acc) 55%,transparent);box-shadow:0 0 14px color-mix(in srgb,var(--acc) 18%,transparent)}
+.btn.p,.btn.primary,.sdk-link.primary{background:linear-gradient(135deg,#f0d99a,#c9a84c)!important;border-color:#c9a84c!important;color:#17130a!important;box-shadow:0 3px 14px #c9a84c26}
+.btn.p:hover,.btn.primary:hover,.sdk-link.primary:hover{background:linear-gradient(135deg,#f7e8bd,#d9b96a)!important;border-color:#f0d99a!important;color:#17130a!important}
+.theme-choice[aria-pressed="true"]{background:var(--acc)!important;border-color:var(--acc)!important;color:#17130a!important}
+.copy:hover,.tab[aria-selected="true"],.chip b{border-color:var(--acc)!important}
+.community-link:hover,.docs a:hover,.sdk-card:hover{border-color:var(--acc)!important}
