@@ -1,0 +1,81 @@
+name: NEXUS-Q Coverage
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref or commit SHA to measure'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nexusq-coverage-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coverage:
+    name: Workspace line coverage and security-module thresholds
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-llvm-cov
+        run: cargo install cargo-llvm-cov --version 0.9.1 --locked
+      - name: Collect workspace coverage
+        run: |
+          mkdir -p coverage
+          cargo llvm-cov --workspace --all-targets --locked --lcov --output-path coverage/lcov.info
+          cargo llvm-cov report --html --output-dir coverage/html
+      - name: Evaluate coverage thresholds and prepare report
+        id: evaluate
+        shell: bash
+        run: |
+          set +e
+          python3 .github/scripts/check-coverage.py coverage/lcov.info .github/coverage-thresholds.json > coverage/summary.md
+          status=$?
+          cat coverage/summary.md >> "$GITHUB_STEP_SUMMARY"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Upload per-file coverage report
+        id: upload-coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexusq-coverage-${{ github.sha }}
+          path: coverage/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Link report in workflow summary
+        if: always()
+        env:
+          ARTIFACT_URL: ${{ steps.upload-coverage.outputs.artifact-url }}
+        run: |
+          if [ -n "$ARTIFACT_URL" ]; then
+            echo "[Open per-file HTML and LCOV coverage report]($ARTIFACT_URL)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Coverage artifact upload did not produce a report URL." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Enforce coverage thresholds
+        if: always()
+        env:
+          COVERAGE_STATUS: ${{ steps.evaluate.outputs.status }}
+        run: |
+          if [ "$COVERAGE_STATUS" != "0" ]; then
+            echo "Coverage thresholds failed (or report generation was unsuccessful)."
+            exit 1
+          fi
