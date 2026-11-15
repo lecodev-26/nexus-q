@@ -4,6 +4,10 @@ Status (2026-10-19): **integrated into `main` as an experimental, standalone nat
 
 This file is a technical design/evidence record. Older measurements and verdicts below remain historical and must be interpreted against their exact commit and harness. The former Issue #48 is closed; its checklist is retained for historical traceability, not as an active task tracker.
 
+## Independent audit boundary
+
+The native backend is excluded from the NEXUS-Q v4.1.2 independent external audit. This is a maintainer-approved scope decision, not an audit result or security approval. The default RustCrypto provider remains the v4.1.2 audit target. The native implementation remains experimental and opt-in, and must not be enabled by default or treated as production-ready. A separate scope, platform/configuration inventory, and independent review are required before production consideration; see [`docs/security/NATIVE_BACKEND_AUDIT_SCOPE.md`](../security/NATIVE_BACKEND_AUDIT_SCOPE.md).
+
 ## Architecture
 
 ```
