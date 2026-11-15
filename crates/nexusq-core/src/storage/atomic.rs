@@ -5,6 +5,10 @@ use std::io;
 use std::path::Path;
 
 /// Atomically replaces destination with source on supported filesystems.
+// SAFETY: This is the narrowly scoped Windows file-replacement FFI exception to
+// the core crate's deny-by-default unsafe policy. Its pointer and ABI invariants
+// are documented at the declaration and call site below.
+#[cfg_attr(windows, allow(unsafe_code))]
 pub(crate) fn replace_file(source: &Path, destination: &Path) -> io::Result<()> {
     #[cfg(windows)]
     {
@@ -14,6 +18,8 @@ pub(crate) fn replace_file(source: &Path, destination: &Path) -> io::Result<()> 
         const MOVEFILE_WRITE_THROUGH: u32 = 0x8;
 
         #[link(name = "Kernel32")]
+        // SAFETY: The declaration mirrors the Windows Kernel32 ABI; callers below
+        // pass NUL-terminated UTF-16 buffers and valid flag values.
         unsafe extern "system" {
             fn MoveFileExW(existing: *const u16, new: *const u16, flags: u32) -> i32;
         }
@@ -24,6 +30,8 @@ pub(crate) fn replace_file(source: &Path, destination: &Path) -> io::Result<()> 
             .encode_wide()
             .chain(once(0))
             .collect();
+        // SAFETY: Both vectors are live, NUL-terminated UTF-16 buffers for the
+        // duration of the call, and the flags are valid MoveFileExW options.
         let result = unsafe {
             MoveFileExW(
                 source.as_ptr(),

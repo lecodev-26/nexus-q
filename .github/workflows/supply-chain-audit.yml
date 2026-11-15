@@ -7,9 +7,18 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'crates/**/Cargo.toml'
+      - 'crates/**/*.rs'
+      - 'crates/nexusq-native-backend/**'
+      - 'vendor/**/*.rs'
+      - 'crates/nexusq-native-backend/Cargo.lock'
+      - 'arena/runners/**/Cargo.toml'
+      - 'arena/runners/**/Cargo.lock'
+      - 'arena/runners/**/*.rs'
+      - 'tools/**/*.rs'
       - 'supply-chain/**'
       - 'deny.toml'
       - 'docs/security/SUPPLY_CHAIN.md'
+      - 'docs/security/UNSAFE_CODE_POLICY.md'
       - '.github/workflows/supply-chain-audit.yml'
   pull_request:
     branches: [main]
@@ -17,9 +26,18 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'crates/**/Cargo.toml'
+      - 'crates/**/*.rs'
+      - 'crates/nexusq-native-backend/**'
+      - 'vendor/**/*.rs'
+      - 'crates/nexusq-native-backend/Cargo.lock'
+      - 'arena/runners/**/Cargo.toml'
+      - 'arena/runners/**/Cargo.lock'
+      - 'arena/runners/**/*.rs'
+      - 'tools/**/*.rs'
       - 'supply-chain/**'
       - 'deny.toml'
       - 'docs/security/SUPPLY_CHAIN.md'
+      - 'docs/security/UNSAFE_CODE_POLICY.md'
       - '.github/workflows/supply-chain-audit.yml'
   workflow_dispatch:
 
@@ -34,7 +52,7 @@ jobs:
   dependency-trust-and-unsafe-inventory:
     name: Cargo dependency trust and unsafe inventory
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
         with:
@@ -54,10 +72,22 @@ jobs:
           mkdir -p artifacts/supply-chain/per-package
           cargo metadata --no-deps --format-version 1 \
             | jq -r '.packages[].manifest_path' \
-            | sort -u > artifacts/supply-chain/workspace-manifests.txt
+            > artifacts/supply-chain/workspace-manifests.txt
+
+          # These are deliberately separate Cargo workspaces excluded from the
+          # root workspace; include them so the inventory covers their Rust code.
+          printf '%s\n' \
+            crates/nexusq-native-backend/Cargo.toml \
+            arena/runners/nexusq/Cargo.toml \
+            arena/runners/nexusq-native/Cargo.toml \
+            >> artifacts/supply-chain/workspace-manifests.txt
+          sort -u -o artifacts/supply-chain/workspace-manifests.txt \
+            artifacts/supply-chain/workspace-manifests.txt
 
           while IFS= read -r manifest; do
-            package="$(basename "$(dirname "${manifest}")")"
+            manifest_rel="${manifest#"${GITHUB_WORKSPACE}"/}"
+            package="${manifest_rel%/Cargo.toml}"
+            package="${package//\//-}"
             echo "Scanning workspace manifest: ${manifest}"
             cargo geiger --manifest-path "${manifest}" --all-features --all-targets \
               --output-format Json --locked \

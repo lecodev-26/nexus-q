@@ -6,12 +6,13 @@ This document describes the workflow configuration in .github/workflows/. Workfl
 
 .github/workflows/ci.yml is named **NEXUS-Q Fast CI**. It runs on pushes to main, pull requests targeting main (opened, synchronized, reopened, or marked ready for review), and manual workflow_dispatch with an optional ref or commit SHA.
 
-The workflow checks out recursive submodules and uses Rust 1.88.0 with rustfmt and Clippy. Its workspace job runs:
+The workflow checks out recursive submodules and uses Rust 1.88.0 with rustfmt and Clippy. Its workspace job first enforces the repository-wide unsafe-code `// SAFETY:` source policy with `.github/scripts/check-unsafe-policy.py`, then runs:
 
-1. cargo fmt --all -- --check
-2. cargo check --workspace --all-targets --locked
-3. cargo clippy --workspace --all-targets --locked -- -D warnings
-4. cargo test --workspace --locked
+1. `python3 .github/scripts/check-unsafe-policy.py`
+2. `cargo fmt --all -- --check`
+3. `cargo check --workspace --all-targets --locked`
+4. `cargo clippy --workspace --all-targets --locked -- -D warnings`
+5. `cargo test --workspace --locked`
 
 A successful run is evidence that these configured steps passed for the exact checked-out revision. It does not establish that every standalone crate, SDK, fuzz target, platform, release path, or manually dispatched workflow passed. It is not an independent security audit, certification, or production-readiness assessment.
 
@@ -22,6 +23,7 @@ These workflows are separate from Fast CI. The trigger column reflects the workf
 | Workflow | Trigger | Purpose / boundary |
 |---|---|---|
 | audit-ci.yml | Manual dispatch | Dependency audit and cargo-deny checks. |
+| supply-chain-audit.yml | Relevant Rust source, manifest, lockfile, or supply-chain policy changes; or manual dispatch | cargo-vet trust policy plus a cargo-geiger JSON inventory across the root, native-backend, and Arena runner workspaces. |
 | security-ci.yml | Manual dispatch | Repository security/data-contract checks, secret scanning, and related security validation. |
 | miri.yml | Relevant pull requests, weekly schedule, or manual dispatch | Pinned-nightly Miri run for Rust-side C ABI pointer/string tests; uploads its console output. See [Miri memory-safety checks](security/MIRI.md) for coverage and exclusions. |
 | correctness-interoperability.yml | Manual dispatch | Additional correctness, interoperability, and official/vendored vector suites. |

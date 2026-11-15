@@ -75,6 +75,8 @@ and the configured fuzzing gates. Main-branch fuzz soak is configured for
 
 The repository runs CodeQL SAST for Rust, C/C++, Go, Python, and GitHub Actions. The versioned workflow, query scope, exclusions, local reproduction guidance, and false-positive triage process are documented in [`docs/security/STATIC_ANALYSIS.md`](docs/security/STATIC_ANALYSIS.md). A clean scan is not a guarantee that the code is vulnerability-free.
 
+Project-owned Rust unsafe code is restricted to documented boundaries and requires a nearby `// SAFETY:` justification enforced by Fast CI. The source policy, current inventory, core-crate exception, and `cargo-geiger` dependency-inventory scope are documented in [`docs/security/UNSAFE_CODE_POLICY.md`](docs/security/UNSAFE_CODE_POLICY.md).
+
 ## Scope and limitations
 
 The v4.1.2 independent external audit scope covers the default RustCrypto

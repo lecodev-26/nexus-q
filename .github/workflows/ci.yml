@@ -35,6 +35,8 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - name: Enforce unsafe-code SAFETY policy
+        run: python3 .github/scripts/check-unsafe-policy.py
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Check workspace

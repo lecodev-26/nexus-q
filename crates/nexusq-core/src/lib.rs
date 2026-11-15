@@ -16,7 +16,7 @@
 //! identity types, the policy types and the most used crypto
 //! primitives. Everything else is reachable through the module tree.
 
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 pub mod crypto;
 pub mod error;

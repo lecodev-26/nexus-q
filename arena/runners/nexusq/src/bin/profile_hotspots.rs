@@ -14,21 +14,29 @@ static REALLOCS: AtomicU64 = AtomicU64::new(0);
 static ALLOC_BYTES: AtomicU64 = AtomicU64::new(0);
 static DEALLOC_BYTES: AtomicU64 = AtomicU64::new(0);
 
+// SAFETY: Every allocation operation is forwarded unchanged to `System`; this
+// wrapper only updates independent atomic counters and preserves allocator contracts.
 unsafe impl GlobalAlloc for CountingAllocator {
+    // SAFETY: The GlobalAlloc caller must provide a valid layout; it is forwarded unchanged.
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         ALLOCS.fetch_add(1, Ordering::Relaxed);
         ALLOC_BYTES.fetch_add(layout.size() as u64, Ordering::Relaxed);
+        // SAFETY: `layout` is the valid layout supplied under the GlobalAlloc contract.
         unsafe { System.alloc(layout) }
     }
+    // SAFETY: The GlobalAlloc caller must provide the live pointer/layout pair returned by this allocator.
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         DEALLOCS.fetch_add(1, Ordering::Relaxed);
         DEALLOC_BYTES.fetch_add(layout.size() as u64, Ordering::Relaxed);
+        // SAFETY: The pointer/layout pair is forwarded unchanged under the GlobalAlloc contract.
         unsafe { System.dealloc(ptr, layout) }
     }
+    // SAFETY: The GlobalAlloc caller must provide the live pointer/layout pair returned by this allocator.
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
         REALLOCS.fetch_add(1, Ordering::Relaxed);
         ALLOC_BYTES.fetch_add(new_size as u64, Ordering::Relaxed);
         DEALLOC_BYTES.fetch_add(layout.size() as u64, Ordering::Relaxed);
+        // SAFETY: The pointer, old layout, and new size are forwarded unchanged under the GlobalAlloc contract.
         unsafe { System.realloc(ptr, layout, new_size) }
     }
 }
