@@ -77,6 +77,16 @@ The repository runs CodeQL SAST for Rust, C/C++, Go, Python, and GitHub Actions.
 
 ## Scope and limitations
 
+The v4.1.2 independent external audit scope covers the default RustCrypto
+provider and excludes the experimental native backend, including its opt-in
+`nexusq-core` integration and native artifacts. The native backend remains
+experimental, opt-in, and unaudited; it must not be enabled by default or
+represented as production-ready. Before production consideration, it requires
+a separately agreed independent audit scope and completion of the conditions
+documented in [`docs/security/NATIVE_BACKEND_AUDIT_SCOPE.md`](docs/security/NATIVE_BACKEND_AUDIT_SCOPE.md).
+The default-provider audit boundary and exclusions are recorded in
+[`docs/security/AUDIT_SCOPE.md`](docs/security/AUDIT_SCOPE.md).
+
 NEXUS-Q is software. The software backend does not provide hardware isolation
 from a compromised OS, kernel, hypervisor, or physical attacker. TPM/HSM/Secure
 Element support is an abstraction/future integration point unless a concrete
