@@ -26,17 +26,17 @@ jobs:
       - name: Install pinned cargo-deny
         run: cargo install --locked cargo-deny --version 0.18.4
       - name: Check root workspace dependency policy
-        run: cargo deny --manifest-path Cargo.toml --config deny.toml --locked check
+        run: cargo deny --manifest-path Cargo.toml check --config deny.toml --locked
       - name: Check excluded native backend dependency policy
-        run: cargo deny --manifest-path crates/nexusq-native-backend/Cargo.toml --config deny.toml --locked check
+        run: cargo deny --manifest-path crates/nexusq-native-backend/Cargo.toml check --config deny.toml --locked
       - name: Check excluded native runner dependency policy
-        run: cargo deny --manifest-path arena/runners/nexusq-native/Cargo.toml --config deny.toml --locked check
+        run: cargo deny --manifest-path arena/runners/nexusq-native/Cargo.toml check --config deny.toml --locked
       - name: Prove that a controlled policy violation fails
         shell: bash
         run: |
           set -euo pipefail
           set +e
-          output="$(cargo deny --manifest-path Cargo.toml --config .github/fixtures/cargo-deny/deny.toml --locked check bans 2>&1)"
+          output="$(cargo deny --manifest-path Cargo.toml check --config .github/fixtures/cargo-deny/deny.toml --locked bans 2>&1)"
           status=$?
           set -e
           printf '%s\n' "$output"
