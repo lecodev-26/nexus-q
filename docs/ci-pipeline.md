@@ -27,6 +27,7 @@ These workflows are separate from Fast CI. The trigger column reflects the workf
 | security-ci.yml | Manual dispatch | Repository security/data-contract checks, secret scanning, and related security validation. |
 | miri.yml | Relevant pull requests, weekly schedule, or manual dispatch | Pinned-nightly Miri run for Rust-side C ABI pointer/string tests; uploads its console output. See [Miri memory-safety checks](security/MIRI.md) for coverage and exclusions. |
 | correctness-interoperability.yml | Manual dispatch | Additional correctness, interoperability, and official/vendored vector suites. |
+| fuzz-nightly.yml | Weekly schedule or manual dispatch | Per-target 10-minute campaigns for all registered Rust fuzz targets; restores and updates target corpora and uploads corpus/crash artifacts for 90 days. See [Rust fuzzing guide](../fuzz/README.md). |
 | fuzz-soak.yml | Manual dispatch | Longer sequential fuzz campaigns; not equivalent to compiling the fuzz harness. |
 | native-backend-gate.yml | Manual dispatch | Experimental native backend provenance, differential/constant-time checks, and performance gates. |
 | native-backend-aa-control.yml | Manual dispatch | Informational A/A control for hosted-runner benchmark noise. |
