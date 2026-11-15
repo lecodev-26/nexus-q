@@ -77,9 +77,9 @@ jobs:
           # These are deliberately separate Cargo workspaces excluded from the
           # root workspace; include them so the inventory covers their Rust code.
           printf '%s\n' \
-            crates/nexusq-native-backend/Cargo.toml \
-            arena/runners/nexusq/Cargo.toml \
-            arena/runners/nexusq-native/Cargo.toml \
+            "${GITHUB_WORKSPACE}/crates/nexusq-native-backend/Cargo.toml" \
+            "${GITHUB_WORKSPACE}/arena/runners/nexusq/Cargo.toml" \
+            "${GITHUB_WORKSPACE}/arena/runners/nexusq-native/Cargo.toml" \
             >> artifacts/supply-chain/workspace-manifests.txt
           sort -u -o artifacts/supply-chain/workspace-manifests.txt \
             artifacts/supply-chain/workspace-manifests.txt
