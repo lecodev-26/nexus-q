@@ -1,5 +1,4 @@
-# cargo-deny policy for NEXUS-Q release and CI gates.
-# Keep the policy explicit so dependency changes fail closed.
+# NEXUS-Q dependency policy. Exceptions must be exact, explained, and revisited.
 
 [advisories]
 version = 2
@@ -27,9 +26,29 @@ allow = [
 confidence-threshold = 0.8
 
 [bans]
-multiple-versions = "warn"
+# New duplicate versions fail CI. The exact exceptions below reflect the
+# current graph's incompatible upstream API lines and must not be broadened.
+multiple-versions = "deny"
+multiple-versions-include-dev = true
 wildcards = "deny"
+deny = [
+    { crate = "native-tls", reason = "Network TLS clients must use the configured rustls backend." },
+    { crate = "hyper-tls", reason = "Network TLS clients must use the configured rustls backend." },
+    { crate = "openssl", wrappers = ["josekit"], reason = "The current JOSE implementation requires OpenSSL; no other crate may introduce it." },
+    { crate = "openssl-sys", wrappers = ["openssl"], reason = "OpenSSL's native binding is permitted only through the approved openssl crate dependency." },
+]
+skip = [
+    { crate = "base64@0.23.1", reason = "hyper-util currently requires the 0.23 API while NEXUS-Q and josekit use 0.22; retain until upstream dependency constraints converge." },
+    { crate = "getrandom@0.2.17", reason = "Required by ring 0.17.14; do not remove without replacing or upgrading that TLS/crypto dependency." },
+    { crate = "getrandom@0.3.4", reason = "The workspace's rand_core 0.9 dependency line still uses getrandom 0.3; the newer crypto stack uses 0.4." },
+    { crate = "r-efi@5.3.0", reason = "Required by getrandom 0.3.4; getrandom 0.4 uses r-efi 6." },
+    { crate = "rand@0.9.5", reason = "proptest currently uses rand 0.9 while application crates use rand 0.10; these are incompatible upstream API lines." },
+    { crate = "rand_core@0.9.5", reason = "Several workspace crates still expose rand_core 0.9 while the ML-KEM and newer RustCrypto dependencies use 0.10; migrate deliberately." },
+    { crate = "syn@2.0.119", reason = "Several proc-macro dependencies still require Syn 2 while newer proc-macro dependencies use Syn 3." },
+    { crate = "windows-sys@0.52.0", reason = "Required by ring 0.17.14; the remaining current dependency graph uses windows-sys 0.61." },
+]
 
 [sources]
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 unknown-registry = "deny"
 unknown-git = "deny"

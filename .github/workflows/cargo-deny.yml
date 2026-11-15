@@ -1,0 +1,51 @@
+name: NEXUS-Q Cargo Dependency Policy
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nexusq-cargo-deny-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cargo-deny:
+    name: Enforce dependency policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Install pinned cargo-deny
+        run: cargo install --locked cargo-deny --version 0.18.4
+      - name: Check root workspace dependency policy
+        run: cargo deny --manifest-path Cargo.toml --config deny.toml --locked check
+      - name: Check excluded native backend dependency policy
+        run: cargo deny --manifest-path crates/nexusq-native-backend/Cargo.toml --config deny.toml --locked check
+      - name: Check excluded native runner dependency policy
+        run: cargo deny --manifest-path arena/runners/nexusq-native/Cargo.toml --config deny.toml --locked check
+      - name: Prove that a controlled policy violation fails
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          output="$(cargo deny --manifest-path Cargo.toml --config .github/fixtures/cargo-deny/deny.toml --locked check bans 2>&1)"
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+          if [[ "$status" -eq 0 ]]; then
+            echo "ERROR: cargo-deny accepted the deliberately banned serde dependency."
+            exit 1
+          fi
+          if ! grep -qi 'serde' <<<"$output" || ! grep -qi 'banned' <<<"$output"; then
+            echo "ERROR: cargo-deny failed for a reason other than the controlled serde ban."
+            exit 1
+          fi
+          echo "Controlled policy-violation check passed: cargo-deny rejected serde."

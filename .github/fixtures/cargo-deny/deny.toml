@@ -1,0 +1,4 @@
+# Deliberately invalid policy used to prove that the CI gate rejects a banned
+# crate already present in the root workspace dependency graph.
+[bans]
+deny = ["serde"]

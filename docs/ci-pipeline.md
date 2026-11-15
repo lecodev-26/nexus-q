@@ -22,7 +22,8 @@ These workflows are separate from Fast CI. The trigger column reflects the workf
 
 | Workflow | Trigger | Purpose / boundary |
 |---|---|---|
-| audit-ci.yml | Manual dispatch | Dependency audit and cargo-deny checks. |
+| audit-ci.yml | Manual dispatch | Supplemental cargo-audit checks across the committed lockfiles; cargo-deny enforcement is also provided by the dedicated workflow below. |
+| cargo-deny.yml | Every pull request targeting main, pushes to main, or manual dispatch | Enforces advisory, license, crate-ban, duplicate-version, and source policies across the root workspace and separately locked native workspaces; includes a controlled policy-violation check. |
 | supply-chain-audit.yml | Relevant Rust source, manifest, lockfile, or supply-chain policy changes; or manual dispatch | cargo-vet trust policy plus a cargo-geiger JSON inventory across the root, native-backend, and Arena runner workspaces. |
 | security-ci.yml | Manual dispatch | Repository security/data-contract checks, secret scanning, and related security validation. |
 | miri.yml | Relevant pull requests, weekly schedule, or manual dispatch | Pinned-nightly Miri run for Rust-side C ABI pointer/string tests; uploads its console output. See [Miri memory-safety checks](security/MIRI.md) for coverage and exclusions. |
