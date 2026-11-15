@@ -25,7 +25,7 @@ When adding or updating a third-party dependency:
 
 ## Cargo-geiger inventory
 
-The GitHub Actions workflow pins `cargo-geiger` to 0.14.0. Because the root manifest is a virtual workspace and cargo-geiger accepts one package root per invocation, the workflow enumerates every root-workspace package with Cargo metadata, scans each package with all features and targets enabled, and combines the per-package JSON reports into `cargo-geiger.json`. Each successful run uploads that aggregate as an artifact named with the validated commit SHA; artifacts are retained for 30 days.
+The GitHub Actions workflow pins `cargo-geiger` to 0.14.0. Because the root manifest is a virtual workspace and cargo-geiger accepts one package root per invocation, the workflow enumerates every root-workspace package with Cargo metadata, adds the separately locked `crates/nexusq-native-backend`, `arena/runners/nexusq`, and `arena/runners/nexusq-native` workspaces, scans each package with all features and targets enabled, and combines the per-package JSON reports into `cargo-geiger.json`. Intermediate per-package report filenames include their workspace-relative path to avoid collisions. Each successful run uploads that aggregate as an artifact named with the validated commit SHA; artifacts are retained for 30 days. The workflow is triggered by project Rust source changes as well as manifest, lockfile, and policy changes.
 
 Treat the report as an inventory and triage aid only:
 
@@ -34,7 +34,7 @@ Treat the report as an inventory and triage aid only:
 - Review findings in context, prioritizing project-maintained unsafe blocks, FFI boundaries, cryptographic code, and dependencies with broad exposure.
 - Compare reports across commits and investigate material changes; do not fail CI merely because a crate reports unsafe usage.
 
-The first implementation covers the root Cargo workspace and its resolved dependency graph. Separately locked/excluded native backend and Arena runner workspaces remain covered by their existing dependency-audit jobs and are not silently represented as part of this report.
+The aggregate covers the root Cargo workspace and the separately locked native backend and Arena runner workspaces. The vendored C and assembly sources in the experimental native backend are not interpreted by cargo-geiger; they remain an explicit manual-review boundary documented in `docs/security/NATIVE_BACKEND_AUDIT_SCOPE.md`.
 
 ## Tool versions and ownership
 

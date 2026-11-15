@@ -105,6 +105,10 @@ security analysis.
 
 NEXUS-Q also maintains supplemental, heuristic Dylint rules for cryptographic code. They run in the dedicated `NEXUS-Q Dylint Crypto Rules` workflow with an isolated pinned nightly toolchain; they do not alter Fast CI or the workspace MSRV. See [Dylint cryptographic rules](DYLINT_CRYPTO_RULES.md) for scope, limitations, false-positive guidance, and the manual invocation command. The reviewed authentication and secret-equality paths are recorded in the [constant-time comparison inventory](CONSTANT_TIME_COMPARISONS.md); functional tests and a clean lint run are not proof of constant-time execution.
 
+## Unsafe Rust source policy
+
+Project-owned unsafe Rust sites require a nearby, specific `// SAFETY:` comment. The rule is enforced by the repository-wide Fast CI source gate, which covers Rust code under `crates/`, `arena/`, and `tools/`. The current allowlisted boundaries and the narrowly scoped Windows exception in `nexusq-core` are documented in [Unsafe Rust policy and inventory](UNSAFE_CODE_POLICY.md). This source gate checks comment presence, not soundness.
+
 ## Dependency trust and unsafe-code inventory
 
 Rust dependency trust is tracked separately from source-code SAST. The

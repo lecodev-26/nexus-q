@@ -4,6 +4,8 @@ NEXUS-Q maintains a small Dylint library in `tools/dylint/nexusq-crypto-lints`.
 It runs in its own GitHub Actions workflow with a pinned nightly toolchain; it
 is deliberately separate from Fast CI and does not change the workspace MSRV.
 
+The separate repository-wide `// SAFETY:` comment requirement is enforced by `.github/scripts/check-unsafe-policy.py` in Fast CI, not by Dylint; see [Unsafe Rust policy and inventory](UNSAFE_CODE_POLICY.md). Dylint remains focused on semantic cryptographic review candidates.
+
 ## Rules
 
 - `NEXUSQ_CRYPTO_SECRET_COMPARISON` flags ordinary `==`/`!=` expressions and

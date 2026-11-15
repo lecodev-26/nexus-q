@@ -1018,6 +1018,8 @@ fn atomic_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
     const MOVEFILE_WRITE_THROUGH: u32 = 0x8;
 
     #[link(name = "Kernel32")]
+    // SAFETY: The declaration mirrors the Windows Kernel32 ABI; callers below
+    // pass NUL-terminated UTF-16 buffers and valid flag values.
     unsafe extern "system" {
         fn MoveFileExW(existing: *const u16, new: *const u16, flags: u32) -> i32;
     }
@@ -1028,6 +1030,8 @@ fn atomic_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
         .encode_wide()
         .chain(once(0))
         .collect();
+    // SAFETY: Both vectors are live, NUL-terminated UTF-16 buffers for the
+    // duration of the call, and the flags are valid MoveFileExW options.
     let result = unsafe {
         MoveFileExW(
             source.as_ptr(),

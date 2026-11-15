@@ -166,7 +166,9 @@ macro_rules! mlkem_level {
                 }
                 pub fn decapsulate(&self, ct: &Ciphertext) -> Result<SharedSecret, Error> {
                     let mut ss = SharedSecret([0; SHARED_SECRET_BYTES]);
-                    // SAFETY: all buffers have the exact sizes required by the C API.
+                    // SAFETY: `ss`, `ct`, and `self.0` are live arrays with the exact
+                    // shared-secret, ciphertext, and secret-key sizes declared by this API;
+                    // only `ss` is writable and the three buffers do not overlap.
                     let rc = unsafe { $dec(ss.0.as_mut_ptr(), ct.0.as_ptr(), self.0.as_ptr()) };
                     if rc == 0 {
                         Ok(ss)
@@ -183,7 +185,8 @@ macro_rules! mlkem_level {
                 pub fn encapsulate(&self) -> Result<(Ciphertext, SharedSecret), Error> {
                     let mut ct = Ciphertext([0; CIPHERTEXT_BYTES]);
                     let mut ss = SharedSecret([0; SHARED_SECRET_BYTES]);
-                    // SAFETY: exact-size buffers.
+                    // SAFETY: `ct` and `ss` are distinct writable arrays with the exact
+                    // ciphertext/shared-secret sizes; `self.0` is a live public-key array.
                     let rc = unsafe { $enc(ct.0.as_mut_ptr(), ss.0.as_mut_ptr(), self.0.as_ptr()) };
                     match rc {
                         0 => Ok((ct, ss)),
@@ -211,7 +214,8 @@ macro_rules! mlkem_level {
                 ) -> Result<(Ciphertext, SharedSecret), Error> {
                     let mut ct = Ciphertext([0; CIPHERTEXT_BYTES]);
                     let mut ss = SharedSecret([0; SHARED_SECRET_BYTES]);
-                    // SAFETY: exact-size buffers.
+                    // SAFETY: `ct` and `ss` are distinct output arrays of the C API's exact
+                    // sizes; `self.0` is a live public key and `m` points to its 32-byte input.
                     let rc = unsafe {
                         $encd(
                             ct.0.as_mut_ptr(),
@@ -230,7 +234,8 @@ macro_rules! mlkem_level {
             pub fn generate() -> Result<(DecapsulationKey, EncapsulationKey), Error> {
                 let mut pk = EncapsulationKey([0; PUBLIC_KEY_BYTES]);
                 let mut sk = DecapsulationKey([0; SECRET_KEY_BYTES]);
-                // SAFETY: exact-size buffers.
+                // SAFETY: `pk` and `sk` are distinct writable arrays sized to the C API's
+                // public- and secret-key lengths and remain live for the call.
                 let rc = unsafe { $kp(pk.0.as_mut_ptr(), sk.0.as_mut_ptr()) };
                 if rc == 0 {
                     Ok((sk, pk))
@@ -244,7 +249,8 @@ macro_rules! mlkem_level {
             ) -> Result<(DecapsulationKey, EncapsulationKey), Error> {
                 let mut pk = EncapsulationKey([0; PUBLIC_KEY_BYTES]);
                 let mut sk = DecapsulationKey([0; SECRET_KEY_BYTES]);
-                // SAFETY: exact-size buffers.
+                // SAFETY: `pk` and `sk` are distinct output arrays of the declared key
+                // sizes; `d_z` is a live 64-byte seed input for the duration of the call.
                 let rc = unsafe { $kpd(pk.0.as_mut_ptr(), sk.0.as_mut_ptr(), d_z.as_ptr()) };
                 if rc == 0 {
                     Ok((sk, pk))
@@ -329,7 +335,8 @@ pub mod mldsa65 {
     pub fn generate() -> Result<(SigningKey, VerifyingKey), Error> {
         let mut pk = VerifyingKey([0; PUBLIC_KEY_BYTES]);
         let mut sk = SigningKey([0; SECRET_KEY_BYTES]);
-        // SAFETY: exact-size buffers.
+        // SAFETY: `pk` and `sk` are distinct writable arrays sized to the ML-DSA-65
+        // public- and secret-key lengths and remain live for the call.
         let rc = unsafe { nq_mldsa65_keypair(pk.0.as_mut_ptr(), sk.0.as_mut_ptr()) };
         if rc == 0 {
             Ok((sk, pk))
@@ -341,7 +348,8 @@ pub mod mldsa65 {
     pub fn generate_from_seed(seed: &[u8; 32]) -> Result<(SigningKey, VerifyingKey), Error> {
         let mut pk = VerifyingKey([0; PUBLIC_KEY_BYTES]);
         let mut sk = SigningKey([0; SECRET_KEY_BYTES]);
-        // SAFETY: exact-size buffers.
+        // SAFETY: `pk` and `sk` are distinct output arrays of the declared key sizes;
+        // `seed` is a live 32-byte input for the duration of the C call.
         let rc = unsafe {
             nq_mldsa65_keypair_internal(pk.0.as_mut_ptr(), sk.0.as_mut_ptr(), seed.as_ptr())
         };
@@ -364,7 +372,8 @@ pub mod mldsa65 {
                 return Err(Error::InvalidInput);
             }
             let mut sig = Signature([0; SIGNATURE_BYTES]);
-            // SAFETY: exact-size sig/sk buffers; msg/ctx pointers valid for their lengths.
+            // SAFETY: `sig` and `self.0` are live arrays with the exact signature and
+            // secret-key sizes; `msg` and `ctx` point to their slice lengths, and ctx <= 255.
             let rc = unsafe {
                 nq_mldsa65_signature(
                     sig.0.as_mut_ptr(),
@@ -392,7 +401,8 @@ pub mod mldsa65 {
             pre.extend_from_slice(ctx);
             let rnd = [0u8; 32];
             let mut sig = Signature([0; SIGNATURE_BYTES]);
-            // SAFETY: as above.
+            // SAFETY: `sig` and `self.0` are exact-size live output/key arrays; `msg`,
+            // `pre`, and the 32-byte `rnd` each point to live buffers for their supplied lengths.
             let rc = unsafe {
                 nq_mldsa65_signature_internal(
                     sig.0.as_mut_ptr(),
@@ -423,7 +433,8 @@ pub mod mldsa65 {
             }
             let sig: &[u8; SIGNATURE_BYTES] =
                 sig.try_into().map_err(|_| Error::InvalidSignature)?;
-            // SAFETY: exact-size sig/pk buffers; msg/ctx valid for their lengths.
+            // SAFETY: `sig` and `self.0` are live arrays with the exact signature and
+            // public-key sizes; `msg` and `ctx` point to their slice lengths, and ctx <= 255.
             let rc = unsafe {
                 nq_mldsa65_verify(
                     sig.as_ptr(),
