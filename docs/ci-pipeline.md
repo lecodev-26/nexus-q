@@ -14,7 +14,7 @@ The workflow checks out recursive submodules and uses Rust 1.88.0 with rustfmt a
 4. `cargo clippy --workspace --all-targets --locked -- -D warnings`
 5. `cargo test --workspace --locked`
 
-A successful run is evidence that these configured steps passed for the exact checked-out revision. It does not establish that every standalone crate, SDK, fuzz target, platform, release path, or manually dispatched workflow passed. It is not an independent security audit, certification, or production-readiness assessment.
+A successful run is evidence that these configured steps passed for the exact checked-out revision. The separate `NEXUS-Q Coverage` workflow also measures workspace line coverage and publishes a per-file report on every pull request; its thresholds are independently enforced. It does not establish that every standalone crate, SDK, fuzz target, platform, release path, or manually dispatched workflow passed. It is not an independent security audit, certification, or production-readiness assessment.
 
 ## Specialized workflows and their triggers
 
@@ -26,6 +26,7 @@ These workflows are separate from Fast CI. The trigger column reflects the workf
 | supply-chain-audit.yml | Relevant Rust source, manifest, lockfile, or supply-chain policy changes; or manual dispatch | cargo-vet trust policy plus a cargo-geiger JSON inventory across the root, native-backend, and Arena runner workspaces. |
 | security-ci.yml | Manual dispatch | Repository security/data-contract checks, secret scanning, and related security validation. |
 | miri.yml | Relevant pull requests, weekly schedule, or manual dispatch | Pinned-nightly Miri run for Rust-side C ABI pointer/string tests; uploads its console output. See [Miri memory-safety checks](security/MIRI.md) for coverage and exclusions. |
+| coverage.yml | Every pull request targeting main, pushes to main, or manual dispatch | Measures root Rust workspace line coverage on every PR, uploads per-file HTML/LCOV reports, publishes report links, and enforces versioned global and critical-module thresholds. See [Rust workspace test coverage](security/COVERAGE.md) for scope and exclusions. |
 | correctness-interoperability.yml | Manual dispatch | Additional correctness, interoperability, and official/vendored vector suites. |
 | fuzz-nightly.yml | Weekly schedule or manual dispatch | Per-target 10-minute campaigns for all registered Rust fuzz targets; restores and updates target corpora and uploads corpus/crash artifacts for 90 days. See [Rust fuzzing guide](../fuzz/README.md). |
 | fuzz-soak.yml | Manual dispatch | Longer sequential fuzz campaigns; not equivalent to compiling the fuzz harness. |

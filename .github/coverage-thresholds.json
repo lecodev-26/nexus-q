@@ -1,0 +1,21 @@
+{
+  "global_minimum_percent": 88.0,
+  "modules": {
+    "vault": {
+      "minimum_percent": 95.0,
+      "path_prefixes": ["crates/nexusq-core/src/vault/"]
+    },
+    "policy": {
+      "minimum_percent": 99.0,
+      "path_prefixes": ["crates/nexusq-core/src/policy/"]
+    },
+    "audit_log": {
+      "minimum_percent": 94.0,
+      "path_prefixes": [
+        "crates/nexusq-core/src/storage/audit_event.rs",
+        "crates/nexusq-core/src/storage/audit_log.rs",
+        "crates/nexusq-core/src/storage/audit_segment.rs"
+      ]
+    }
+  }
+}
