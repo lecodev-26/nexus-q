@@ -16,6 +16,7 @@ on:
 permissions:
   contents: read
   issues: write
+  pull-requests: write
 
 concurrency:
   group: nexusq-coverage-${{ github.event.pull_request.number || github.ref }}
