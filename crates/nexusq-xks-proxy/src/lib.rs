@@ -15,4 +15,7 @@ pub use protocol::{
     GetHealthStatusRequest, GetHealthStatusResponse, GetKeyMetadataRequest, GetKeyMetadataResponse,
     KeyStatus, RequestMetadata, XksError, encode_xks_aad,
 };
-pub use service::{ProviderCiphertext, SigV4Credential, XksKeyProvider, XksProxyConfig, router};
+pub use service::{
+    ProviderCiphertext, ProviderDecryptRequest, SigV4Credential, XksKeyProvider, XksProxyConfig,
+    router,
+};
