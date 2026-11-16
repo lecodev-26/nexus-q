@@ -1,11 +1,8 @@
-use std::{
-    fmt,
-    sync::{Arc, Mutex},
-};
+use std::{fmt, sync::Arc};
 
 use cryptoki::{
     context::{CInitializeArgs, CInitializeFlags, Pkcs11},
-    error::{Error as CryptokiError, RvError},
+    error::{Error as CryptokiError, Function, RvError},
     mechanism::{
         Mechanism,
         aead::GcmParams,
@@ -72,7 +69,6 @@ pub struct Pkcs11Provider {
     pin: Zeroizing<String>,
     token_label: String,
     token_serial: String,
-    login_initialized: Mutex<bool>,
 }
 impl fmt::Debug for Pkcs11Provider {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -115,9 +111,8 @@ impl Pkcs11Provider {
             pin: Zeroizing::new(pin),
             token_label,
             token_serial,
-            login_initialized: Mutex::new(false),
         });
-        // Authenticate once during initialization so configuration failures surface early.
+        // Authenticate every session; PKCS#11 may report that the application is already logged in.
         let _session = provider.open_session()?;
         Ok(provider)
     }
@@ -167,7 +162,6 @@ impl Pkcs11Provider {
             pin: Zeroizing::new(pin),
             token_label,
             token_serial,
-            login_initialized: Mutex::new(false),
         });
         let _session = provider.open_session()?;
         Ok(provider)
@@ -178,16 +172,10 @@ impl Pkcs11Provider {
             .context
             .open_rw_session(self.slot)
             .map_err(|e| HsmError::Pkcs11(e.to_string()))?;
-        let mut login_initialized = self
-            .login_initialized
-            .lock()
-            .map_err(|_| HsmError::InvalidConfig)?;
-        if !*login_initialized {
-            let pin = AuthPin::new(self.pin.as_str().to_owned().into());
-            session
-                .login(UserType::User, Some(&pin))
-                .map_err(|e| HsmError::Pkcs11(e.to_string()))?;
-            *login_initialized = true;
+        let pin = AuthPin::new(self.pin.as_str().to_owned().into());
+        match session.login(UserType::User, Some(&pin)) {
+            Ok(()) | Err(CryptokiError::Pkcs11(RvError::UserAlreadyLoggedIn, Function::Login)) => {}
+            Err(error) => return Err(HsmError::Pkcs11(error.to_string())),
         }
         Ok(session)
     }

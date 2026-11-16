@@ -10,7 +10,9 @@ use nexusq_hsm::{HsmError, Pkcs11AesKeyRef, Pkcs11Provider};
 
 use crate::{
     ErrorCode, GetHealthStatusResponse, GetKeyMetadataResponse, KeyStatus, ProviderCiphertext,
-    RequestMetadata, XksError, encode_xks_aad, protocol::EkmFleetDetail, service::XksKeyProvider,
+    RequestMetadata, XksError, encode_xks_aad,
+    protocol::EkmFleetDetail,
+    service::{ProviderDecryptRequest, XksKeyProvider},
 };
 
 /// Routes configured external key IDs to pre-provisioned non-extractable PKCS#11 AES-256 keys.
@@ -206,23 +208,27 @@ impl XksKeyProvider for Pkcs11XksProvider {
     fn decrypt(
         &self,
         external_key_id: &str,
-        ciphertext: &[u8],
-        iv: &[u8],
-        tag: &[u8],
-        metadata: &[u8],
-        aad: &[u8],
-        _request_metadata: &RequestMetadata,
+        request: ProviderDecryptRequest<'_>,
     ) -> Result<Vec<u8>, XksError> {
-        if !metadata.is_empty() {
+        if !request.ciphertext_metadata.is_empty() {
             return Err(XksError::new(
                 ErrorCode::InvalidCiphertext,
                 "This PKCS#11 adapter does not use ciphertext metadata",
             ));
         }
         let key = self.key(external_key_id)?;
-        let framed_aad = encode_xks_aad(aad, metadata)?;
+        let framed_aad = encode_xks_aad(
+            request.additional_authenticated_data,
+            request.ciphertext_metadata,
+        )?;
         self.provider
-            .decrypt_aes256_gcm(key, ciphertext, iv, tag, &framed_aad)
+            .decrypt_aes256_gcm(
+                key,
+                request.ciphertext,
+                request.initialization_vector,
+                request.authentication_tag,
+                &framed_aad,
+            )
             .map_err(|error| match error {
                 HsmError::KeyNotFound => {
                     XksError::new(ErrorCode::InvalidKey, "External key was not found")
@@ -256,5 +262,60 @@ fn map_hsm_error(error: HsmError) -> XksError {
         | HsmError::Randomness => {
             XksError::new(ErrorCode::Internal, "External key manager operation failed")
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::map_hsm_error;
+    use crate::ErrorCode;
+    use nexusq_hsm::HsmError;
+
+    #[test]
+    fn maps_hsm_failures_without_leaking_provider_details() {
+        assert!(matches!(
+            map_hsm_error(HsmError::KeyNotFound).code,
+            ErrorCode::InvalidKey
+        ));
+        assert!(matches!(
+            map_hsm_error(HsmError::InvalidConfig).code,
+            ErrorCode::InvalidState
+        ));
+        assert!(matches!(
+            map_hsm_error(HsmError::InvalidLabel).code,
+            ErrorCode::InvalidState
+        ));
+        assert!(matches!(
+            map_hsm_error(HsmError::KeyAlreadyExists).code,
+            ErrorCode::InvalidState
+        ));
+        assert!(matches!(
+            map_hsm_error(HsmError::KeyReferenceAmbiguous).code,
+            ErrorCode::InvalidState
+        ));
+        assert!(matches!(
+            map_hsm_error(HsmError::InvalidCiphertext).code,
+            ErrorCode::InvalidCiphertext
+        ));
+        assert!(matches!(
+            map_hsm_error(HsmError::InvalidPublicKey).code,
+            ErrorCode::Internal
+        ));
+        assert!(matches!(
+            map_hsm_error(HsmError::MessageTooLarge).code,
+            ErrorCode::Internal
+        ));
+        assert!(matches!(
+            map_hsm_error(HsmError::Randomness).code,
+            ErrorCode::Internal
+        ));
+        assert!(matches!(
+            map_hsm_error(HsmError::Pkcs11("sensitive detail".into())).code,
+            ErrorCode::Internal
+        ));
+        assert_eq!(
+            map_hsm_error(HsmError::Pkcs11("sensitive detail".into())).message,
+            "External key manager operation failed"
+        );
     }
 }

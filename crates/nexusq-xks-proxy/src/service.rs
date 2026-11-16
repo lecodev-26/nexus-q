@@ -51,12 +51,7 @@ pub trait XksKeyProvider: Send + Sync + 'static {
     fn decrypt(
         &self,
         external_key_id: &str,
-        ciphertext: &[u8],
-        iv: &[u8],
-        tag: &[u8],
-        metadata: &[u8],
-        aad: &[u8],
-        request_metadata: &RequestMetadata,
+        request: ProviderDecryptRequest<'_>,
     ) -> Result<Vec<u8>, XksError>;
 }
 
@@ -67,6 +62,17 @@ pub struct ProviderCiphertext {
     pub initialization_vector: Vec<u8>,
     pub authentication_tag: Vec<u8>,
     pub ciphertext_metadata: Vec<u8>,
+}
+
+/// Authenticated decryption input passed to an external key manager.
+#[derive(Debug, Clone, Copy)]
+pub struct ProviderDecryptRequest<'a> {
+    pub ciphertext: &'a [u8],
+    pub initialization_vector: &'a [u8],
+    pub authentication_tag: &'a [u8],
+    pub ciphertext_metadata: &'a [u8],
+    pub additional_authenticated_data: &'a [u8],
+    pub request_metadata: &'a RequestMetadata,
 }
 
 #[derive(Clone)]
@@ -411,12 +417,14 @@ async fn encrypt(State(state): State<AppState>, Path(key): Path<String>, body: B
         if cdiv.is_some() {
             let check = Zeroizing::new(provider.decrypt(
                 &key_for_call,
-                &output.ciphertext,
-                &output.initialization_vector,
-                &output.authentication_tag,
-                &output.ciphertext_metadata,
-                &aad,
-                &request_metadata,
+                ProviderDecryptRequest {
+                    ciphertext: &output.ciphertext,
+                    initialization_vector: &output.initialization_vector,
+                    authentication_tag: &output.authentication_tag,
+                    ciphertext_metadata: &output.ciphertext_metadata,
+                    additional_authenticated_data: &aad,
+                    request_metadata: &request_metadata,
+                },
             )?);
             if check.as_slice() != plaintext.as_slice() {
                 return Err(XksError::new(
@@ -496,12 +504,14 @@ async fn decrypt(State(state): State<AppState>, Path(key): Path<String>, body: B
     match run_provider(&state, move || {
         provider.decrypt(
             &key,
-            &ciphertext,
-            &iv,
-            &tag,
-            &metadata,
-            &aad,
-            &request_metadata,
+            ProviderDecryptRequest {
+                ciphertext: &ciphertext,
+                initialization_vector: &iv,
+                authentication_tag: &tag,
+                ciphertext_metadata: &metadata,
+                additional_authenticated_data: &aad,
+                request_metadata: &request_metadata,
+            },
         )
     })
     .await
@@ -646,6 +656,117 @@ mod tests {
     fn malformed_json_maps_to_xks_validation_error() {
         let error = parse_request::<GetHealthStatusRequest>(b"not-json").unwrap_err();
         assert!(matches!(error.code, ErrorCode::InvalidRequest));
+    }
+
+    #[test]
+    fn validates_all_sigv4_credential_and_path_constraints() {
+        let base = XksProxyConfig {
+            uri_path: "/kms/xks/v1".into(),
+            access_key_id: "ABCDEFGHIJKLMNOPQRST".into(),
+            secret_access_key: Zeroizing::new("abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG".into()),
+            additional_credentials: Vec::new(),
+        };
+        assert!(base.validate().is_ok());
+        assert!(
+            XksProxyConfig {
+                access_key_id: "short".into(),
+                ..base.clone()
+            }
+            .validate()
+            .is_err()
+        );
+        assert!(
+            XksProxyConfig {
+                secret_access_key: Zeroizing::new("short".into()),
+                ..base.clone()
+            }
+            .validate()
+            .is_err()
+        );
+        assert!(
+            XksProxyConfig {
+                uri_path: "/kms/xks/v1/".into(),
+                ..base.clone()
+            }
+            .validate()
+            .is_err()
+        );
+        assert!(
+            XksProxyConfig {
+                uri_path: "/kms/xks/v1?x=1".into(),
+                ..base.clone()
+            }
+            .validate()
+            .is_err()
+        );
+        let duplicate = SigV4Credential {
+            access_key_id: base.access_key_id.clone(),
+            secret_access_key: base.secret_access_key.clone(),
+        };
+        assert!(
+            XksProxyConfig {
+                additional_credentials: vec![duplicate],
+                ..base.clone()
+            }
+            .validate()
+            .is_err()
+        );
+        let second = SigV4Credential {
+            access_key_id: "QRSTUVWXYZABCDEFGHIJ".into(),
+            secret_access_key: Zeroizing::new("abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG".into()),
+        };
+        assert!(
+            XksProxyConfig {
+                additional_credentials: vec![second.clone(), second],
+                ..base
+            }
+            .validate()
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn decodes_optional_base64_with_size_limits() {
+        use super::decode_optional;
+        assert_eq!(decode_optional(None, 4).unwrap(), Vec::<u8>::new());
+        assert_eq!(decode_optional(Some("YWJj"), 4).unwrap(), b"abc");
+        assert!(decode_optional(Some("%%%"), 4).is_err());
+        assert!(decode_optional(Some("YWJjZA=="), 3).is_err());
+    }
+
+    #[test]
+    fn validates_external_key_identifiers() {
+        use super::valid_key_id;
+        assert!(valid_key_id("key-01.test_name"));
+        assert!(!valid_key_id(""));
+        assert!(!valid_key_id("bad/key"));
+        assert!(!valid_key_id(&"a".repeat(129)));
+    }
+
+    #[test]
+    fn maps_xks_errors_to_expected_http_statuses() {
+        use super::error_response;
+        use crate::protocol::XksError;
+        use axum::http::StatusCode;
+        let cases = [
+            (ErrorCode::AuthenticationFailed, StatusCode::UNAUTHORIZED),
+            (ErrorCode::AccessDenied, StatusCode::FORBIDDEN),
+            (ErrorCode::InvalidKey, StatusCode::NOT_FOUND),
+            (ErrorCode::Throttling, StatusCode::TOO_MANY_REQUESTS),
+            (ErrorCode::InvalidCiphertext, StatusCode::BAD_REQUEST),
+            (ErrorCode::UnsupportedOperation, StatusCode::NOT_IMPLEMENTED),
+            (
+                ErrorCode::DependencyTimeout,
+                StatusCode::SERVICE_UNAVAILABLE,
+            ),
+            (ErrorCode::Internal, StatusCode::INTERNAL_SERVER_ERROR),
+        ];
+        for (code, expected) in cases {
+            assert_eq!(
+                error_response(XksError::new(code, "safe message")).status(),
+                expected
+            );
+        }
     }
 
     #[test]

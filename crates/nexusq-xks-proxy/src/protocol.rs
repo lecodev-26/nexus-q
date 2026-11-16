@@ -190,4 +190,34 @@ mod aad_tests {
         assert_eq!(encode_xks_aad(b"abc", b"xy").unwrap(), b"\0\x03abc\x02xy");
         assert_eq!(encode_xks_aad(b"", b"").unwrap(), b"\0\0\0");
     }
+
+    #[test]
+    fn rejects_aad_and_metadata_over_protocol_limits() {
+        assert!(encode_xks_aad(&vec![0; 8193], b"").is_err());
+        assert!(encode_xks_aad(b"", &vec![0; 21]).is_err());
+        assert!(encode_xks_aad(&vec![0; 65536], b"").is_err());
+    }
+
+    #[test]
+    fn exposes_stable_aws_error_names() {
+        use super::ErrorCode;
+        assert_eq!(
+            ErrorCode::AuthenticationFailed.as_str(),
+            "AuthenticationFailedException"
+        );
+        assert_eq!(
+            ErrorCode::InvalidCiphertext.as_str(),
+            "InvalidCiphertextException"
+        );
+        assert_eq!(ErrorCode::InvalidKey.as_str(), "KeyNotFoundException");
+        assert_eq!(ErrorCode::Throttling.as_str(), "ThrottlingException");
+        assert_eq!(
+            ErrorCode::DependencyUnavailable.as_str(),
+            "InternalException"
+        );
+        assert_eq!(
+            ErrorCode::UnsupportedOperation.as_str(),
+            "UnsupportedOperationException"
+        );
+    }
 }

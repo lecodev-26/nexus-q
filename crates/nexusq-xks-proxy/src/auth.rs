@@ -97,19 +97,17 @@ fn verify_at(
         ));
     }
     let canonical = format!(
-        "{}\n{}\n\nhost:{}\nx-amz-date:{}\n\nhost;x-amz-date\n{}",
-        method.as_str(),
-        uri.path(),
-        host.trim(),
-        date,
-        payload_hash
+        "{method}\n{path}\n\nhost:{host}\nx-amz-date:{date}\n\nhost;x-amz-date\n{payload_hash}",
+        method = method.as_str(),
+        path = uri.path(),
+        host = host.trim(),
     );
     let canonical_hash = hex(&Sha256::digest(canonical.as_bytes()));
     let scope = format!(
         "{}/{}/kms-xks-proxy/aws4_request",
         scope_parts[0], scope_parts[1]
     );
-    let string_to_sign = format!("AWS4-HMAC-SHA256\n{}\n{}\n{}", date, scope, canonical_hash);
+    let string_to_sign = format!("AWS4-HMAC-SHA256\n{date}\n{scope}\n{canonical_hash}");
 
     let mut prefixed_secret =
         Zeroizing::new(Vec::with_capacity(4 + credential.secret_access_key.len()));
@@ -296,6 +294,78 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn rejects_missing_headers_invalid_signature_scope_and_query() {
+        let date = "20261116T100000Z";
+        let path = "/kms/xks/v1/health";
+        let body = b"body";
+        let now = parse_timestamp(date).unwrap();
+        let valid = signed_headers(date, body, path);
+
+        let mut missing_auth = valid.clone();
+        missing_auth.remove(header::AUTHORIZATION);
+        assert!(
+            verify_at(
+                &config(),
+                &Method::POST,
+                &path.parse().unwrap(),
+                &missing_auth,
+                body,
+                now
+            )
+            .is_err()
+        );
+
+        let mut bad_signature = valid.clone();
+        bad_signature.insert(header::AUTHORIZATION, HeaderValue::from_static("AWS4-HMAC-SHA256 Credential=ABCDEFGHIJKLMNOPQRST/20261116/us-east-1/kms-xks-proxy/aws4_request, SignedHeaders=host;x-amz-date, Signature=xyz"));
+        assert!(
+            verify_at(
+                &config(),
+                &Method::POST,
+                &path.parse().unwrap(),
+                &bad_signature,
+                body,
+                now
+            )
+            .is_err()
+        );
+
+        let mut wrong_scope = valid.clone();
+        wrong_scope.insert(header::AUTHORIZATION, HeaderValue::from_static("AWS4-HMAC-SHA256 Credential=ABCDEFGHIJKLMNOPQRST/20261116/us-east-1/other/aws4_request, SignedHeaders=host;x-amz-date, Signature=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+        assert!(
+            verify_at(
+                &config(),
+                &Method::POST,
+                &path.parse().unwrap(),
+                &wrong_scope,
+                body,
+                now
+            )
+            .is_err()
+        );
+
+        let query_path = "/kms/xks/v1/health?unexpected=1";
+        let query_headers = signed_headers(date, body, query_path);
+        assert!(
+            verify_at(
+                &config(),
+                &Method::POST,
+                &query_path.parse().unwrap(),
+                &query_headers,
+                body,
+                now
+            )
+            .is_err()
+        );
+
+        let mut missing_host = valid;
+        missing_host.remove(header::HOST);
+        let uri: Uri = "https://xks.example.test/kms/xks/v1/health"
+            .parse()
+            .unwrap();
+        assert!(verify_at(&config(), &Method::POST, &uri, &missing_host, body, now).is_ok());
     }
 
     #[test]
