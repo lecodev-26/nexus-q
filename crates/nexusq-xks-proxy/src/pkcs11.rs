@@ -9,8 +9,8 @@ use std::{
 use nexusq_hsm::{HsmError, Pkcs11AesKeyRef, Pkcs11Provider};
 
 use crate::{
-    EkmFleetDetail, ErrorCode, GetHealthStatusResponse, GetKeyMetadataResponse, KeyStatus,
-    ProviderCiphertext, RequestMetadata, XksError, encode_xks_aad, service::XksKeyProvider,
+    ErrorCode, GetHealthStatusResponse, GetKeyMetadataResponse, KeyStatus, ProviderCiphertext,
+    RequestMetadata, XksError, encode_xks_aad, protocol::EkmFleetDetail, service::XksKeyProvider,
 };
 
 /// Routes configured external key IDs to pre-provisioned non-extractable PKCS#11 AES-256 keys.

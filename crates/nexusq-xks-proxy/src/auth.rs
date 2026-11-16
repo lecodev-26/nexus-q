@@ -1,6 +1,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::http::{HeaderMap, Method, Uri};
+use hmac::KeyInit;
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
@@ -66,6 +67,11 @@ fn verify_at(
         .strip_prefix("AWS4-HMAC-SHA256 ")
         .ok_or_else(denied)?;
     let credential_scope = field(fields, "Credential=").ok_or_else(denied)?;
+    let supplied_signature = field(fields, "Signature=")
+        .filter(|signature| {
+            signature.len() == 64 && signature.bytes().all(|byte| byte.is_ascii_hexdigit())
+        })
+        .ok_or_else(denied)?;
     let (credential, scope_parts) = config
         .credentials
         .iter()

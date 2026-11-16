@@ -241,7 +241,7 @@ async fn authenticate(
     ) {
         return error_response(error);
     }
-    parts.extensions.insert(permit);
+    parts.extensions.insert(Arc::new(permit));
     let request = Request::from_parts(parts, Body::from(bytes));
     next.run(request).await
 }
