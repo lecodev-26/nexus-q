@@ -1868,7 +1868,7 @@ name = "nexusq-xks-proxy"
 version = "4.1.2"
 dependencies = [
  "axum",
- "base64",
+ "base64 0.22.1",
  "hmac",
  "nexusq-hsm",
  "serde",

@@ -496,7 +496,7 @@ impl Pkcs11Provider {
         let mut decrypt = None;
         for attr in attrs {
             match attr {
-                Attribute::ValueLen(v) => len_32 = Some(*v == 32.into()),
+                Attribute::ValueLen(v) => len_32 = Some(*v == 32_u64),
                 Attribute::Sensitive(v) => sensitive = Some(v),
                 Attribute::Extractable(v) => extractable = Some(v),
                 Attribute::Encrypt(v) => encrypt = Some(v),
