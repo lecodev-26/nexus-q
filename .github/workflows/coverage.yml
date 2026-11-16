@@ -36,12 +36,35 @@ jobs:
         with:
           components: llvm-tools-preview
       - uses: Swatinem/rust-cache@v2
-      - name: Install cargo-llvm-cov
-        run: cargo install cargo-llvm-cov --version 0.9.1 --locked
-      - name: Collect workspace coverage
+      - name: Install cargo-llvm-cov and SoftHSM2
+        run: |
+          cargo install cargo-llvm-cov --version 0.9.1 --locked
+          sudo apt-get update
+          sudo apt-get install -y softhsm2
+      - name: Prepare disposable SoftHSM token for coverage
+        run: |
+          mkdir -p "$RUNNER_TEMP/softhsm/tokens"
+          cat > "$RUNNER_TEMP/softhsm/softhsm2.conf" <<CONF
+          log.level = ERROR
+          objectstore.backend = file
+          directories.tokendir = $RUNNER_TEMP/softhsm/tokens
+          slots.removable = false
+          CONF
+          export SOFTHSM2_CONF="$RUNNER_TEMP/softhsm/softhsm2.conf"
+          echo "SOFTHSM2_CONF=$SOFTHSM2_CONF" >> "$GITHUB_ENV"
+          module="$(find /usr/lib -name libsofthsm2.so -print -quit)"
+          test -n "$module"
+          echo "NEXUSQ_PKCS11_MODULE=$module" >> "$GITHUB_ENV"
+          echo "NEXUSQ_PKCS11_SLOT_INDEX=0" >> "$GITHUB_ENV"
+          echo "NEXUSQ_PKCS11_PIN=nexusq-coverage-pin-2026" >> "$GITHUB_ENV"
+          softhsm2-util --init-token --free --label NexusQCoverage --so-pin nexusq-coverage-so-pin --pin nexusq-coverage-pin-2026
+      - name: Collect workspace and SoftHSM integration coverage
         run: |
           mkdir -p coverage
-          cargo llvm-cov --workspace --all-targets --locked --lcov --output-path coverage/lcov.info
+          cargo llvm-cov --workspace --all-targets --locked --no-report
+          cargo llvm-cov --package nexusq-hsm --features softhsm-tests --test softhsm --locked --no-report -- --exact softhsm_keeps_aes256_key_non_extractable_and_performs_gcm_inside_token --nocapture
+          cargo llvm-cov --package nexusq-xks-proxy --features softhsm-tests --test softhsm --locked --no-report
+          cargo llvm-cov report --lcov --output-path coverage/lcov.info
           cargo llvm-cov report --html --output-dir coverage/html
       - name: Evaluate coverage thresholds and prepare report
         id: evaluate

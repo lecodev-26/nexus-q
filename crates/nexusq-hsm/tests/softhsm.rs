@@ -102,3 +102,65 @@ fn softhsm_keeps_mldsa_private_key_non_extractable_and_signs_inside_token() {
         .destroy_key(&key)
         .expect("remove temporary integration-test key");
 }
+
+#[test]
+fn softhsm_keeps_aes256_key_non_extractable_and_performs_gcm_inside_token() {
+    let module = std::env::var("NEXUSQ_PKCS11_MODULE")
+        .expect("set NEXUSQ_PKCS11_MODULE via scripts/test-softhsm.sh");
+    let pin = std::env::var("NEXUSQ_PKCS11_PIN")
+        .expect("set NEXUSQ_PKCS11_PIN via scripts/test-softhsm.sh");
+    let slot = std::env::var("NEXUSQ_PKCS11_SLOT_INDEX")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(0);
+    let provider = Pkcs11Provider::connect(module, slot, pin).expect("connect to SoftHSM token");
+    let label = format!("nexusq-xks-aes-test-{}", std::process::id());
+    let key = provider
+        .generate_aes256_gcm_key(&label)
+        .expect("generate token AES-256 key");
+    assert!(
+        provider
+            .aes256_key_is_protected(&key)
+            .expect("inspect AES key attributes")
+    );
+    provider.health_check().expect("token session health check");
+    provider
+        .aes256_gcm_self_test(&key)
+        .expect("AES-GCM health-check round trip");
+
+    let plaintext = b"NEXUS-Q XKS HSM integration test";
+    let aad = b"kms-key-arn=arn:aws:kms:us-east-1:123456789012:key/test";
+    let encrypted = provider
+        .encrypt_aes256_gcm(&key, plaintext, aad)
+        .expect("encrypt inside token");
+    assert_eq!(encrypted.ciphertext.len(), plaintext.len());
+    assert_eq!(encrypted.initialization_vector.len(), 12);
+    assert_eq!(encrypted.authentication_tag.len(), 16);
+    let decrypted = provider
+        .decrypt_aes256_gcm(
+            &key,
+            &encrypted.ciphertext,
+            &encrypted.initialization_vector,
+            &encrypted.authentication_tag,
+            aad,
+        )
+        .expect("decrypt inside token");
+    assert_eq!(decrypted, plaintext);
+
+    let mut tampered_tag = encrypted.authentication_tag.clone();
+    tampered_tag[0] ^= 1;
+    assert!(
+        provider
+            .decrypt_aes256_gcm(
+                &key,
+                &encrypted.ciphertext,
+                &encrypted.initialization_vector,
+                &tampered_tag,
+                aad
+            )
+            .is_err()
+    );
+    provider
+        .destroy_aes256_gcm_key(&key)
+        .expect("remove temporary AES test key");
+}

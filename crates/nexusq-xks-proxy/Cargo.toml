@@ -1,0 +1,33 @@
+[package]
+name = "nexusq-xks-proxy"
+description = "AWS KMS External Key Store (XKS) v1 proxy service for NEXUS-Q"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+axum = { workspace = true }
+base64 = { workspace = true }
+hmac = { workspace = true }
+nexusq-hsm = { path = "../nexusq-hsm", version = "4.1.2" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+subtle = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+zeroize = { workspace = true }
+
+
+[[bin]]
+name = "nexusq-xks-proxy"
+path = "src/main.rs"
+
+[features]
+default = []
+softhsm-tests = []
