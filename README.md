@@ -26,7 +26,7 @@
 
 | Start here | Explore deeper |
 |---|---|
-| [Overview and design](#overview) · [Cryptography](#cryptography) · [Quick start](#quick-start) | [Architecture](docs/ARCHITECTURE.md) · [Threat model](docs/THREAT_MODEL.md) · [Security model](docs/SECURITY_MODEL.md) |
+| [Overview and design](#overview) · [Desktop applications](#desktop-applications) · [Cryptography](#cryptography) · [Quick start](#quick-start) | [Architecture](docs/ARCHITECTURE.md) · [Threat model](docs/THREAT_MODEL.md) · [Security model](docs/SECURITY_MODEL.md) |
 | [Benchmarks and measured results](#benchmarks) · [Installation](#installation) | [Benchmark Arena and methodology](arena/README.md) · [Benchmark index](BENCHMARKS.md) · [Performance reports](docs/performance/) |
 | [Project status and versions](#status) · [Security and assurance](#security-and-assurance) | [Roadmap](docs/ROADMAP.md) · [Release notes](docs/V4_RELEASE.md) · [Security policy](SECURITY.md) |
 | [Documentation index](#documentation) · [Contributing](#contributing) · [License](#license) | [Website](https://nexus-q.link) · [Releases](https://github.com/lecodev-26/nexus-q/releases) · [Discussions](https://github.com/lecodev-26/nexus-q/discussions) |
@@ -92,6 +92,35 @@ The repository already includes visual assets for the architecture flow, project
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/dark/h-overview.svg"><img src="assets/light/h-overview.svg" alt="Overview" width="100%"></picture>
 
 </div>
+
+
+## Desktop applications
+
+NEXUS-Q also powers independent desktop applications that bring its cryptographic capabilities to everyday workflows. Each application has its own repository, interface, release process and security documentation. They are separate products—not modules bundled into this engine repository.
+
+<table>
+<tr>
+<td align="center" valign="top" width="50%">
+<a href="https://github.com/lecodev-26/nexus-q-vault">
+<img src="assets/apps/nexus-q-vault-logo.png" alt="NEXUS-Q Vault logo" width="180">
+</a>
+<h3><a href="https://github.com/lecodev-26/nexus-q-vault">NEXUS-Q Vault</a></h3>
+<p>A local-first desktop vault for encrypting files and folders, managing vault data, and creating separately encrypted recovery backups. Its cryptographic operations are delegated to the NEXUS-Q Rust engine.</p>
+<p><a href="https://github.com/lecodev-26/nexus-q-vault">Explore the repository</a></p>
+</td>
+<td align="center" valign="top" width="50%">
+<a href="https://github.com/lecodev-26/nexus-q-sign">
+<img src="assets/apps/nexus-q-sign-logo.png" alt="NEXUS-Q Sign logo" width="220">
+</a>
+<h3><a href="https://github.com/lecodev-26/nexus-q-sign">NEXUS-Q Sign</a></h3>
+<p>A local-first desktop application for detached document signing and verification. It uses ML-DSA-65 through the NEXUS-Q cryptographic library and stores signatures in separate <code>.nqsig</code> files.</p>
+<p><a href="https://github.com/lecodev-26/nexus-q-sign">Explore the repository</a></p>
+</td>
+</tr>
+</table>
+
+For installation instructions, platform availability, screenshots, security limitations and release status, visit each application's repository. Their documentation is maintained independently so that product-specific information stays accurate.
+
 
 ## Overview
 
