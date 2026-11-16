@@ -633,7 +633,10 @@ fn error_response(error: XksError) -> Response {
 #[cfg(test)]
 mod tests {
     use super::{XksProxyConfig, compute_cdiv, parse_request};
-    use crate::protocol::{ErrorCode, GetHealthStatusRequest};
+    use crate::{
+        SigV4Credential,
+        protocol::{ErrorCode, GetHealthStatusRequest},
+    };
     use zeroize::Zeroizing;
 
     #[test]
