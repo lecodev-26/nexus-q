@@ -224,7 +224,7 @@ mod tests {
         let canonical_hash = hex(&Sha256::digest(canonical.as_bytes()));
         let scope = format!("{}/{}/kms-xks-proxy/aws4_request", &date[..8], region);
         let string_to_sign = format!("AWS4-HMAC-SHA256\n{date}\n{scope}\n{canonical_hash}");
-        let k_date = hmac(format!("AWS4{SECRET}").as_bytes(), date[..8].as_bytes()).unwrap();
+        let k_date = hmac(format!("AWS4{SECRET}").as_bytes(), &date.as_bytes()[..8]).unwrap();
         let k_region = hmac(&k_date, region.as_bytes()).unwrap();
         let k_service = hmac(&k_region, b"kms-xks-proxy").unwrap();
         let k_signing = hmac(&k_service, b"aws4_request").unwrap();

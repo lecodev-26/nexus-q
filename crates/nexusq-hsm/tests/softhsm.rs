@@ -123,6 +123,10 @@ fn softhsm_keeps_aes256_key_non_extractable_and_performs_gcm_inside_token() {
             .aes256_key_is_protected(&key)
             .expect("inspect AES key attributes")
     );
+    provider.health_check().expect("token session health check");
+    provider
+        .aes256_gcm_self_test(&key)
+        .expect("AES-GCM health-check round trip");
 
     let plaintext = b"NEXUS-Q XKS HSM integration test";
     let aad = b"kms-key-arn=arn:aws:kms:us-east-1:123456789012:key/test";

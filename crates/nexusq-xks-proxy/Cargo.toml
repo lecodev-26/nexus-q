@@ -27,3 +27,7 @@ zeroize = { workspace = true }
 [[bin]]
 name = "nexusq-xks-proxy"
 path = "src/main.rs"
+
+[features]
+default = []
+softhsm-tests = []

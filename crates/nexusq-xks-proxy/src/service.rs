@@ -632,11 +632,7 @@ fn error_response(error: XksError) -> Response {
 
 #[cfg(test)]
 mod tests {
-    use super::{XksProxyConfig, compute_cdiv, parse_request};
-    use crate::{
-        SigV4Credential,
-        protocol::{ErrorCode, GetHealthStatusRequest},
-    };
+    use super::*;
     use zeroize::Zeroizing;
 
     #[test]
@@ -770,6 +766,309 @@ mod tests {
                 expected
             );
         }
+    }
+
+    use super::*;
+    use axum::{
+        body::Bytes,
+        extract::{Path, State},
+    };
+    use base64::{Engine, engine::general_purpose::STANDARD};
+    use std::sync::Arc;
+
+    struct MockProvider {
+        unavailable: bool,
+        invalid_metadata: bool,
+        invalid_ciphertext: bool,
+        invalid_plaintext: bool,
+    }
+
+    impl XksKeyProvider for MockProvider {
+        fn health_check(&self) -> Result<GetHealthStatusResponse, XksError> {
+            Ok(GetHealthStatusResponse {
+                xks_proxy_fleet_size: 1,
+                xks_proxy_vendor: "test".into(),
+                xks_proxy_model: "test".into(),
+                ekm_vendor: "test".into(),
+                ekm_fleet_details: vec![EkmFleetDetail {
+                    id: "token".into(),
+                    model: "mock".into(),
+                    health_status: if self.unavailable {
+                        "UNAVAILABLE"
+                    } else {
+                        "ACTIVE"
+                    }
+                    .into(),
+                }],
+            })
+        }
+
+        fn key_metadata(
+            &self,
+            _key: &str,
+            _metadata: &RequestMetadata,
+        ) -> Result<GetKeyMetadataResponse, XksError> {
+            Ok(GetKeyMetadataResponse {
+                key_spec: if self.invalid_metadata {
+                    "AES_128"
+                } else {
+                    "AES_256"
+                },
+                key_usage: vec!["ENCRYPT", "DECRYPT"],
+                key_status: KeyStatus::Enabled,
+            })
+        }
+
+        fn encrypt(
+            &self,
+            _key: &str,
+            plaintext: &[u8],
+            _aad: &[u8],
+            _metadata: &RequestMetadata,
+        ) -> Result<ProviderCiphertext, XksError> {
+            Ok(ProviderCiphertext {
+                ciphertext: if self.invalid_ciphertext {
+                    vec![1]
+                } else {
+                    plaintext.to_vec()
+                },
+                initialization_vector: vec![7; 12],
+                authentication_tag: vec![9; 16],
+                ciphertext_metadata: Vec::new(),
+            })
+        }
+
+        fn decrypt(
+            &self,
+            _key: &str,
+            request: ProviderDecryptRequest<'_>,
+        ) -> Result<Vec<u8>, XksError> {
+            Ok(if self.invalid_plaintext {
+                Vec::new()
+            } else {
+                request.ciphertext.to_vec()
+            })
+        }
+    }
+
+    fn test_state(provider: MockProvider) -> AppState {
+        AppState {
+            provider: Arc::new(provider),
+            auth: AuthConfig {
+                credentials: Vec::new(),
+            },
+            concurrency: Arc::new(Semaphore::new(8)),
+            provider_slots: Arc::new(Semaphore::new(8)),
+        }
+    }
+
+    fn request_metadata(operation: &str) -> serde_json::Value {
+        serde_json::json!({
+            "awsPrincipalArn": "arn:aws:iam::123456789012:role/test",
+            "kmsKeyArn": "arn:aws:kms:us-east-1:123456789012:key/test",
+            "kmsOperation": operation,
+            "kmsRequestId": "request-123"
+        })
+    }
+
+    #[tokio::test]
+    async fn health_and_metadata_handlers_cover_success_and_rejections() {
+        let state = test_state(MockProvider {
+            unavailable: false,
+            invalid_metadata: false,
+            invalid_ciphertext: false,
+            invalid_plaintext: false,
+        });
+        let health_body = Bytes::from(
+            serde_json::json!({"requestMetadata": request_metadata("GetHealthStatus")}).to_string(),
+        );
+        assert_eq!(
+            health(State(state.clone()), health_body).await.status(),
+            StatusCode::OK
+        );
+        assert_eq!(
+            health(State(state.clone()), Bytes::from_static(b"bad-json"))
+                .await
+                .status(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
+        let incomplete = Bytes::from(serde_json::json!({"requestMetadata": {}}).to_string());
+        assert_eq!(
+            health(State(state.clone()), incomplete).await.status(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
+        assert_eq!(
+            load_balancer_health(State(state.clone())).await.status(),
+            StatusCode::OK
+        );
+        let unavailable = test_state(MockProvider {
+            unavailable: true,
+            invalid_metadata: false,
+            invalid_ciphertext: false,
+            invalid_plaintext: false,
+        });
+        assert_eq!(
+            load_balancer_health(State(unavailable)).await.status(),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
+
+        let body = Bytes::from(serde_json::json!({"requestMetadata": {}}).to_string());
+        assert_eq!(
+            metadata(State(state.clone()), Path("key-1".into()), body.clone())
+                .await
+                .status(),
+            StatusCode::OK
+        );
+        assert_eq!(
+            metadata(State(state.clone()), Path("bad/key".into()), body.clone())
+                .await
+                .status(),
+            StatusCode::NOT_FOUND
+        );
+        let bad_provider = test_state(MockProvider {
+            unavailable: false,
+            invalid_metadata: true,
+            invalid_ciphertext: false,
+            invalid_plaintext: false,
+        });
+        assert_eq!(
+            metadata(State(bad_provider), Path("key-1".into()), body)
+                .await
+                .status(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[tokio::test]
+    async fn encrypt_handler_validates_inputs_and_checks_cdiv_round_trip() {
+        let state = test_state(MockProvider {
+            unavailable: false,
+            invalid_metadata: false,
+            invalid_ciphertext: false,
+            invalid_plaintext: false,
+        });
+        let body = || {
+            Bytes::from(
+                serde_json::json!({
+                    "requestMetadata": request_metadata("Encrypt"),
+                    "plaintext": STANDARD.encode(b"hello"),
+                    "encryptionAlgorithm": "AES_GCM",
+                    "additionalAuthenticatedData": STANDARD.encode(b"aad"),
+                    "ciphertextDataIntegrityValueAlgorithm": "SHA_256"
+                })
+                .to_string(),
+            )
+        };
+        assert_eq!(
+            encrypt(State(state.clone()), Path("key-1".into()), body())
+                .await
+                .status(),
+            StatusCode::OK
+        );
+        let bad_algorithm = Bytes::from(serde_json::json!({"requestMetadata": request_metadata("Encrypt"), "plaintext":"aGVsbG8=", "encryptionAlgorithm":"RSA"}).to_string());
+        assert_eq!(
+            encrypt(State(state.clone()), Path("key-1".into()), bad_algorithm)
+                .await
+                .status(),
+            StatusCode::BAD_REQUEST
+        );
+        let missing_metadata = Bytes::from(serde_json::json!({"requestMetadata": {}, "plaintext":"aGVsbG8=", "encryptionAlgorithm":"AES_GCM"}).to_string());
+        assert_eq!(
+            encrypt(State(state.clone()), Path("key-1".into()), missing_metadata)
+                .await
+                .status(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            encrypt(State(state.clone()), Path("bad/key".into()), body())
+                .await
+                .status(),
+            StatusCode::NOT_FOUND
+        );
+        let invalid_provider = test_state(MockProvider {
+            unavailable: false,
+            invalid_metadata: false,
+            invalid_ciphertext: true,
+            invalid_plaintext: false,
+        });
+        assert_eq!(
+            encrypt(State(invalid_provider), Path("key-1".into()), body())
+                .await
+                .status(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
+        let bad_round_trip = test_state(MockProvider {
+            unavailable: false,
+            invalid_metadata: false,
+            invalid_ciphertext: false,
+            invalid_plaintext: true,
+        });
+        assert_eq!(
+            encrypt(State(bad_round_trip), Path("key-1".into()), body())
+                .await
+                .status(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
+    }
+
+    #[tokio::test]
+    async fn decrypt_handler_validates_inputs_and_provider_output() {
+        let state = test_state(MockProvider {
+            unavailable: false,
+            invalid_metadata: false,
+            invalid_ciphertext: false,
+            invalid_plaintext: false,
+        });
+        let body = || {
+            Bytes::from(
+                serde_json::json!({
+                    "requestMetadata": request_metadata("Decrypt"),
+                    "ciphertext": STANDARD.encode(b"hello"),
+                    "initializationVector": STANDARD.encode([7u8; 12]),
+                    "authenticationTag": STANDARD.encode([9u8; 16]),
+                    "encryptionAlgorithm": "AES_GCM"
+                })
+                .to_string(),
+            )
+        };
+        assert_eq!(
+            decrypt(State(state.clone()), Path("key-1".into()), body())
+                .await
+                .status(),
+            StatusCode::OK
+        );
+        let bad_algorithm = Bytes::from(serde_json::json!({"requestMetadata": request_metadata("Decrypt"), "ciphertext":"aGVsbG8=", "initializationVector":STANDARD.encode([7;12]), "authenticationTag":STANDARD.encode([9;16]), "encryptionAlgorithm":"RSA"}).to_string());
+        assert_eq!(
+            decrypt(State(state.clone()), Path("key-1".into()), bad_algorithm)
+                .await
+                .status(),
+            StatusCode::BAD_REQUEST
+        );
+        let missing_metadata = Bytes::from(serde_json::json!({"requestMetadata": {}, "ciphertext":"aGVsbG8=", "initializationVector":STANDARD.encode([7;12]), "authenticationTag":STANDARD.encode([9;16]), "encryptionAlgorithm":"AES_GCM"}).to_string());
+        assert_eq!(
+            decrypt(State(state.clone()), Path("key-1".into()), missing_metadata)
+                .await
+                .status(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            decrypt(State(state.clone()), Path("bad/key".into()), body())
+                .await
+                .status(),
+            StatusCode::NOT_FOUND
+        );
+        let invalid_plaintext = test_state(MockProvider {
+            unavailable: false,
+            invalid_metadata: false,
+            invalid_ciphertext: false,
+            invalid_plaintext: true,
+        });
+        assert_eq!(
+            decrypt(State(invalid_plaintext), Path("key-1".into()), body())
+                .await
+                .status(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]

@@ -193,9 +193,9 @@ mod aad_tests {
 
     #[test]
     fn rejects_aad_and_metadata_over_protocol_limits() {
-        assert!(encode_xks_aad(&vec![0; 8193], b"").is_err());
-        assert!(encode_xks_aad(b"", &vec![0; 21]).is_err());
-        assert!(encode_xks_aad(&vec![0; 65536], b"").is_err());
+        assert!(encode_xks_aad(&[0; 8193], b"").is_err());
+        assert!(encode_xks_aad(b"", &[0; 21]).is_err());
+        assert!(encode_xks_aad(&[0; 65536], b"").is_err());
     }
 
     #[test]
