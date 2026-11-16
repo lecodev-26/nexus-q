@@ -2,7 +2,7 @@
 
 NEXUS-Q uses complementary tools for different supply-chain questions:
 
-- `cargo-deny` checks advisories, licenses, duplicate versions, and allowed dependency sources through the existing `deny.toml` policy.
+- `cargo-deny` enforces advisories, licenses, duplicate-version exceptions, crate bans, and allowed dependency sources through `deny.toml`. The dedicated policy workflow checks the root workspace and the separately locked native workspaces on every pull request to `main` and every push to `main`. See [Cargo dependency policy](CARGO_DENY.md).
 - `cargo-vet` records which third-party Rust crates have been reviewed against explicit trust criteria. Its version-controlled store is `supply-chain/`.
 - `cargo-geiger` produces a machine-readable inventory of `unsafe` usage in the workspace dependency graph. The report is uploaded as a GitHub Actions artifact.
 
@@ -40,7 +40,8 @@ The aggregate covers the root Cargo workspace and the separately locked native b
 
 - `cargo-vet`: 0.10.3
 - `cargo-geiger`: 0.14.0
+- `cargo-deny`: 0.19.9 (see [Cargo dependency policy](CARGO_DENY.md))
 - Policy source: `supply-chain/config.toml`, `supply-chain/audits.toml`, and `deny.toml`
-- Automation: `.github/workflows/supply-chain-audit.yml`
+- Automation: `.github/workflows/cargo-deny.yml` and `.github/workflows/supply-chain-audit.yml`
 
 Review changes to the trust store as security-sensitive policy changes. Keep rationale, exact crate versions, audit criteria, and any imported audit source visible in the pull request.

@@ -17,7 +17,7 @@ upstream-c-keccak = ["nexusq-native-backend/upstream-c-keccak"]
 aws-lc-rng = ["nexusq-native-backend/aws-lc-rng"]
 
 [dependencies]
-nexusq-native-backend = { path = "../../../crates/nexusq-native-backend" }
+nexusq-native-backend = { path = "../../../crates/nexusq-native-backend", version = "0.1.0" }
 serde_json = "1"
 
 [profile.release]
