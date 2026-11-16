@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "PKCS#11 ML-DSA-65 HSM signing and M-of-N CA key ceremonies for NexusQ"
+description = "PKCS#11 AES-GCM and ML-DSA-65 HSM operations and M-of-N CA key ceremonies for NexusQ"
 readme = "README.md"
 
 [dependencies]

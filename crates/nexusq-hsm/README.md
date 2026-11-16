@@ -38,3 +38,15 @@ The integration test generates a non-extractable token key, checks its `Sensitiv
 ## Operational limits
 
 Ceremony state and its audit snapshot are currently in memory. Export the audit events to durable tamper-evident storage, and persist ceremony state, token serials, key references and serial allocation before production HA/recovery use. Back up keys only with the HSM vendor's native encrypted backup/restore mechanism; raw private-key export is intentionally unsupported.
+
+
+## AES-256-GCM for external key stores
+
+`Pkcs11Provider::generate_aes256_gcm_key` creates a token-resident AES-256
+secret key with sensitive and non-extractable attributes and encrypt/decrypt
+usage only. `encrypt_aes256_gcm` and `decrypt_aes256_gcm` execute AES-GCM inside
+the PKCS#11 module; the key bytes are never returned. `Pkcs11AesKeyRef` is a
+serializable opaque reference bound to the token label and serial. Persist the
+reference as protected configuration and never expose the token PIN.
+
+The optional SoftHSM integration test `softhsm_keeps_aes256_key_non_extractable_and_performs_gcm_inside_token` checks key attributes, round-trip behavior, and tag tampering.

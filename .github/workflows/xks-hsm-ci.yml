@@ -1,0 +1,46 @@
+name: XKS PKCS#11 HSM Integration
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/nexusq-hsm/**'
+      - 'crates/nexusq-xks-proxy/**'
+      - 'docs/xks/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/xks-hsm-ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'crates/nexusq-hsm/**'
+      - 'crates/nexusq-xks-proxy/**'
+      - 'docs/xks/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/xks-hsm-ci.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nexusq-xks-hsm-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  softhsm-aes-gcm:
+    name: SoftHSM and AWS XKS v1 conformance client
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install SoftHSM2
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes softhsm2 jq uuid-runtime xxd curl
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Run HSM and AWS XKS conformance tests
+        run: ./scripts/test-softhsm.sh

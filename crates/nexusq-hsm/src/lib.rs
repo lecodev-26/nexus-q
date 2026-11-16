@@ -7,7 +7,9 @@ pub use ceremony::{
     CeremonyAction, CeremonyCoordinator, CeremonyError, CeremonyParticipant, CeremonyRequest,
     CeremonyStatus,
 };
-pub use provider::{HsmKeyStore, Pkcs11KeyRef, Pkcs11MlDsaSigner, Pkcs11Provider};
+pub use provider::{
+    AesGcmCiphertext, HsmKeyStore, Pkcs11AesKeyRef, Pkcs11KeyRef, Pkcs11MlDsaSigner, Pkcs11Provider,
+};
 
 /// Errors from PKCS#11 operations and key ceremonies. PINs and private key material are never included.
 #[derive(Debug, thiserror::Error)]
@@ -28,6 +30,8 @@ pub enum HsmError {
     InvalidPublicKey,
     #[error("message exceeds the configured signing limit")]
     MessageTooLarge,
+    #[error("ciphertext authentication failed")]
+    InvalidCiphertext,
     #[error("secure random generation failed")]
     Randomness,
 }
