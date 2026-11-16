@@ -1,0 +1,55 @@
+name: NEXUS-Q Cargo Audit
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nexusq-cargo-audit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: cargo-audit (all lockfiles)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate time-limited advisory exceptions
+        run: python3 .github/scripts/check-cargo-audit-exceptions.py
+      - name: Install pinned cargo-audit
+        run: cargo install --locked cargo-audit --version 0.23.0
+      - name: Audit root workspace lockfile
+        run: cargo audit --file Cargo.lock
+      - name: Audit native backend lockfile
+        run: cargo audit --no-fetch --file crates/nexusq-native-backend/Cargo.lock
+      - name: Audit native runner lockfile
+        run: cargo audit --no-fetch --file arena/runners/nexusq-native/Cargo.lock
+      - name: Verify cargo-audit rejects a known vulnerable dependency
+        shell: bash
+        run: |
+          set +e
+          output="$(cargo audit --no-fetch --file .github/fixtures/cargo-audit/vulnerable.lock 2>&1)"
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+          if [ "$status" -eq 0 ]; then
+            echo "Expected cargo-audit to reject the vulnerable fixture, but it succeeded."
+            exit 1
+          fi
+          if ! grep -q 'RUSTSEC-2020-0071' <<< "$output"; then
+            echo "cargo-audit failed, but did not report the expected RustSec advisory."
+            exit 1
+          fi
+          echo "Controlled vulnerability correctly rejected (RUSTSEC-2020-0071)."

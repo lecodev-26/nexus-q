@@ -1,0 +1,6 @@
+# Temporary exception retained from ADR 0005. Reassess before expiry.
+[[exceptions]]
+id = "RUSTSEC-2023-0071"
+owner = "lecodev-26"
+rationale = "Transitive rsa dependency via cms; current source-path assessment and reassessment triggers are documented in docs/adr/0005-rustsec-2023-0071-rsa-advisory.md. This is not a claim that the advisory is fixed."
+expires = "2026-12-16"

@@ -2,7 +2,8 @@
 
 NEXUS-Q uses complementary tools for different supply-chain questions:
 
-- `cargo-deny` enforces advisories, licenses, duplicate-version exceptions, crate bans, and allowed dependency sources through `deny.toml`. The dedicated policy workflow checks the root workspace and the separately locked native workspaces on every pull request to `main` and every push to `main`. See [Cargo dependency policy](CARGO_DENY.md).
+- `cargo-audit` checks every committed lockfile against the RustSec Advisory Database on every pull request to `main` and every push to `main`. Its tool version is pinned, and any ignored advisory must have an owner, rationale, and enforced expiry. See [Cargo vulnerability auditing](CARGO_AUDIT.md).
+- `cargo-deny` enforces graph-aware advisories, licenses, duplicate-version exceptions, crate bans, and allowed dependency sources through `deny.toml`. The dedicated policy workflow checks the root workspace and the separately locked native workspaces on every pull request to `main` and every push to `main`. See [Cargo dependency policy](CARGO_DENY.md).
 - `cargo-vet` records which third-party Rust crates have been reviewed against explicit trust criteria. Its version-controlled store is `supply-chain/`.
 - `cargo-geiger` produces a machine-readable inventory of `unsafe` usage in the workspace dependency graph. The report is uploaded as a GitHub Actions artifact.
 
@@ -40,8 +41,9 @@ The aggregate covers the root Cargo workspace and the separately locked native b
 
 - `cargo-vet`: 0.10.3
 - `cargo-geiger`: 0.14.0
+- `cargo-audit`: 0.23.0 (see [Cargo vulnerability auditing](CARGO_AUDIT.md))
 - `cargo-deny`: 0.19.9 (see [Cargo dependency policy](CARGO_DENY.md))
 - Policy source: `supply-chain/config.toml`, `supply-chain/audits.toml`, and `deny.toml`
-- Automation: `.github/workflows/cargo-deny.yml` and `.github/workflows/supply-chain-audit.yml`
+- Automation: `.github/workflows/cargo-audit.yml`, `.github/workflows/cargo-deny.yml`, and `.github/workflows/supply-chain-audit.yml`
 
 Review changes to the trust store as security-sensitive policy changes. Keep rationale, exact crate versions, audit criteria, and any imported audit source visible in the pull request.
