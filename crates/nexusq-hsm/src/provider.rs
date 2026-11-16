@@ -1,8 +1,8 @@
 use std::{fmt, sync::Arc};
 
 use cryptoki::{
-    context::{CInitializeArgs, CInitializeFlags, Pkcs11},
-    error::{Error as CryptokiError, Function, RvError},
+    context::{CInitializeArgs, CInitializeFlags, Function, Pkcs11},
+    error::{Error as CryptokiError, RvError},
     mechanism::{
         Mechanism,
         aead::GcmParams,
