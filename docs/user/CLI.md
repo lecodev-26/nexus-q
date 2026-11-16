@@ -8,6 +8,8 @@ The `nexusq` CLI is a thin wrapper around `nexusq-core`. It contains no independ
 - `--output json` — machine-readable JSON.
 - `--quiet` — suppress successful non-error output.
 
+For checked examples and guidance on scripting with JSON output, see the [JSON output guide](CLI_JSON.md).
+
 ## Health and diagnostics
 
 ```bash
@@ -16,7 +18,7 @@ nexusq health --vault ./example.nqv
 nexusq diagnostics
 nexusq diagnostics --vault ./example.nqv
 nexusq --output json health
-nexusq version
+nexusq --version
 ```
 
 Health and diagnostics do not unlock a vault.
