@@ -22,7 +22,7 @@ jobs:
       - name: Install cargo-audit and cargo-deny
         run: |
           cargo install cargo-audit --locked
-          cargo install cargo-deny --locked --version 0.18.4
+          cargo install cargo-deny --locked --version 0.19.9
       - name: Audit workspace dependency lockfile
         run: cargo audit --file Cargo.lock
       - name: Audit native backend dependency lockfile

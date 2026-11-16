@@ -40,7 +40,7 @@ The aggregate covers the root Cargo workspace and the separately locked native b
 
 - `cargo-vet`: 0.10.3
 - `cargo-geiger`: 0.14.0
-- `cargo-deny`: 0.18.4 (see [Cargo dependency policy](CARGO_DENY.md))
+- `cargo-deny`: 0.19.9 (see [Cargo dependency policy](CARGO_DENY.md))
 - Policy source: `supply-chain/config.toml`, `supply-chain/audits.toml`, and `deny.toml`
 - Automation: `.github/workflows/cargo-deny.yml` and `.github/workflows/supply-chain-audit.yml`
 

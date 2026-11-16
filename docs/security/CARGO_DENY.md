@@ -1,6 +1,6 @@
 # Cargo dependency policy
 
-NEXUS-Q uses `cargo-deny` 0.18.4 as a CI gate. The version-controlled policy is `deny.toml`; `.github/workflows/cargo-deny.yml` runs it on every pull request targeting `main`, every push to `main`, and manual dispatch.
+NEXUS-Q uses `cargo-deny` 0.19.9 as a CI gate. The version-controlled policy is `deny.toml`; `.github/workflows/cargo-deny.yml` runs it on every pull request targeting `main`, every push to `main`, and manual dispatch.
 
 ## Enforced policy
 

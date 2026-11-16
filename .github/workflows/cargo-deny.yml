@@ -24,7 +24,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.88.0
       - uses: Swatinem/rust-cache@v2
       - name: Install pinned cargo-deny
-        run: cargo install --locked cargo-deny --version 0.18.4
+        run: cargo install --locked cargo-deny --version 0.19.9
       - name: Check root workspace dependency policy
         run: cargo deny --manifest-path Cargo.toml check --config deny.toml
       - name: Check excluded native backend dependency policy
