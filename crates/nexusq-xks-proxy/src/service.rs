@@ -768,7 +768,6 @@ mod tests {
         }
     }
 
-    use super::*;
     use axum::{
         body::Bytes,
         extract::{Path, State},

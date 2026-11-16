@@ -50,7 +50,8 @@ jobs:
           directories.tokendir = $RUNNER_TEMP/softhsm/tokens
           slots.removable = false
           CONF
-          echo "SOFTHSM2_CONF=$RUNNER_TEMP/softhsm/softhsm2.conf" >> "$GITHUB_ENV"
+          export SOFTHSM2_CONF="$RUNNER_TEMP/softhsm/softhsm2.conf"
+          echo "SOFTHSM2_CONF=$SOFTHSM2_CONF" >> "$GITHUB_ENV"
           module="$(find /usr/lib -name libsofthsm2.so -print -quit)"
           test -n "$module"
           echo "NEXUSQ_PKCS11_MODULE=$module" >> "$GITHUB_ENV"
