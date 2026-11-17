@@ -29,7 +29,7 @@
 | [Overview and design](#overview) · [Desktop applications](#desktop-applications) · [Cryptography](#cryptography) · [Quick start](#quick-start) | [Architecture](docs/ARCHITECTURE.md) · [Threat model](docs/THREAT_MODEL.md) · [Security model](docs/SECURITY_MODEL.md) |
 | [Benchmarks and measured results](#benchmarks) · [Installation](#installation) | [Benchmark Arena and methodology](arena/README.md) · [Benchmark index](BENCHMARKS.md) · [Performance reports](docs/performance/) |
 | [Project status and versions](#status) · [Security and assurance](#security-and-assurance) | [Roadmap](docs/ROADMAP.md) · [Release notes](docs/V4_RELEASE.md) · [Security policy](SECURITY.md) |
-| [Documentation index](#documentation) · [Contributing](#contributing) · [License](#license) | [Website](https://nexus-q.link) · [Releases](https://github.com/lecodev-26/nexus-q/releases) · [Discussions](https://github.com/lecodev-26/nexus-q/discussions) |
+| [Documentation index](#documentation) · [Contributing](#contributing) · [Contributors](#contributors) · [License](#license) | [Website](https://nexus-q.link) · [Releases](https://github.com/lecodev-26/nexus-q/releases) · [Discussions](https://github.com/lecodev-26/nexus-q/discussions) |
 
 ### Project at a glance
 
@@ -540,6 +540,18 @@ Contributions of code, tests, documentation, security research, reviews, and des
 - **Security vulnerabilities:** report them privately using [SECURITY.md](SECURITY.md), never in public issues, discussions, or PRs.
 
 GitHub Actions is the authoritative validation for configured CI checks. Contributors should report exactly which local commands and Actions runs were executed; a green CI run is not an independent security audit or certification.
+
+
+## Contributors
+
+NEXUS-Q is grateful to everyone who has contributed code, testing, documentation, and engineering improvements. The contributors below are recognized for changes merged into the repository; feedback and participation in Discussions are appreciated as well.
+
+- **[Khaten](https://github.com/kathennn)** — contributed security and reliability fixes across the vault, storage, cryptography, HSM, ACME, TSA, OCSP, high-availability, audit, and C SDK areas, including secret zeroization, fail-closed behavior, and safer resource handling.
+- **[Notrim](https://github.com/notrimmm)** — improved native-backend benchmark and evaluation tooling, including near-parity result handling, and locked the CIRCL adapter's Go dependencies for reproducible builds.
+- **[Mohammed Sinan Mk](https://github.com/mks-mk)** — clarified the cryptographic kernel's capabilities and documented upstream implementation provenance ([PR #191](https://github.com/lecodev-26/nexus-q/pull/191)).
+- **[dentimoer-official](https://github.com/dentimoer-official)** — strengthened X-Wing validation with official draft-11 test vectors, seed-injectable encapsulation for deterministic testing, and related documentation ([PR #185](https://github.com/lecodev-26/nexus-q/pull/185)).
+
+Thank you for helping make NEXUS-Q more reliable, understandable, and useful.
 
 
 <div align="center">
