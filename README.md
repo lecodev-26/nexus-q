@@ -550,6 +550,7 @@ NEXUS-Q is grateful to everyone who has contributed code, testing, documentation
 - **[Notrim](https://github.com/notrimmm)** — improved native-backend benchmark and evaluation tooling, including near-parity result handling, and locked the CIRCL adapter's Go dependencies for reproducible builds.
 - **[Mohammed Sinan Mk](https://github.com/mks-mk)** — clarified the cryptographic kernel's capabilities and documented upstream implementation provenance ([PR #191](https://github.com/lecodev-26/nexus-q/pull/191)).
 - **[dentimoer-official](https://github.com/dentimoer-official)** — strengthened X-Wing validation with official draft-11 test vectors, seed-injectable encapsulation for deterministic testing, and related documentation ([PR #185](https://github.com/lecodev-26/nexus-q/pull/185)).
+- **[Harshit Nagila](https://github.com/harshit3355)** — improved the CLI documentation with verified JSON output examples for health and backend status, clearer scripting error guidance, and corrected version-command examples ([PR #219](https://github.com/lecodev-26/nexus-q/pull/219)).
 
 Thank you for helping make NEXUS-Q more reliable, understandable, and useful.
 
