@@ -28,39 +28,501 @@ jobs:
     name: four-hour fuzz campaign — vault parser
     runs-on: ubuntu-latest
     timeout-minutes: 255
+    env:
+      TARGET: vault_parse
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
       - name: Run vault parser campaign for four hours
-        run: cargo fuzz run vault_parse -- -max_total_time=14400 -timeout=30
         working-directory: fuzz
+        run: |
+          RUN_ID="run-${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}"
+          RESULTS_DIR="${GITHUB_WORKSPACE}/fuzz-results/${TARGET}/${RUN_ID}"
+          mkdir -p "${RESULTS_DIR}/artifacts" "${RESULTS_DIR}/logs"
+          date -u +%Y-%m-%dT%H:%M:%SZ > "${RESULTS_DIR}/started_at.txt"
+          set +e
+          cargo fuzz run "${TARGET}" -- \
+            -max_total_time=14400 \
+            -timeout=30 \
+            -artifact_prefix="${RESULTS_DIR}/artifacts/" \
+            -print_final_stats=1 2>&1 | tee "${RESULTS_DIR}/logs/libfuzzer.log.raw"
+          STATUS=${PIPESTATUS[0]}
+          set -e
+          echo "${STATUS}" > "${RESULTS_DIR}/exit_status.txt"
+          exit "${STATUS}"
+      - name: Finalize vault fuzz results
+        if: always()
+        run: |
+          RUN_ID="run-${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}"
+          RESULTS_DIR="${GITHUB_WORKSPACE}/fuzz-results/${TARGET}/${RUN_ID}"
+          LOG_DIR="${RESULTS_DIR}/logs"
+          ARTIFACT_DIR="${RESULTS_DIR}/artifacts"
+          LOG_CAP_BYTES=10485760
+          mkdir -p "${LOG_DIR}" "${ARTIFACT_DIR}"
+          if [ -f "${LOG_DIR}/libfuzzer.log.raw" ]; then
+            tail -c "${LOG_CAP_BYTES}" "${LOG_DIR}/libfuzzer.log.raw" > "${LOG_DIR}/libfuzzer.log"
+            rm -f "${LOG_DIR}/libfuzzer.log.raw"
+          fi
+          export RESULTS_DIR TARGET LOG_DIR ARTIFACT_DIR LOG_CAP_BYTES GITHUB_JOB
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import subprocess
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          results_dir = Path(os.environ["RESULTS_DIR"])
+          log_dir = Path(os.environ["LOG_DIR"])
+          artifact_dir = Path(os.environ["ARTIFACT_DIR"])
+          target = os.environ["TARGET"]
+          log_cap_bytes = int(os.environ["LOG_CAP_BYTES"])
+          log_file = log_dir / "libfuzzer.log"
+
+          def utc_now():
+              return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+          def read_optional(path):
+              try:
+                  return path.read_text(encoding="utf-8", errors="replace").strip()
+              except OSError:
+                  return None
+
+          def tool_version(cmd):
+              try:
+                  out = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+                  return out.stdout.strip() or None
+              except (OSError, subprocess.SubprocessError):
+                  return None
+
+          generated_at = utc_now()
+          run_timestamp = read_optional(results_dir / "started_at.txt")
+          exit_status_raw = read_optional(results_dir / "exit_status.txt")
+          exit_status = int(exit_status_raw) if exit_status_raw is not None else None
+
+          duration_seconds = None
+          if run_timestamp is not None:
+              try:
+                  started = datetime.strptime(run_timestamp, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                  duration_seconds = int((datetime.now(timezone.utc) - started).total_seconds())
+              except ValueError:
+                  duration_seconds = None
+
+          crash_reproducers = sorted(
+              "artifacts/" + p.name for p in artifact_dir.iterdir() if p.is_file()
+          )
+
+          fuzzer_stats = {}
+          if log_file.is_file():
+              stat_re = re.compile(r"^stat::([a-z0-9_]+):\s*(\S+)")
+              try:
+                  with log_file.open("r", encoding="utf-8", errors="replace") as fh:
+                      for line in fh:
+                          m = stat_re.match(line)
+                          if not m:
+                              continue
+                          key, raw_value = m.groups()
+                          try:
+                              value = int(raw_value)
+                          except ValueError:
+                              try:
+                                  value = float(raw_value)
+                              except ValueError:
+                                  value = raw_value
+                          fuzzer_stats[key] = value
+              except OSError:
+                  pass
+
+          if exit_status is None:
+              outcome = "interrupted"
+          elif exit_status == 0:
+              outcome = "completed"
+          elif crash_reproducers:
+              outcome = "crash"
+          else:
+              outcome = "failed"
+
+          report = {
+              "schema_version": 1,
+              "generated_at": generated_at,
+              "run_timestamp": run_timestamp,
+              "completed_at": generated_at,
+              "duration_seconds": duration_seconds,
+              "workflow": "fuzz-soak.yml",
+              "workflow_run_id": int(os.environ["GITHUB_RUN_ID"]),
+              "workflow_run_attempt": int(os.environ["GITHUB_RUN_ATTEMPT"]),
+              "job": os.environ["GITHUB_JOB"],
+              "commit_sha": os.environ["GITHUB_SHA"],
+              "runner_os": os.environ.get("RUNNER_OS"),
+              "runner_arch": os.environ.get("RUNNER_ARCH"),
+              "target": target,
+              "command": (
+                  f"cargo fuzz run {target} -- "
+                  f"-max_total_time=14400 -timeout=30 "
+                  f"-artifact_prefix={artifact_dir}/ -print_final_stats=1"
+              ),
+              "exit_status": exit_status,
+              "outcome": outcome,
+              "crash_reproducers": crash_reproducers,
+              "log_file": "logs/libfuzzer.log",
+              "fuzzer_stats": fuzzer_stats,
+              "config": {
+                  "max_total_time_seconds": 14400,
+                  "unit_timeout_seconds": 30,
+                  "artifact_prefix": f"{artifact_dir}/",
+                  "log_cap_bytes": log_cap_bytes,
+                  "rustc_version": tool_version(["rustc", "--version"]),
+                  "cargo_fuzz_version": tool_version(["cargo", "fuzz", "--version"]),
+              },
+          }
+
+          report_path = results_dir / "report.json"
+          report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+          print(f"wrote {report_path}")
+          PY
+      - name: Retain vault fuzz results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-soak-${{ env.TARGET }}-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: fuzz-results/${{ env.TARGET }}/
+          if-no-files-found: warn
+          retention-days: 90
 
   fuzz-soak-envelope:
     name: four-hour fuzz campaign — envelope parser
     needs: fuzz-soak-vault
     runs-on: ubuntu-latest
     timeout-minutes: 255
+    env:
+      TARGET: envelope_parse
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
       - name: Run envelope parser campaign for four hours
-        run: cargo fuzz run envelope_parse -- -max_total_time=14400 -timeout=30
         working-directory: fuzz
+        run: |
+          RUN_ID="run-${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}"
+          RESULTS_DIR="${GITHUB_WORKSPACE}/fuzz-results/${TARGET}/${RUN_ID}"
+          mkdir -p "${RESULTS_DIR}/artifacts" "${RESULTS_DIR}/logs"
+          date -u +%Y-%m-%dT%H:%M:%SZ > "${RESULTS_DIR}/started_at.txt"
+          set +e
+          cargo fuzz run "${TARGET}" -- \
+            -max_total_time=14400 \
+            -timeout=30 \
+            -artifact_prefix="${RESULTS_DIR}/artifacts/" \
+            -print_final_stats=1 2>&1 | tee "${RESULTS_DIR}/logs/libfuzzer.log.raw"
+          STATUS=${PIPESTATUS[0]}
+          set -e
+          echo "${STATUS}" > "${RESULTS_DIR}/exit_status.txt"
+          exit "${STATUS}"
+      - name: Finalize envelope fuzz results
+        if: always()
+        run: |
+          RUN_ID="run-${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}"
+          RESULTS_DIR="${GITHUB_WORKSPACE}/fuzz-results/${TARGET}/${RUN_ID}"
+          LOG_DIR="${RESULTS_DIR}/logs"
+          ARTIFACT_DIR="${RESULTS_DIR}/artifacts"
+          LOG_CAP_BYTES=10485760
+          mkdir -p "${LOG_DIR}" "${ARTIFACT_DIR}"
+          if [ -f "${LOG_DIR}/libfuzzer.log.raw" ]; then
+            tail -c "${LOG_CAP_BYTES}" "${LOG_DIR}/libfuzzer.log.raw" > "${LOG_DIR}/libfuzzer.log"
+            rm -f "${LOG_DIR}/libfuzzer.log.raw"
+          fi
+          export RESULTS_DIR TARGET LOG_DIR ARTIFACT_DIR LOG_CAP_BYTES GITHUB_JOB
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import subprocess
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          results_dir = Path(os.environ["RESULTS_DIR"])
+          log_dir = Path(os.environ["LOG_DIR"])
+          artifact_dir = Path(os.environ["ARTIFACT_DIR"])
+          target = os.environ["TARGET"]
+          log_cap_bytes = int(os.environ["LOG_CAP_BYTES"])
+          log_file = log_dir / "libfuzzer.log"
+
+          def utc_now():
+              return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+          def read_optional(path):
+              try:
+                  return path.read_text(encoding="utf-8", errors="replace").strip()
+              except OSError:
+                  return None
+
+          def tool_version(cmd):
+              try:
+                  out = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+                  return out.stdout.strip() or None
+              except (OSError, subprocess.SubprocessError):
+                  return None
+
+          generated_at = utc_now()
+          run_timestamp = read_optional(results_dir / "started_at.txt")
+          exit_status_raw = read_optional(results_dir / "exit_status.txt")
+          exit_status = int(exit_status_raw) if exit_status_raw is not None else None
+
+          duration_seconds = None
+          if run_timestamp is not None:
+              try:
+                  started = datetime.strptime(run_timestamp, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                  duration_seconds = int((datetime.now(timezone.utc) - started).total_seconds())
+              except ValueError:
+                  duration_seconds = None
+
+          crash_reproducers = sorted(
+              "artifacts/" + p.name for p in artifact_dir.iterdir() if p.is_file()
+          )
+
+          fuzzer_stats = {}
+          if log_file.is_file():
+              stat_re = re.compile(r"^stat::([a-z0-9_]+):\s*(\S+)")
+              try:
+                  with log_file.open("r", encoding="utf-8", errors="replace") as fh:
+                      for line in fh:
+                          m = stat_re.match(line)
+                          if not m:
+                              continue
+                          key, raw_value = m.groups()
+                          try:
+                              value = int(raw_value)
+                          except ValueError:
+                              try:
+                                  value = float(raw_value)
+                              except ValueError:
+                                  value = raw_value
+                          fuzzer_stats[key] = value
+              except OSError:
+                  pass
+
+          if exit_status is None:
+              outcome = "interrupted"
+          elif exit_status == 0:
+              outcome = "completed"
+          elif crash_reproducers:
+              outcome = "crash"
+          else:
+              outcome = "failed"
+
+          report = {
+              "schema_version": 1,
+              "generated_at": generated_at,
+              "run_timestamp": run_timestamp,
+              "completed_at": generated_at,
+              "duration_seconds": duration_seconds,
+              "workflow": "fuzz-soak.yml",
+              "workflow_run_id": int(os.environ["GITHUB_RUN_ID"]),
+              "workflow_run_attempt": int(os.environ["GITHUB_RUN_ATTEMPT"]),
+              "job": os.environ["GITHUB_JOB"],
+              "commit_sha": os.environ["GITHUB_SHA"],
+              "runner_os": os.environ.get("RUNNER_OS"),
+              "runner_arch": os.environ.get("RUNNER_ARCH"),
+              "target": target,
+              "command": (
+                  f"cargo fuzz run {target} -- "
+                  f"-max_total_time=14400 -timeout=30 "
+                  f"-artifact_prefix={artifact_dir}/ -print_final_stats=1"
+              ),
+              "exit_status": exit_status,
+              "outcome": outcome,
+              "crash_reproducers": crash_reproducers,
+              "log_file": "logs/libfuzzer.log",
+              "fuzzer_stats": fuzzer_stats,
+              "config": {
+                  "max_total_time_seconds": 14400,
+                  "unit_timeout_seconds": 30,
+                  "artifact_prefix": f"{artifact_dir}/",
+                  "log_cap_bytes": log_cap_bytes,
+                  "rustc_version": tool_version(["rustc", "--version"]),
+                  "cargo_fuzz_version": tool_version(["cargo", "fuzz", "--version"]),
+              },
+          }
+
+          report_path = results_dir / "report.json"
+          report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+          print(f"wrote {report_path}")
+          PY
+      - name: Retain envelope fuzz results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-soak-${{ env.TARGET }}-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: fuzz-results/${{ env.TARGET }}/
+          if-no-files-found: warn
+          retention-days: 90
 
   fuzz-soak-backup:
     name: four-hour fuzz campaign — backup importer
     needs: fuzz-soak-envelope
     runs-on: ubuntu-latest
     timeout-minutes: 255
+    env:
+      TARGET: backup_import
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
       - name: Run backup importer campaign for four hours
-        run: cargo fuzz run backup_import -- -max_total_time=14400 -timeout=30
         working-directory: fuzz
+        run: |
+          RUN_ID="run-${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}"
+          RESULTS_DIR="${GITHUB_WORKSPACE}/fuzz-results/${TARGET}/${RUN_ID}"
+          mkdir -p "${RESULTS_DIR}/artifacts" "${RESULTS_DIR}/logs"
+          date -u +%Y-%m-%dT%H:%M:%SZ > "${RESULTS_DIR}/started_at.txt"
+          set +e
+          cargo fuzz run "${TARGET}" -- \
+            -max_total_time=14400 \
+            -timeout=30 \
+            -artifact_prefix="${RESULTS_DIR}/artifacts/" \
+            -print_final_stats=1 2>&1 | tee "${RESULTS_DIR}/logs/libfuzzer.log.raw"
+          STATUS=${PIPESTATUS[0]}
+          set -e
+          echo "${STATUS}" > "${RESULTS_DIR}/exit_status.txt"
+          exit "${STATUS}"
+      - name: Finalize backup fuzz results
+        if: always()
+        run: |
+          RUN_ID="run-${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}"
+          RESULTS_DIR="${GITHUB_WORKSPACE}/fuzz-results/${TARGET}/${RUN_ID}"
+          LOG_DIR="${RESULTS_DIR}/logs"
+          ARTIFACT_DIR="${RESULTS_DIR}/artifacts"
+          LOG_CAP_BYTES=10485760
+          mkdir -p "${LOG_DIR}" "${ARTIFACT_DIR}"
+          if [ -f "${LOG_DIR}/libfuzzer.log.raw" ]; then
+            tail -c "${LOG_CAP_BYTES}" "${LOG_DIR}/libfuzzer.log.raw" > "${LOG_DIR}/libfuzzer.log"
+            rm -f "${LOG_DIR}/libfuzzer.log.raw"
+          fi
+          export RESULTS_DIR TARGET LOG_DIR ARTIFACT_DIR LOG_CAP_BYTES GITHUB_JOB
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import subprocess
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          results_dir = Path(os.environ["RESULTS_DIR"])
+          log_dir = Path(os.environ["LOG_DIR"])
+          artifact_dir = Path(os.environ["ARTIFACT_DIR"])
+          target = os.environ["TARGET"]
+          log_cap_bytes = int(os.environ["LOG_CAP_BYTES"])
+          log_file = log_dir / "libfuzzer.log"
+
+          def utc_now():
+              return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+          def read_optional(path):
+              try:
+                  return path.read_text(encoding="utf-8", errors="replace").strip()
+              except OSError:
+                  return None
+
+          def tool_version(cmd):
+              try:
+                  out = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+                  return out.stdout.strip() or None
+              except (OSError, subprocess.SubprocessError):
+                  return None
+
+          generated_at = utc_now()
+          run_timestamp = read_optional(results_dir / "started_at.txt")
+          exit_status_raw = read_optional(results_dir / "exit_status.txt")
+          exit_status = int(exit_status_raw) if exit_status_raw is not None else None
+
+          duration_seconds = None
+          if run_timestamp is not None:
+              try:
+                  started = datetime.strptime(run_timestamp, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                  duration_seconds = int((datetime.now(timezone.utc) - started).total_seconds())
+              except ValueError:
+                  duration_seconds = None
+
+          crash_reproducers = sorted(
+              "artifacts/" + p.name for p in artifact_dir.iterdir() if p.is_file()
+          )
+
+          fuzzer_stats = {}
+          if log_file.is_file():
+              stat_re = re.compile(r"^stat::([a-z0-9_]+):\s*(\S+)")
+              try:
+                  with log_file.open("r", encoding="utf-8", errors="replace") as fh:
+                      for line in fh:
+                          m = stat_re.match(line)
+                          if not m:
+                              continue
+                          key, raw_value = m.groups()
+                          try:
+                              value = int(raw_value)
+                          except ValueError:
+                              try:
+                                  value = float(raw_value)
+                              except ValueError:
+                                  value = raw_value
+                          fuzzer_stats[key] = value
+              except OSError:
+                  pass
+
+          if exit_status is None:
+              outcome = "interrupted"
+          elif exit_status == 0:
+              outcome = "completed"
+          elif crash_reproducers:
+              outcome = "crash"
+          else:
+              outcome = "failed"
+
+          report = {
+              "schema_version": 1,
+              "generated_at": generated_at,
+              "run_timestamp": run_timestamp,
+              "completed_at": generated_at,
+              "duration_seconds": duration_seconds,
+              "workflow": "fuzz-soak.yml",
+              "workflow_run_id": int(os.environ["GITHUB_RUN_ID"]),
+              "workflow_run_attempt": int(os.environ["GITHUB_RUN_ATTEMPT"]),
+              "job": os.environ["GITHUB_JOB"],
+              "commit_sha": os.environ["GITHUB_SHA"],
+              "runner_os": os.environ.get("RUNNER_OS"),
+              "runner_arch": os.environ.get("RUNNER_ARCH"),
+              "target": target,
+              "command": (
+                  f"cargo fuzz run {target} -- "
+                  f"-max_total_time=14400 -timeout=30 "
+                  f"-artifact_prefix={artifact_dir}/ -print_final_stats=1"
+              ),
+              "exit_status": exit_status,
+              "outcome": outcome,
+              "crash_reproducers": crash_reproducers,
+              "log_file": "logs/libfuzzer.log",
+              "fuzzer_stats": fuzzer_stats,
+              "config": {
+                  "max_total_time_seconds": 14400,
+                  "unit_timeout_seconds": 30,
+                  "artifact_prefix": f"{artifact_dir}/",
+                  "log_cap_bytes": log_cap_bytes,
+                  "rustc_version": tool_version(["rustc", "--version"]),
+                  "cargo_fuzz_version": tool_version(["cargo", "fuzz", "--version"]),
+              },
+          }
+
+          report_path = results_dir / "report.json"
+          report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+          print(f"wrote {report_path}")
+          PY
+      - name: Retain backup fuzz results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-soak-${{ env.TARGET }}-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: fuzz-results/${{ env.TARGET }}/
+          if-no-files-found: warn
+          retention-days: 90
