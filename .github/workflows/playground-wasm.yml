@@ -10,6 +10,8 @@ on:
       - 'crates/nexusq-ml-dsa/**'
       - 'crates/nexusq-ml-kem/**'
       - 'crates/nexusq-wasm/**'
+      - 'site/playground/**'
+      - 'scripts/build-playground-wasm.sh'
       - '.github/workflows/playground-wasm.yml'
   push:
     branches: [main]
@@ -20,6 +22,8 @@ on:
       - 'crates/nexusq-ml-dsa/**'
       - 'crates/nexusq-ml-kem/**'
       - 'crates/nexusq-wasm/**'
+      - 'site/playground/**'
+      - 'scripts/build-playground-wasm.sh'
       - '.github/workflows/playground-wasm.yml'
 
 permissions:
@@ -31,19 +35,31 @@ concurrency:
 
 jobs:
   wasm:
-    name: Compile browser WebAssembly target
+    name: Build and verify browser WebAssembly package
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.88.0
         with:
           targets: wasm32-unknown-unknown
           components: rustfmt
+      - uses: jetli/wasm-pack-action@v0.4.0
+        with:
+          version: latest
       - uses: Swatinem/rust-cache@v2
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Check WASM bridge
         run: cargo check -p nexusq-wasm --target wasm32-unknown-unknown --locked
+      - name: Build browser package for the Playground
+        run: wasm-pack build crates/nexusq-wasm --target web --release --out-dir site/playground/pkg --out-name nexusq_wasm
       - name: Test native bridge API and cryptographic round trips
         run: cargo test -p nexusq-wasm --locked
+      - name: Upload browser package for preview and release
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexusq-playground-wasm
+          path: site/playground/pkg/
+          if-no-files-found: error
+          retention-days: 14
