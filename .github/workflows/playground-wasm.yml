@@ -53,7 +53,7 @@ jobs:
       - name: Check WASM bridge
         run: cargo check -p nexusq-wasm --target wasm32-unknown-unknown --locked
       - name: Build browser package for the Playground
-        run: wasm-pack build crates/nexusq-wasm --target web --release --out-dir site/playground/pkg --out-name nexusq_wasm
+        run: wasm-pack build crates/nexusq-wasm --target web --release --no-opt --out-dir site/playground/pkg --out-name nexusq_wasm
       - name: Test native bridge API and cryptographic round trips
         run: cargo test -p nexusq-wasm --locked
       - name: Upload browser package for preview and release
