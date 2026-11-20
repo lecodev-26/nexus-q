@@ -1,19 +1,12 @@
 name: NEXUS-Q Cargo Audit
 
 on:
+  # Always publish the required status check for every PR targeting main.
+  # The main-branch ruleset requires this context even when a PR changes no
+  # Rust manifests or lockfiles, so path-filtering pull_request would leave
+  # the required check permanently pending and block otherwise valid merges.
   pull_request:
     branches: [main]
-    paths:
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - 'crates/nexusq-native-backend/Cargo.toml'
-      - 'crates/nexusq-native-backend/Cargo.lock'
-      - 'arena/runners/nexusq-native/Cargo.toml'
-      - 'arena/runners/nexusq-native/Cargo.lock'
-      - '.cargo/**'
-      - '.github/fixtures/cargo-audit/**'
-      - '.github/scripts/check-cargo-audit-exceptions.py'
-      - '.github/workflows/cargo-audit.yml'
   push:
     branches: [main]
     paths:
