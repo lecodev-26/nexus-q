@@ -1,0 +1,48 @@
+name: NEXUS-Q Playground WASM
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/nexusq-core/**'
+      - 'crates/nexusq-ml-dsa/**'
+      - 'crates/nexusq-ml-kem/**'
+      - 'crates/nexusq-wasm/**'
+      - '.github/workflows/playground-wasm.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/nexusq-core/**'
+      - 'crates/nexusq-ml-dsa/**'
+      - 'crates/nexusq-ml-kem/**'
+      - 'crates/nexusq-wasm/**'
+      - '.github/workflows/playground-wasm.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nexusq-playground-wasm-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  wasm:
+    name: Compile browser WebAssembly target
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Check WASM bridge
+        run: cargo check -p nexusq-wasm --target wasm32-unknown-unknown --locked
+      - name: Test native bridge API and cryptographic round trips
+        run: cargo test -p nexusq-wasm --locked
