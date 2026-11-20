@@ -1,0 +1,21 @@
+{
+  "name": "nexusq-wasm",
+  "type": "module",
+  "description": "WebAssembly bridge for the NEXUS-Q post-quantum cryptographic core",
+  "version": "4.1.2",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lecodev-26/nexus-q"
+  },
+  "files": [
+    "nexusq_wasm_bg.wasm",
+    "nexusq_wasm.js",
+    "nexusq_wasm.d.ts"
+  ],
+  "main": "nexusq_wasm.js",
+  "types": "nexusq_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
