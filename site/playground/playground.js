@@ -4,11 +4,10 @@ let wasm = null;
 let signingPair = null;
 let kemPair = null;
 let kemEncapsulation = null;
+let lastSignature = null;
 
-function bytesToHex(bytes, limit = 900) {
-  const view = Array.from(bytes).slice(0, limit);
-  const hex = view.map((byte) => byte.toString(16).padStart(2, "0")).join("");
-  return bytes.length > limit ? `${hex}\n… ${bytes.length - limit} more bytes` : hex;
+function bytesToHex(bytes) {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 function setStatus(id, message, kind = "") {
   const el = $(id);
@@ -86,6 +85,7 @@ $("generate-sign-key").addEventListener("click", () => {
   try {
     if (signingPair) signingPair.free();
     signingPair = wasm.WasmMlDsa65KeyPair.generate();
+    lastSignature = null;
     $("sign-public-key").textContent = bytesToHex(signingPair.public_key());
     $("sign-signature").textContent = "Sign a message to generate a detached signature.";
     enable("sign-message-btn");
@@ -101,8 +101,7 @@ $("sign-message-btn").addEventListener("click", () => {
     if (!signingPair) throw new Error("Generate a key pair first.");
     const message = encoder.encode($("sign-message").value);
     const signature = signingPair.sign(message);
-    window.lastSignature = signature;
-    window.lastSignedMessage = message;
+    lastSignature = signature;
     $("sign-signature").textContent = bytesToHex(signature);
     document.querySelector('[data-copy="sign-signature"]').disabled = false;
     enable("verify-signature-btn");
@@ -111,8 +110,8 @@ $("sign-message-btn").addEventListener("click", () => {
 });
 $("verify-signature-btn").addEventListener("click", () => {
   try {
-    if (!signingPair || !window.lastSignature) throw new Error("Create a signature first.");
-    const valid = wasm.ml_dsa_65_verify(signingPair.public_key(), encoder.encode($("sign-message").value), window.lastSignature);
+    if (!signingPair || !lastSignature) throw new Error("Create a signature first.");
+    const valid = wasm.ml_dsa_65_verify(signingPair.public_key(), encoder.encode($("sign-message").value), lastSignature);
     setStatus("sign-result", valid ? "VALID — signature matches the current message." : "INVALID — message or signature does not match.", valid ? "success" : "error");
   } catch (error) { setStatus("sign-result", error.message, "error"); }
 });
@@ -136,6 +135,7 @@ $("generate-kem-key").addEventListener("click", () => {
 $("encapsulate-btn").addEventListener("click", () => {
   try {
     if (!kemPair) throw new Error("Generate a key pair first.");
+    if (kemEncapsulation) kemEncapsulation.free();
     kemEncapsulation = wasm.ml_kem_768_encapsulate(kemPair.public_key());
     $("kem-ciphertext").textContent = bytesToHex(kemEncapsulation.ciphertext());
     document.querySelector('[data-copy="kem-ciphertext"]').disabled = false;
@@ -144,18 +144,23 @@ $("encapsulate-btn").addEventListener("click", () => {
   } catch (error) { setStatus("kem-result", error.message, "error"); }
 });
 $("decapsulate-btn").addEventListener("click", () => {
+  let received = null;
+  let sent = null;
   try {
     if (!kemPair || !kemEncapsulation) throw new Error("Encapsulate a secret first.");
-    const received = kemPair.decapsulate(kemEncapsulation.ciphertext());
-    const sent = kemEncapsulation.shared_secret();
+    received = kemPair.decapsulate(kemEncapsulation.ciphertext());
+    sent = kemEncapsulation.shared_secret();
     const equal = sent.length === received.length && sent.every((byte, index) => byte === received[index]);
-    sent.fill(0);
-    received.fill(0);
-    kemEncapsulation.free();
+    setStatus("kem-result", equal ? "MATCH — both sides derived the same shared secret. Temporary JS copies were cleared." : "MISMATCH — the derived secrets differ.", equal ? "success" : "error");
+  } catch (error) {
+    setStatus("kem-result", error.message, "error");
+  } finally {
+    sent?.fill(0);
+    received?.fill(0);
+    if (kemEncapsulation) kemEncapsulation.free();
     kemEncapsulation = null;
     enable("decapsulate-btn", false);
-    setStatus("kem-result", equal ? "MATCH — both sides derived the same shared secret. Temporary JS copies were cleared." : "MISMATCH — the derived secrets differ.", equal ? "success" : "error");
-  } catch (error) { setStatus("kem-result", error.message, "error"); }
+  }
 });
 
 $("password-length").addEventListener("input", (event) => { $("password-length-value").textContent = event.target.value; });
