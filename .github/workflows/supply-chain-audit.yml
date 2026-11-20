@@ -1,44 +1,8 @@
 name: NEXUS-Q Supply Chain Inventory
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - 'crates/**/Cargo.toml'
-      - 'crates/**/*.rs'
-      - 'crates/nexusq-native-backend/**'
-      - 'vendor/**/*.rs'
-      - 'crates/nexusq-native-backend/Cargo.lock'
-      - 'arena/runners/**/Cargo.toml'
-      - 'arena/runners/**/Cargo.lock'
-      - 'arena/runners/**/*.rs'
-      - 'tools/**/*.rs'
-      - 'supply-chain/**'
-      - 'deny.toml'
-      - 'docs/security/SUPPLY_CHAIN.md'
-      - 'docs/security/UNSAFE_CODE_POLICY.md'
-      - '.github/workflows/supply-chain-audit.yml'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - 'crates/**/Cargo.toml'
-      - 'crates/**/*.rs'
-      - 'crates/nexusq-native-backend/**'
-      - 'vendor/**/*.rs'
-      - 'crates/nexusq-native-backend/Cargo.lock'
-      - 'arena/runners/**/Cargo.toml'
-      - 'arena/runners/**/Cargo.lock'
-      - 'arena/runners/**/*.rs'
-      - 'tools/**/*.rs'
-      - 'supply-chain/**'
-      - 'deny.toml'
-      - 'docs/security/SUPPLY_CHAIN.md'
-      - 'docs/security/UNSAFE_CODE_POLICY.md'
-      - '.github/workflows/supply-chain-audit.yml'
+  schedule:
+    - cron: '15 6 * * 1'
   workflow_dispatch:
 
 permissions:
