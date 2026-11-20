@@ -14,7 +14,7 @@ The workflow checks out recursive submodules and uses Rust 1.88.0 with rustfmt a
 4. `cargo clippy --workspace --all-targets --locked -- -D warnings`
 5. `cargo test --workspace --locked`
 
-A successful run is evidence that these configured steps passed for the exact checked-out revision. The separate `NEXUS-Q Coverage` workflow also measures workspace line coverage and publishes a per-file report on every pull request; its thresholds are independently enforced. It does not establish that every standalone crate, SDK, fuzz target, platform, release path, or manually dispatched workflow passed. It is not an independent security audit, certification, or production-readiness assessment.
+A successful run is evidence that these configured steps passed for the exact checked-out revision. Coverage is a separate scheduled/manual workflow; it is not part of the per-PR Fast CI gate. Its thresholds are independently enforced whenever that workflow runs. It does not establish that every standalone crate, SDK, fuzz target, platform, release path, or manually dispatched workflow passed. It is not an independent security audit, certification, or production-readiness assessment.
 
 ## Specialized workflows and their triggers
 
@@ -22,13 +22,16 @@ These workflows are separate from Fast CI. The trigger column reflects the workf
 
 | Workflow | Trigger | Purpose / boundary |
 |---|---|---|
-| cargo-audit.yml | Every pull request targeting main, pushes to main, or manual dispatch | Pinned cargo-audit gate across all three committed lockfiles, with expiring exception metadata and a controlled vulnerable-dependency rejection check. |
+| cargo-audit.yml | Dependency-input/policy paths on PRs and pushes, weekly schedule, or manual dispatch | Pinned cargo-audit gate across all three committed lockfiles, with expiring exception metadata and a controlled vulnerable-dependency rejection check. |
 | audit-ci.yml | Manual dispatch | Supplemental manually triggered cargo-audit and cargo-deny checks across the committed lockfiles. |
-| cargo-deny.yml | Every pull request targeting main, pushes to main, or manual dispatch | Enforces graph-aware advisory, license, crate-ban, duplicate-version, and source policies across the root workspace and separately locked native workspaces; includes a controlled policy-violation check. The cargo-audit.yml workflow additionally audits every committed lockfile directly. |
-| supply-chain-audit.yml | Relevant Rust source, manifest, lockfile, or supply-chain policy changes; or manual dispatch | cargo-vet trust policy plus a cargo-geiger JSON inventory across the root, native-backend, and Arena runner workspaces. |
+| cargo-deny.yml | Cargo manifests/lockfiles or deny policy on PRs and pushes, or manual dispatch | Enforces graph-aware advisory, license, crate-ban, duplicate-version, and source policies across the root workspace and separately locked native workspaces; includes a controlled policy-violation check. The cargo-audit.yml workflow additionally audits every committed lockfile directly. |
+| supply-chain-audit.yml | Weekly schedule or manual dispatch (repository-wide inventory is intentionally not run on every PR) | cargo-vet trust policy plus a cargo-geiger JSON inventory across the root, native-backend, and Arena runner workspaces. |
 | security-ci.yml | Manual dispatch | Repository security/data-contract checks, secret scanning, and related security validation. |
+| dylint-crypto.yml | Changes to Dylint rules or crypto-sensitive crate paths, or manual dispatch | Pinned-nightly semantic crypto lints; intentionally avoids running for unrelated Rust changes. See [Dylint crypto rules](security/DYLINT_CRYPTO_RULES.md). |
+| playground-wasm.yml | Changes to the WASM bridge, its cryptographic dependencies, Playground assets/build script, or workflow | Builds and verifies the browser WebAssembly package with a pinned `wasm-pack` version. |
+| xks-hsm-ci.yml | Changes to HSM/XKS crates, XKS docs, Cargo manifests/lockfile, or workflow | SoftHSM integration and AWS XKS v1 conformance checks. |
 | miri.yml | Relevant pull requests, weekly schedule, or manual dispatch | Pinned-nightly Miri run for Rust-side C ABI pointer/string tests; uploads its console output. See [Miri memory-safety checks](security/MIRI.md) for coverage and exclusions. |
-| coverage.yml | Every pull request targeting main, pushes to main, or manual dispatch | Measures root Rust workspace line coverage on every PR, uploads per-file HTML/LCOV reports, publishes report links, and enforces versioned global and critical-module thresholds. See [Rust workspace test coverage](security/COVERAGE.md) for scope and exclusions. |
+| coverage.yml | Weekly schedule or manual dispatch | Measures root Rust workspace line coverage, uploads per-file HTML/LCOV reports, and enforces versioned global and critical-module thresholds. See [Rust workspace test coverage](security/COVERAGE.md) for scope and exclusions. |
 | correctness-interoperability.yml | Manual dispatch | Additional correctness, interoperability, and official/vendored vector suites. |
 | fuzz-nightly.yml | Weekly schedule or manual dispatch | Per-target 10-minute campaigns for all registered Rust fuzz targets; restores and updates target corpora and uploads corpus/crash artifacts for 90 days. See [Rust fuzzing guide](../fuzz/README.md). |
 | fuzz-soak.yml | Manual dispatch | Longer sequential fuzz campaigns; not equivalent to compiling the fuzz harness. |

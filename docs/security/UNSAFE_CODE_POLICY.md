@@ -24,7 +24,7 @@ The Dylint crypto rules remain focused on semantic review candidates such as sec
 
 ## Unsafe dependency inventory
 
-The `NEXUS-Q Supply Chain Inventory` workflow pins `cargo-geiger` to 0.14.0 and uploads a machine-readable JSON artifact named `cargo-geiger-<commit-sha>`. It scans each package in the root workspace plus the separately locked `crates/nexusq-native-backend`, `arena/runners/nexusq`, and `arena/runners/nexusq-native` workspaces. The workflow refreshes on Rust source, manifest, lockfile, and supply-chain policy changes; artifacts are retained for 30 days.
+The `NEXUS-Q Supply Chain Inventory` workflow pins `cargo-geiger` to 0.14.0 and uploads a machine-readable JSON artifact named `cargo-geiger-<commit-sha>`. It scans each package in the root workspace plus the separately locked `crates/nexusq-native-backend`, `arena/runners/nexusq`, and `arena/runners/nexusq-native` workspaces. The workflow refreshes weekly and can also be dispatched manually; artifacts are retained for 30 days.
 
 `cargo-geiger` reports unsafe usage in the dependency graph. It is an inventory and triage aid, not a security certification, a proof of safety, or a substitute for reviewing project-owned unsafe blocks and third-party code. Root-workspace, native-backend, and Arena reports share the same artifact so reviewers can distinguish the separately managed dependency boundaries.
 

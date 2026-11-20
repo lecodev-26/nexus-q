@@ -1,6 +1,6 @@
 # Rust workspace test coverage
 
-NEXUS-Q measures line coverage with `cargo-llvm-cov` in GitHub Actions. The dedicated `NEXUS-Q Coverage` workflow runs for every pull request targeting `main`, every push to `main`, and manual dispatch. Each run publishes an HTML per-file report and its LCOV source data as a 30-day artifact; the workflow summary links directly to that artifact. Same-repository pull requests also receive an updated report comment. For fork-originated pull requests, the report remains linked from the PR check summary because GitHub does not grant write permissions to the fork-triggered workflow token.
+NEXUS-Q measures line coverage with `cargo-llvm-cov` in GitHub Actions. The dedicated `NEXUS-Q Coverage` workflow runs weekly and on manual dispatch, keeping this resource-intensive report separate from the automatic Fast CI path. Each run publishes an HTML per-file report and its LCOV source data as a 30-day artifact; the workflow summary links directly to that artifact. The workflow summary links to the uploaded artifact; it does not post PR comments because it is no longer a per-PR check.
 
 ## Reproduce a report
 
