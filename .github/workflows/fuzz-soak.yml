@@ -28,39 +28,153 @@ jobs:
     name: four-hour fuzz campaign — vault parser
     runs-on: ubuntu-latest
     timeout-minutes: 255
+    env:
+      TARGET: vault_parse
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
       - name: Run vault parser campaign for four hours
-        run: cargo fuzz run vault_parse -- -max_total_time=14400 -timeout=30
         working-directory: fuzz
+        run: |
+          RUN_ID="run-${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}"
+          RESULTS_DIR="${GITHUB_WORKSPACE}/fuzz-results/${TARGET}/${RUN_ID}"
+          mkdir -p "${RESULTS_DIR}/artifacts" "${RESULTS_DIR}/logs"
+          date -u +%Y-%m-%dT%H:%M:%SZ > "${RESULTS_DIR}/started_at.txt"
+          CMD=(cargo fuzz run "${TARGET}" -- -max_total_time=14400 -timeout=30 \
+            "-artifact_prefix=${RESULTS_DIR}/artifacts/" -print_final_stats=1)
+          printf '%s\n' "${CMD[*]}" > "${RESULTS_DIR}/command.txt"
+          set +e
+          "${CMD[@]}" 2>&1 | python3 "${GITHUB_WORKSPACE}/.github/scripts/fuzz_bounded_log.py" \
+            --cap-bytes 10485760 \
+            --output "${RESULTS_DIR}/logs/libfuzzer.log"
+          STATUS=${PIPESTATUS[0]}
+          set -e
+          echo "${STATUS}" > "${RESULTS_DIR}/exit_status.txt"
+          exit "${STATUS}"
+      # Retention is best-effort: if GitHub terminates the runner (hard job
+      # timeout at 255 min, manual cancellation, runner loss), finalization
+      # and upload may not run at all. libFuzzer's own 240-min limit leaves
+      # ~15 min of headroom, which makes runner loss unlikely in practice.
+      - name: Finalize vault fuzz results
+        if: always()
+        run: |
+          RUN_ID="run-${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}"
+          RESULTS_DIR="${GITHUB_WORKSPACE}/fuzz-results/${TARGET}/${RUN_ID}"
+          mkdir -p "${RESULTS_DIR}"
+          python3 "${GITHUB_WORKSPACE}/.github/scripts/fuzz_finalize.py" \
+            --results-dir "${RESULTS_DIR}" \
+            --target "${TARGET}"
+      - name: Retain vault fuzz results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-soak-${{ env.TARGET }}-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: fuzz-results/${{ env.TARGET }}/
+          if-no-files-found: warn
+          retention-days: 90
 
   fuzz-soak-envelope:
     name: four-hour fuzz campaign — envelope parser
     needs: fuzz-soak-vault
     runs-on: ubuntu-latest
     timeout-minutes: 255
+    env:
+      TARGET: envelope_parse
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
       - name: Run envelope parser campaign for four hours
-        run: cargo fuzz run envelope_parse -- -max_total_time=14400 -timeout=30
         working-directory: fuzz
+        run: |
+          RUN_ID="run-${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}"
+          RESULTS_DIR="${GITHUB_WORKSPACE}/fuzz-results/${TARGET}/${RUN_ID}"
+          mkdir -p "${RESULTS_DIR}/artifacts" "${RESULTS_DIR}/logs"
+          date -u +%Y-%m-%dT%H:%M:%SZ > "${RESULTS_DIR}/started_at.txt"
+          CMD=(cargo fuzz run "${TARGET}" -- -max_total_time=14400 -timeout=30 \
+            "-artifact_prefix=${RESULTS_DIR}/artifacts/" -print_final_stats=1)
+          printf '%s\n' "${CMD[*]}" > "${RESULTS_DIR}/command.txt"
+          set +e
+          "${CMD[@]}" 2>&1 | python3 "${GITHUB_WORKSPACE}/.github/scripts/fuzz_bounded_log.py" \
+            --cap-bytes 10485760 \
+            --output "${RESULTS_DIR}/logs/libfuzzer.log"
+          STATUS=${PIPESTATUS[0]}
+          set -e
+          echo "${STATUS}" > "${RESULTS_DIR}/exit_status.txt"
+          exit "${STATUS}"
+      # Retention is best-effort: if GitHub terminates the runner (hard job
+      # timeout at 255 min, manual cancellation, runner loss), finalization
+      # and upload may not run at all. libFuzzer's own 240-min limit leaves
+      # ~15 min of headroom, which makes runner loss unlikely in practice.
+      - name: Finalize envelope fuzz results
+        if: always()
+        run: |
+          RUN_ID="run-${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}"
+          RESULTS_DIR="${GITHUB_WORKSPACE}/fuzz-results/${TARGET}/${RUN_ID}"
+          mkdir -p "${RESULTS_DIR}"
+          python3 "${GITHUB_WORKSPACE}/.github/scripts/fuzz_finalize.py" \
+            --results-dir "${RESULTS_DIR}" \
+            --target "${TARGET}"
+      - name: Retain envelope fuzz results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-soak-${{ env.TARGET }}-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: fuzz-results/${{ env.TARGET }}/
+          if-no-files-found: warn
+          retention-days: 90
 
   fuzz-soak-backup:
     name: four-hour fuzz campaign — backup importer
     needs: fuzz-soak-envelope
     runs-on: ubuntu-latest
     timeout-minutes: 255
+    env:
+      TARGET: backup_import
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
       - name: Run backup importer campaign for four hours
-        run: cargo fuzz run backup_import -- -max_total_time=14400 -timeout=30
         working-directory: fuzz
+        run: |
+          RUN_ID="run-${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}"
+          RESULTS_DIR="${GITHUB_WORKSPACE}/fuzz-results/${TARGET}/${RUN_ID}"
+          mkdir -p "${RESULTS_DIR}/artifacts" "${RESULTS_DIR}/logs"
+          date -u +%Y-%m-%dT%H:%M:%SZ > "${RESULTS_DIR}/started_at.txt"
+          CMD=(cargo fuzz run "${TARGET}" -- -max_total_time=14400 -timeout=30 \
+            "-artifact_prefix=${RESULTS_DIR}/artifacts/" -print_final_stats=1)
+          printf '%s\n' "${CMD[*]}" > "${RESULTS_DIR}/command.txt"
+          set +e
+          "${CMD[@]}" 2>&1 | python3 "${GITHUB_WORKSPACE}/.github/scripts/fuzz_bounded_log.py" \
+            --cap-bytes 10485760 \
+            --output "${RESULTS_DIR}/logs/libfuzzer.log"
+          STATUS=${PIPESTATUS[0]}
+          set -e
+          echo "${STATUS}" > "${RESULTS_DIR}/exit_status.txt"
+          exit "${STATUS}"
+      # Retention is best-effort: if GitHub terminates the runner (hard job
+      # timeout at 255 min, manual cancellation, runner loss), finalization
+      # and upload may not run at all. libFuzzer's own 240-min limit leaves
+      # ~15 min of headroom, which makes runner loss unlikely in practice.
+      - name: Finalize backup fuzz results
+        if: always()
+        run: |
+          RUN_ID="run-${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}"
+          RESULTS_DIR="${GITHUB_WORKSPACE}/fuzz-results/${TARGET}/${RUN_ID}"
+          mkdir -p "${RESULTS_DIR}"
+          python3 "${GITHUB_WORKSPACE}/.github/scripts/fuzz_finalize.py" \
+            --results-dir "${RESULTS_DIR}" \
+            --target "${TARGET}"
+      - name: Retain backup fuzz results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-soak-${{ env.TARGET }}-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: fuzz-results/${{ env.TARGET }}/
+          if-no-files-found: warn
+          retention-days: 90
