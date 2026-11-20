@@ -5,7 +5,14 @@ on:
     branches: [main]
     paths:
       - 'tools/dylint/**'
-      - 'crates/**/*.rs'
+      - 'crates/nexusq/**'
+      - 'crates/nexusq-core/**'
+      - 'crates/nexusq-kernels/**'
+      - 'crates/nexusq-ml-dsa/**'
+      - 'crates/nexusq-ml-kem/**'
+      - 'crates/nexusq-c/**'
+      - 'crates/nexusq-hsm/**'
+      - 'crates/nexusq-xks-proxy/**'
       - '.github/workflows/dylint-crypto.yml'
       - 'docs/security/DYLINT_CRYPTO_RULES.md'
   workflow_dispatch:

@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>NEXUS-Q Playground — Post-quantum cryptography lab</title>
+  <meta name="description" content="Experiment with post-quantum cryptography in your browser. Generate ML-DSA-65 signatures, explore ML-KEM-768 key encapsulation, learn PQC and create strong random passwords.">
+  <meta name="robots" content="index,follow,max-image-preview:large">
+  <link rel="canonical" href="https://nexus-q.link/playground/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="NEXUS-Q">
+  <meta property="og:title" content="NEXUS-Q Playground — Post-quantum cryptography lab">
+  <meta property="og:description" content="A hands-on browser laboratory for ML-DSA-65, ML-KEM-768 and post-quantum cryptography education.">
+  <meta property="og:url" content="https://nexus-q.link/playground/">
+  <meta name="theme-color" content="#090a0c">
+  <link rel="icon" href="/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/playground/playground.css">
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"SoftwareApplication","name":"NEXUS-Q Playground","applicationCategory":"DeveloperApplication","operatingSystem":"Any modern browser with WebAssembly and Web Crypto support","url":"https://nexus-q.link/playground/","description":"An educational browser laboratory for post-quantum cryptography, including ML-DSA-65 signatures and ML-KEM-768 key encapsulation.","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"author":{"@type":"Organization","name":"NEXUS-Q","url":"https://nexus-q.link/"}}
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="NEXUS-Q home"><img src="/nexus-q-logo-64.webp" alt="" width="34" height="34"><span>NEXUS-Q</span><i>PLAYGROUND</i></a>
+    <nav aria-label="Main navigation"><a href="#lab">Crypto lab</a><a href="#learn">Learn PQC</a><a href="#challenges">Challenges</a><a href="#vault">Vault</a></nav>
+    <a class="back-link" href="/">Back to site <span aria-hidden="true">↗</span></a>
+  </header>
+
+  <main>
+    <section class="hero wrap">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="pulse"></span> BROWSER-BASED CRYPTOGRAPHY LAB</p>
+        <h1>Explore the<br><em>post-quantum</em><br>frontier.</h1>
+        <p class="hero-lead">A hands-on laboratory powered by the NEXUS-Q Rust engine compiled to WebAssembly. Generate keys, sign messages, verify signatures and understand how post-quantum cryptography works.</p>
+        <div class="hero-actions"><a class="button gold" href="#lab">Open crypto lab <span>↓</span></a><a class="button ghost" href="#learn">Start learning</a></div>
+        <div class="hero-meta"><span><b>ML-DSA-65</b> Digital signatures</span><span><b>ML-KEM-768</b> Key encapsulation</span><span><b>WASM</b> Local execution</span></div>
+      </div>
+      <div class="hero-visual" aria-hidden="true">
+        <div class="orbit orbit-a"></div><div class="orbit orbit-b"></div><div class="core-mark"><span>NQ</span><small>CRYPTO CORE</small></div>
+        <div class="float-chip chip-one">FIPS 204 <b>ML-DSA</b></div><div class="float-chip chip-two">FIPS 203 <b>ML-KEM</b></div><div class="float-chip chip-three">RUST → WASM</div>
+      </div>
+    </section>
+
+    <section class="status-strip wrap" aria-live="polite">
+      <div class="status-dot" id="engine-dot"></div><div><strong id="engine-title">Crypto engine is loading</strong><p id="engine-message">Preparing the NEXUS-Q WebAssembly module. Cryptographic operations stay in this browser.</p></div><span class="status-tag" id="engine-tag">INITIALIZING</span>
+    </section>
+
+    <section class="section wrap" id="lab">
+      <div class="section-heading"><div><p class="eyebrow">01 / INTERACTIVE LAB</p><h2>Work with real <em>cryptography.</em></h2></div><p>These tools call the NEXUS-Q Rust cryptographic core through WebAssembly. Private key objects remain inside WASM memory and are not exported by this interface.</p></div>
+      <div class="tabs" role="tablist" aria-label="Cryptography tools">
+        <button class="tab active" role="tab" aria-selected="true" aria-controls="panel-sign" id="tab-sign" data-panel="sign">01 <span>Signatures</span></button>
+        <button class="tab" role="tab" aria-selected="false" aria-controls="panel-kem" id="tab-kem" data-panel="kem">02 <span>Key exchange</span></button>
+        <button class="tab" role="tab" aria-selected="false" aria-controls="panel-password" id="tab-password" data-panel="password">03 <span>Password generator</span></button>
+      </div>
+
+      <section class="lab-panel" id="panel-sign" role="tabpanel" aria-labelledby="tab-sign">
+        <div class="panel-intro"><div class="number">A</div><div><h3>ML-DSA-65 signature lab</h3><p>Generate a signing key pair, sign a message and verify the detached signature. ML-DSA is standardized in FIPS 204.</p></div><span class="algorithm">FIPS 204</span></div>
+        <div class="lab-grid">
+          <div class="control-card"><label>Message to sign</label><textarea id="sign-message" rows="4" maxlength="4096">NEXUS-Q: exploring post-quantum cryptography in the browser.</textarea><div class="field-foot"><span>UTF-8 message</span><span id="message-length">64 / 4096</span></div><button class="button gold full" id="generate-sign-key" disabled>Generate ML-DSA-65 key pair</button><div class="key-summary" id="sign-key-state"><span class="mini-dot"></span>No key pair generated in this session</div><button class="button outline full" id="sign-message-btn" disabled>Sign message</button><button class="button outline full" id="verify-signature-btn" disabled>Verify signature</button></div>
+          <div class="result-card"><div class="result-head"><h4>Operation output</h4><span class="live-label">LOCAL SESSION</span></div><div class="result-block"><label>Public key</label><pre id="sign-public-key">Generate a key pair to display the public key.</pre><button class="copy-btn" data-copy="sign-public-key" disabled>Copy</button></div><div class="result-block"><label>Detached signature</label><pre id="sign-signature">Your signature will appear here.</pre><button class="copy-btn" data-copy="sign-signature" disabled>Copy</button></div><div class="result-status" id="sign-result" aria-live="polite">Waiting for key generation.</div></div>
+        </div>
+        <p class="panel-note">The private signing key is held by a WASM object for this page session. Refreshing or closing the page discards it. The public key and signature shown here are demonstration outputs, not a certificate or legal signature.</p>
+      </section>
+
+      <section class="lab-panel hidden" id="panel-kem" role="tabpanel" aria-labelledby="tab-kem" hidden>
+        <div class="panel-intro"><div class="number">B</div><div><h3>ML-KEM-768 key encapsulation</h3><p>Generate a recipient key pair, encapsulate a shared secret and decapsulate it to compare both sides. ML-KEM is standardized in FIPS 203.</p></div><span class="algorithm">FIPS 203</span></div>
+        <div class="lab-grid">
+          <div class="control-card"><label>Recipient key pair</label><p class="muted small">The decapsulation key remains inside the WASM object.</p><button class="button gold full" id="generate-kem-key" disabled>Generate ML-KEM-768 key pair</button><div class="key-summary" id="kem-key-state"><span class="mini-dot"></span>No key pair generated in this session</div><button class="button outline full" id="encapsulate-btn" disabled>Encapsulate shared secret</button><button class="button outline full" id="decapsulate-btn" disabled>Decapsulate and compare</button></div>
+          <div class="result-card"><div class="result-head"><h4>Key exchange output</h4><span class="live-label">LOCAL SESSION</span></div><div class="result-block"><label>Public key</label><pre id="kem-public-key">Generate a key pair to display the public key.</pre><button class="copy-btn" data-copy="kem-public-key" disabled>Copy</button></div><div class="result-block"><label>Ciphertext</label><pre id="kem-ciphertext">Encapsulation output will appear here.</pre><button class="copy-btn" data-copy="kem-ciphertext" disabled>Copy</button></div><div class="result-status" id="kem-result" aria-live="polite">Waiting for key generation.</div></div>
+        </div>
+        <p class="panel-note warning">Educational demonstration: this lab briefly exposes the shared secret in the page to compare encapsulation and decapsulation. Never use these demo values as production session keys or log/persist them.</p>
+      </section>
+
+      <section class="lab-panel hidden" id="panel-password" role="tabpanel" aria-labelledby="tab-password" hidden>
+        <div class="panel-intro"><div class="number">C</div><div><h3>Secure random password generator</h3><p>Create strong random passwords using the browser's Web Crypto API. This is a CSPRNG-based password tool, not a post-quantum cryptographic algorithm.</p></div><span class="algorithm">WEB CRYPTO</span></div>
+        <div class="password-layout"><div class="control-card"><label for="password-length">Password length <strong id="password-length-value">32</strong></label><input id="password-length" type="range" min="16" max="96" value="32"><div class="range-labels"><span>16 characters</span><span>96 characters</span></div><div class="checks"><label><input type="checkbox" id="pw-upper" checked> Uppercase letters</label><label><input type="checkbox" id="pw-lower" checked> Lowercase letters</label><label><input type="checkbox" id="pw-numbers" checked> Numbers</label><label><input type="checkbox" id="pw-symbols" checked> Symbols</label></div><button class="button gold full" id="generate-password">Generate secure password</button></div><div class="result-card password-result"><div class="result-head"><h4>Your random password</h4><span class="live-label">CRYPTO.GETRANDOMVALUES</span></div><output id="password-output">Click generate to create a password.</output><div class="password-actions"><button class="button outline" id="copy-password" disabled>Copy password</button><span id="password-entropy">—</span></div><p class="panel-note">Generated locally using <code>crypto.getRandomValues()</code> with rejection sampling to avoid modulo bias. This page does not store or transmit generated passwords.</p></div></div>
+      </section>
+    </section>
+
+    <section class="section learn-section" id="learn"><div class="wrap"><div class="section-heading"><div><p class="eyebrow">02 / LEARN PQC</p><h2>Understand the <em>building blocks.</em></h2></div><p>Post-quantum cryptography uses mathematical problems believed to resist attacks from both classical and large-scale quantum computers. Standards matter; claims should stay precise.</p></div>
+      <div class="learn-grid"><article class="learn-card"><span class="learn-code">FIPS 203</span><h3>ML-KEM-768</h3><p>Module-Lattice-Based Key-Encapsulation Mechanism. It lets two parties establish a shared secret over a public channel.</p><div class="learn-flow"><span>Public key</span><b>→</b><span>Encapsulate</span><b>→</b><span>Shared secret</span></div><a href="https://csrc.nist.gov/pubs/fips/203/final" target="_blank" rel="noopener">Read the NIST standard ↗</a></article>
+      <article class="learn-card"><span class="learn-code">FIPS 204</span><h3>ML-DSA-65</h3><p>Module-Lattice-Based Digital Signature Algorithm. It provides public-key signatures for authenticity and integrity.</p><div class="learn-flow"><span>Private key</span><b>→</b><span>Sign</span><b>→</b><span>Verify</span></div><a href="https://csrc.nist.gov/pubs/fips/204/final" target="_blank" rel="noopener">Read the NIST standard ↗</a></article>
+      <article class="learn-card"><span class="learn-code">SECURITY MODEL</span><h3>What “post-quantum” means</h3><p>PQC algorithms are designed to withstand known quantum attacks. That does not make every application, key store or deployment automatically secure.</p><div class="learn-flow"><span>Algorithm</span><b>+</b><span>Implementation</span><b>+</b><span>Operations</span></div><a href="https://csrc.nist.gov/projects/post-quantum-cryptography" target="_blank" rel="noopener">Explore NIST PQC ↗</a></article></div>
+    </div></section>
+
+    <section class="section wrap" id="challenges"><div class="section-heading"><div><p class="eyebrow">03 / KNOWLEDGE CHECK</p><h2>Test your <em>understanding.</em></h2></div><p>Short challenges to reinforce the difference between key encapsulation, signatures and secure randomness.</p></div>
+      <div class="challenge-card"><div class="challenge-count">CHALLENGE 01 <span> / 03</span></div><h3 id="challenge-question">Which NIST standard specifies ML-DSA digital signatures?</h3><div class="challenge-options" id="challenge-options"><button data-answer="A">FIPS 203</button><button data-answer="B">FIPS 204</button><button data-answer="C">FIPS 205</button></div><div class="challenge-feedback" id="challenge-feedback" aria-live="polite">Choose an answer to see the explanation.</div><button class="text-button" id="next-challenge">Next challenge →</button></div>
+    </section>
+
+    <section class="vault-section" id="vault"><div class="wrap vault-inner"><div><p class="eyebrow">04 / IN DEVELOPMENT</p><h2>Your future <em>Vault.</em></h2><p>A secure web Vault experience is on the roadmap. It is not available in this Playground preview: no account creation, cloud key storage or secret synchronization is enabled.</p></div><div class="vault-badge"><span class="vault-lock">⌑</span><strong>COMING SOON</strong><small>NO ACCOUNTS · NO KEY CUSTODY</small></div></div></section>
+
+    <section class="disclaimer wrap"><strong>Security and scope notice</strong><p>This Playground is an educational proof of concept, not an independently audited product or a production key-management service. Cryptographic code runs locally in the browser when the WASM module is available. Do not enter real secrets, production keys or sensitive messages. NEXUS-Q does not claim certification or independent security audit from this demonstration.</p></section>
+  </main>
+  <footer class="wrap"><a class="brand" href="/"><img src="/nexus-q-logo-64.webp" alt="" width="28" height="28"><span>NEXUS-Q</span></a><span>Open source · MIT OR Apache-2.0</span><div><a href="https://github.com/lecodev-26/nexus-q" target="_blank" rel="noopener">GitHub</a><a href="/legal">Legal</a><a href="/privacy">Privacy</a><a href="/">Main site</a></div></footer>
+  <script type="module" src="/playground/playground.js"></script>
+</body>
+</html>
