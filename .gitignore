@@ -54,6 +54,9 @@ Thumbs.db
 
 # Local release packaging output
 dist/
+
+# Fuzz soak results (CI workspace/dry-run output only; uploaded as CI artifacts)
+fuzz-results/
 .github/scripts/__pycache__/
 
 # Node (TypeScript SDK)
