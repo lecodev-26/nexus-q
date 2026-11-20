@@ -6,10 +6,17 @@
 
 ## Context
 
+
 NEXUS-Q must implement the primitives specified in `docs/CRYPTOGRAPHY.md`:
-randomness, hashing, KDF, AEAD, KEM, and signatures. Per the golden rule,
-we do not implement any primitive ourselves — we depend on audited,
-maintained crates.
+randomness, hashing, KDF, AEAD, KEM, and signatures. Production
+cryptographic implementations are provided by maintained crates wherever
+available. Dependencies are reviewed, but NEXUS-Q does not claim that every
+dependency has undergone an independent audit.
+
+The project also contains narrowly scoped, project-written experimental
+reference kernels in `nexusq-kernels`. They are not the default production
+cryptography path and are documented separately in ADR 0006.
+
 
 The choice is complicated by post-quantum algorithms being very young.
 The NIST standards (FIPS 203/204/205) were finalized in 2024, so most

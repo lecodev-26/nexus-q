@@ -12,14 +12,14 @@ use std::fs;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::crypto::aead::{self, AeadError, Algorithm as AeadAlgorithm};
 use crate::crypto::kdf::{self, KdfError};
 use crate::crypto::random::{OsRandomSource, RandomError, RandomSource};
 
 use super::algorithm::Algorithm;
-use super::body::{CURRENT_SCHEMA_VERSION, VaultBody, VaultMetadata};
+use super::body::{AuditKeyEpoch, CURRENT_SCHEMA_VERSION, VaultBody, VaultMetadata};
 use std::cell::{Cell, RefCell};
 
 use super::envelope::{self, EnvelopeError};
@@ -33,13 +33,14 @@ use super::record::{KeyRecord, RecordValidationError, WrappedKeyMaterial};
 use super::serde_helpers::{self, CborError};
 use super::state::{StateTransitionError, VaultState};
 use super::status::KeyStatus;
-use super::timestamp::Timestamp;
+use super::timestamp::{Timestamp, TimestampError};
 use super::wrapping::{self, WrappingError, wrap};
 use crate::crypto::sign::{self, SignError, Signature};
 use crate::identity::{
     Credential, CredentialError, Identity, IdentityId, IdentityMetadata, IdentityStatus,
 };
 use crate::policy::{PolicyContext, PolicyDecision, PolicyOperation, PolicySet};
+use crate::storage::atomic::{replace_file, sync_parent_dir};
 use crate::storage::{AuditEventSpec, AuditLog, AuditLogConfig, EventOutcome, EventType};
 
 /// Number of bytes of the length prefix before the CBOR header.
@@ -65,6 +66,10 @@ pub enum VaultError {
     /// The header was malformed or used an unsupported version.
     #[error("header error: {0}")]
     Header(#[from] HeaderError),
+
+    /// The system clock is before the UNIX epoch.
+    #[error("timestamp error: {0}")]
+    Timestamp(#[from] TimestampError),
 
     /// CBOR (de)serialization failed.
     #[error("cbor error: {0}")]
@@ -186,7 +191,7 @@ pub enum VaultError {
 
     /// The audit log could not be written. The operation is refused:
     /// a security-relevant action is never performed without being
-    /// logged (see `docs/SECURITY_MODEL.md` §7.6).
+    /// logged (see `docs/SECURITY_MODEL.md` §7.7).
     #[error("audit error: {0}")]
     Audit(#[from] crate::storage::DbError),
 
@@ -288,34 +293,45 @@ impl Vault {
             .open(&path)?;
         drop(reservation);
 
-        let rng = OsRandomSource::new();
+        // If initialization fails before the atomic vault-file rename, remove
+        // the empty reservation so callers can retry creation at this path.
+        let result = (|| {
+            let rng = OsRandomSource::new();
 
-        // Generate a fresh salt and vault id.
-        let mut salt = [0u8; SALT_LEN];
-        rng.fill_bytes(&mut salt)?;
+            // Generate a fresh salt and vault id.
+            let mut salt = [0u8; SALT_LEN];
+            rng.fill_bytes(&mut salt)?;
 
-        let vault_id = generate_vault_id(&rng)?;
+            let vault_id = generate_vault_id(&rng)?;
 
-        // Derive the KEK and build the header.
-        let params = KdfParams::v1_default();
-        let kek = derive_kek(password, &salt, &params)?;
-        let header = VaultHeader::new(params, salt.to_vec(), kek.as_ref())?;
+            // Derive the KEK and build the header.
+            let params = KdfParams::v1_default();
+            let kek = derive_kek(password, &salt, &params)?;
+            let header = VaultHeader::new(params, salt.to_vec(), kek.as_ref())?;
 
-        // Build the initial (empty) body.
-        let now = Timestamp::now().unwrap_or(Timestamp::from_secs(0));
-        let metadata = VaultMetadata {
-            vault_id,
-            created_at: now,
-            created_by: DEFAULT_LABEL.to_string(),
-            label,
-            schema_version: CURRENT_SCHEMA_VERSION,
-        };
-        let body = VaultBody::new(metadata);
+            // Build the initial (empty) body.
+            let now = Timestamp::now()?;
+            let metadata = VaultMetadata {
+                vault_id,
+                created_at: now,
+                created_by: DEFAULT_LABEL.to_string(),
+                label,
+                schema_version: CURRENT_SCHEMA_VERSION,
+            };
+            let body = VaultBody::new(metadata);
 
-        let vault = Self { path, header };
-        vault.write_body(&body, &kek)?;
+            let vault = Self {
+                path: path.clone(),
+                header,
+            };
+            vault.write_body(&body, &kek)?;
+            Ok(vault)
+        })();
 
-        Ok(vault)
+        if result.is_err() && fs::metadata(&path).is_ok_and(|metadata| metadata.len() == 0) {
+            let _ = fs::remove_file(&path);
+        }
+        result
     }
 
     /// Opens an existing vault file and parses its header.
@@ -379,8 +395,7 @@ impl Vault {
         let audit = match &body.audit_dir {
             Some(dir) => {
                 let resolved = resolve_audit_path(&self.path, Path::new(dir));
-                let audit_auth = audit_key(kek.as_ref())?;
-                let log = AuditLog::open_with(&resolved, AuditLogConfig::default(), &audit_auth)?;
+                let log = open_audit_log(&resolved, &body, kek.as_ref())?;
                 log.verify_all()?;
                 if let Some(anchor) = body.audit_anchor.as_deref()
                     && !log.contains_event_hash(anchor)
@@ -590,7 +605,7 @@ impl Session {
         };
 
         // Build the metadata record.
-        let now = Timestamp::now().unwrap_or(Timestamp::from_secs(0));
+        let now = Timestamp::now()?;
         let metadata = KeyMetadata {
             key_id: key_id.clone(),
             algorithm,
@@ -745,7 +760,7 @@ impl Session {
             return Err(VaultError::DuplicateIdentityId(identity_id));
         }
 
-        let now = Timestamp::now().unwrap_or(Timestamp::from_secs(0));
+        let now = Timestamp::now()?;
         let metadata = IdentityMetadata {
             created_at: now,
             created_by: "session".to_string(),
@@ -1043,7 +1058,7 @@ impl Session {
         self.require_writes_allowed()?;
         self.check_policy(PolicyOperation::IdentityRevoke, id.as_str(), None, Some(id))?;
 
-        let now = Timestamp::now().unwrap_or(Timestamp::from_secs(0));
+        let now = Timestamp::now()?;
 
         let identity = self
             .body
@@ -1139,7 +1154,7 @@ impl Session {
             credential_key_id,
         )?;
 
-        let now = Timestamp::now().unwrap_or(Timestamp::from_secs(0));
+        let now = Timestamp::now()?;
         let credential_bytes = match record.algorithm() {
             Algorithm::MlDsa65 => Credential::issue_ml_dsa65(
                 seed_bytes.as_ref(),
@@ -1228,7 +1243,7 @@ impl Session {
                 status: identity.metadata.status,
             });
         }
-        if credential.is_expired_at(Timestamp::now().unwrap_or(Timestamp::from_secs(0))) {
+        if credential.is_expired_at(Timestamp::now()?) {
             return Err(VaultError::Credential(CredentialError::Expired));
         }
         let revocation_id = credential.revocation_id()?;
@@ -1804,8 +1819,7 @@ impl Session {
         // Open the log first so a bad path fails before we touch the
         // body.
         let resolved = resolve_audit_path(&self.vault.path, audit_dir);
-        let audit_auth = audit_key(self.kek.as_ref())?;
-        let log = AuditLog::open_with(&resolved, AuditLogConfig::default(), &audit_auth)?;
+        let log = open_audit_log(&resolved, &self.body, self.kek.as_ref())?;
 
         self.body.audit_anchor = log.head_event_hash().map(ToOwned::to_owned);
         *self.audit.borrow_mut() = Some(log);
@@ -1863,11 +1877,59 @@ impl Session {
         audit_dir: impl AsRef<std::path::Path>,
     ) -> Result<(), VaultError> {
         self.require_writes_allowed()?;
-        let audit_auth = audit_key(self.kek.as_ref())?;
-        let log = AuditLog::open_with(audit_dir.as_ref(), AuditLogConfig::default(), &audit_auth)?;
+        let log = open_audit_log(audit_dir.as_ref(), &self.body, self.kek.as_ref())?;
         self.body.audit_anchor = log.head_event_hash().map(ToOwned::to_owned);
         *self.audit.borrow_mut() = Some(log);
         self.body.audit_dir = Some(audit_dir.as_ref().to_string_lossy().into_owned());
+        Ok(())
+    }
+
+    /// Rotates the audit authentication key without discarding historical keys.
+    ///
+    /// The new keyring is committed inside the encrypted vault body before the
+    /// log switches epochs. On the next unlock, an interrupted transition can
+    /// be completed from the durable current-epoch marker.
+    pub fn rotate_audit_key(&mut self) -> Result<(), VaultError> {
+        self.require_writes_allowed()?;
+        if self.audit.borrow().is_none() {
+            return Err(VaultError::Corrupt("audit logging is not enabled"));
+        }
+        if self.body.audit_key_epochs.is_empty() {
+            let legacy = audit_key(self.kek.as_ref())?;
+            self.body
+                .audit_key_epochs
+                .push(AuditKeyEpoch::new([0u8; 16], *legacy));
+        }
+        let rng = OsRandomSource::new();
+        let mut epoch = [0u8; 16];
+        let mut key = Zeroizing::new([0u8; 32]);
+        rng.fill_bytes(&mut epoch)?;
+        rng.fill_bytes(key.as_mut())?;
+        if epoch == [0u8; 16]
+            || self
+                .body
+                .audit_key_epochs
+                .iter()
+                .any(|entry| entry.id() == &epoch)
+        {
+            return Err(VaultError::Corrupt("audit key epoch identifier collision"));
+        }
+        self.body
+            .audit_key_epochs
+            .push(AuditKeyEpoch::new(epoch, *key));
+        self.body.audit_current_epoch = Some(epoch);
+        // Persist the key before creating any segment that depends on it.
+        self.vault.write_body(&self.body, &self.kek)?;
+        {
+            let mut audit = self.audit.borrow_mut();
+            let log = audit
+                .as_mut()
+                .ok_or(VaultError::Corrupt("audit logging is not enabled"))?;
+            log.add_key_epoch(epoch, &key)?;
+            log.rotate_to_epoch(epoch)?;
+            self.body.audit_anchor = log.head_event_hash().map(ToOwned::to_owned);
+        }
+        self.vault.write_body(&self.body, &self.kek)?;
         Ok(())
     }
 
@@ -1899,7 +1961,10 @@ impl Session {
                 .with_actor("session")
                 .with_subject(subject)
                 .with_outcome(outcome);
-            let now = Timestamp::now().unwrap_or(Timestamp::from_secs(0));
+            let now = Timestamp::now().map_err(|error| {
+                self.audit_failed.set(true);
+                VaultError::Timestamp(error)
+            })?;
             if let Err(err) = log.append(now, spec) {
                 self.audit_failed.set(true);
                 return Err(err.into());
@@ -1930,7 +1995,7 @@ impl Session {
             return Ok(());
         };
 
-        let now = Timestamp::now().unwrap_or(Timestamp::from_secs(0));
+        let now = Timestamp::now()?;
         let mut context = PolicyContext::new(operation, now);
         if let Some((key_id, status)) = key {
             context = context.with_key(key_id.clone(), status);
@@ -2074,7 +2139,7 @@ fn write_vault_file(
     drop(f);
 
     // Rename onto the target. If this fails, try to clean up the temp.
-    if let Err(e) = fs::rename(&tmp_path, path) {
+    if let Err(e) = replace_file(&tmp_path, path) {
         let _ = fs::remove_file(&tmp_path);
         return Err(VaultError::Io(e));
     }
@@ -2082,14 +2147,7 @@ fn write_vault_file(
 
     // fsync the directory so the rename is durable. Best-effort on
     // platforms that do not support directory fsync.
-    if let Some(parent) = path.parent()
-        && !parent.as_os_str().is_empty()
-        && let Ok(dir) = fs::File::open(parent)
-        && let Err(e) = dir.sync_all()
-        && e.kind() != std::io::ErrorKind::Unsupported
-    {
-        return Err(VaultError::Io(e));
-    }
+    sync_parent_dir(path).map_err(VaultError::Io)?;
 
     Ok(())
 }
@@ -2140,10 +2198,17 @@ fn derive_kek(
     salt: &[u8],
     params: &KdfParams,
 ) -> Result<Zeroizing<[u8; kdf::DERIVED_KEY_LEN]>, VaultError> {
-    // Only Argon2id is supported in v1; unknown values will be rejected
-    // at header parse time once more algorithms are added.
-    let _ = params.algorithm;
-    kdf::argon2id(password, salt).map_err(VaultError::Kdf)
+    if !params.is_supported() {
+        return Err(VaultError::Kdf(KdfError::InvalidParams));
+    }
+    kdf::argon2id_with_params(
+        password,
+        salt,
+        params.memory_kib,
+        params.iterations,
+        params.parallelism,
+    )
+    .map_err(VaultError::Kdf)
 }
 
 fn generate_vault_id<S: RandomSource>(source: &S) -> Result<String, VaultError> {
@@ -2220,6 +2285,57 @@ fn generate_material<S: RandomSource>(
 /// the vault file itself is opened.
 fn audit_key(kek: &[u8]) -> Result<Zeroizing<[u8; 32]>, KdfError> {
     kdf::hkdf_sha256(kek, None, b"nexusq-audit-log-v2")
+}
+
+fn open_audit_log(dir: &Path, body: &VaultBody, kek: &[u8]) -> Result<AuditLog, VaultError> {
+    let (mut keys, current_epoch) = audit_keyring(body, kek)?;
+    let result = AuditLog::open_with_keyring(dir, AuditLogConfig::default(), &keys, &current_epoch);
+    for (_, key) in &mut keys {
+        key.zeroize();
+    }
+    Ok(result?)
+}
+
+type AuditKeyring = Vec<([u8; 16], [u8; 32])>;
+
+fn audit_keyring(body: &VaultBody, kek: &[u8]) -> Result<(AuditKeyring, [u8; 16]), VaultError> {
+    if body.audit_key_epochs.is_empty() {
+        if body.audit_current_epoch.is_some() {
+            return Err(VaultError::Corrupt("audit current epoch has no keyring"));
+        }
+        let legacy = audit_key(kek)?;
+        return Ok((vec![([0u8; 16], *legacy)], [0u8; 16]));
+    }
+    let mut keys: Vec<([u8; 16], [u8; 32])> = Vec::with_capacity(body.audit_key_epochs.len());
+    for epoch in &body.audit_key_epochs {
+        let Some(material) = epoch.key() else {
+            for (_, key) in &mut keys {
+                key.zeroize();
+            }
+            return Err(VaultError::Corrupt("invalid audit key length"));
+        };
+        let key = Zeroizing::new(material);
+        if keys.iter().any(|(id, _)| id == epoch.id()) {
+            for (_, key) in &mut keys {
+                key.zeroize();
+            }
+            return Err(VaultError::Corrupt("duplicate audit key epoch"));
+        }
+        keys.push((*epoch.id(), *key));
+    }
+    let Some(current) = body.audit_current_epoch else {
+        for (_, key) in &mut keys {
+            key.zeroize();
+        }
+        return Err(VaultError::Corrupt("audit keyring has no current epoch"));
+    };
+    if !keys.iter().any(|(id, _)| id == &current) {
+        for (_, key) in &mut keys {
+            key.zeroize();
+        }
+        return Err(VaultError::Corrupt("current audit key epoch is missing"));
+    }
+    Ok((keys, current))
 }
 
 fn resolve_audit_path(vault_path: &Path, audit_dir: &Path) -> PathBuf {
@@ -4122,6 +4238,41 @@ mod tests {
     }
 
     #[test]
+    fn audit_key_rotation_preserves_history_across_lock_and_unlock() {
+        let dir = TempDir::new().unwrap();
+        let vault_path = temp_path(&dir, "v.nqv");
+        let audit_dir = dir.path().join("audit");
+        std::fs::create_dir(&audit_dir).unwrap();
+        Vault::create(&vault_path, b"pw", None).unwrap();
+        let vault = Vault::open(&vault_path).unwrap();
+        let mut session = vault.unlock(b"pw").unwrap();
+        session.enable_audit(&audit_dir).unwrap();
+        let key_id = session
+            .generate_key(Algorithm::Ed25519, Purpose::Sign)
+            .unwrap();
+        session.activate_key(&key_id).unwrap();
+        let before = session.audit_events().unwrap().last().unwrap().hash.clone();
+
+        session.rotate_audit_key().unwrap();
+        session.verify_audit().unwrap();
+        assert_eq!(session.body().audit_key_epochs.len(), 2);
+        assert!(session.body().audit_current_epoch.is_some());
+        let vault = session.lock().unwrap();
+
+        let reopened = vault.unlock(b"pw").unwrap();
+        reopened.verify_audit().unwrap();
+        let events = reopened.audit_events().unwrap();
+        assert!(
+            events
+                .iter()
+                .any(|event| event.event_type == EventType::KeyRotated)
+        );
+        assert_eq!(events.len(), 4); // rotation, lock, session end, and unlock
+        let log = open_audit_log(&audit_dir, reopened.body(), reopened.kek.as_ref()).unwrap();
+        assert!(log.contains_event_hash(&before));
+    }
+
+    #[test]
     fn identity_signed_is_audited() {
         let dir = TempDir::new().unwrap();
         let vault_path = temp_path(&dir, "v.nqv");
@@ -4182,29 +4333,26 @@ mod tests {
         let mut session = vault.unlock(b"pw").unwrap();
         session.enable_audit(&audit_dir).unwrap();
 
-        // Make the audit directory read-only so subsequent writes fail.
-        let mut perms = std::fs::metadata(&audit_dir).unwrap().permissions();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt as _;
-            perms.set_mode(0o500); // r-x for owner, no write
-            std::fs::set_permissions(&audit_dir, perms).unwrap();
+        // Move the directory after the log is opened and put a regular file
+        // at its former path. This makes segment persistence fail with ENOTDIR
+        // for every user, including root (which can bypass chmod permissions).
+        let displaced_audit_dir = dir.path().join("audit-displaced");
+        std::fs::rename(&audit_dir, &displaced_audit_dir).unwrap();
+        std::fs::write(&audit_dir, b"not a directory").unwrap();
 
-            // Now generate_key should fail because the audit write fails.
-            let err = session
-                .generate_key(Algorithm::Ed25519, Purpose::Sign)
-                .unwrap_err();
-            assert!(matches!(err, VaultError::Audit(_)));
+        let err = session
+            .generate_key(Algorithm::Ed25519, Purpose::Sign)
+            .unwrap_err();
+        assert!(matches!(err, VaultError::Audit(_)));
 
-            // Restore permissions so the temp dir can be cleaned up.
-            let mut perms = std::fs::metadata(&audit_dir).unwrap().permissions();
-            perms.set_mode(0o700);
-            std::fs::set_permissions(&audit_dir, perms).unwrap();
+        // Restore the original audit directory before checking the poisoned
+        // session and allowing TempDir to clean up its contents.
+        std::fs::remove_file(&audit_dir).unwrap();
+        std::fs::rename(&displaced_audit_dir, &audit_dir).unwrap();
 
-            // The failed audit write permanently blocks persistence of the
-            // in-memory mutation. The vault on disk must remain unchanged.
-            assert!(session.lock().is_err());
-        }
+        // The failed audit write permanently blocks persistence of the
+        // in-memory mutation. The vault on disk must remain unchanged.
+        assert!(session.lock().is_err());
     }
 
     // =========================================================================

@@ -59,7 +59,7 @@ pub struct TimeStampRequest {
     pub req_policy: Option<ObjectIdentifier>,
     /// Optional nonce echoed unchanged in the token.
     pub nonce: Option<Uint>,
-    /// Whether the token should carry the TSA certificate. The implementation always includes it.
+    /// Whether the token should carry the TSA certificate.
     #[asn1(default = "default_false")]
     pub cert_req: bool,
     /// Optional request extensions; unknown critical extensions are rejected by this implementation.
@@ -291,10 +291,10 @@ impl<K: TimeSource> TimestampAuthority<K> {
             nonce: request.nonce,
         };
         let info_der = info.to_der()?;
-        self.build_token(&info_der)
+        self.build_token(&info_der, request.cert_req)
     }
 
-    fn build_token(&self, info_der: &[u8]) -> Result<Vec<u8>, TsaError> {
+    fn build_token(&self, info_der: &[u8], include_certificate: bool) -> Result<Vec<u8>, TsaError> {
         let econtent = Any::encode_from(&OctetString::new(info_der.to_vec())?)?;
         let eci = EncapsulatedContentInfo {
             econtent_type: TST_INFO_OID,
@@ -335,9 +335,11 @@ impl<K: TimeSource> TimestampAuthority<K> {
         builder
             .add_digest_algorithm(digest_algorithm)
             .map_err(|_| TsaError::Cms)?;
-        builder
-            .add_certificate(CertificateChoices::Certificate(self.certificate.clone()))
-            .map_err(|_| TsaError::Cms)?;
+        if include_certificate {
+            builder
+                .add_certificate(CertificateChoices::Certificate(self.certificate.clone()))
+                .map_err(|_| TsaError::Cms)?;
+        }
         builder
             .add_signer_info::<SigningKey<MlDsa65>, MlDsaSignature<MlDsa65>>(
                 signer_info,
@@ -577,6 +579,26 @@ mod tests {
         assert_eq!(info.nonce, request.nonce);
         assert_eq!(info.message_imprint, request.message_imprint);
         assert_eq!(info.serial_number, Uint::new(&[1]).unwrap());
+    }
+
+    #[test]
+    fn omits_tsa_certificate_when_cert_req_is_false() {
+        let (key, cert) = test_signer();
+        let policy = ObjectIdentifier::new_unwrap("1.3.6.1.4.1.55555.68.1");
+        let tsa = TimestampAuthority::new(policy, cert, key, 1).unwrap();
+        let request = TimeStampRequest {
+            version: Uint::new(&[1]).unwrap(),
+            message_imprint: sha256_message_imprint(b"certReq false").unwrap(),
+            req_policy: None,
+            nonce: None,
+            cert_req: false,
+            extensions: None,
+        };
+
+        let token_der = tsa.timestamp_request(&request.to_der().unwrap()).unwrap();
+        let content_info = ContentInfo::from_der(&token_der).unwrap();
+        let signed_data = content_info.content.decode_as::<SignedData>().unwrap();
+        assert!(signed_data.certificates.is_none());
     }
 
     #[test]

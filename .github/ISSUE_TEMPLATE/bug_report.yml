@@ -1,0 +1,46 @@
+name: Bug report
+description: Report a reproducible defect in NEXUS-Q.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search existing issues first. Do not include secrets or vulnerability details.
+        For suspected vulnerabilities use https://github.com/lecodev-26/nexus-q/security/advisories/new
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe observed behavior and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include a minimal example and exact commands, with secrets removed.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: NEXUS-Q version/commit, OS, architecture, Rust/toolchain, feature flags, SDK/runtime.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or errors
+      description: Redact tokens, keys, personal data, vault contents, and sensitive paths.
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmation
+      options:
+        - label: I searched existing reports and removed secrets and sensitive information.
+          required: true
+        - label: This is not a security vulnerability report.
+          required: true

@@ -8,7 +8,7 @@
 use std::{
     collections::{BTreeMap, HashMap},
     fs::{self, File, OpenOptions},
-    io::{BufRead, BufReader, Seek, Write},
+    io::{BufRead, BufReader, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
     sync::{
         Arc, Mutex, RwLock,
@@ -372,7 +372,8 @@ impl DurableTenantJournal {
         Ok(record)
     }
     pub fn accept_replica_prepare(&self, record: &JournalRecord) -> Result<(), HaError> {
-        if record.tenant != self.tenant || record.hash != record_hash(record) || record.term == 0 {
+        validate_record_fields(record)?;
+        if record.tenant != self.tenant || record.hash != record_hash(record) {
             return Err(HaError::HashMismatch);
         }
         let mut state = self.state.lock().map_err(|_| HaError::StateUnavailable)?;
@@ -502,30 +503,73 @@ impl DurableTenantJournal {
     /// Restore a validated snapshot into a new, empty journal. Existing data is never overwritten.
     pub fn restore_snapshot(&self, snapshot: &JournalSnapshot) -> Result<(), HaError> {
         validate_snapshot(snapshot, &self.tenant)?;
+        let mut state = self.state.lock().map_err(|_| HaError::StateUnavailable)?;
+        if !state.committed.is_empty()
+            || !state.pending.is_empty()
+            || state.next_sequence != 1
+            || state.last_hash != [0; 32]
         {
-            let state = self.state.lock().map_err(|_| HaError::StateUnavailable)?;
-            if !state.committed.is_empty()
-                || !state.pending.is_empty()
-                || state.next_sequence != 1
-                || state.last_hash != [0; 32]
-            {
-                return Err(HaError::RestoreTargetNotEmpty);
-            }
+            return Err(HaError::RestoreTargetNotEmpty);
         }
+
+        // Keep the state lock for the entire restore. Releasing it between frames
+        // would allow a concurrent writer to append to a journal that was checked
+        // as empty, interleaving live mutations with snapshot records.
         for record in &snapshot.records {
-            let next = self
-                .state
-                .lock()
-                .map_err(|_| HaError::StateUnavailable)?
-                .next_sequence;
-            if record.sequence > next {
-                self.advance_sequence_to(record.sequence)?;
+            if record.sequence > state.next_sequence {
+                append_frame(
+                    &mut state.file,
+                    &JournalFrame::SequenceAdvance {
+                        next_sequence: record.sequence,
+                    },
+                )?;
+                state.next_sequence = record.sequence;
             }
-            self.accept_replica_prepare(record)?;
-            self.commit_prepared(record.sequence, record.hash)?;
+            if record.sequence != state.next_sequence || record.previous_hash != state.last_hash {
+                return Err(HaError::JournalCorrupt);
+            }
+            append_frame(
+                &mut state.file,
+                &JournalFrame::Prepared {
+                    record: record.clone(),
+                },
+            )?;
+            state.pending.insert(record.sequence, record.clone());
+            state.highest_term = state.highest_term.max(record.term);
+            state.next_sequence = record
+                .sequence
+                .checked_add(1)
+                .ok_or(HaError::SequenceExhausted)?;
+
+            append_frame(
+                &mut state.file,
+                &JournalFrame::Committed {
+                    sequence: record.sequence,
+                    hash: record.hash,
+                },
+            )?;
+            state.pending.remove(&record.sequence);
+            state.last_hash = record.hash;
+            state.committed.push(record.clone());
         }
-        self.advance_sequence_to(snapshot.next_sequence)?;
-        self.advance_fencing_to(snapshot.highest_term)?;
+        if snapshot.next_sequence > state.next_sequence {
+            append_frame(
+                &mut state.file,
+                &JournalFrame::SequenceAdvance {
+                    next_sequence: snapshot.next_sequence,
+                },
+            )?;
+            state.next_sequence = snapshot.next_sequence;
+        }
+        if snapshot.highest_term > state.highest_term {
+            append_frame(
+                &mut state.file,
+                &JournalFrame::FencingAdvance {
+                    highest_term: snapshot.highest_term,
+                },
+            )?;
+            state.highest_term = snapshot.highest_term;
+        }
         Ok(())
     }
 
@@ -542,38 +586,6 @@ impl DurableTenantJournal {
             serde_json::from_slice(&bytes).map_err(|_| HaError::JournalCorrupt)?;
         validate_snapshot(&snapshot, tenant)?;
         Ok(snapshot)
-    }
-
-    fn advance_sequence_to(&self, next_sequence: u64) -> Result<(), HaError> {
-        let mut state = self.state.lock().map_err(|_| HaError::StateUnavailable)?;
-        if !state.pending.is_empty() || next_sequence < state.next_sequence {
-            return Err(HaError::JournalCorrupt);
-        }
-        if next_sequence == state.next_sequence {
-            return Ok(());
-        }
-        append_frame(
-            &mut state.file,
-            &JournalFrame::SequenceAdvance { next_sequence },
-        )?;
-        state.next_sequence = next_sequence;
-        Ok(())
-    }
-
-    fn advance_fencing_to(&self, highest_term: u64) -> Result<(), HaError> {
-        let mut state = self.state.lock().map_err(|_| HaError::StateUnavailable)?;
-        if !state.pending.is_empty() || highest_term < state.highest_term {
-            return Err(HaError::JournalCorrupt);
-        }
-        if highest_term == state.highest_term {
-            return Ok(());
-        }
-        append_frame(
-            &mut state.file,
-            &JournalFrame::FencingAdvance { highest_term },
-        )?;
-        state.highest_term = highest_term;
-        Ok(())
     }
 }
 
@@ -599,13 +611,56 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), HaError> {
         return Err(HaError::StorageUnavailable);
     }
     drop(file);
-    if fs::rename(&temp, path).is_err() {
+    if atomic_replace(&temp, path).is_err() {
         let _ = fs::remove_file(&temp);
         return Err(HaError::StorageUnavailable);
     }
+    #[cfg(unix)]
     File::open(parent)
         .and_then(|directory| directory.sync_all())
-        .map_err(|_| HaError::StorageUnavailable)
+        .map_err(|_| HaError::StorageUnavailable)?;
+    Ok(())
+}
+
+#[cfg(windows)]
+fn atomic_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
+    use std::{iter::once, os::windows::ffi::OsStrExt};
+
+    const MOVEFILE_REPLACE_EXISTING: u32 = 0x1;
+    const MOVEFILE_WRITE_THROUGH: u32 = 0x8;
+
+    #[link(name = "Kernel32")]
+    // SAFETY: The declaration mirrors the Windows Kernel32 ABI; callers below
+    // pass NUL-terminated UTF-16 buffers and valid flag values.
+    unsafe extern "system" {
+        fn MoveFileExW(existing: *const u16, new: *const u16, flags: u32) -> i32;
+    }
+
+    let source: Vec<u16> = source.as_os_str().encode_wide().chain(once(0)).collect();
+    let destination: Vec<u16> = destination
+        .as_os_str()
+        .encode_wide()
+        .chain(once(0))
+        .collect();
+    // SAFETY: Both vectors are live, NUL-terminated UTF-16 buffers for the
+    // duration of the call, and the flags are valid MoveFileExW options.
+    let result = unsafe {
+        MoveFileExW(
+            source.as_ptr(),
+            destination.as_ptr(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    };
+    if result == 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(not(windows))]
+fn atomic_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
+    fs::rename(source, destination)
 }
 
 fn append_frame(file: &mut File, frame: &JournalFrame) -> Result<(), HaError> {
@@ -613,10 +668,25 @@ fn append_frame(file: &mut File, frame: &JournalFrame) -> Result<(), HaError> {
     if encoded.len() > MAX_RECORD_BYTES * 4 + 4096 {
         return Err(HaError::InvalidRecord);
     }
-    file.write_all(&encoded)
+    let start = file
+        .metadata()
+        .map_err(|_| HaError::StorageUnavailable)?
+        .len();
+    if file
+        .write_all(&encoded)
         .and_then(|_| file.write_all(b"\n"))
         .and_then(|_| file.sync_data())
-        .map_err(|_| HaError::StorageUnavailable)
+        .is_err()
+    {
+        // A failed append may have written only part of a frame. Roll it back so
+        // later writes cannot be concatenated onto a torn JSON record.
+        file.set_len(start)
+            .and_then(|_| file.sync_data())
+            .and_then(|_| file.seek(SeekFrom::End(0)).map(|_| ()))
+            .map_err(|_| HaError::StorageUnavailable)?;
+        return Err(HaError::StorageUnavailable);
+    }
+    Ok(())
 }
 
 fn recover_frames(
@@ -625,21 +695,46 @@ fn recover_frames(
     tenant: &TenantId,
 ) -> Result<RecoveredFrames, HaError> {
     file.rewind().map_err(|_| HaError::StorageUnavailable)?;
-    let reader = BufReader::new(file.try_clone().map_err(|_| HaError::StorageUnavailable)?);
+    let mut reader = BufReader::new(file.try_clone().map_err(|_| HaError::StorageUnavailable)?);
     let mut committed = Vec::new();
     let mut pending: HashMap<u64, JournalRecord> = HashMap::new();
     let mut next_sequence = 1u64;
     let mut last_hash = [0u8; 32];
     let mut highest_term = 0u64;
-    for line in reader.lines() {
-        let line = line.map_err(|_| HaError::StorageUnavailable)?;
+    let mut valid_len = 0u64;
+    let mut line = Vec::new();
+    loop {
+        line.clear();
+        let bytes_read = reader
+            .read_until(b'\n', &mut line)
+            .map_err(|_| HaError::StorageUnavailable)?;
+        if bytes_read == 0 {
+            break;
+        }
+        if line.last() != Some(&b'\n') {
+            // A crash can interrupt the final append between any two bytes.
+            // Only discard an unterminated tail; complete malformed frames remain fatal.
+            file.set_len(valid_len)
+                .and_then(|_| file.sync_data())
+                .and_then(|_| file.seek(SeekFrom::End(0)).map(|_| ()))
+                .map_err(|_| HaError::StorageUnavailable)?;
+            break;
+        }
+        line.pop();
+        if line.last() == Some(&b'\r') {
+            line.pop();
+        }
         if line.len() > MAX_RECORD_BYTES * 4 + 4096 {
             return Err(HaError::JournalCorrupt);
         }
         let frame: JournalFrame =
-            serde_json::from_str(&line).map_err(|_| HaError::JournalCorrupt)?;
+            serde_json::from_slice(&line).map_err(|_| HaError::JournalCorrupt)?;
+        valid_len = valid_len
+            .checked_add(bytes_read as u64)
+            .ok_or(HaError::JournalCorrupt)?;
         match frame {
             JournalFrame::Prepared { record } => {
+                validate_record_fields(&record).map_err(|_| HaError::JournalCorrupt)?;
                 if record.tenant != *tenant
                     || record.sequence != next_sequence
                     || record.previous_hash != last_hash
@@ -739,6 +834,7 @@ fn validate_snapshot(
     let mut previous_sequence = 0u64;
     let mut maximum_record_term = 0u64;
     for record in &snapshot.records {
+        validate_record_fields(record).map_err(|_| HaError::JournalCorrupt)?;
         if record.tenant != snapshot.tenant
             || record.sequence <= previous_sequence
             || record.sequence >= snapshot.next_sequence
@@ -754,6 +850,19 @@ fn validate_snapshot(
     }
     if snapshot.highest_term < maximum_record_term {
         return Err(HaError::JournalCorrupt);
+    }
+    Ok(())
+}
+
+fn validate_record_fields(record: &JournalRecord) -> Result<(), HaError> {
+    if record.term == 0
+        || record.kind.is_empty()
+        || record.kind.len() > 128
+        || !record.kind.is_ascii()
+        || record.kind.chars().any(char::is_control)
+        || record.payload.len() > MAX_RECORD_BYTES
+    {
+        return Err(HaError::InvalidRecord);
     }
     Ok(())
 }
@@ -1138,6 +1247,55 @@ mod tests {
         catalog.set_issuance(&alpha, false).unwrap();
         assert!(!catalog.get(&alpha).unwrap().issuance_enabled);
         assert!(catalog.get(&beta).unwrap().issuance_enabled);
+    }
+
+    #[test]
+    fn replica_prepare_rejects_payloads_over_the_local_record_limit() {
+        let dir = tempdir().unwrap();
+        let tenant = TenantId::new("alpha").unwrap();
+        let journal = DurableTenantJournal::open(dir.path(), tenant.clone()).unwrap();
+        let mut record = JournalRecord {
+            tenant,
+            sequence: 1,
+            term: 1,
+            kind: "certificate.issued".to_owned(),
+            payload: vec![0; MAX_RECORD_BYTES + 1],
+            previous_hash: [0; 32],
+            hash: [0; 32],
+            created_at: 1,
+        };
+        record.hash = record_hash(&record);
+        assert!(matches!(
+            journal.accept_replica_prepare(&record),
+            Err(HaError::InvalidRecord)
+        ));
+    }
+
+    #[test]
+    fn journal_recovery_truncates_an_unterminated_tail_frame() {
+        let dir = tempdir().unwrap();
+        let tenant = TenantId::new("alpha").unwrap();
+        let journal = DurableTenantJournal::open(dir.path(), tenant.clone()).unwrap();
+        let record = journal
+            .prepare(1, "certificate.issued", b"serial=1")
+            .unwrap();
+        journal
+            .commit_prepared(record.sequence, record.hash)
+            .unwrap();
+        let path = journal.path().to_path_buf();
+        let valid_len = std::fs::metadata(&path).unwrap().len();
+        drop(journal);
+
+        OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .unwrap()
+            .write_all(b"{\"frame\":\"prepared\"")
+            .unwrap();
+
+        let reopened = DurableTenantJournal::open(dir.path(), tenant).unwrap();
+        assert_eq!(reopened.committed_records().unwrap().len(), 1);
+        assert_eq!(std::fs::metadata(path).unwrap().len(), valid_len);
     }
 
     #[test]

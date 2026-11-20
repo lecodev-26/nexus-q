@@ -30,6 +30,13 @@ pub const ARGON2_ITERATIONS: u32 = 3;
 /// Parallelism factor for Argon2id.
 pub const ARGON2_PARALLELISM: u32 = 1;
 
+/// Maximum accepted Argon2id memory cost (256 MiB).
+pub const ARGON2_MAX_MEMORY_KIB: u32 = 256 * 1024;
+/// Maximum accepted Argon2id iteration count.
+pub const ARGON2_MAX_ITERATIONS: u32 = 10;
+/// Maximum accepted Argon2id parallelism.
+pub const ARGON2_MAX_PARALLELISM: u32 = 4;
+
 /// Errors returned by the KDF module.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -41,6 +48,10 @@ pub enum KdfError {
     /// Argon2 rejected the salt length.
     #[error("invalid salt length")]
     InvalidSalt,
+
+    /// Argon2 parameters are outside the supported resource bounds.
+    #[error("argon2 parameters are unsupported or out of bounds")]
+    InvalidParams,
 
     /// Argon2 failed to derive a key (bad parameters or internal error).
     #[error("argon2 derivation failed")]
@@ -93,18 +104,46 @@ pub fn argon2id(
     password: &[u8],
     salt: &[u8],
 ) -> Result<Zeroizing<[u8; DERIVED_KEY_LEN]>, KdfError> {
-    if salt.len() < ARGON2_SALT_LEN {
-        return Err(KdfError::InvalidSalt);
-    }
-
-    let params = Params::new(
+    argon2id_with_params(
+        password,
+        salt,
         ARGON2_MEMORY_KIB,
         ARGON2_ITERATIONS,
         ARGON2_PARALLELISM,
-        Some(DERIVED_KEY_LEN),
     )
-    .map_err(|_| KdfError::Argon2Failure)?;
+}
 
+/// Returns whether Argon2id costs are within the supported resource bounds.
+#[must_use]
+pub const fn argon2id_params_supported(memory_kib: u32, iterations: u32, parallelism: u32) -> bool {
+    memory_kib >= ARGON2_MEMORY_KIB
+        && memory_kib <= ARGON2_MAX_MEMORY_KIB
+        && iterations >= ARGON2_ITERATIONS
+        && iterations <= ARGON2_MAX_ITERATIONS
+        && parallelism >= ARGON2_PARALLELISM
+        && parallelism <= ARGON2_MAX_PARALLELISM
+}
+
+/// Derives a 32-byte key using bounded Argon2id costs.
+///
+/// Rejects costs below the v1 minimum or above the documented ceilings before
+/// allocating Argon2 memory or performing password-dependent work.
+pub fn argon2id_with_params(
+    password: &[u8],
+    salt: &[u8],
+    memory_kib: u32,
+    iterations: u32,
+    parallelism: u32,
+) -> Result<Zeroizing<[u8; DERIVED_KEY_LEN]>, KdfError> {
+    if salt.len() < ARGON2_SALT_LEN {
+        return Err(KdfError::InvalidSalt);
+    }
+    if !argon2id_params_supported(memory_kib, iterations, parallelism) {
+        return Err(KdfError::InvalidParams);
+    }
+
+    let params = Params::new(memory_kib, iterations, parallelism, Some(DERIVED_KEY_LEN))
+        .map_err(|_| KdfError::Argon2Failure)?;
     let argon = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
 
     let mut out = Zeroizing::new([0u8; DERIVED_KEY_LEN]);
@@ -154,6 +193,70 @@ mod tests {
         let a = hkdf_sha256(ikm, None, b"purpose-a").unwrap();
         let b = hkdf_sha256(ikm, None, b"purpose-b").unwrap();
         assert_ne!(a, b);
+    }
+
+    #[test]
+    fn argon2id_rejects_costs_outside_supported_bounds() {
+        let salt = [0u8; ARGON2_SALT_LEN];
+        assert!(matches!(
+            argon2id_with_params(
+                b"password",
+                &salt,
+                ARGON2_MEMORY_KIB - 1,
+                ARGON2_ITERATIONS,
+                ARGON2_PARALLELISM
+            ),
+            Err(KdfError::InvalidParams)
+        ));
+        assert!(matches!(
+            argon2id_with_params(
+                b"password",
+                &salt,
+                ARGON2_MAX_MEMORY_KIB + 1,
+                ARGON2_ITERATIONS,
+                ARGON2_PARALLELISM
+            ),
+            Err(KdfError::InvalidParams)
+        ));
+        assert!(matches!(
+            argon2id_with_params(
+                b"password",
+                &salt,
+                ARGON2_MEMORY_KIB,
+                ARGON2_ITERATIONS - 1,
+                ARGON2_PARALLELISM
+            ),
+            Err(KdfError::InvalidParams)
+        ));
+        assert!(matches!(
+            argon2id_with_params(b"password", &salt, ARGON2_MEMORY_KIB, ARGON2_ITERATIONS, 0),
+            Err(KdfError::InvalidParams)
+        ));
+        assert!(matches!(
+            argon2id_with_params(
+                b"password",
+                &salt,
+                ARGON2_MEMORY_KIB,
+                ARGON2_ITERATIONS,
+                ARGON2_MAX_PARALLELISM + 1
+            ),
+            Err(KdfError::InvalidParams)
+        ));
+    }
+
+    #[test]
+    fn argon2id_custom_costs_change_the_derived_key() {
+        let salt = [0u8; ARGON2_SALT_LEN];
+        let default = argon2id(b"password", &salt).unwrap();
+        let stronger = argon2id_with_params(
+            b"password",
+            &salt,
+            ARGON2_MEMORY_KIB,
+            ARGON2_ITERATIONS + 1,
+            ARGON2_PARALLELISM,
+        )
+        .unwrap();
+        assert_ne!(default, stronger);
     }
 
     #[test]

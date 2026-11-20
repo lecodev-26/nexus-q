@@ -127,6 +127,8 @@ pub enum CeremonyError {
     Hsm(String),
     #[error("secure random generation failed")]
     Randomness,
+    #[error("system clock is before the UNIX epoch")]
+    ClockUnavailable,
     #[error("ceremony state is unavailable")]
     StateUnavailable,
 }
@@ -213,10 +215,7 @@ impl CeremonyCoordinator {
         {
             return Err(CeremonyError::InvalidPolicy);
         }
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|_| CeremonyError::Randomness)?
-            .as_secs();
+        let now = unix_now()?;
         let expires_at = now
             .checked_add(self.ttl.as_secs())
             .ok_or(CeremonyError::Randomness)?;
@@ -274,7 +273,7 @@ impl CeremonyCoordinator {
         if record.request != *request {
             return Err(CeremonyError::TranscriptMismatch);
         }
-        if unix_now() >= request.expires_at {
+        if unix_now()? >= request.expires_at {
             record.status = CeremonyStatus::Expired;
             return Err(CeremonyError::Expired);
         }
@@ -328,7 +327,7 @@ impl CeremonyCoordinator {
             if record.executing {
                 return Err(CeremonyError::InProgress);
             }
-            if unix_now() >= record.request.expires_at {
+            if unix_now()? >= record.request.expires_at {
                 record.status = CeremonyStatus::Expired;
                 return Err(CeremonyError::Expired);
             }
@@ -388,7 +387,7 @@ impl CeremonyCoordinator {
             if record.executing {
                 return Err(CeremonyError::InProgress);
             }
-            if unix_now() >= record.request.expires_at {
+            if unix_now()? >= record.request.expires_at {
                 record.status = CeremonyStatus::Expired;
                 return Err(CeremonyError::Expired);
             }
@@ -447,13 +446,16 @@ impl CeremonyCoordinator {
                 output
             },
         );
+        let Ok(timestamp) = unix_now() else {
+            return;
+        };
         let item = CeremonyAuditEvent {
             ceremony_id: request.id.clone(),
             event: event.to_owned(),
             participant_id: participant_id.map(str::to_owned),
             key_label: request.key_label.clone(),
             approval_count,
-            timestamp: unix_now(),
+            timestamp,
             transcript_sha256,
         };
         let mut events = self
@@ -484,11 +486,11 @@ impl CeremonyCoordinator {
         Ok((record.status, record.approvals.len()))
     }
 }
-fn unix_now() -> u64 {
+fn unix_now() -> Result<u64, CeremonyError> {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
+        .map(|duration| duration.as_secs())
+        .map_err(|_| CeremonyError::ClockUnavailable)
 }
 
 #[cfg(test)]

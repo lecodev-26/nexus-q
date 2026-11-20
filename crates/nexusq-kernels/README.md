@@ -2,6 +2,8 @@
 
 This crate contains portable scalar reference kernels, a cached backend-dispatch
 boundary, and an experimental x86_64 AVX2 four-state Keccak/SHAKE batch path.
+The scalar kernels have not undergone an independent external security audit;
+correctness-reference status and CI evidence are not audit certification.
 
 ## Safety and selection policy
 

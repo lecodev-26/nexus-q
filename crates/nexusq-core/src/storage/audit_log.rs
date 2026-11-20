@@ -30,7 +30,7 @@
 //! Every append writes the segment to disk before returning. If the
 //! write fails, the append fails and the caller must treat the
 //! operation as failed. This is the "failure to log = failure to
-//! operate" rule from `docs/SECURITY_MODEL.md` §7.6.
+//! operate" rule from `docs/SECURITY_MODEL.md` §7.7.
 //!
 //! ## Performance note
 //!
@@ -39,22 +39,27 @@
 //! bounded, so this is acceptable; a future version may adopt an
 //! appendable layout with per-event CRCs and a separate index.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
-use zeroize::Zeroizing;
+use subtle::ConstantTimeEq as _;
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::vault::Timestamp;
 
-use super::audit_event::{AuditEvent, AuditEventSpec, HASH_LEN};
-use super::audit_segment::{AuditSegment, SegmentId};
+use super::atomic::{replace_file, sync_parent_dir};
+use super::audit_event::{AuditEvent, AuditEventSpec, EventType, HASH_LEN};
+use super::audit_segment::{AuditSegment, KEY_EPOCH_ID_LEN, SegmentId};
 use super::db::DbError;
 
 /// Default maximum number of events per segment.
 pub const DEFAULT_MAX_EVENTS: usize = 1000;
-const ANCHOR_MAGIC: &[u8] = b"NQA3";
+const LEGACY_ANCHOR_MAGIC: &[u8] = b"NQA3";
+const ANCHOR_MAGIC: &[u8] = b"NQA4";
+const LEGACY_EPOCH_ID: [u8; KEY_EPOCH_ID_LEN] = [0u8; KEY_EPOCH_ID_LEN];
 const ANCHOR_FILE: &str = "audit.anchor";
 
 /// Tuning for the log.
@@ -79,7 +84,8 @@ pub struct AuditLog {
     current_path: PathBuf,
     current_number: u32,
     config: AuditLogConfig,
-    auth_key: Zeroizing<[u8; 32]>,
+    keyring: BTreeMap<[u8; KEY_EPOCH_ID_LEN], Zeroizing<[u8; 32]>>,
+    current_epoch: [u8; KEY_EPOCH_ID_LEN],
 }
 
 impl AuditLog {
@@ -109,6 +115,20 @@ impl AuditLog {
         config: AuditLogConfig,
         auth_key: &[u8; 32],
     ) -> Result<Self, DbError> {
+        let mut keys = [(LEGACY_EPOCH_ID, *auth_key)];
+        let result = Self::open_with_keyring(dir, config, &keys, &LEGACY_EPOCH_ID);
+        keys[0].1.zeroize();
+        result
+    }
+
+    /// Opens a log with all retained authentication epochs and the epoch
+    /// that must authenticate newly appended events.
+    pub fn open_with_keyring(
+        dir: impl AsRef<Path>,
+        config: AuditLogConfig,
+        keys: &[([u8; KEY_EPOCH_ID_LEN], [u8; 32])],
+        current_epoch: &[u8; KEY_EPOCH_ID_LEN],
+    ) -> Result<Self, DbError> {
         let dir = dir.as_ref().to_path_buf();
         if !dir.is_dir() {
             return Err(DbError::Io(std::io::Error::new(
@@ -116,31 +136,44 @@ impl AuditLog {
                 "audit directory does not exist",
             )));
         }
-
+        let mut keyring = BTreeMap::new();
+        for (id, key) in keys {
+            if keyring.insert(*id, Zeroizing::new(*key)).is_some() {
+                return Err(DbError::AuditAnchorMismatch);
+            }
+        }
+        if !keyring.contains_key(current_epoch) {
+            return Err(DbError::AuditAnchorMismatch);
+        }
         let existing = find_segments(&dir)?;
         let (current_number, current_path) = match existing.last() {
             Some((num, path)) => (*num, path.clone()),
             None => (1, segment_path(&dir, 1)),
         };
-
         let current = if current_path.exists() {
             let mut seg = AuditSegment::open(&current_path)?;
-            seg.set_auth_key(auth_key);
+            let key = keyring
+                .get(seg.key_epoch_id())
+                .ok_or(DbError::AuditAnchorMismatch)?;
+            seg.set_auth_key(key);
             seg.verify()?;
             seg
         } else {
-            let seg = AuditSegment::new_with_key(None, auth_key)?;
+            let key = keyring
+                .get(current_epoch)
+                .ok_or(DbError::AuditAnchorMismatch)?;
+            let seg = AuditSegment::new_with_key_epoch(None, key, current_epoch)?;
             seg.save(&current_path)?;
             seg
         };
-
-        let log = Self {
+        let mut log = Self {
             dir,
             current,
             current_path,
             current_number,
             config,
-            auth_key: Zeroizing::new(*auth_key),
+            keyring,
+            current_epoch: *current_epoch,
         };
         if !log.anchor_path().exists() {
             if existing.is_empty() {
@@ -150,6 +183,16 @@ impl AuditLog {
             }
         }
         log.verify_all()?;
+        // A rotation is represented by a new segment. If the vault has
+        // durably committed a newer current epoch but the process stopped
+        // before creating that segment, finish the transition now.
+        if log.current.key_epoch_id() != current_epoch {
+            log.rotate_to_epoch(*current_epoch)?;
+        } else {
+            // Also completes an interrupted rotation where the new empty
+            // segment reached disk but its anchor replacement did not.
+            log.persist_anchor()?;
+        }
         Ok(log)
     }
 
@@ -197,17 +240,46 @@ impl AuditLog {
         if anchor.len() != HASH_LEN {
             return false;
         }
-        find_segments(&self.dir)
-            .ok()
-            .into_iter()
-            .flatten()
-            .filter_map(|(_, path)| AuditSegment::open(path).ok())
-            .any(|segment| {
-                segment
-                    .events()
-                    .iter()
-                    .any(|event| event.hash.as_slice() == anchor)
-            })
+        let Ok(segments) = find_segments(&self.dir) else {
+            return false;
+        };
+        let mut expected_prev = super::audit_event::GENESIS_HASH;
+        let mut last_number = None;
+        let mut found = false;
+
+        // Re-read and validate the complete chain in one pass. Individual
+        // segment authentication is insufficient: a valid segment replayed
+        // into a different position must not satisfy an anchor lookup.
+        for (number, path) in segments {
+            last_number = Some(number);
+            let Ok(mut segment) = AuditSegment::open(&path) else {
+                return false;
+            };
+            let Some(key) = self.keyring.get(segment.key_epoch_id()) else {
+                return false;
+            };
+            segment.set_auth_key(key);
+            if segment.verify().is_err() || *segment.prev_segment() != expected_prev {
+                return false;
+            }
+
+            found |= segment
+                .events()
+                .iter()
+                .any(|event| event.hash.as_slice() == anchor);
+            let Ok(segment_hash) = segment.segment_hash() else {
+                return false;
+            };
+            expected_prev = segment_hash;
+        }
+
+        let Ok(current_hash) = self.current.segment_hash() else {
+            return false;
+        };
+
+        // The chain must still terminate at the exact authenticated tail
+        // held by this AuditLog instance, not merely at any valid old chain.
+        found && last_number == Some(self.current_number) && expected_prev == current_hash
     }
 
     /// Returns the number of segments currently on disk.
@@ -266,12 +338,71 @@ impl AuditLog {
         let next_number = self.current_number + 1;
         let next_path = segment_path(&self.dir, next_number);
 
-        let next = AuditSegment::new_with_key(Some(prev_hash), &self.auth_key)?;
+        let key = self
+            .keyring
+            .get(&self.current_epoch)
+            .ok_or(DbError::AuditAnchorMismatch)?;
+        let next = AuditSegment::new_with_key_epoch(Some(prev_hash), key, &self.current_epoch)?;
         next.save(&next_path)?;
 
         self.current = next;
         self.current_path = next_path;
         self.current_number = next_number;
+        self.persist_anchor()?;
+        Ok(())
+    }
+
+    /// Adds a retained epoch to this open log. Callers must durably persist
+    /// the corresponding key in the encrypted vault before invoking this.
+    pub fn add_key_epoch(
+        &mut self,
+        epoch: [u8; KEY_EPOCH_ID_LEN],
+        key: &[u8; 32],
+    ) -> Result<(), DbError> {
+        if epoch == LEGACY_EPOCH_ID || self.keyring.contains_key(&epoch) {
+            return Err(DbError::AuditAnchorMismatch);
+        }
+        self.keyring.insert(epoch, Zeroizing::new(*key));
+        Ok(())
+    }
+
+    /// Switches future events to a previously persisted key epoch.
+    /// The old segments remain untouched and verifiable with their retained keys.
+    pub fn rotate_to_epoch(&mut self, epoch: [u8; KEY_EPOCH_ID_LEN]) -> Result<(), DbError> {
+        if !self.keyring.contains_key(&epoch) {
+            return Err(DbError::AuditAnchorMismatch);
+        }
+        if self.current.key_epoch_id() == &epoch {
+            self.current_epoch = epoch;
+            return Ok(());
+        }
+        self.current.save(&self.current_path)?;
+        let prev_hash = self.current.segment_hash()?;
+        let next_number = self
+            .current_number
+            .checked_add(1)
+            .ok_or(DbError::LengthLimitExceeded)?;
+        let next_path = segment_path(&self.dir, next_number);
+        let key = self
+            .keyring
+            .get(&epoch)
+            .ok_or(DbError::AuditAnchorMismatch)?;
+        let mut next = AuditSegment::new_with_key_epoch(Some(prev_hash), key, &epoch)?;
+        let timestamp = Timestamp::now()
+            .map_err(|error| DbError::Io(std::io::Error::other(error.to_string())))?;
+        next.append(
+            timestamp,
+            AuditEventSpec::new(EventType::KeyRotated)
+                .with_actor("vault")
+                .with_subject(hex::encode(epoch)),
+        )?;
+        // Persist the transition event with the new segment so recovery
+        // never exposes a committed epoch switch without its audit record.
+        next.save(&next_path)?;
+        self.current = next;
+        self.current_path = next_path;
+        self.current_number = next_number;
+        self.current_epoch = epoch;
         self.persist_anchor()?;
         Ok(())
     }
@@ -290,7 +421,11 @@ impl AuditLog {
 
         for (_num, path) in &segments {
             let mut seg = AuditSegment::open(path)?;
-            seg.set_auth_key(&self.auth_key);
+            let key = self
+                .keyring
+                .get(seg.key_epoch_id())
+                .ok_or(DbError::AuditAnchorMismatch)?;
+            seg.set_auth_key(key);
             seg.verify()?;
 
             // The first segment must have prev = genesis; later ones
@@ -312,14 +447,21 @@ impl AuditLog {
 
     fn persist_anchor(&self) -> Result<(), DbError> {
         let segment_hash = self.current.segment_hash()?;
+        let key = self
+            .keyring
+            .get(&self.current_epoch)
+            .ok_or(DbError::AuditAnchorMismatch)?;
         let mac = authenticate_anchor(
-            &self.auth_key,
+            key,
             &self.current_number.to_be_bytes(),
+            &self.current_epoch,
             &segment_hash,
         );
-        let mut bytes = Vec::with_capacity(ANCHOR_MAGIC.len() + 4 + HASH_LEN + HASH_LEN);
+        let mut bytes =
+            Vec::with_capacity(ANCHOR_MAGIC.len() + 4 + KEY_EPOCH_ID_LEN + HASH_LEN + HASH_LEN);
         bytes.extend_from_slice(ANCHOR_MAGIC);
         bytes.extend_from_slice(&self.current_number.to_be_bytes());
+        bytes.extend_from_slice(&self.current_epoch);
         bytes.extend_from_slice(&segment_hash);
         bytes.extend_from_slice(&mac);
 
@@ -329,33 +471,81 @@ impl AuditLog {
         file.write_all(&bytes)?;
         file.sync_all()?;
         drop(file);
-        fs::rename(&tmp, self.anchor_path())?;
-        if let Some(parent) = self.anchor_path().parent() {
-            fs::File::open(parent)?.sync_all()?;
-        }
+        replace_file(&tmp, &self.anchor_path())?;
+        sync_parent_dir(&self.anchor_path())?;
         Ok(())
     }
 
     fn verify_anchor(&self) -> Result<(), DbError> {
         let bytes = fs::read(self.anchor_path()).map_err(|_| DbError::AuditAnchorMismatch)?;
-        if bytes.len() != ANCHOR_MAGIC.len() + 4 + HASH_LEN + HASH_LEN
-            || &bytes[..ANCHOR_MAGIC.len()] != ANCHOR_MAGIC
-        {
-            return Err(DbError::AuditAnchorMismatch);
-        }
-        let n = ANCHOR_MAGIC.len();
-        let number = u32::from_be_bytes(bytes[n..n + 4].try_into().expect("4 bytes"));
-        let hash_start = n + 4;
+        let legacy_len = LEGACY_ANCHOR_MAGIC.len() + 4 + HASH_LEN + HASH_LEN;
+        let current_len = ANCHOR_MAGIC.len() + 4 + KEY_EPOCH_ID_LEN + HASH_LEN + HASH_LEN;
+        let (magic_len, epoch, hash_start, mac_start, key, legacy) =
+            if bytes.len() == current_len && &bytes[..4] == ANCHOR_MAGIC {
+                let mut epoch = [0u8; KEY_EPOCH_ID_LEN];
+                epoch.copy_from_slice(&bytes[4 + 4..4 + 4 + KEY_EPOCH_ID_LEN]);
+                let key = self
+                    .keyring
+                    .get(&epoch)
+                    .ok_or(DbError::AuditAnchorMismatch)?;
+                (
+                    4usize,
+                    epoch,
+                    8 + KEY_EPOCH_ID_LEN,
+                    8 + KEY_EPOCH_ID_LEN + HASH_LEN,
+                    key,
+                    false,
+                )
+            } else if bytes.len() == legacy_len && &bytes[..4] == LEGACY_ANCHOR_MAGIC {
+                let key = self
+                    .keyring
+                    .get(&LEGACY_EPOCH_ID)
+                    .ok_or(DbError::AuditAnchorMismatch)?;
+                (4usize, LEGACY_EPOCH_ID, 8, 8 + HASH_LEN, key, true)
+            } else {
+                return Err(DbError::AuditAnchorMismatch);
+            };
+        let number =
+            u32::from_be_bytes(bytes[magic_len..magic_len + 4].try_into().expect("4 bytes"));
         let mut segment_hash = [0u8; HASH_LEN];
         segment_hash.copy_from_slice(&bytes[hash_start..hash_start + HASH_LEN]);
-        let mac_start = hash_start + HASH_LEN;
         let mut stored_mac = [0u8; HASH_LEN];
         stored_mac.copy_from_slice(&bytes[mac_start..]);
-        let expected_mac =
-            authenticate_anchor(&self.auth_key, &number.to_be_bytes(), &segment_hash);
-        if number != self.current_number
-            || segment_hash != self.current.segment_hash()?
-            || stored_mac != expected_mac
+        let expected_mac = if legacy {
+            authenticate_legacy_anchor(key, &number.to_be_bytes(), &segment_hash)
+        } else {
+            authenticate_anchor(key, &number.to_be_bytes(), &epoch, &segment_hash)
+        };
+        let current_hash = self.current.segment_hash()?;
+        let current_anchor = number == self.current_number
+            && epoch == *self.current.key_epoch_id()
+            && bool::from(segment_hash.ct_eq(&current_hash));
+        let interrupted_epoch_switch = if number.checked_add(1) == Some(self.current_number)
+            && *self.current.prev_segment() == segment_hash
+        {
+            let previous_path = segment_path(&self.dir, number);
+            if let Ok(mut previous) = AuditSegment::open(previous_path) {
+                if previous.key_epoch_id() == &epoch {
+                    if let Some(previous_key) = self.keyring.get(&epoch) {
+                        previous.set_auth_key(previous_key);
+                        previous.verify().is_ok()
+                            && previous
+                                .segment_hash()
+                                .is_ok_and(|hash| hash == segment_hash)
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+        if (!current_anchor && !interrupted_epoch_switch)
+            || !bool::from(stored_mac.ct_eq(&expected_mac))
         {
             return Err(DbError::AuditAnchorMismatch);
         }
@@ -393,21 +583,37 @@ fn create_unique_temp_file(path: &Path) -> Result<(PathBuf, fs::File), DbError> 
     )))
 }
 
-fn authenticate_anchor(
+fn authenticate_legacy_anchor(
     key: &[u8; HASH_LEN],
     number: &[u8; 4],
     segment_hash: &[u8; HASH_LEN],
 ) -> [u8; HASH_LEN] {
-    let mut data = Vec::with_capacity(ANCHOR_MAGIC.len() + number.len() + segment_hash.len());
+    let mut data =
+        Vec::with_capacity(LEGACY_ANCHOR_MAGIC.len() + number.len() + segment_hash.len());
+    data.extend_from_slice(LEGACY_ANCHOR_MAGIC);
+    data.extend_from_slice(number);
+    data.extend_from_slice(segment_hash);
+    authenticate_anchor_mac(key, &data)
+}
+
+fn authenticate_anchor(
+    key: &[u8; HASH_LEN],
+    number: &[u8; 4],
+    epoch: &[u8; KEY_EPOCH_ID_LEN],
+    segment_hash: &[u8; HASH_LEN],
+) -> [u8; HASH_LEN] {
+    let mut data =
+        Vec::with_capacity(ANCHOR_MAGIC.len() + number.len() + epoch.len() + segment_hash.len());
     data.extend_from_slice(ANCHOR_MAGIC);
     data.extend_from_slice(number);
+    data.extend_from_slice(epoch);
     data.extend_from_slice(segment_hash);
     authenticate_anchor_mac(key, &data)
 }
 
 fn authenticate_anchor_mac(key: &[u8; HASH_LEN], data: &[u8]) -> [u8; HASH_LEN] {
     const BLOCK: usize = 64;
-    let mut key_block = [0u8; BLOCK];
+    let mut key_block = Zeroizing::new([0u8; BLOCK]);
     if key.len() > BLOCK {
         let digest = Sha256::digest(key);
         key_block[..HASH_LEN].copy_from_slice(&digest);
@@ -415,14 +621,14 @@ fn authenticate_anchor_mac(key: &[u8; HASH_LEN], data: &[u8]) -> [u8; HASH_LEN] 
         key_block[..key.len()].copy_from_slice(key);
     }
     let mut inner = Sha256::new();
-    for byte in key_block {
-        inner.update([byte ^ 0x36]);
+    for byte in key_block.iter() {
+        inner.update([*byte ^ 0x36]);
     }
     inner.update(data);
     let inner_hash = inner.finalize();
     let mut outer = Sha256::new();
-    for byte in key_block {
-        outer.update([byte ^ 0x5c]);
+    for byte in key_block.iter() {
+        outer.update([*byte ^ 0x5c]);
     }
     outer.update(inner_hash);
     outer.finalize().into()
@@ -507,6 +713,122 @@ mod tests {
         ));
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn audit_segment_and_anchor_files_are_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let (_tmp, audit) = init_dir();
+        let _log = AuditLog::open(&audit, &TEST_KEY).unwrap();
+
+        for path in [audit.join("audit-00001.nqa"), audit.join(ANCHOR_FILE)] {
+            let mode = fs::metadata(path).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600);
+        }
+    }
+
+    #[test]
+    fn opening_with_a_different_authentication_key_fails_closed() {
+        let (_tmp, audit) = init_dir();
+        {
+            let mut log = AuditLog::open(&audit, &TEST_KEY).unwrap();
+            log.append(ts(1), spec(EventType::VaultCreated)).unwrap();
+            log.rotate().unwrap();
+            log.append(ts(2), spec(EventType::VaultUnlocked)).unwrap();
+            log.verify_all().unwrap();
+        }
+
+        // A replacement key must not silently authenticate old segments or
+        // the tail commitment. Key rotation needs an explicit epoch protocol.
+        let replacement_key = [0x24; 32];
+        assert!(AuditLog::open(&audit, &replacement_key).is_err());
+        assert!(AuditLog::open(&audit, &TEST_KEY).is_ok());
+    }
+
+    #[test]
+    fn key_rotation_preserves_historical_segments_and_reopens() {
+        let (_tmp, audit) = init_dir();
+        let epoch = [0x19; KEY_EPOCH_ID_LEN];
+        let replacement = [0x73; 32];
+        let keys = [(LEGACY_EPOCH_ID, TEST_KEY), (epoch, replacement)];
+        let mut log = AuditLog::open_with_keyring(
+            &audit,
+            AuditLogConfig::default(),
+            &[(LEGACY_EPOCH_ID, TEST_KEY)],
+            &LEGACY_EPOCH_ID,
+        )
+        .unwrap();
+        log.append(ts(1), spec(EventType::VaultCreated)).unwrap();
+        let old_hash = log.head_event_hash().unwrap().to_vec();
+        log.add_key_epoch(epoch, &replacement).unwrap();
+        log.rotate_to_epoch(epoch).unwrap();
+        log.append(ts(2), spec(EventType::VaultUnlocked)).unwrap();
+        let new_hash = log.head_event_hash().unwrap().to_vec();
+        log.verify_all().unwrap();
+        drop(log);
+
+        let reopened =
+            AuditLog::open_with_keyring(&audit, AuditLogConfig::default(), &keys, &epoch).unwrap();
+        assert!(reopened.contains_event_hash(&old_hash));
+        assert!(reopened.contains_event_hash(&new_hash));
+        assert_eq!(reopened.segment_count().unwrap(), 2);
+    }
+
+    #[test]
+    fn missing_historical_epoch_fails_closed() {
+        let (_tmp, audit) = init_dir();
+        let epoch = [0x39; KEY_EPOCH_ID_LEN];
+        let replacement = [0x64; 32];
+        let mut log = AuditLog::open_with_keyring(
+            &audit,
+            AuditLogConfig::default(),
+            &[(LEGACY_EPOCH_ID, TEST_KEY)],
+            &LEGACY_EPOCH_ID,
+        )
+        .unwrap();
+        log.append(ts(1), spec(EventType::VaultCreated)).unwrap();
+        log.add_key_epoch(epoch, &replacement).unwrap();
+        log.rotate_to_epoch(epoch).unwrap();
+        drop(log);
+        assert!(
+            AuditLog::open_with_keyring(
+                &audit,
+                AuditLogConfig::default(),
+                &[(epoch, replacement)],
+                &epoch
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn interrupted_epoch_rotation_repairs_the_tail_anchor() {
+        let (_tmp, audit) = init_dir();
+        let epoch = [0x29; KEY_EPOCH_ID_LEN];
+        let replacement = [0x64; 32];
+        let keys = [(LEGACY_EPOCH_ID, TEST_KEY), (epoch, replacement)];
+        let mut log = AuditLog::open_with_keyring(
+            &audit,
+            AuditLogConfig::default(),
+            &[(LEGACY_EPOCH_ID, TEST_KEY)],
+            &LEGACY_EPOCH_ID,
+        )
+        .unwrap();
+        log.append(ts(1), spec(EventType::VaultCreated)).unwrap();
+        let old_anchor = fs::read(audit.join(ANCHOR_FILE)).unwrap();
+        log.add_key_epoch(epoch, &replacement).unwrap();
+        log.rotate_to_epoch(epoch).unwrap();
+        // Model a crash after the new segment and transition event are durable but
+        // before the NQA4 tail anchor replacement reaches disk.
+        fs::write(audit.join(ANCHOR_FILE), old_anchor).unwrap();
+        drop(log);
+
+        let recovered =
+            AuditLog::open_with_keyring(&audit, AuditLogConfig::default(), &keys, &epoch).unwrap();
+        recovered.verify_all().unwrap();
+        assert_eq!(recovered.segment_count().unwrap(), 2);
+    }
+
     #[test]
     fn append_persists_and_is_readable() {
         let (_tmp, audit) = init_dir();
@@ -518,6 +840,81 @@ mod tests {
         // Reopen and check.
         let log2 = AuditLog::open(&audit, &TEST_KEY).unwrap();
         assert_eq!(log2.current_len(), 2);
+    }
+
+    #[test]
+    fn contains_event_hash_rejects_a_tampered_segment() {
+        let dir = TempDir::new().unwrap();
+        let key = [0x42; 32];
+        let mut log = AuditLog::open(dir.path(), &key).unwrap();
+        log.append(
+            ts(1),
+            AuditEventSpec::new(EventType::KeyCreated)
+                .with_actor("alice")
+                .with_subject("key-1"),
+        )
+        .unwrap();
+        let anchor = log.head_event_hash().unwrap().to_vec();
+        let path = log.current_path().to_path_buf();
+        let mut bytes = fs::read(&path).unwrap();
+        let actor_offset = bytes
+            .windows(b"alice".len())
+            .position(|window| window == b"alice")
+            .unwrap();
+        bytes[actor_offset..actor_offset + b"alice".len()].copy_from_slice(b"xxxxx");
+        fs::write(path, bytes).unwrap();
+
+        assert!(!log.contains_event_hash(&anchor));
+    }
+
+    #[test]
+    fn contains_event_hash_rejects_a_valid_segment_with_a_broken_link() {
+        let (_tmp, audit) = init_dir();
+        let mut log =
+            AuditLog::open_with(&audit, AuditLogConfig { max_events: 1 }, &TEST_KEY).unwrap();
+        log.append(ts(1), spec(EventType::VaultCreated)).unwrap();
+        let original_anchor = log.head_event_hash().unwrap().to_vec();
+        log.append(ts(2), spec(EventType::VaultUnlocked)).unwrap();
+
+        // Replace segment 1 with a separately authenticated segment. Its
+        // own contents and MAC are valid, but segment 2 still links to the
+        // original segment 1 hash, so the complete chain is invalid.
+        let mut replacement = AuditSegment::new_with_key(None, &TEST_KEY).unwrap();
+        replacement
+            .append(ts(3), spec(EventType::KeyCreated))
+            .unwrap();
+        let replacement_anchor = replacement.events()[0].hash.clone();
+        replacement.save(audit.join("audit-00001.nqa")).unwrap();
+
+        assert_ne!(replacement_anchor, original_anchor);
+        assert!(!log.contains_event_hash(&replacement_anchor));
+    }
+
+    #[test]
+    fn contains_event_hash_rejects_a_replayed_valid_chain() {
+        let (_tmp, audit) = init_dir();
+        let config = AuditLogConfig { max_events: 1 };
+        let mut log = AuditLog::open_with(&audit, config, &TEST_KEY).unwrap();
+        log.append(ts(1), spec(EventType::VaultCreated)).unwrap();
+        log.append(ts(2), spec(EventType::VaultUnlocked)).unwrap();
+
+        // Build a different, fully authenticated chain with the same key
+        // and segment numbers, then replay it over the on-disk log.
+        let (_stale_tmp, stale_audit) = init_dir();
+        let mut stale = AuditLog::open_with(&stale_audit, config, &TEST_KEY).unwrap();
+        stale.append(ts(10), spec(EventType::KeyCreated)).unwrap();
+        let stale_anchor = stale.head_event_hash().unwrap().to_vec();
+        stale.append(ts(11), spec(EventType::KeyUsed)).unwrap();
+
+        for number in 1..=2 {
+            fs::copy(
+                stale_audit.join(format!("audit-{number:05}.nqa")),
+                audit.join(format!("audit-{number:05}.nqa")),
+            )
+            .unwrap();
+        }
+
+        assert!(!log.contains_event_hash(&stale_anchor));
     }
 
     #[test]

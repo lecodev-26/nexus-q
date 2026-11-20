@@ -1,3 +1,16 @@
-# Documented exception: see docs/adr/0005-rustsec-2023-0071-rsa-advisory.md.
+# The sole current exception is documented, owned, and time-limited in
+# audit-exceptions.toml and ADR 0005. Do not add IDs without matching metadata.
 [advisories]
 ignore = ["RUSTSEC-2023-0071"]
+informational_warnings = ["unmaintained"]
+severity_threshold = "low"
+
+[database]
+url = "https://github.com/RustSec/advisory-db.git"
+fetch = true
+stale = false
+
+[output]
+format = "terminal"
+quiet = false
+show_tree = true

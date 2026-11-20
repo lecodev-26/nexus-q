@@ -27,6 +27,7 @@
 //! probability.
 
 use serde::{Deserialize, Serialize};
+use subtle::ConstantTimeEq as _;
 
 use crate::crypto::kdf::{KdfError, hkdf_sha256};
 
@@ -96,6 +97,18 @@ impl KdfParams {
             output_len: crate::crypto::kdf::DERIVED_KEY_LEN as u32,
         }
     }
+
+    /// Returns whether these parameters describe a supported, bounded KDF.
+    #[must_use]
+    pub fn is_supported(&self) -> bool {
+        matches!(self.algorithm, KdfAlgorithm::Argon2id)
+            && self.output_len == crate::crypto::kdf::DERIVED_KEY_LEN as u32
+            && crate::crypto::kdf::argon2id_params_supported(
+                self.memory_kib,
+                self.iterations,
+                self.parallelism,
+            )
+    }
 }
 
 /// The vault file header.
@@ -152,7 +165,10 @@ impl VaultHeader {
     /// build supports.
     #[must_use]
     pub fn is_supported(&self) -> bool {
-        self.magic == MAGIC && self.version == FORMAT_VERSION && self.flags == 0
+        self.magic == MAGIC
+            && self.version == FORMAT_VERSION
+            && self.flags == 0
+            && self.kdf.is_supported()
     }
 
     /// Checks that `kek` produces the same verifier stored in the header.
@@ -163,7 +179,7 @@ impl VaultHeader {
     /// does not match, and [`HeaderError::Kdf`] if the derivation fails.
     pub fn verify_kek(&self, kek: &[u8]) -> Result<(), HeaderError> {
         let computed = compute_kek_verifier(kek)?;
-        if computed == self.kek_verifier {
+        if bool::from(computed.ct_eq(&self.kek_verifier)) {
             Ok(())
         } else {
             Err(HeaderError::WrongPassword)
@@ -205,6 +221,32 @@ mod tests {
 
     fn sample_header() -> VaultHeader {
         VaultHeader::new(KdfParams::v1_default(), vec![0u8; SALT_LEN], &sample_kek()).unwrap()
+    }
+
+    #[test]
+    fn kdf_params_accept_v1_and_bounded_custom_costs() {
+        let defaults = KdfParams::v1_default();
+        assert!(defaults.is_supported());
+        let custom = KdfParams {
+            iterations: defaults.iterations + 1,
+            ..defaults
+        };
+        assert!(custom.is_supported());
+    }
+
+    #[test]
+    fn kdf_params_reject_wrong_output_length_and_excessive_costs() {
+        let defaults = KdfParams::v1_default();
+        let wrong_output = KdfParams {
+            output_len: 16,
+            ..defaults
+        };
+        assert!(!wrong_output.is_supported());
+        let excessive_memory = KdfParams {
+            memory_kib: crate::crypto::kdf::ARGON2_MAX_MEMORY_KIB + 1,
+            ..defaults
+        };
+        assert!(!excessive_memory.is_supported());
     }
 
     #[test]

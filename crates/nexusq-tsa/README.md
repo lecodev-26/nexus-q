@@ -11,7 +11,7 @@
 
 ## Request policy
 
-The initial implementation supports SHA-256 message imprints only. The request must be DER, version 1, no larger than 64 KiB, and contain a 32-byte SHA-256 imprint with absent algorithm parameters. A supplied policy must match the configured policy. A supplied nonce is echoed unchanged. Unknown critical request extensions are rejected. The TSA certificate is always included in the CMS token, regardless of `certReq`.
+The initial implementation supports SHA-256 message imprints only. The request must be DER, version 1, no larger than 64 KiB, and contain a 32-byte SHA-256 imprint with absent algorithm parameters. A supplied policy must match the configured policy. A supplied nonce is echoed unchanged. Unknown critical request extensions are rejected. The TSA certificate is included in the CMS token only when `certReq` is true; when omitted (the RFC 3161 default), the token does not embed the certificate.
 
 The CMS `SignerInfo` includes the message digest, content type, ESS `SigningCertificateV2` certificate hash and ML-DSA-65 signature. The returned bytes are the `TimeStampToken`; an HTTP adapter should wrap it in RFC 3161 `TimeStampResp` with the appropriate PKI status and content type.
 

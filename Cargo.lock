@@ -1616,6 +1616,7 @@ dependencies = [
  "rand_core 0.9.5",
  "serde",
  "serde_bytes",
+ "serde_json",
  "sha2",
  "sha3",
  "slh-dsa",
@@ -1860,6 +1861,25 @@ dependencies = [
  "slh-dsa",
  "thiserror",
  "x509-cert",
+]
+
+[[package]]
+name = "nexusq-xks-proxy"
+version = "4.1.2"
+dependencies = [
+ "axum",
+ "base64 0.22.1",
+ "hmac",
+ "nexusq-hsm",
+ "serde",
+ "serde_json",
+ "sha2",
+ "subtle",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "zeroize",
 ]
 
 [[package]]

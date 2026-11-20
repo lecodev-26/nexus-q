@@ -1,0 +1,40 @@
+name: AI Security Audit — lightweight validation
+
+on:
+  pull_request:
+    paths:
+      - 'security-audit/**'
+      - '.github/workflows/ai-security-audit.yml'
+      - '.github/workflows/ai-audit-validation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'security-audit/**'
+      - '.github/workflows/ai-security-audit.yml'
+      - '.github/workflows/ai-audit-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-audit-tooling:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check Python syntax
+        run: python -m py_compile security-audit/bot/coordinator.py
+      - name: Test coordinator helpers (no API calls)
+        run: python -m unittest discover -s security-audit/tests -v
+      - name: Test vendored validators
+        run: |
+          node --test security-audit/cloudflare-skill/validate-findings.test.cjs
+          node --test security-audit/cloudflare-skill/validate-coverage-ledger.test.cjs

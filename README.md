@@ -2,14 +2,15 @@
 
 <table align="center" border="0">
 <tr>
-<td><img src="assets/logo.png" alt="NEXUS-Q logo" width="132"></td>
+<td><img src="assets/nexusqlogo.png" alt="NEXUS-Q logo" width="144"></td>
 <td><strong>NEXUS-Q is an open-source post-quantum cryptographic engine written in Rust</strong></td>
 </tr>
 </table>
 
-<img src="assets/banner.jpg" alt="NEXUS-Q: post-quantum cryptographic security engine" width="100%">
+<img src="assets/nexus-q-banner-animado.svg" alt="NEXUS-Q animated post-quantum cryptographic security engine banner" width="100%">
 
 [![Fast CI](https://github.com/lecodev-26/nexus-q/actions/workflows/ci.yml/badge.svg)](https://github.com/lecodev-26/nexus-q/actions/workflows/ci.yml)
+[![Dependency audit (manual)](https://github.com/lecodev-26/nexus-q/actions/workflows/audit-ci.yml/badge.svg)](https://github.com/lecodev-26/nexus-q/actions/workflows/audit-ci.yml)
 
 <a href="https://nexus-q.link"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/dark/b-site.svg"><img src="assets/light/b-site.svg" alt="Project website" width="96"></picture></a>&nbsp;<a href="https://github.com/lecodev-26/nexus-q/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/dark/b-rel.svg"><img src="assets/light/b-rel.svg" alt="Releases" width="104"></picture></a>&nbsp;<a href="docs/user/README.md"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/dark/b-docs.svg"><img src="assets/light/b-docs.svg" alt="Documentation" width="151"></picture></a>&nbsp;<a href="SECURITY.md"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/dark/b-sec.svg"><img src="assets/light/b-sec.svg" alt="Security policy" width="154"></picture></a>
 
@@ -25,10 +26,10 @@
 
 | Start here | Explore deeper |
 |---|---|
-| [Overview and design](#overview) · [Cryptography](#cryptography) · [Quick start](#quick-start) | [Architecture](docs/ARCHITECTURE.md) · [Threat model](docs/THREAT_MODEL.md) · [Security model](docs/SECURITY_MODEL.md) |
+| [Overview and design](#overview) · [Desktop applications](#desktop-applications) · [Cryptography](#cryptography) · [Quick start](#quick-start) | [Architecture](docs/ARCHITECTURE.md) · [Threat model](docs/THREAT_MODEL.md) · [Security model](docs/SECURITY_MODEL.md) |
 | [Benchmarks and measured results](#benchmarks) · [Installation](#installation) | [Benchmark Arena and methodology](arena/README.md) · [Benchmark index](BENCHMARKS.md) · [Performance reports](docs/performance/) |
 | [Project status and versions](#status) · [Security and assurance](#security-and-assurance) | [Roadmap](docs/ROADMAP.md) · [Release notes](docs/V4_RELEASE.md) · [Security policy](SECURITY.md) |
-| [Documentation index](#documentation) · [Contributing](#contributing) · [License](#license) | [Website](https://nexus-q.link) · [Releases](https://github.com/lecodev-26/nexus-q/releases) · [Discussions](https://github.com/lecodev-26/nexus-q/discussions) |
+| [Documentation index](#documentation) · [Contributing](#contributing) · [Contributors](#contributors) · [License](#license) | [Website](https://nexus-q.link) · [Releases](https://github.com/lecodev-26/nexus-q/releases) · [Discussions](https://github.com/lecodev-26/nexus-q/discussions) |
 
 ### Project at a glance
 
@@ -91,6 +92,35 @@ The repository already includes visual assets for the architecture flow, project
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/dark/h-overview.svg"><img src="assets/light/h-overview.svg" alt="Overview" width="100%"></picture>
 
 </div>
+
+
+## Desktop applications
+
+NEXUS-Q also powers independent desktop applications that bring its cryptographic capabilities to everyday workflows. Each application has its own repository, interface, release process and security documentation. They are separate products—not modules bundled into this engine repository.
+
+<table>
+<tr>
+<td align="center" valign="top" width="50%">
+<a href="https://github.com/lecodev-26/nexus-q-vault">
+<img src="assets/apps/nexus-q-vault-logo.png" alt="NEXUS-Q Vault logo" width="180">
+</a>
+<h3><a href="https://github.com/lecodev-26/nexus-q-vault">NEXUS-Q Vault</a></h3>
+<p>A local-first desktop vault for encrypting files and folders, managing vault data, and creating separately encrypted recovery backups. Its cryptographic operations are delegated to the NEXUS-Q Rust engine.</p>
+<p><a href="https://github.com/lecodev-26/nexus-q-vault">Explore the repository</a></p>
+</td>
+<td align="center" valign="top" width="50%">
+<a href="https://github.com/lecodev-26/nexus-q-sign">
+<img src="assets/apps/nexus-q-sign-logo.png" alt="NEXUS-Q Sign logo" width="220">
+</a>
+<h3><a href="https://github.com/lecodev-26/nexus-q-sign">NEXUS-Q Sign</a></h3>
+<p>A local-first desktop application for detached document signing and verification. It uses ML-DSA-65 through the NEXUS-Q cryptographic library and stores signatures in separate <code>.nqsig</code> files.</p>
+<p><a href="https://github.com/lecodev-26/nexus-q-sign">Explore the repository</a></p>
+</td>
+</tr>
+</table>
+
+For installation instructions, platform availability, screenshots, security limitations and release status, visit each application's repository. Their documentation is maintained independently so that product-specific information stays accurate.
+
 
 ## Overview
 
@@ -459,6 +489,7 @@ User-facing documentation starts at [`docs/user/README.md`](docs/user/README.md)
 | [CRYPTOGRAPHY](docs/CRYPTOGRAPHY.md) | Algorithms and rules |
 | [KEY_MANAGEMENT](docs/KEY_MANAGEMENT.md) | Key lifecycle |
 | [SECURITY_MODEL](docs/SECURITY_MODEL.md) | Security guarantees |
+| [STRIDE_THREAT_MODEL](docs/STRIDE_THREAT_MODEL.md) | STRIDE abuse cases, controls, evidence, and residual risks |
 | [STORAGE](docs/STORAGE.md) | Persistent formats |
 | [API](docs/API.md) | Public interfaces |
 | [POLICY](docs/POLICY.md) | Access control engine |
@@ -495,27 +526,33 @@ V1–V4 are engineering version lines/snapshots, not proof of production readine
 | Security CI, SDK CI, benchmark CI and fuzz targets | Registry publication as an audit or production-readiness endorsement |
 | Published threat model and security model | Hardware isolation from the default software backend |
 
-Report suspected vulnerabilities privately through GitHub Security Advisories. See [`SECURITY.md`](SECURITY.md).
+Report suspected vulnerabilities through the [private GitHub Security Advisories form](https://github.com/lecodev-26/nexus-q/security/advisories/new), not in public issues. See [`SECURITY.md`](SECURITY.md) for the private-reporting process and safe public fallback.
 
 ## Contributing
 
-Issues, reproducible bug reports, documentation improvements, and focused pull requests are welcome. Before opening a change:
+Contributions of code, tests, documentation, security research, reviews, and design feedback are welcome. **You do not need to contact the maintainer before opening a focused, non-sensitive Pull Request.**
 
-1. Read the [architecture](docs/ARCHITECTURE.md), [threat model](docs/THREAT_MODEL.md), [cryptographic rules](docs/CRYPTOGRAPHY.md), and [security policy](SECURITY.md) relevant to the change.
-2. Keep cryptographic primitives delegated to established libraries; do not introduce home-grown cryptography or silently change serialized formats.
-3. Add or update tests and documentation alongside behavior changes. For performance work, include reproducible measurements and preserve the benchmark conditions and raw evidence.
-4. Run the relevant local checks before submitting. A useful baseline for Rust changes is:
+- **New contributors:** start with [CONTRIBUTING.md](CONTRIBUTING.md) for the complete workflow and [AGENT.md](AGENT.md) for the repository map and detailed instructions for human and AI-assisted work.
+- **Find work:** browse [open issues](https://github.com/lecodev-26/nexus-q/issues), review [GitHub Discussions](https://github.com/lecodev-26/nexus-q/discussions), or propose a focused improvement in a PR.
+- **Open a change:** fork the repository, create a topic branch, and open a PR against main. GitHub provides a PR checklist automatically. Explain scope, security/correctness impact, compatibility, validation evidence, and limitations.
+- **Ask for help:** see [SUPPORT.md](SUPPORT.md), or ask in [Discussions](https://github.com/lecodev-26/nexus-q/discussions).
+- **Community standards:** participation follows [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+- **Security vulnerabilities:** report them privately using [SECURITY.md](SECURITY.md), never in public issues, discussions, or PRs.
 
-   ```bash
-   cargo fmt --all -- --check
-   cargo test --workspace
-   cargo build --workspace --release
-   ```
+GitHub Actions is the authoritative validation for configured CI checks. Contributors should report exactly which local commands and Actions runs were executed; a green CI run is not an independent security audit or certification.
 
-   Run the checks applicable to the crates and SDKs you changed; CI remains the authoritative check for the full supported matrix.
-5. Describe security-impacting changes and compatibility implications clearly in the pull request. Never include secrets, private keys, vault contents, production credentials, or sensitive logs.
 
-Please report suspected vulnerabilities privately using the process in [`SECURITY.md`](SECURITY.md), rather than publishing exploitable details in a public issue.
+## Contributors
+
+NEXUS-Q is grateful to everyone who has contributed code, testing, documentation, and engineering improvements. The contributors below are recognized for changes merged into the repository; feedback and participation in Discussions are appreciated as well.
+
+- **[Khaten](https://github.com/kathennn)** — contributed security and reliability fixes across the vault, storage, cryptography, HSM, ACME, TSA, OCSP, high-availability, audit, and C SDK areas, including secret zeroization, fail-closed behavior, and safer resource handling.
+- **[Notrim](https://github.com/notrimmm)** — improved native-backend benchmark and evaluation tooling, including near-parity result handling, and locked the CIRCL adapter's Go dependencies for reproducible builds.
+- **[Mohammed Sinan Mk](https://github.com/mks-mk)** — clarified the cryptographic kernel's capabilities and documented upstream implementation provenance ([PR #191](https://github.com/lecodev-26/nexus-q/pull/191)).
+- **[dentimoer-official](https://github.com/dentimoer-official)** — strengthened X-Wing validation with official draft-11 test vectors, seed-injectable encapsulation for deterministic testing, and related documentation ([PR #185](https://github.com/lecodev-26/nexus-q/pull/185)).
+- **[Harshit Nagila](https://github.com/harshit3355)** — improved the CLI documentation with verified JSON output examples for health and backend status, clearer scripting error guidance, and corrected version-command examples ([PR #219](https://github.com/lecodev-26/nexus-q/pull/219)).
+
+Thank you for helping make NEXUS-Q more reliable, understandable, and useful.
 
 
 <div align="center">

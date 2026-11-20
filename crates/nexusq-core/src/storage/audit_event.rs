@@ -26,6 +26,7 @@
 //! See `docs/SECURITY_MODEL.md` §7 and `docs/STORAGE.md` §7.
 
 use serde::{Deserialize, Serialize};
+use subtle::ConstantTimeEq as _;
 
 use crate::vault::Timestamp;
 use sha2::{Digest, Sha256};
@@ -387,7 +388,7 @@ impl AuditEvent {
     /// recomputed (see [`AuditEvent::recompute_hash`]).
     pub fn is_intact(&self, auth_key: &[u8; HASH_LEN]) -> Result<bool, DbError> {
         let computed = self.recompute_hash(auth_key)?;
-        Ok(computed == self.hash)
+        Ok(bool::from(computed.ct_eq(&self.hash)))
     }
 }
 

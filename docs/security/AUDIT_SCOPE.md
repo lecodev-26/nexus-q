@@ -21,9 +21,13 @@ Define the source snapshot, claims, exclusions, and evidence expected for an ind
 - A claim of FIPS 140-3 validation, Common Criteria certification, or formal verification.
 - A claim of production readiness or completion of an independent external audit.
 - Hardware isolation or assurance for a TPM, HSM, Secure Element, compromised operating system, hypervisor, or physical attacker beyond explicitly tested integrations.
-- The experimental native backend as a production cryptographic provider; it remains opt-in and outside default-provider claims. Any audit of that backend requires a separately agreed scope.
+- The experimental native backend, including its opt-in `nexusq-core` integration, Rust/C FFI, vendored C/assembly, native build configurations, and artifacts. It remains opt-in and outside the v4.1.2 audit claims; the default RustCrypto provider remains in scope. The maintainer decision, interface/asset/threat/dependency inventory, rationale, residual risks, and conditions for a future audit are recorded in [`NATIVE_BACKEND_AUDIT_SCOPE.md`](NATIVE_BACKEND_AUDIT_SCOPE.md).
 - Guarantees about all language-registry packages unless each artifact is linked to the exact source commit by verifiable evidence.
 - Side-channel guarantees beyond the specific analysis and tests agreed with the auditor.
+
+## Scope decision record
+
+The native-backend exclusion was explicitly approved by the project maintainer (`lecodev-26`) on 2026-11-15. It is a boundary for this v4.1.2 audit candidate, not a security approval or finding. A separate written scope and approval are required before the native backend can be considered for production use; see [`NATIVE_BACKEND_AUDIT_SCOPE.md`](NATIVE_BACKEND_AUDIT_SCOPE.md).
 
 ## Required candidate evidence
 

@@ -17,7 +17,7 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeSet, HashSet},
     fs::{self, File, OpenOptions},
-    io::{BufRead, BufReader, Write},
+    io::{BufRead, BufReader, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
     sync::{
         Mutex, RwLock,
@@ -489,7 +489,7 @@ impl AuditLog {
                     .map_err(|_| AdminError::Storage)?;
             }
         }
-        let (sequence, head_hash) = verify_audit_file(&mut file, &key)?;
+        let (sequence, head_hash) = verify_audit_file(&mut file, &key, true)?;
         Ok(Self {
             path,
             key: Zeroizing::new(key),
@@ -568,7 +568,7 @@ impl AuditLog {
     /// Verify the on-disk audit chain without modifying it.
     pub fn verify(&self) -> Result<(), AdminError> {
         let mut file = File::open(&self.path).map_err(|_| AdminError::Storage)?;
-        verify_audit_file(&mut file, &self.key).map(|_| ())
+        verify_audit_file(&mut file, &self.key, false).map(|_| ())
     }
     /// Return the last event hash for a separately protected integrity anchor.
     pub fn head_hash(&self) -> Result<[u8; 32], AdminError> {
@@ -580,31 +580,60 @@ impl AuditLog {
     }
 }
 
-fn verify_audit_file(file: &mut File, key: &[u8; 32]) -> Result<(u64, [u8; 32]), AdminError> {
-    use std::io::Seek;
+fn verify_audit_file(
+    file: &mut File,
+    key: &[u8; 32],
+    repair_torn_tail: bool,
+) -> Result<(u64, [u8; 32]), AdminError> {
     file.rewind().map_err(|_| AdminError::Storage)?;
-    let reader = BufReader::new(file.try_clone().map_err(|_| AdminError::Storage)?);
+    let mut reader = BufReader::new(file.try_clone().map_err(|_| AdminError::Storage)?);
     let mut sequence = 0u64;
     let mut head = [0u8; 32];
-    for line in reader.lines() {
-        let line = line.map_err(|_| AdminError::Storage)?;
+    let mut valid_len = 0u64;
+    let mut line = Vec::new();
+    loop {
+        line.clear();
+        let bytes_read = reader
+            .read_until(b'\n', &mut line)
+            .map_err(|_| AdminError::Storage)?;
+        if bytes_read == 0 {
+            break;
+        }
+        if line.last() != Some(&b'\n') {
+            if !repair_torn_tail {
+                return Err(AdminError::AuditIntegrity);
+            }
+            file.set_len(valid_len)
+                .and_then(|_| file.sync_data())
+                .and_then(|_| file.seek(SeekFrom::End(0)).map(|_| ()))
+                .map_err(|_| AdminError::Storage)?;
+            break;
+        }
+        line.pop();
+        if line.last() == Some(&b'\r') {
+            line.pop();
+        }
         if line.len() > 1024 * 1024 {
             return Err(AdminError::AuditIntegrity);
         }
         let record: AuditRecord =
-            serde_json::from_str(&line).map_err(|_| AdminError::AuditIntegrity)?;
+            serde_json::from_slice(&line).map_err(|_| AdminError::AuditIntegrity)?;
         if record.body.sequence != sequence + 1
             || record.previous_hash != head
             || record.hash != audit_hash(&record.body, &head)?
-            || record.mac != audit_mac(key, &head, &record.hash)?
+            || !bool::from(record.mac.ct_eq(&audit_mac(key, &head, &record.hash)?))
         {
             return Err(AdminError::AuditIntegrity);
         }
+        valid_len = valid_len
+            .checked_add(bytes_read as u64)
+            .ok_or(AdminError::AuditIntegrity)?;
         sequence = record.body.sequence;
         head = record.hash;
     }
     Ok((sequence, head))
 }
+
 fn audit_hash(body: &AuditBody, previous_hash: &[u8; 32]) -> Result<[u8; 32], AdminError> {
     let encoded = serde_json::to_vec(body).map_err(|_| AdminError::Encoding)?;
     let mut hasher = Sha256::new();
@@ -963,7 +992,7 @@ fn atomic_write(path: &Path, bytes: &[u8], no_replace: bool) -> Result<(), Admin
     let result = if no_replace {
         fs::hard_link(&temp, path)
     } else {
-        fs::rename(&temp, path)
+        atomic_replace(&temp, path)
     };
     if result.is_err() {
         let _ = fs::remove_file(&temp);
@@ -974,9 +1003,52 @@ fn atomic_write(path: &Path, bytes: &[u8], no_replace: bool) -> Result<(), Admin
         });
     }
     let _ = fs::remove_file(&temp);
+    #[cfg(unix)]
     File::open(parent)
         .and_then(|directory| directory.sync_all())
-        .map_err(|_| AdminError::Storage)
+        .map_err(|_| AdminError::Storage)?;
+    Ok(())
+}
+
+#[cfg(windows)]
+fn atomic_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
+    use std::{iter::once, os::windows::ffi::OsStrExt};
+
+    const MOVEFILE_REPLACE_EXISTING: u32 = 0x1;
+    const MOVEFILE_WRITE_THROUGH: u32 = 0x8;
+
+    #[link(name = "Kernel32")]
+    // SAFETY: The declaration mirrors the Windows Kernel32 ABI; callers below
+    // pass NUL-terminated UTF-16 buffers and valid flag values.
+    unsafe extern "system" {
+        fn MoveFileExW(existing: *const u16, new: *const u16, flags: u32) -> i32;
+    }
+
+    let source: Vec<u16> = source.as_os_str().encode_wide().chain(once(0)).collect();
+    let destination: Vec<u16> = destination
+        .as_os_str()
+        .encode_wide()
+        .chain(once(0))
+        .collect();
+    // SAFETY: Both vectors are live, NUL-terminated UTF-16 buffers for the
+    // duration of the call, and the flags are valid MoveFileExW options.
+    let result = unsafe {
+        MoveFileExW(
+            source.as_ptr(),
+            destination.as_ptr(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    };
+    if result == 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(not(windows))]
+fn atomic_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
+    fs::rename(source, destination)
 }
 
 /// Administrative security errors.
@@ -1083,6 +1155,36 @@ mod tests {
             Err(AdminError::AuthenticationDenied)
         ));
         audit.verify().unwrap();
+    }
+
+    #[test]
+    fn audit_log_open_recovers_an_unterminated_tail_record() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("audit.log");
+        let audit = AuditLog::open(&path, [7; 32]).unwrap();
+        audit
+            .append(
+                "root",
+                AuditAction::AdminLogin,
+                None,
+                AuditOutcome::Success,
+                None,
+            )
+            .unwrap();
+        let expected_head = audit.head_hash().unwrap();
+        let valid_len = fs::metadata(&path).unwrap().len();
+        drop(audit);
+
+        OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .unwrap()
+            .write_all(b"{\"body\":")
+            .unwrap();
+
+        let reopened = AuditLog::open(&path, [7; 32]).unwrap();
+        assert_eq!(reopened.head_hash().unwrap(), expected_head);
+        assert_eq!(fs::metadata(path).unwrap().len(), valid_len);
     }
 
     #[test]

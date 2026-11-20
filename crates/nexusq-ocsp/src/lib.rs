@@ -176,8 +176,14 @@ impl RevocationStore {
     }
     /// Mark a certificate as known and not revoked.
     pub fn mark_good(&mut self, serial: &SerialNumber) -> Result<(), Error> {
-        self.entries
-            .insert(serial.to_der()?, CertificateStatus::Good);
+        let encoded = serial.to_der()?;
+        if matches!(
+            self.entries.get(&encoded),
+            Some(CertificateStatus::Revoked { .. })
+        ) {
+            return Err(Error::AlreadyRevoked);
+        }
+        self.entries.insert(encoded, CertificateStatus::Good);
         Ok(())
     }
     /// Revoke a certificate. Persist the updated store before publishing a refreshed CRL.
@@ -242,6 +248,9 @@ pub enum Error {
     /// The in-memory revocation store lock was poisoned.
     #[error("revocation store unavailable")]
     StoreUnavailable,
+    /// A revoked certificate cannot be returned to the good state.
+    #[error("certificate is already revoked")]
+    AlreadyRevoked,
     /// Durable HA replication or leader fencing failed.
     #[error("HA replication failed: {0}")]
     Ha(#[from] HaError),
@@ -601,6 +610,9 @@ impl OcspService {
     /// Mark a certificate known-good and advance the publication version.
     pub fn mark_good(&self, serial: &SerialNumber) -> Result<(), Error> {
         let mut store = self.store.write().map_err(|_| Error::StoreUnavailable)?;
+        if matches!(store.get(serial)?, Some(CertificateStatus::Revoked { .. })) {
+            return Err(Error::AlreadyRevoked);
+        }
         let next_crl_number = self
             .crl_number
             .load(Ordering::SeqCst)
@@ -825,6 +837,32 @@ mod tests {
         }
         .to_der()
         .unwrap()
+    }
+
+    #[test]
+    fn revoked_certificate_cannot_be_marked_good_again() {
+        let mut store = RevocationStore::new();
+        let serial = SerialNumber::from(77u32);
+        let revoked_at = SystemTime::now();
+        store
+            .revoke(
+                &serial,
+                revoked_at,
+                Some(x509_cert::ext::pkix::crl::CrlReason::KeyCompromise),
+            )
+            .unwrap();
+
+        assert!(matches!(
+            store.mark_good(&serial),
+            Err(Error::AlreadyRevoked)
+        ));
+        assert!(matches!(
+            store.get(&serial).unwrap(),
+            Some(CertificateStatus::Revoked {
+                reason: Some(x509_cert::ext::pkix::crl::CrlReason::KeyCompromise),
+                ..
+            })
+        ));
     }
 
     #[test]

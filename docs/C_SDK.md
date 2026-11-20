@@ -38,12 +38,11 @@ part of the SDK workflow.
 
 The current C ABI exposes:
 
-- `nexusq_version()` — returns the library version.
-- `nexusq_backend_name()` — returns `rustcrypto` or `native-experimental` for the compiled ML-KEM/ML-DSA provider.
+- `nexusq_version()` — returns a static, borrowed library-version string; do not free it.
+- `nexusq_backend_name()` — returns a static, borrowed `rustcrypto` or `native-experimental` provider string; do not free it.
 - `nexusq_backend_is_experimental()` — returns 1 for the experimental native provider, otherwise 0.
-- `nexusq_last_error_message()` — returns the last error on the calling
-  thread.
-- `nexusq_string_free()` — frees C strings allocated by the library.
+- `nexusq_last_error_message()` — returns a borrowed thread-local error string, valid only until the next NEXUS-Q call on the same thread; do not free it.
+- `nexusq_string_free()` — deallocates only strings explicitly documented by an API as owned heap allocations. No current C ABI function returns such an allocation, so callers must not pass any current API return value to this function (null remains a no-op).
 - `nexusq_vault_create(path, password, label)` — creates a vault.
 - `nexusq_vault_format_version(path)` — reads the vault format version.
 
@@ -69,8 +68,8 @@ LD_LIBRARY_PATH=target/debug /tmp/nexusq-c-smoke
 - ABI functions use `extern "C"` and stable exported symbol names.
 - Input pointers are validated at the boundary.
 - The core owns cryptographic semantics; the C layer only translates types.
-- Error messages are owned by the library and are valid until the next
-  NEXUS-Q call on the same thread.
+- Error messages are borrowed by callers, owned by the library, and valid only
+  until the next NEXUS-Q call on the same thread. They must not be freed by callers.
 - ABI changes must be reviewed as compatibility-sensitive changes.
 
 More operations will be added as the core public API and Phase 13 SDK surface
@@ -94,7 +93,9 @@ The library:
 
 - Uses `Zeroizing` / `zeroize` features on the Rust side for key material and
   temporary buffers inside the core.
-- Frees C strings allocated by the library via `nexusq_string_free()`.
+- Provides `nexusq_string_free()` for future APIs that explicitly return owned
+  heap-allocated C strings. No current C ABI function returns such a string;
+  static and thread-local borrowed strings must never be passed to the deallocator.
 - Does not guarantee that the entire process address space is scrubbed; the
   C binding is a thin translation layer.
 

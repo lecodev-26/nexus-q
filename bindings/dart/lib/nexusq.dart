@@ -92,7 +92,7 @@ String _resolveLibrary() {
       File('${cache.path}${Platform.pathSeparator}checksums.download');
   final binaryTemp = File('${library.path}.download');
   try {
-    _curl('$base/NATIVE-RUNTIME-SHA256SUMS', sumsTemp.path);
+    _curl('${base}NATIVE-RUNTIME-SHA256SUMS', sumsTemp.path);
     final line = sumsTemp
         .readAsLinesSync()
         .where((line) => line.trim().endsWith('  $asset'))

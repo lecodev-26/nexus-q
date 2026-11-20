@@ -1,5 +1,6 @@
 //! Persistent storage and on-disk formats.
 
+pub(crate) mod atomic;
 pub mod audit_event;
 pub mod audit_log;
 pub mod audit_segment;

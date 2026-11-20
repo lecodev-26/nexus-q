@@ -1,0 +1,67 @@
+name: NEXUS-Q Continuous Fuzz Campaigns
+
+on:
+  schedule:
+    - cron: '17 2 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: fuzz ${{ matrix.target }} (10 minutes)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - vault_parse
+          - envelope_parse
+          - vault_body_decode
+          - audit_event_decode
+          - audit_segment_decode
+          - credential_decode
+          - backup_import
+          - mldsa_key_decode
+          - policy_set_decode
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Restore target corpus
+        uses: actions/cache@v4
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: |
+            fuzz-corpus-${{ matrix.target }}-
+      - name: Build target
+        run: cargo fuzz build "${TARGET}"
+        working-directory: fuzz
+        env:
+          TARGET: ${{ matrix.target }}
+      - name: Run bounded fuzz campaign
+        run: |
+          mkdir -p "corpus/${TARGET}" "artifacts/${TARGET}"
+          cargo fuzz run "${TARGET}" "corpus/${TARGET}" -- \
+            -max_total_time=600 \
+            -timeout=30 \
+            -artifact_prefix="artifacts/${TARGET}/" \
+            -print_final_stats=1
+        working-directory: fuzz
+        env:
+          TARGET: ${{ matrix.target }}
+      - name: Retain corpus and crash artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-campaign-${{ matrix.target }}
+          path: |
+            fuzz/corpus/${{ matrix.target }}/
+            fuzz/artifacts/${{ matrix.target }}/
+          if-no-files-found: warn
+          retention-days: 90

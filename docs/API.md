@@ -280,7 +280,7 @@ nexusq audit show <audit-dir> [--last <n>]
 
 nexusq health
 nexusq diagnostics
-nexusq version
+nexusq --version
 
 ```
 

@@ -1,0 +1,108 @@
+name: NEXUS-Q Supply Chain Inventory
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/**/Cargo.toml'
+      - 'crates/**/*.rs'
+      - 'crates/nexusq-native-backend/**'
+      - 'vendor/**/*.rs'
+      - 'crates/nexusq-native-backend/Cargo.lock'
+      - 'arena/runners/**/Cargo.toml'
+      - 'arena/runners/**/Cargo.lock'
+      - 'arena/runners/**/*.rs'
+      - 'tools/**/*.rs'
+      - 'supply-chain/**'
+      - 'deny.toml'
+      - 'docs/security/SUPPLY_CHAIN.md'
+      - 'docs/security/UNSAFE_CODE_POLICY.md'
+      - '.github/workflows/supply-chain-audit.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/**/Cargo.toml'
+      - 'crates/**/*.rs'
+      - 'crates/nexusq-native-backend/**'
+      - 'vendor/**/*.rs'
+      - 'crates/nexusq-native-backend/Cargo.lock'
+      - 'arena/runners/**/Cargo.toml'
+      - 'arena/runners/**/Cargo.lock'
+      - 'arena/runners/**/*.rs'
+      - 'tools/**/*.rs'
+      - 'supply-chain/**'
+      - 'deny.toml'
+      - 'docs/security/SUPPLY_CHAIN.md'
+      - 'docs/security/UNSAFE_CODE_POLICY.md'
+      - '.github/workflows/supply-chain-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nexusq-supply-chain-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-trust-and-unsafe-inventory:
+    name: Cargo dependency trust and unsafe inventory
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install pinned supply-chain tools
+        run: |
+          cargo install --locked cargo-vet --version 0.10.3
+          cargo install --locked cargo-geiger --version 0.14.0
+      - name: Enforce the versioned cargo-vet dependency policy
+        run: cargo vet check
+      - name: Generate cargo-geiger JSON inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/supply-chain/per-package
+          cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[].manifest_path' \
+            > artifacts/supply-chain/workspace-manifests.txt
+
+          # These are deliberately separate Cargo workspaces excluded from the
+          # root workspace; include them so the inventory covers their Rust code.
+          printf '%s\n' \
+            "${GITHUB_WORKSPACE}/crates/nexusq-native-backend/Cargo.toml" \
+            "${GITHUB_WORKSPACE}/arena/runners/nexusq/Cargo.toml" \
+            "${GITHUB_WORKSPACE}/arena/runners/nexusq-native/Cargo.toml" \
+            >> artifacts/supply-chain/workspace-manifests.txt
+          sort -u -o artifacts/supply-chain/workspace-manifests.txt \
+            artifacts/supply-chain/workspace-manifests.txt
+
+          while IFS= read -r manifest; do
+            manifest_rel="${manifest#"${GITHUB_WORKSPACE}"/}"
+            package="${manifest_rel%/Cargo.toml}"
+            package="${package//\//-}"
+            echo "Scanning workspace manifest: ${manifest}"
+            cargo geiger --manifest-path "${manifest}" --all-features --all-targets \
+              --output-format Json --locked \
+              > "artifacts/supply-chain/per-package/${package}.json"
+            test -s "artifacts/supply-chain/per-package/${package}.json"
+          done < artifacts/supply-chain/workspace-manifests.txt
+
+          jq -s '{format_version: 1, packages: .}' \
+            artifacts/supply-chain/per-package/*.json \
+            > artifacts/supply-chain/cargo-geiger.json
+          test -s artifacts/supply-chain/cargo-geiger.json
+      - name: Upload cargo-geiger inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-geiger-${{ github.sha }}
+          path: artifacts/supply-chain/cargo-geiger.json
+          if-no-files-found: error
+          retention-days: 30

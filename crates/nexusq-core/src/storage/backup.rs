@@ -46,13 +46,16 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+use subtle::ConstantTimeEq as _;
 use zeroize::Zeroizing;
+
+use super::atomic::{replace_file, sync_parent_dir};
 
 use crate::crypto::aead::{self, AeadError, Algorithm as AeadAlgorithm};
 use crate::crypto::kdf::{self, KdfError};
 use crate::crypto::random::{OsRandomSource, RandomError, RandomSource};
 use crate::vault::body::VaultBody;
-use crate::vault::header::{HeaderError, KdfAlgorithm, KdfParams};
+use crate::vault::header::{HeaderError, KdfParams};
 use crate::vault::operation::{
     OperationControl, OperationError, OperationPhase, OperationProgress,
 };
@@ -110,7 +113,10 @@ impl BackupHeader {
     /// what this build supports.
     #[must_use]
     pub fn is_supported(&self) -> bool {
-        self.magic == MAGIC && self.version == FORMAT_VERSION && self.flags == 0
+        self.magic == MAGIC
+            && self.version == FORMAT_VERSION
+            && self.flags == 0
+            && self.kdf.is_supported()
     }
 }
 
@@ -316,7 +322,7 @@ fn write_backup_file_controlled(
         published = true;
         fs::remove_file(&tmp).map_err(BackupError::from)?;
         restrict_file_permissions(path)?;
-        sync_parent_dir(path)?;
+        sync_parent_dir(path).map_err(BackupError::from)?;
         Ok(())
     })();
     if result.is_err() {
@@ -403,14 +409,17 @@ pub fn import(
     body.audit_anchor = None;
 
     // Create a fresh vault and replace its body with the imported one.
-    Vault::create(new_vault_path, new_vault_password, None)?;
-    let vault = Vault::open(new_vault_path)?;
-    let mut session = vault.unlock(new_vault_password)?;
-    session.rewrap_body_from(&mut body, backup_kek.as_ref())?;
-    *session.body_mut()? = body;
-    let vault = session.lock()?;
-
-    Ok(vault)
+    let vault = Vault::create(new_vault_path, new_vault_password, None)?;
+    let result = (|| {
+        let mut session = vault.unlock(new_vault_password)?;
+        session.rewrap_body_from(&mut body, backup_kek.as_ref())?;
+        *session.body_mut()? = body;
+        Ok(session.lock()?)
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(new_vault_path);
+    }
+    result
 }
 
 /// Import a backup with safe cancellation points and backend progress updates.
@@ -530,7 +539,7 @@ fn build_header(kdf: KdfParams, salt: Vec<u8>, kek: &[u8]) -> Result<BackupHeade
 
 fn verify_backup_kek(header: &BackupHeader, kek: &[u8]) -> Result<(), BackupError> {
     let computed = compute_kek_verifier(kek)?;
-    if computed == header.kek_verifier {
+    if bool::from(computed.ct_eq(&header.kek_verifier)) {
         Ok(())
     } else {
         Err(BackupError::WrongPassphrase)
@@ -548,11 +557,18 @@ fn compute_kek_verifier(kek: &[u8]) -> Result<[u8; KEK_VERIFIER_LEN], BackupErro
 fn derive_backup_kek(
     passphrase: &[u8],
     salt: &[u8],
-    _params: &KdfParams,
+    params: &KdfParams,
 ) -> Result<Zeroizing<[u8; kdf::DERIVED_KEY_LEN]>, BackupError> {
-    // Only Argon2id is supported in v1; the params field is present
-    // for future algorithm agility, the same way it is in the vault.
-    Ok(kdf::argon2id(passphrase, salt)?)
+    if !params.is_supported() {
+        return Err(BackupError::Kdf(KdfError::InvalidParams));
+    }
+    Ok(kdf::argon2id_with_params(
+        passphrase,
+        salt,
+        params.memory_kib,
+        params.iterations,
+        params.parallelism,
+    )?)
 }
 
 // =============================================================================
@@ -581,7 +597,7 @@ fn write_backup_file(
     file.write_all(&out)?;
     file.sync_all()?;
     drop(file);
-    if let Err(e) = fs::rename(&tmp, path) {
+    if let Err(e) = replace_file(&tmp, path) {
         let _ = fs::remove_file(&tmp);
         return Err(BackupError::Io(e));
     }
@@ -660,21 +676,6 @@ fn create_unique_temp_file(path: &Path) -> Result<(PathBuf, fs::File), BackupErr
         "could not allocate unique backup temp file",
     )))
 }
-
-fn sync_parent_dir(path: &Path) -> Result<(), BackupError> {
-    #[cfg(unix)]
-    {
-        if let Some(parent) = path.parent() {
-            fs::File::open(parent)?.sync_all()?;
-        }
-    }
-    Ok(())
-}
-
-// KdfAlgorithm is re-exported by the vault header module and used
-// implicitly through KdfParams; keep the import exercised.
-#[allow(dead_code)]
-fn _keep_kdf_algorithm_in_scope(_a: KdfAlgorithm) {}
 
 #[cfg(test)]
 mod tests {

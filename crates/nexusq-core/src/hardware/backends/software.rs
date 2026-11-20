@@ -116,7 +116,7 @@ fn tighten_permissions(_path: &Path) -> Result<(), HardwareError> {
 
 impl SecureStorage for SoftwareBackend {
     fn read(&self, key: &StorageKey) -> Result<Vec<u8>, HardwareError> {
-        let path = self.path_for(key);
+        let path = self.path_for(key)?;
         match fs::read(&path) {
             Ok(bytes) => Ok(bytes),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Err(HardwareError::NotFound),
@@ -125,7 +125,7 @@ impl SecureStorage for SoftwareBackend {
     }
 
     fn write(&self, key: &StorageKey, value: &[u8]) -> Result<(), HardwareError> {
-        let path = self.path_for(key);
+        let path = self.path_for(key)?;
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -134,7 +134,7 @@ impl SecureStorage for SoftwareBackend {
     }
 
     fn delete(&self, key: &StorageKey) -> Result<(), HardwareError> {
-        let path = self.path_for(key);
+        let path = self.path_for(key)?;
         match fs::remove_file(&path) {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -143,7 +143,7 @@ impl SecureStorage for SoftwareBackend {
     }
 
     fn exists(&self, key: &StorageKey) -> Result<bool, HardwareError> {
-        Ok(self.path_for(key).exists())
+        Ok(self.path_for(key)?.exists())
     }
 
     fn list(&self, prefix: &str) -> Result<Vec<StorageKey>, HardwareError> {
@@ -169,15 +169,21 @@ fn collect_keys(
     for entry in entries {
         let entry = entry?;
         let path = entry.path();
-        let metadata = entry.metadata()?;
-        if metadata.is_dir() {
+        let file_type = entry.file_type()?;
+        if file_type.is_symlink() {
+            continue;
+        }
+        if file_type.is_dir() {
             collect_keys(root, &path, prefix, out)?;
-        } else {
-            let rel = path
+        } else if file_type.is_file() {
+            let relative = path
                 .strip_prefix(root)
-                .unwrap_or(&path)
-                .to_string_lossy()
-                .into_owned();
+                .map_err(|_| HardwareError::Backend("storage path escaped root".into()))?;
+            let rel = relative
+                .components()
+                .map(|component| component.as_os_str().to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+                .join("/");
             if rel.starts_with(prefix) {
                 out.push(StorageKey::new(rel));
             }
@@ -192,15 +198,45 @@ impl SoftwareBackend {
     /// Names are treated as opaque strings; the backend only refuses
     /// path separators and `..` components to keep files inside the
     /// root. Callers that want hierarchies can use `/` in the name.
-    fn path_for(&self, key: &StorageKey) -> PathBuf {
+    fn path_for(&self, key: &StorageKey) -> Result<PathBuf, HardwareError> {
+        let name = key.as_str();
+        let invalid = || {
+            HardwareError::Io(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "invalid secure-storage key",
+            ))
+        };
+        if name.is_empty() || name.starts_with('/') || name.contains('\\') || name.contains(':') {
+            return Err(invalid());
+        }
+
         let mut path = self.storage_root.clone();
-        for segment in key.as_str().split('/') {
-            if segment.is_empty() || segment == "." || segment == ".." {
-                continue;
+        for segment in name.split('/') {
+            let stem = segment
+                .split('.')
+                .next()
+                .unwrap_or_default()
+                .to_ascii_uppercase();
+            let reserved_device = matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+                || (stem.len() == 4
+                    && (stem.starts_with("COM") || stem.starts_with("LPT"))
+                    && matches!(stem.as_bytes()[3], b'1'..=b'9'));
+            if segment.is_empty()
+                || segment == "."
+                || segment == ".."
+                || segment.ends_with(' ')
+                || segment.ends_with('.')
+                || segment.chars().any(char::is_control)
+                || segment
+                    .chars()
+                    .any(|ch| matches!(ch, '<' | '>' | '"' | '|' | '?' | '*'))
+                || reserved_device
+            {
+                return Err(invalid());
             }
             path.push(segment);
         }
-        path
+        Ok(path)
     }
 }
 
@@ -400,6 +436,32 @@ mod tests {
         let k = StorageKey::new("vault/master");
         b.write(&k, b"secret").unwrap();
         assert_eq!(b.read(&k).unwrap(), b"secret");
+    }
+
+    #[test]
+    fn storage_rejects_path_traversal_and_windows_path_prefixes() {
+        let (_dir, backend) = backend();
+        for name in [
+            "../outside",
+            "nested/../../outside",
+            "..\\outside",
+            "C:\\outside",
+            "/etc/passwd",
+            "CON",
+        ] {
+            let key = StorageKey::new(name);
+            assert!(backend.write(&key, b"must not escape").is_err(), "{name}");
+            assert!(backend.read(&key).is_err(), "{name}");
+        }
+    }
+
+    #[test]
+    fn storage_list_returns_portable_slash_separated_keys() {
+        let (_dir, backend) = backend();
+        let key = StorageKey::new("nested/path");
+        backend.write(&key, b"value").unwrap();
+        let listed = backend.list("nested/").unwrap();
+        assert_eq!(listed, vec![StorageKey::new("nested/path")]);
     }
 
     #[test]

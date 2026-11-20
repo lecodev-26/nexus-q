@@ -21,7 +21,7 @@ use ml_kem::kem::{Decapsulate as _, Encapsulate as _};
 use ml_kem::{DecapsulationKey768, EncapsulationKey768, KeyExport, MlKem768};
 use sha3::digest::{ExtendableOutput, Update, XofReader};
 use sha3::{Digest, Sha3_256, Shake256};
-use x25519_dalek::{EphemeralSecret, PublicKey as X25519Public, StaticSecret};
+use x25519_dalek::{PublicKey as X25519Public, StaticSecret};
 use zeroize::Zeroizing;
 
 /// Length in bytes of a shared secret produced by either KEM.
@@ -183,6 +183,45 @@ pub mod ml_kem_768 {
         }
     }
 
+    /// Derandomized ML-KEM-768 encapsulation (FIPS 203 `ML-KEM.Encaps_internal`)
+    /// with the 32-byte message `m` supplied by the caller.
+    ///
+    /// Internal building block for the X-Wing hybrid, which takes `m` from its
+    /// encapsulation seed.
+    ///
+    /// # Security
+    ///
+    /// `m` MUST be secret, uniformly random and used for exactly one
+    /// encapsulation. Anyone who learns `m` can recompute the shared secret
+    /// from the public key, and reusing `m` with the same key repeats both the
+    /// ciphertext and the shared secret.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`KemError::Encapsulate`] if the native backend rejects the
+    /// key or fails.
+    pub(super) fn encapsulate_derand(
+        public: &EncapsulationKey768,
+        m: &[u8; 32],
+    ) -> Result<(Vec<u8>, Zeroizing<[u8; SHARED_SECRET_LEN]>), KemError> {
+        #[cfg(feature = "native-backend")]
+        {
+            let encoded = public.to_bytes();
+            let native_public =
+                nexusq_native_backend::mlkem768::EncapsulationKey::from_bytes(encoded.as_slice())
+                    .map_err(|_| KemError::Encapsulate)?;
+            let (ct, ss) = native_public
+                .encapsulate_derand(m)
+                .map_err(|_| KemError::Encapsulate)?;
+            Ok((ct.0.to_vec(), Zeroizing::new(*ss.as_bytes())))
+        }
+        #[cfg(not(feature = "native-backend"))]
+        {
+            let (ct, ss) = public.encapsulate_deterministic(&(*m).into());
+            Ok((ct.as_slice().to_vec(), Zeroizing::new(ss.into())))
+        }
+    }
+
     /// Decapsulates `ciphertext` with `secret`.
     ///
     /// # Errors
@@ -339,9 +378,37 @@ pub mod hybrid {
     ///
     /// # Errors
     ///
-    /// Returns [`KemError::InvalidPublicKey`] if the length is wrong.
+    /// Returns [`KemError::InvalidPublicKey`] if the length is wrong, and
+    /// [`KemError::Randomness`] if the operating system cannot provide the
+    /// encapsulation seed.
     pub fn encapsulate(
         public_key: &[u8],
+    ) -> Result<(Vec<u8>, Zeroizing<[u8; SHARED_SECRET_LEN]>), KemError> {
+        encapsulate_with_rng(public_key, |eseed| {
+            getrandom::fill(eseed).map_err(|_| KemError::Randomness)
+        })
+    }
+
+    /// Length in bytes of the X-Wing encapsulation seed (`eseed`).
+    const ENCAPSULATION_SEED_LEN: usize = 64;
+
+    /// X-Wing `EncapsulateDerand` (draft-connolly-cfrg-xwing-kem-11, section 5.4)
+    /// with the 64-byte encapsulation seed written by `fill`.
+    ///
+    /// `eseed[0..32]` is the ML-KEM-768 encapsulation randomness and
+    /// `eseed[32..64]` is the X25519 ephemeral secret. Production code reaches
+    /// this only through [`encapsulate`], which fills the seed from the OS
+    /// CSPRNG; tests inject the official test-vector seeds.
+    ///
+    /// # Security
+    ///
+    /// `fill` MUST write fresh, uniformly random bytes and a seed MUST never
+    /// be reused. A known `eseed` lets anyone recompute the shared secret, and
+    /// a repeated one repeats the ciphertext and the shared secret. Fixed seeds
+    /// are only acceptable in tests.
+    pub(super) fn encapsulate_with_rng(
+        public_key: &[u8],
+        fill: impl FnOnce(&mut [u8]) -> Result<(), KemError>,
     ) -> Result<(Vec<u8>, Zeroizing<[u8; SHARED_SECRET_LEN]>), KemError> {
         if public_key.len() != PUBLIC_KEY_LEN {
             return Err(KemError::InvalidPublicKey);
@@ -349,14 +416,20 @@ pub mod hybrid {
         let (ml_pk_bytes, x_pk_bytes) = public_key.split_at(ml_kem_768::PUBLIC_KEY_LEN);
 
         let ml_pk = ml_kem_768::public_key_from_bytes(ml_pk_bytes)?;
-        let (ml_ct, ml_ss) = ml_kem_768::encapsulate(&ml_pk);
 
         let x_pk_arr: [u8; 32] = x_pk_bytes
             .try_into()
             .map_err(|_| KemError::InvalidPublicKey)?;
         let x_pk = X25519Public::from(x_pk_arr);
 
-        let eph = EphemeralSecret::random();
+        let mut eseed = Zeroizing::new([0u8; ENCAPSULATION_SEED_LEN]);
+        fill(eseed.as_mut())?;
+        let ml_m: &[u8; 32] = eseed[..32].try_into().expect("32-byte slice");
+        let x_ek: &[u8; 32] = eseed[32..].try_into().expect("32-byte slice");
+
+        let (ml_ct, ml_ss) = ml_kem_768::encapsulate_derand(&ml_pk, ml_m)?;
+
+        let eph = StaticSecret::from(*x_ek);
         let eph_pub = X25519Public::from(&eph);
         let x_ss = eph.diffie_hellman(&x_pk);
 
@@ -429,6 +502,111 @@ pub mod hybrid {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Official X-Wing test vectors: draft-connolly-cfrg-xwing-kem-11,
+    /// Appendix C. Byte-for-byte copy of `spec/test-vectors.json` from the
+    /// specification repository at commit 984c2f7; see
+    /// `testdata/xwing/README.md` for provenance and the SHA-256.
+    const XWING_DRAFT_11_VECTORS: &str =
+        include_str!("../../testdata/xwing/draft-connolly-cfrg-xwing-kem-11.json");
+
+    #[derive(serde::Deserialize)]
+    struct XWingVectorHex {
+        seed: String,
+        sk: String,
+        pk: String,
+        eseed: String,
+        ct: String,
+        ss: String,
+    }
+
+    struct XWingVector {
+        seed: Vec<u8>,
+        sk: Vec<u8>,
+        pk: Vec<u8>,
+        eseed: Vec<u8>,
+        ct: Vec<u8>,
+        ss: Vec<u8>,
+    }
+
+    fn xwing_vectors() -> Vec<XWingVector> {
+        let raw: Vec<XWingVectorHex> =
+            serde_json::from_str(XWING_DRAFT_11_VECTORS).expect("valid X-Wing vector JSON");
+        raw.into_iter()
+            .map(|v| XWingVector {
+                seed: hex::decode(v.seed).expect("hex seed"),
+                sk: hex::decode(v.sk).expect("hex sk"),
+                pk: hex::decode(v.pk).expect("hex pk"),
+                eseed: hex::decode(v.eseed).expect("hex eseed"),
+                ct: hex::decode(v.ct).expect("hex ct"),
+                ss: hex::decode(v.ss).expect("hex ss"),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn xwing_official_vectors_are_present() {
+        let vectors = xwing_vectors();
+        assert_eq!(vectors.len(), 3, "draft-11 ships three vectors");
+        for v in &vectors {
+            assert_eq!(v.seed.len(), hybrid::SECRET_KEY_LEN);
+            assert_eq!(v.sk.len(), hybrid::SECRET_KEY_LEN);
+            assert_eq!(v.pk.len(), hybrid::PUBLIC_KEY_LEN);
+            assert_eq!(v.eseed.len(), 64);
+            assert_eq!(v.ct.len(), hybrid::CIPHERTEXT_LEN);
+            assert_eq!(v.ss.len(), SHARED_SECRET_LEN);
+        }
+    }
+
+    #[test]
+    fn xwing_official_vectors_key_generation() {
+        for (i, v) in xwing_vectors().iter().enumerate() {
+            // GenerateKeyPairDerand(seed) through the production key generation path.
+            let pair = hybrid::try_generate_with_rng(|buf| {
+                buf.copy_from_slice(&v.seed);
+                Ok(())
+            })
+            .unwrap();
+            assert_eq!(*pair.secret_key_bytes(), v.sk, "vector {i}: sk");
+            assert_eq!(pair.public_key_bytes(), v.pk, "vector {i}: pk");
+
+            // Loading the serialized decapsulation key gives the same key pair.
+            let loaded = hybrid::from_secret_key_bytes(&v.sk).unwrap();
+            assert_eq!(loaded.public_key_bytes(), v.pk, "vector {i}: pk from sk");
+        }
+    }
+
+    #[test]
+    fn xwing_official_vectors_encapsulation() {
+        for (i, v) in xwing_vectors().iter().enumerate() {
+            // EncapsulateDerand(pk, eseed) through the production encapsulation path.
+            let (ct, ss) = hybrid::encapsulate_with_rng(&v.pk, |buf| {
+                assert_eq!(buf.len(), v.eseed.len());
+                buf.copy_from_slice(&v.eseed);
+                Ok(())
+            })
+            .unwrap();
+            assert_eq!(ct, v.ct, "vector {i}: ct");
+            assert_eq!(ss.as_slice(), v.ss.as_slice(), "vector {i}: ss");
+        }
+    }
+
+    #[test]
+    fn xwing_official_vectors_decapsulation() {
+        for (i, v) in xwing_vectors().iter().enumerate() {
+            let pair = hybrid::from_secret_key_bytes(&v.sk).unwrap();
+            let ss = hybrid::decapsulate(&pair, &v.ct).unwrap();
+            assert_eq!(ss.as_slice(), v.ss.as_slice(), "vector {i}: ss");
+        }
+    }
+
+    #[test]
+    fn hybrid_encapsulate_with_rng_propagates_randomness_error() {
+        let pair = hybrid::generate();
+        let result =
+            hybrid::encapsulate_with_rng(&pair.public_key_bytes(), |_| Err(KemError::Randomness));
+        assert!(matches!(result, Err(KemError::Randomness)));
+    }
 
     #[test]
     fn ml_kem_768_roundtrip() {

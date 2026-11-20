@@ -1,0 +1,13 @@
+# NEXUS-Q CodeQL policy. Keep exclusions narrow and review every change.
+name: NEXUS-Q CodeQL security-extended
+
+queries:
+  - uses: security-extended
+
+paths-ignore:
+  # Third-party source is maintained and reviewed upstream, not as project code.
+  - '**/vendor/**'
+  - 'vendor/**'
+  # Build output and generated sources are not authoritative source inputs.
+  - '**/target/**'
+  - '**/generated/**'

@@ -1,7 +1,7 @@
 //! ACME RFC 8555 directory, account, order, authorization, challenge, finalize, and certificate routes.
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{
         Arc, Mutex, RwLock,
         atomic::{AtomicU64, Ordering},
@@ -505,6 +505,57 @@ async fn handle_post(
     }
 }
 
+fn prune_expired_resources(state: &AcmeState) -> Result<(), AcmeError> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let expired_orders: Vec<Order> = state
+        .orders
+        .read()
+        .map_err(|_| AcmeError::server())?
+        .values()
+        .filter(|order| order.expires <= now)
+        .cloned()
+        .collect();
+    if expired_orders.is_empty() {
+        return Ok(());
+    }
+    let expired_order_ids: HashSet<String> = expired_orders
+        .iter()
+        .map(|order| order.id.clone())
+        .collect();
+    let expired_authz_ids: HashSet<String> = expired_orders
+        .iter()
+        .flat_map(|order| order.authorization_ids.iter().cloned())
+        .collect();
+    let expired_challenge_ids: Vec<String> = state
+        .authorizations
+        .read()
+        .map_err(|_| AcmeError::server())?
+        .values()
+        .filter(|authz| expired_order_ids.contains(&authz.order_id))
+        .flat_map(|authz| authz.challenge_ids.iter().cloned())
+        .collect();
+
+    let mut challenges = state.challenges.write().map_err(|_| AcmeError::server())?;
+    let mut authorizations = state
+        .authorizations
+        .write()
+        .map_err(|_| AcmeError::server())?;
+    let mut orders = state.orders.write().map_err(|_| AcmeError::server())?;
+    for id in expired_challenge_ids {
+        challenges.remove(&id);
+    }
+    for id in expired_authz_ids {
+        authorizations.remove(&id);
+    }
+    for id in expired_order_ids {
+        orders.remove(&id);
+    }
+    Ok(())
+}
+
 fn create_order(state: &AcmeState, verified: VerifiedRequest) -> Result<Response, AcmeError> {
     let identifiers = verified
         .payload
@@ -549,6 +600,7 @@ fn create_order(state: &AcmeState, verified: VerifiedRequest) -> Result<Response
             EnrollmentError::RateLimited => AcmeError::rate_limited(),
             _ => AcmeError::server(),
         })?;
+    prune_expired_resources(state)?;
     if state.orders.read().map_err(|_| AcmeError::server())?.len() >= MAX_ACME_RESOURCES {
         return Err(AcmeError::rate_limited());
     }
@@ -703,17 +755,22 @@ fn authorization_resource(
     verified: VerifiedRequest,
 ) -> Result<Response, AcmeError> {
     let id = path.trim_start_matches("/acme/authz/");
-    let authorizations = state
-        .authorizations
-        .read()
-        .map_err(|_| AcmeError::server())?;
-    let authz = authorizations.get(id).ok_or_else(AcmeError::not_found)?;
+    let authz = {
+        let authorizations = state
+            .authorizations
+            .read()
+            .map_err(|_| AcmeError::server())?;
+        authorizations
+            .get(id)
+            .cloned()
+            .ok_or_else(AcmeError::not_found)?
+    };
     if verified.account_id.as_deref() != Some(authz.account_id.as_str()) {
         return Err(AcmeError::unauthorized());
     }
     Ok(json_response(
         StatusCode::OK,
-        authorization_json(state, authz)?,
+        authorization_json(state, &authz)?,
     ))
 }
 
@@ -733,7 +790,7 @@ async fn challenge_resource(
     if verified.account_id.as_deref() != Some(challenge.account_id.as_str()) {
         return Err(AcmeError::unauthorized());
     }
-    if challenge.status == "valid" {
+    if challenge.status != "pending" {
         return Ok(json_response(
             StatusCode::OK,
             challenge_json(state, &challenge),
@@ -764,13 +821,20 @@ async fn challenge_resource(
         )
         .await;
     let status = if valid { "valid" } else { "invalid" };
-    let mut updated = challenge.clone();
-    updated.status = status.to_owned();
-    state
-        .challenges
-        .write()
-        .map_err(|_| AcmeError::server())?
-        .insert(id.to_owned(), updated.clone());
+    let updated = {
+        let mut challenges = state.challenges.write().map_err(|_| AcmeError::server())?;
+        let stored = challenges.get_mut(id).ok_or_else(AcmeError::not_found)?;
+        if stored.status == "pending" {
+            stored.status = status.to_owned();
+        }
+        stored.clone()
+    };
+    if updated.status != status {
+        return Ok(json_response(
+            StatusCode::OK,
+            challenge_json(state, &updated),
+        ));
+    }
     let authz_id = challenge.authorization_id.clone();
     {
         let challenges = state.challenges.read().map_err(|_| AcmeError::server())?;
@@ -779,16 +843,13 @@ async fn challenge_resource(
             .write()
             .map_err(|_| AcmeError::server())?;
         if let Some(authz) = authorizations.get_mut(&authz_id) {
-            if !valid {
-                authz.status = "invalid".to_owned();
-            } else if authz
+            let challenge_statuses: Vec<&str> = authz
                 .challenge_ids
                 .iter()
                 .filter_map(|cid| challenges.get(cid))
-                .any(|item| item.status == "valid")
-            {
-                authz.status = "valid".to_owned();
-            }
+                .map(|item| item.status.as_str())
+                .collect();
+            authz.status = next_authorization_status(&authz.status, &challenge_statuses);
         }
     }
     let authz_order_id = state
@@ -798,27 +859,30 @@ async fn challenge_resource(
         .get(&authz_id)
         .map(|a| a.order_id.clone())
         .ok_or_else(AcmeError::server)?;
+    let order_authorization_ids = state
+        .orders
+        .read()
+        .map_err(|_| AcmeError::server())?
+        .get(&authz_order_id)
+        .map(|order| order.authorization_ids.clone())
+        .ok_or_else(AcmeError::server)?;
     let all_authzs_valid = {
-        let orders = state.orders.read().map_err(|_| AcmeError::server())?;
-        let order = orders.get(&authz_order_id).ok_or_else(AcmeError::server)?;
         let authzs = state
             .authorizations
             .read()
             .map_err(|_| AcmeError::server())?;
-        order.authorization_ids.iter().all(|authz_id| {
+        order_authorization_ids.iter().all(|authz_id| {
             authzs
                 .get(authz_id)
                 .is_some_and(|authz| authz.status == "valid")
         })
     };
     let any_authz_invalid = {
-        let orders = state.orders.read().map_err(|_| AcmeError::server())?;
-        let order = orders.get(&authz_order_id).ok_or_else(AcmeError::server)?;
         let authzs = state
             .authorizations
             .read()
             .map_err(|_| AcmeError::server())?;
-        order.authorization_ids.iter().any(|authz_id| {
+        order_authorization_ids.iter().any(|authz_id| {
             authzs
                 .get(authz_id)
                 .is_some_and(|authz| authz.status == "invalid")
@@ -830,6 +894,8 @@ async fn challenge_resource(
             .write()
             .map_err(|_| AcmeError::server())?
             .get_mut(&authz_order_id)
+        && order.status != "processing"
+        && order.status != "valid"
     {
         order.status = if all_authzs_valid { "ready" } else { "invalid" }.to_owned();
     }
@@ -837,6 +903,20 @@ async fn challenge_resource(
         StatusCode::OK,
         challenge_json(state, &updated),
     ))
+}
+
+fn next_authorization_status(current: &str, challenge_statuses: &[&str]) -> String {
+    match current {
+        "valid" => "valid".to_owned(),
+        "invalid" => "invalid".to_owned(),
+        _ if challenge_statuses.contains(&"valid") => "valid".to_owned(),
+        _ if !challenge_statuses.is_empty()
+            && challenge_statuses.iter().all(|status| *status == "invalid") =>
+        {
+            "invalid".to_owned()
+        }
+        _ => "pending".to_owned(),
+    }
 }
 
 fn challenge_json(state: &AcmeState, challenge: &Challenge) -> Value {
@@ -859,21 +939,6 @@ fn finalize_order(
     if verified.account_id.as_deref() != Some(order.account_id.as_str()) {
         return Err(AcmeError::unauthorized());
     }
-    if order.status != "ready"
-        || SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs()
-            >= order.expires
-    {
-        order.status = "invalid".to_owned();
-        state
-            .orders
-            .write()
-            .map_err(|_| AcmeError::server())?
-            .insert(id.to_owned(), order);
-        return Err(AcmeError::rejected());
-    }
     let csr_b64 = verified
         .payload
         .get("csr")
@@ -890,12 +955,27 @@ fn finalize_order(
     if names != expected {
         return Err(AcmeError::rejected());
     }
-    order.status = "processing".to_owned();
-    state
-        .orders
-        .write()
-        .map_err(|_| AcmeError::server())?
-        .insert(id.to_owned(), order.clone());
+    order = {
+        let mut orders = state.orders.write().map_err(|_| AcmeError::server())?;
+        let stored = orders.get_mut(id).ok_or_else(AcmeError::not_found)?;
+        if verified.account_id.as_deref() != Some(stored.account_id.as_str()) {
+            return Err(AcmeError::unauthorized());
+        }
+        if stored.status != "ready" {
+            return Err(AcmeError::rejected());
+        }
+        if SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+            >= stored.expires
+        {
+            stored.status = "invalid".to_owned();
+            return Err(AcmeError::rejected());
+        }
+        stored.status = "processing".to_owned();
+        stored.clone()
+    };
     let principal = Principal {
         id: order.account_id.clone(),
     };
@@ -1092,6 +1172,26 @@ mod tests {
             .to_str()
             .unwrap()
             .to_owned()
+    }
+
+    #[test]
+    fn authorization_waits_for_all_challenges_to_fail_and_never_downgrades() {
+        assert_eq!(
+            next_authorization_status("pending", &["invalid", "pending"]),
+            "pending"
+        );
+        assert_eq!(
+            next_authorization_status("pending", &["valid", "invalid"]),
+            "valid"
+        );
+        assert_eq!(
+            next_authorization_status("valid", &["invalid", "invalid"]),
+            "valid"
+        );
+        assert_eq!(
+            next_authorization_status("pending", &["invalid", "invalid"]),
+            "invalid"
+        );
     }
 
     #[tokio::test]

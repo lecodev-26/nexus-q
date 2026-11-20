@@ -2,17 +2,33 @@
 
 ## Supported security line
 
-NEXUS-Q v4.1.2 is the current release. Public status: “Audit-Ready Release. No production-readiness claim, no FIPS validation, external audit pending.” Release evidence is provided separately and must be checked against the exact tagged commit and artifact digests. Registry availability alone is not proof that every ecosystem package was built from the same Git commit.
+**Policy approved and last reviewed: 2026-11-14.** Only the latest published stable NEXUS-Q release is supported for security fixes. As of this review, that release is **v4.1.2** (the current v4.1.x release). Earlier patches and development snapshots are not independently supported. The v4.2.x line is not supported until a v4.2.x stable release is published; when a newer stable release is published, it becomes the supported release line.
 
-Security fixes are developed against the active engineering baseline and backported only when maintainers judge the change safe and applicable. NEXUS-Q does **not** claim FIPS validation, Common Criteria certification, formal verification, or completion of an independent external security audit unless corresponding public evidence is linked from this repository.
+Security fixes are developed against the active engineering baseline. Backports to an older release are considered case by case, based on security impact, compatibility, and the risk of introducing regressions; there is no automatic backport commitment. Any maintenance of an older line must be explicitly announced by the maintainers.
+
+The current release's public status is: “Audit-Ready Release. No production-readiness claim, no FIPS validation, external audit pending.” Release evidence is provided separately and must be checked against the exact tagged commit and artifact digests. Registry availability alone is not proof that every ecosystem package was built from the same Git commit.
+
+NEXUS-Q does **not** claim FIPS validation, Common Criteria certification, formal verification, or completion of an independent external security audit unless corresponding public evidence is linked from this repository.
 
 ## Reporting a vulnerability
 
 Please report suspected vulnerabilities privately through the repository's
-GitHub **Security Advisories** / private vulnerability reporting mechanism when
-available. Do not disclose an unpatched vulnerability in a public issue.
+[GitHub Security Advisories form](https://github.com/lecodev-26/nexus-q/security/advisories/new)
+(private vulnerability reporting). Private vulnerability reporting is enabled
+in the repository settings; GitHub sign-in is required to access the form. Do
+**not** create a public issue containing
+vulnerability details, exploit steps, proof-of-concept code, affected secrets,
+or information that would help an attacker reproduce the issue.
 
-Include, when safe to provide:
+The repository's issue tracker links to this private reporting channel. If you
+cannot access the private form, create only a minimal public issue titled
+"Request for a private security contact" and state that you need a secure
+reporting channel. Do not include technical details, attachments, logs, or
+proof-of-concept material in that public issue. Maintainers will follow up with
+a private channel.
+
+Include the following information **only in the private report**, and only
+when safe to provide:
 
 - affected commit, tag, or package version;
 - affected component/API;
@@ -24,23 +40,28 @@ Include, when safe to provide:
 Do not include production secrets, private keys, passwords, customer data, or
 other sensitive material in a report.
 
-If private reporting is temporarily unavailable, open a minimal public issue
-requesting a private contact channel; do not publish exploit details there.
+Never use a public issue, pull request, discussion, or comment to disclose
+unpatched vulnerability details. The public issue fallback is for requesting a
+private contact channel only.
 
 ## Response targets
 
 These are engineering targets, not contractual SLAs:
 
-| Severity | Acknowledge | Triage target | Fix/release target |
+| Severity | Acknowledge receipt | Initial triage and substantive reporter update | Fix/release target |
 |---|---:|---:|---:|
 | Critical | 2 business days | 5 business days | 14 calendar days |
 | High | 3 business days | 10 business days | 30 calendar days |
 | Medium | 5 business days | 15 business days | Next appropriate release |
 | Low | 10 business days | 30 business days | Planned maintenance |
 
-Targets may be extended when coordinated disclosure, upstream fixes, or
-reproduction requires additional time. The reason and current status should be
-recorded internally.
+Acknowledgement confirms receipt and gives the reporter a point of contact.
+The initial substantive update communicates the current severity assessment,
+known impact, next steps, or any information still needed; if triage is not
+complete, it provides a status update by the target above. These are engineering
+targets, not guarantees. Targets may be extended when coordinated disclosure,
+upstream fixes, or reproduction requires additional time. The reason and
+current status should be recorded internally.
 
 ## Security gates
 
@@ -50,7 +71,23 @@ and the configured fuzzing gates. Main-branch fuzz soak is configured for
 45 minutes per designated parser target; V2 development PRs use the shorter
 5-minute smoke gate.
 
+## Static analysis
+
+The repository runs CodeQL SAST for Rust, C/C++, Go, Python, and GitHub Actions. The versioned workflow, query scope, exclusions, local reproduction guidance, and false-positive triage process are documented in [`docs/security/STATIC_ANALYSIS.md`](docs/security/STATIC_ANALYSIS.md). A clean scan is not a guarantee that the code is vulnerability-free.
+
+Project-owned Rust unsafe code is restricted to documented boundaries and requires a nearby `// SAFETY:` justification enforced by Fast CI. The source policy, current inventory, core-crate exception, and `cargo-geiger` dependency-inventory scope are documented in [`docs/security/UNSAFE_CODE_POLICY.md`](docs/security/UNSAFE_CODE_POLICY.md).
+
 ## Scope and limitations
+
+The v4.1.2 independent external audit scope covers the default RustCrypto
+provider and excludes the experimental native backend, including its opt-in
+`nexusq-core` integration and native artifacts. The native backend remains
+experimental, opt-in, and unaudited; it must not be enabled by default or
+represented as production-ready. Before production consideration, it requires
+a separately agreed independent audit scope and completion of the conditions
+documented in [`docs/security/NATIVE_BACKEND_AUDIT_SCOPE.md`](docs/security/NATIVE_BACKEND_AUDIT_SCOPE.md).
+The default-provider audit boundary and exclusions are recorded in
+[`docs/security/AUDIT_SCOPE.md`](docs/security/AUDIT_SCOPE.md).
 
 NEXUS-Q is software. The software backend does not provide hardware isolation
 from a compromised OS, kernel, hypervisor, or physical attacker. TPM/HSM/Secure
