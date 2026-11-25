@@ -59,6 +59,11 @@ dist/
 fuzz-results/
 .github/scripts/__pycache__/
 
+# Local fuzzing output — corpus and crash artifacts must never be committed
+# (see fuzz/README.md and CONTRIBUTING.md section 3)
+fuzz/corpus/
+fuzz/artifacts/
+
 # Node (TypeScript SDK)
 node_modules/
 
