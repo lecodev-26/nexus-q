@@ -48,13 +48,15 @@ targets.
 | --- | --- | --- |
 | `policy_set_decode` | `PolicySet` JSON deserialization | Weekly 10-minute matrix |
 
-Note (verified 2026-11-24): `mldsa_key_decode` campaigns currently record no
-new corpus units — every generated input takes the same early rejection path
-in `MlDsa65VerifyingKey::from_public_key`, so a 30-second local run and the
-2026-11-23 weekly run both ended with an empty on-disk corpus and the weekly
-run uploaded no `fuzz-campaign-mldsa_key_decode` artifact. The job still
-builds and executes the harness for its full 10 minutes; the absence of an
-artifact for this target does not mean the job was skipped.
+Note (observed 2026-11-24): in the sampled campaigns observed so far — local
+30-second runs and CI run 45159196337 (2026-11-23) — generated inputs for
+`mldsa_key_decode` took the same early rejection path in
+`MlDsa65VerifyingKey::from_public_key` and no corpus units were added, so the
+on-disk corpus stayed empty and the weekly run uploaded no
+`fuzz-campaign-mldsa_key_decode` artifact. This is a bounded observation, not
+a proven property of the harness. The job still builds and executes the
+harness for its full 10 minutes; the absence of an artifact for this target
+does not mean the job was skipped.
 
 Every harness feeds untrusted bytes to one decode/parse path and must not
 panic; malformed input must be rejected with an error, not a crash. Harnesses
@@ -99,8 +101,11 @@ cargo +nightly fuzz build                 # all nine harnesses
 cargo +nightly fuzz build vault_parse     # or a single harness
 ```
 
-Building generates `fuzz/Cargo.lock` and `fuzz/target/` locally; neither is
-committed — both are covered by `.gitignore`.
+`fuzz/Cargo.lock` is tracked in git so that dependency resolution is
+reproducible for auditors from a clean checkout: the committed lockfile pins
+every dependency version, and `cargo +nightly fuzz build` respects it and
+leaves it unmodified. `fuzz/target/` is generated locally and covered by
+`.gitignore`.
 
 ## Run a bounded campaign
 
